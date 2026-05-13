@@ -1,0 +1,669 @@
+import React, { useState, useEffect, useMemo } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
+import ReactMarkdown from 'react-markdown';
+import { Rating } from 'ts-fsrs';
+import { getCards, reviewCard, Flashcard, deleteFlashcard, PhraseStatus } from '../services/cardService';
+import { Check, X, ArrowRight, Brain, Trash2, ChevronLeft, Clock, Music, User, LayoutGrid, PlayCircle, Library, Globe, ChevronDown, ChevronUp, Volume2 } from 'lucide-react';
+import { cn } from '../lib/utils';
+import { getLocaleByName } from '../lib/languages';
+
+interface StudyViewProps {
+  onBack: () => void;
+}
+
+type GroupMode = 'recent' | 'track' | 'artist';
+
+export default function StudyView({ onBack }: StudyViewProps) {
+  const [allCards, setAllCards] = useState<Flashcard[]>([]);
+  const [sessionCards, setSessionCards] = useState<Flashcard[]>([]);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [isFlipped, setIsFlipped] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [viewMode, setViewMode] = useState<'hub' | 'session' | 'complete'>('hub');
+  const [groupMode, setGroupMode] = useState<GroupMode>('recent');
+  const [isExplanationExpanded, setIsExplanationExpanded] = useState(false);
+  const [selectedLanguage, setSelectedLanguage] = useState<string>(() => localStorage.getItem('study_selected_language') || 'all');
+  const [selectedTrack, setSelectedTrack] = useState<string>('all');
+  const [selectedStatus, setSelectedStatus] = useState<string>('all');
+  const [expandedParents, setExpandedParents] = useState<Set<string>>(new Set());
+
+  const toggleParent = (phrase: string) => {
+    setExpandedParents(prev => {
+      const next = new Set(prev);
+      if (next.has(phrase)) next.delete(phrase);
+      else next.add(phrase);
+      return next;
+    });
+  };
+
+  useEffect(() => {
+    localStorage.setItem('study_selected_language', selectedLanguage);
+  }, [selectedLanguage]);
+
+  useEffect(() => {
+    loadCards();
+  }, []);
+
+  async function loadCards() {
+    setIsLoading(true);
+    const cards = await getCards();
+    setAllCards(cards);
+    
+    // If current selected language is 'all' or not in available languages, 
+    // pick the first one from the new cards if available
+    const langs = new Set<string>();
+    cards.forEach(card => {
+      langs.add(card.sourceLanguage || 'en');
+    });
+    const available = Array.from(langs).sort();
+    
+    setSelectedLanguage(prev => {
+      const persisted = localStorage.getItem('study_selected_language');
+      if (persisted && available.includes(persisted)) return persisted;
+      if (available.length > 0) return available[0];
+      return 'en';
+    });
+    
+    setIsLoading(false);
+  }
+
+  const availableLanguages = useMemo(() => {
+    const langs = new Set<string>();
+    allCards.forEach(card => {
+      // Fallback for older cards or cards without language field
+      const lang = card.sourceLanguage || 'en';
+      langs.add(lang);
+    });
+    return Array.from(langs).sort();
+  }, [allCards]);
+  
+  const tracksList = useMemo(() => {
+    const tracks = new Set<string>();
+    allCards.forEach(card => {
+      tracks.add(card.trackTitle);
+    });
+    return Array.from(tracks).sort();
+  }, [allCards]);
+
+  const now = useMemo(() => new Date(), [viewMode]);
+
+  const filteredCards = useMemo(() => {
+    let list = allCards;
+    if (selectedLanguage !== 'all') {
+      list = list.filter(card => (card.sourceLanguage || 'en') === selectedLanguage);
+    }
+    if (selectedTrack !== 'all') {
+      list = list.filter(card => card.trackId === selectedTrack);
+    }
+    list = list.filter(card => card.status === 'learning');
+    return list;
+  }, [allCards, selectedLanguage, selectedTrack]);
+
+  const groupedCards = useMemo(() => {
+    // Group phrases by track and line for display
+    const groups = new Map<string, Flashcard[]>();
+    
+    filteredCards.forEach(card => {
+      const key = `${card.trackId}-${card.lineId}`;
+      const list = groups.get(key) || [];
+      list.push(card);
+      groups.set(key, list);
+    });
+
+    return Array.from(groups.entries()).map(([key, phrases]) => {
+      const sample = phrases[0];
+      return {
+        id: key,
+        title: sample.lineId || 'Vocabulary',
+        trackTitle: sample.trackId,
+        phrases: phrases,
+        createdAt: sample.createdAt
+      };
+    }).sort((a, b) => {
+      const dateA = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(a.createdAt || 0);
+      const dateB = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(b.createdAt || 0);
+      return dateB.getTime() - dateA.getTime();
+    });
+  }, [filteredCards]);
+
+  const dueCards = useMemo(() => {
+    return filteredCards.filter(card => card.due <= now);
+  }, [filteredCards, now]);
+
+  // Decks computation
+  const decks = useMemo(() => {
+    const getDueCount = (cards: Flashcard[]) => cards.filter(c => c.due <= now).length;
+    if (groupMode === 'recent') {
+      const sorted = [...filteredCards].sort((a, b) => {
+        const dateA = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(a.createdAt || 0);
+        const dateB = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(b.createdAt || 0);
+        return dateB.getTime() - dateA.getTime();
+      });
+      
+        return [{
+          id: 'recent-all',
+          title: 'Recent Phrases',
+          subtitle: 'Latest additions',
+          count: filteredCards.length,
+          dueCount: getDueCount(filteredCards),
+          cards: sorted,
+          icon: <Clock size={20} />
+        }];
+      }
+  
+      if (groupMode === 'track') {
+        const groups = filteredCards.reduce((acc, card) => {
+          const key = card.trackTitle;
+          if (!acc[key]) acc[key] = [];
+          acc[key].push(card);
+          return acc;
+        }, {} as Record<string, Flashcard[]>);
+  
+        return Object.entries(groups).map(([title, cards]) => ({
+          id: `track-${title}`,
+          title,
+          subtitle: cards[0].artist,
+          count: cards.length,
+          dueCount: getDueCount(cards),
+          cards,
+          icon: <Music size={20} />
+        })).sort((a, b) => b.count - a.count);
+      }
+  
+      if (groupMode === 'artist') {
+        const groups = filteredCards.reduce((acc, card) => {
+          const key = card.artist;
+          if (!acc[key]) acc[key] = [];
+          acc[key].push(card);
+          return acc;
+        }, {} as Record<string, Flashcard[]>);
+  
+        return Object.entries(groups).map(([artist, cards]) => ({
+          id: `artist-${artist}`,
+          title: artist,
+          subtitle: `${cards.length} phrases`,
+          count: cards.length,
+          dueCount: getDueCount(cards),
+          cards,
+          icon: <User size={20} />
+        })).sort((a, b) => b.count - a.count);
+      }
+
+    return [];
+  }, [filteredCards, groupMode, now]);
+
+  const startSession = (cards: Flashcard[]) => {
+    if (cards.length === 0) return;
+    setSessionCards(cards);
+    setCurrentIndex(0);
+    setIsFlipped(false);
+    setViewMode('session');
+  };
+
+  const handleRating = async (rating: Rating) => {
+    const card = sessionCards[currentIndex];
+    await reviewCard(card, rating);
+    setIsFlipped(false);
+    setIsExplanationExpanded(false);
+    if (currentIndex < sessionCards.length - 1) {
+      setCurrentIndex(currentIndex + 1);
+    } else {
+      // Session finished
+      loadCards();
+      setViewMode('complete');
+    }
+  };
+
+  const currentCard = sessionCards[currentIndex];
+
+  useEffect(() => {
+    if (viewMode === 'session' && currentCard) {
+      speak(currentCard.text);
+    }
+  }, [currentIndex, viewMode]);
+
+  const speak = (text: string) => {
+    window.speechSynthesis.cancel();
+    setTimeout(() => {
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = getLocaleByName(currentCard?.sourceLanguage || 'English');
+      utterance.rate = 0.9;
+      window.speechSynthesis.speak(utterance);
+    }, 50);
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex-1 flex items-center justify-center">
+        <Brain className="animate-pulse" size={48} style={{ color: 'var(--accent)' }} />
+      </div>
+    );
+  }
+
+  if (allCards.length === 0) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center gap-6 p-8">
+        <div className="w-24 h-24 bg-white/5 rounded-full flex items-center justify-center">
+          <Brain className="text-white/20" size={40} />
+        </div>
+        <div className="text-center space-y-2">
+          <h2 className="text-2xl font-bold">No cards yet</h2>
+          <p className="text-[#94a3b8]">Add phrases from the lyrics reader to start learning.</p>
+        </div>
+        <button 
+          onClick={onBack}
+          className="px-8 py-3 rounded-full font-bold text-white transition-all shadow-lg active:scale-95"
+          style={{ backgroundColor: 'var(--accent)', boxShadow: '0 4px 15px -3px var(--accent)' }}
+        >
+          Go Back to Music
+        </button>
+      </div>
+    );
+  }
+
+  if (viewMode === 'complete') {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center p-8 max-w-2xl mx-auto w-full text-center">
+        <motion.div 
+          initial={{ scale: 0, rotate: -20 }}
+          animate={{ scale: 1, rotate: 0 }}
+          className="w-24 h-24 bg-emerald-500/10 rounded-full flex items-center justify-center mb-8"
+        >
+          <Check className="text-emerald-500" size={40} />
+        </motion.div>
+        
+        <h2 className="text-3xl font-bold mb-4">Session Complete!</h2>
+        <p className="text-[#94a3b8] mb-12 max-w-sm">
+          Great job! You've reviewed {sessionCards.length} phrases. Keep up the momentum to master {selectedLanguage.toUpperCase()}!
+        </p>
+
+        <div className="space-y-4 w-full">
+          <button 
+            onClick={() => setViewMode('hub')}
+            className="w-full py-4 rounded-3xl bg-app-fg text-app-bg font-bold tracking-widest uppercase text-xs active:scale-95 transition-all shadow-xl"
+          >
+            Back to Study Hub
+          </button>
+          <button 
+            onClick={onBack}
+            className="w-full py-4 rounded-3xl bg-app-card border border-app-card-border text-app-fg opacity-60 font-bold tracking-widest uppercase text-xs hover:opacity-100 transition-all"
+          >
+            Go Back to Music
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (viewMode === 'hub') {
+    return (
+      <div className="flex-1 flex flex-col p-4 sm:p-6 max-w-5xl mx-auto w-full overflow-y-auto scrollbar-hide">
+        <header className="mb-6 space-y-4 shrink-0">
+          <div className="flex items-center justify-between">
+            <h1 className="text-3xl font-bold">Study Hub</h1>
+            {dueCards.length > 0 ? (
+              <button 
+                onClick={() => startSession(dueCards)}
+                className="flex items-center gap-2 px-6 py-2.5 rounded-full bg-app-fg text-app-bg font-bold text-xs uppercase tracking-widest active:scale-95 transition-all shadow-xl"
+              >
+                <PlayCircle size={18} />
+                Review Due ({dueCards.length})
+              </button>
+            ) : (
+              <div className="flex items-center gap-3 px-4 py-2 rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/10">
+                <Check size={14} />
+                <span className="text-[10px] font-black uppercase tracking-widest">All caught up!</span>
+              </div>
+            )}
+          </div>
+
+          <div className="flex flex-col gap-4">
+            <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide">
+              <select 
+                value={selectedLanguage}
+                onChange={(e) => setSelectedLanguage(e.target.value)}
+                className="px-4 py-2 rounded-xl bg-app-card border border-app-card-border text-xs font-black uppercase tracking-widest outline-none"
+              >
+                <option value="all">All Languages</option>
+                {availableLanguages.map(l => <option key={l} value={l}>{l.toUpperCase()}</option>)}
+              </select>
+
+              <select 
+                value={selectedTrack}
+                onChange={(e) => setSelectedTrack(e.target.value)}
+                className="px-4 py-2 rounded-xl bg-app-card border border-app-card-border text-xs font-black uppercase tracking-widest outline-none max-w-[150px] truncate"
+              >
+                <option value="all">All Tracks</option>
+                {tracksList.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+
+              <select 
+                value={selectedStatus}
+                onChange={(e) => setSelectedStatus(e.target.value)}
+                className="px-4 py-2 rounded-xl bg-app-card border border-app-card-border text-xs font-black uppercase tracking-widest outline-none"
+              >
+                <option value="all">All Status</option>
+                <option value="new">New</option>
+                <option value="learning">Learning</option>
+                <option value="known">Known</option>
+              </select>
+            </div>
+            
+            <div className="flex p-1 bg-app-card border border-app-card-border rounded-2xl w-full sm:w-fit overflow-x-auto scrollbar-hide">
+              {[
+                { id: 'recent', label: 'Phrases', icon: <Clock size={16} /> },
+                { id: 'track', label: 'Decks (Tracks)', icon: <Music size={16} /> },
+                { id: 'artist', label: 'Artists', icon: <User size={16} /> },
+              ].map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setGroupMode(tab.id as GroupMode)}
+                  className={cn(
+                    "flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all whitespace-nowrap",
+                    groupMode === tab.id 
+                      ? "bg-app-bg text-app-fg shadow-lg" 
+                      : "text-app-fg opacity-40 hover:opacity-100"
+                  )}
+                >
+                  {tab.icon}
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </header>
+
+        <div className="space-y-4 pb-20">
+          {groupMode === 'recent' ? (
+            <div className="grid gap-3">
+              {groupedCards.map((group) => {
+                const knownCount = group.phrases.filter(c => c.status === 'known').length;
+                const totalCount = group.phrases.length;
+                const isExpanded = expandedParents.has(group.id);
+                
+                return (
+                  <div key={group.id} className="group overflow-hidden rounded-[2rem] bg-app-card border border-app-card-border hover:border-app-fg/10 transition-all">
+                    <div 
+                      className="flex items-center justify-between p-6 cursor-pointer"
+                      onClick={() => toggleParent(group.id)}
+                    >
+                      <div className="flex items-center gap-4 min-w-0">
+                        <div className="w-10 h-10 rounded-2xl bg-app-fg/5 flex items-center justify-center text-app-accent shrink-0">
+                           <Library size={20} />
+                        </div>
+                        <div className="min-w-0">
+                          <h3 className="font-serif text-lg leading-tight truncate">{group.title || 'General Vocabulary'}</h3>
+                          <p className="text-[10px] font-black uppercase tracking-widest opacity-20 truncate">{group.trackTitle}</p>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-center gap-4 shrink-0">
+                        <span className="text-[10px] font-black bg-app-fg/5 px-2 py-1 rounded-lg opacity-40">
+                          {knownCount}/{totalCount}
+                        </span>
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            startSession(group.phrases);
+                          }}
+                          className="p-2 rounded-xl bg-app-fg text-app-bg hover:scale-110 active:scale-95 transition-all"
+                          title="Study group"
+                        >
+                          <PlayCircle size={18} />
+                        </button>
+                        <div className={cn("transition-transform duration-300", isExpanded ? "rotate-180" : "")}>
+                          <ChevronDown size={20} className="opacity-20" />
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <AnimatePresence>
+                      {isExpanded && (
+                        <motion.div
+                          initial={{ height: 0 }}
+                          animate={{ height: 'auto' }}
+                          exit={{ height: 0 }}
+                          className="overflow-hidden border-t border-app-card-border bg-app-fg/[0.02]"
+                        >
+                          <div className="p-2 space-y-1">
+                            {group.phrases.map(child => (
+                              <div key={child.id} className="flex items-center justify-between p-4 pl-10 rounded-2xl hover:bg-app-fg/[0.03] transition-all">
+                                <div className="flex items-center gap-3">
+                                  <div className={cn(
+                                    "w-1.5 h-1.5 rounded-full",
+                                    child.status === 'known' ? 'bg-green-500' : (child.status === 'learning' ? 'bg-orange-500' : 'bg-blue-500')
+                                  )} />
+                                  <span className="text-sm font-medium opacity-80">{child.text}</span>
+                                </div>
+                                <button 
+                                  onClick={() => startSession([child])}
+                                  className="p-2 rounded-lg text-app-fg opacity-20 hover:opacity-100 hover:bg-app-fg/5 transition-all"
+                                >
+                                  <PlayCircle size={16} />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 pb-20">
+              <AnimatePresence mode="popLayout">
+                {decks.length > 0 ? decks.map((deck) => (
+                  <motion.button
+                    key={deck.id}
+                    layout
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.9 }}
+                    onClick={() => {
+                      const dueOnly = deck.cards.filter(c => c.due <= now);
+                      if (dueOnly.length > 0) {
+                        startSession(dueOnly);
+                      } else if (confirm('No cards are currently due in this deck. Review all anyway?')) {
+                        startSession(deck.cards);
+                      }
+                    }}
+                    className="group relative flex flex-col p-8 rounded-[2.5rem] bg-app-card border border-app-card-border shadow-app-card hover:border-app-accent/30 transition-all text-left overflow-hidden active:scale-95"
+                  >
+                    <div 
+                      className="absolute top-0 right-0 p-10 opacity-[0.03] group-hover:opacity-[0.08] transition-opacity"
+                      style={{ color: 'var(--accent)' }}
+                    >
+                      {deck.icon}
+                    </div>
+                    
+                    <div className="flex-1 space-y-1 mb-10">
+                      <h3 className="text-xl font-bold leading-tight group-hover:text-[var(--accent)] transition-colors line-clamp-2">
+                        {deck.title}
+                      </h3>
+                      <p className="text-sm opacity-40 truncate">{deck.subtitle}</p>
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <div className="flex gap-4">
+                        <div className="space-y-0.5">
+                          <span className="text-[10px] font-black uppercase tracking-widest opacity-20 block">All</span>
+                          <span className="text-lg font-bold">{deck.count}</span>
+                        </div>
+                        {deck.dueCount > 0 && (
+                          <div className="space-y-0.5">
+                            <span className="text-[10px] font-black uppercase tracking-widest text-emerald-500 block">Due</span>
+                            <span className="text-lg font-bold text-emerald-500">{deck.dueCount}</span>
+                          </div>
+                        )}
+                      </div>
+                      <div 
+                        className="w-10 h-10 rounded-2xl flex items-center justify-center bg-app-bg border border-app-card-border group-hover:bg-[var(--accent)] group-hover:text-white transition-all shadow-inner"
+                      >
+                        <ArrowRight size={18} />
+                      </div>
+                    </div>
+                  </motion.button>
+                )) : (
+                  <div className="col-span-full py-20 flex flex-col items-center justify-center text-center opacity-40">
+                    <Music size={48} className="mb-4" />
+                    <p className="font-bold">No cards found for this selection</p>
+                    <p className="text-sm">Try changing the filter or group mode</p>
+                  </div>
+                )}
+              </AnimatePresence>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="absolute inset-0 overflow-y-auto overflow-x-hidden bg-app-bg scrollbar-hide">
+      <div className="max-w-2xl mx-auto w-full py-8 px-4 sm:px-6 flex flex-col min-h-full">
+        <header className="flex items-center justify-between mb-8 shrink-0">
+          <button 
+            onClick={() => setViewMode('hub')} 
+            className="flex items-center gap-2 text-app-fg opacity-40 hover:opacity-100 transition-all font-bold uppercase tracking-widest text-[10px]"
+          >
+            <ChevronLeft size={16} />
+            Back
+          </button>
+          <div className="text-[10px] font-mono font-bold uppercase tracking-[0.3em] px-3 py-1 rounded-full bg-app-card border border-app-card-border" style={{ color: 'var(--accent)' }}>
+            {currentIndex + 1} / {sessionCards.length}
+          </div>
+        </header>
+
+        <main className="flex-1 flex flex-col">
+          <AnimatePresence mode="wait">
+            <motion.div 
+              key={currentCard.id + (isFlipped ? '-back' : '-front')}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="relative"
+            >
+              <div className="w-full bg-app-card border border-app-card-border shadow-app-card rounded-[2.5rem] p-8 sm:p-12 flex flex-col items-center justify-start text-center gap-10 transition-all mb-8">
+                <div className="absolute top-8 left-1/2 -translate-x-1/2 text-[10px] font-black text-app-fg opacity-10 uppercase tracking-[0.5em] truncate max-w-[80%]">
+                  {currentCard.trackId}
+                </div>
+
+                <div className="absolute top-8 right-8">
+                  <button 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      speak(currentCard.text);
+                    }}
+                    className="w-10 h-10 rounded-full flex items-center justify-center bg-app-bg border border-app-card-border text-app-fg opacity-40 hover:opacity-100 transition-all hover:bg-app-fg/5"
+                  >
+                    <Volume2 size={18} />
+                  </button>
+                </div>
+                
+                <div className="space-y-10 w-full pt-10">
+                  <p className="text-3xl lg:text-4xl font-serif leading-[1.3] text-app-fg">
+                    {isFlipped ? currentCard.translation : currentCard.text}
+                  </p>
+                  
+                  {isFlipped && (
+                    <div className="space-y-8 w-full animate-in fade-in slide-in-from-bottom-4 duration-500">
+                      <div className="h-px w-12 bg-app-fg opacity-5 mx-auto" />
+                      
+                      <p className="text-2xl italic font-medium opacity-50 font-serif" style={{ color: 'var(--accent)' }}>
+                        {currentCard.text}
+                      </p>
+                      
+                      {currentCard.explanation && (
+                        <div className="w-full">
+                          <button 
+                            onClick={() => setIsExplanationExpanded(!isExplanationExpanded)}
+                            className="w-full flex items-center justify-between p-6 rounded-[2rem] bg-app-bg border border-app-card-border hover:border-app-accent/30 transition-all text-left"
+                          >
+                            <span className="text-[10px] font-black uppercase tracking-widest opacity-40">Explanation</span>
+                            <div className="w-6 h-6 rounded-lg bg-app-fg/5 flex items-center justify-center">
+                              {isExplanationExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                            </div>
+                          </button>
+                          
+                          <AnimatePresence>
+                            {isExplanationExpanded && (
+                              <motion.div 
+                                initial={{ height: 0, opacity: 0 }}
+                                animate={{ height: 'auto', opacity: 1 }}
+                                exit={{ height: 0, opacity: 0 }}
+                                className="overflow-hidden"
+                              >
+                                <div className="pt-8 px-2 text-left">
+                                  <div className="text-base leading-relaxed text-app-fg opacity-80 prose prose-invert max-w-none prose-p:mb-6">
+                                    <ReactMarkdown>{currentCard.explanation}</ReactMarkdown>
+                                  </div>
+                                </div>
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                <div className="w-full mt-auto pt-6">
+                  {!isFlipped ? (
+                    <button 
+                      onClick={() => setIsFlipped(true)}
+                      className="w-full py-5 text-white rounded-full font-bold uppercase tracking-[0.2em] text-xs transition-all flex items-center justify-center gap-3 shadow-xl active:scale-95"
+                      style={{ 
+                        backgroundColor: 'var(--accent)', 
+                        boxShadow: '0 15px 25px -5px color-mix(in srgb, var(--accent) 40%, transparent)' 
+                      }}
+                    >
+                      Show Translation
+                      <ArrowRight size={14} />
+                    </button>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-4 w-full">
+                      <button
+                        onClick={() => handleRating(Rating.Again)}
+                        className="py-5 rounded-[2rem] border border-red-500/20 text-red-500 font-bold uppercase tracking-[0.2em] text-xs hover:bg-red-500 hover:text-white transition-all shadow-lg active:scale-95"
+                      >
+                        Again
+                      </button>
+                      <button
+                        onClick={() => handleRating(Rating.Good)}
+                        className="py-5 rounded-[2rem] border border-emerald-500/20 text-emerald-500 font-bold uppercase tracking-[0.2em] text-xs hover:bg-emerald-500 hover:text-white transition-all shadow-lg active:scale-95"
+                      >
+                        Got it
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </motion.div>
+          </AnimatePresence>
+
+          <footer className="mt-auto py-12 flex justify-center shrink-0">
+            <button 
+            onClick={async () => {
+              if (confirm('Delete this card?')) {
+                await deleteFlashcard(currentCard.id);
+                loadCards();
+                if (sessionCards.length <= 1) setViewMode('hub');
+                else {
+                  setSessionCards(prev => prev.filter(c => c.id !== currentCard.id));
+                  if (currentIndex >= sessionCards.length - 1) setCurrentIndex(0);
+                }
+              }
+            }}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl text-app-fg opacity-20 hover:opacity-100 transition-all font-bold uppercase tracking-widest text-[10px]"
+          >
+            <Trash2 size={16} />
+            Delete Phrase
+          </button>
+          </footer>
+        </main>
+      </div>
+    </div>
+  );
+}

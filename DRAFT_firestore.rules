@@ -1,0 +1,84 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidCard(data) {
+      return data.keys().hasAll(['originalPhrase', 'translatedPhrase', 'trackTitle', 'artist', 'sourceLanguage', 'status', 'userId', 'due', 'state', 'reps', 'lapses', 'stability', 'difficulty', 'elapsed_days', 'scheduled_days', 'createdAt', 'updatedAt']) &&
+             data.keys().size() >= 17 && data.keys().size() <= 20 &&
+             data.originalPhrase is string && data.originalPhrase.size() <= 1000 &&
+             data.translatedPhrase is string && data.translatedPhrase.size() <= 1000 &&
+             data.trackTitle is string && data.trackTitle.size() <= 200 &&
+             data.artist is string && data.artist.size() <= 200 &&
+             data.sourceLanguage is string && data.sourceLanguage.size() <= 64 &&
+             data.status in ['new', 'known', 'studying'] &&
+             data.userId == request.auth.uid &&
+             data.state is number &&
+             data.reps is number &&
+             data.lapses is number &&
+             data.stability is number &&
+             data.difficulty is number &&
+             data.elapsed_days is number &&
+             data.scheduled_days is number &&
+             data.due is timestamp &&
+             (data.explanation == null || (data.explanation is string && data.explanation.size() <= 2000)) &&
+             (data.last_review == null || data.last_review is timestamp) &&
+             (data.learning_steps == null || data.learning_steps is map);
+    }
+
+    match /cards/{cardId} {
+      allow create: if isSignedIn() && 
+                      isValidId(cardId) && 
+                      isValidCard(incoming()) &&
+                      incoming().createdAt == request.time &&
+                      incoming().updatedAt == request.time;
+
+      allow update: if isSignedIn() && 
+                      isOwner(existing().userId) &&
+                      isValidCard(incoming()) &&
+                      // Identity Integrity
+                      incoming().userId == existing().userId &&
+                      // Immutability
+                      incoming().createdAt == existing().createdAt &&
+                      incoming().originalPhrase == existing().originalPhrase &&
+                      // Temporal Integrity
+                      incoming().updatedAt == request.time &&
+                      (
+                        // Action: Update Status
+                        (incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt', 'explanation'])) ||
+                        // Action: Review/FSRS Update
+                        (incoming().diff(existing()).affectedKeys().hasAny(['due', 'state', 'last_review', 'elapsed_days', 'scheduled_days', 'stability', 'difficulty', 'reps', 'lapses', 'learning_steps']) &&
+                         incoming().diff(existing()).affectedKeys().hasOnly(['due', 'state', 'last_review', 'elapsed_days', 'scheduled_days', 'stability', 'difficulty', 'reps', 'lapses', 'learning_steps', 'updatedAt', 'status', 'explanation']))
+                      );
+
+      allow delete: if isSignedIn() && isOwner(existing().userId);
+
+      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow get: if isSignedIn() && isOwner(resource.data.userId);
+    }
+  }
+}

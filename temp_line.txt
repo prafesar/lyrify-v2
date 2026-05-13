@@ -1,0 +1,1 @@
+                                  title={lineStatusStatus === 'new' ? "Add line + components" : "Open Phrase Drawer"}

@@ -1,0 +1,8 @@
+{
+  "name": "Remix: Lyrify 2",
+  "description": "Premium music player with AI-powered lyric extraction and real-time translation.",
+  "requestFramePermissions": [
+    "microphone"
+  ],
+  "majorCapabilities": []
+}

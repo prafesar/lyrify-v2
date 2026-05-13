@@ -1,0 +1,118 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+
+  --color-app-bg: var(--background);
+  --color-app-fg: var(--foreground);
+  --color-app-card: var(--card);
+  --color-app-card-border: var(--card-border);
+  --color-app-muted: var(--muted);
+  --color-app-accent: var(--accent);
+  --shadow-app-card: var(--card-shadow);
+  
+  --animate-spin-slow: spin 8s linear infinite;
+
+  @keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+}
+
+@layer base {
+  :root {
+    --background: #020617;
+    --foreground: #f8fafc;
+    --card: rgba(255, 255, 255, 0.03);
+    --card-border: rgba(255, 255, 255, 0.05);
+    --card-shadow: none;
+    --muted: #94a3b8;
+    --accent: #6366f1;
+    --glow-color: var(--accent);
+  }
+
+  [data-theme='light'] {
+    --background: #f1f5f9;
+    --foreground: #0f172a;
+    --card: #ffffff;
+    --card-border: rgba(0, 0, 0, 0.02);
+    --card-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05), 0 2px 10px -2px rgba(0, 0, 0, 0.03);
+    --muted: #64748b;
+    --accent: #16a34a;
+    --glow-color: transparent;
+  }
+
+  [data-theme='solarized'] {
+    --background: #fdf6e3;
+    --foreground: #073642;
+    --card: #fdf6e3;
+    --card-border: rgba(7, 54, 66, 0.05);
+    --card-shadow: 0 10px 30px -5px rgba(7, 54, 66, 0.05);
+    --muted: #586e75;
+    --accent: #9d1715;
+    --glow-color: transparent;
+  }
+
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    transition: background-color 0.4s cubic-bezier(0.4, 0, 0.2, 1), color 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .bg-accent-glow {
+    opacity: 0.2;
+  }
+
+  [data-theme='light'] .bg-accent-glow,
+  [data-theme='solarized'] .bg-accent-glow {
+    display: none;
+  }
+}
+
+@layer utilities {
+  .bg-app-bg { background-color: var(--background); }
+  .text-app-fg { color: var(--foreground); }
+  .bg-app-card { background-color: var(--card); }
+  .border-app-card-border { border-color: var(--card-border); }
+  .shadow-app-card { box-shadow: var(--card-shadow); }
+  .text-app-muted { color: var(--muted); }
+  .bg-app-accent { background-color: var(--accent); }
+  .text-app-accent { color: var(--accent); }
+  .border-app-accent { border-color: var(--accent); }
+
+  .mask-fade-y {
+    mask-image: linear-gradient(to bottom, transparent 0%, black 15%, black 85%, transparent 100%);
+  }
+
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 4px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: var(--card-border);
+    border-radius: 10px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: var(--muted);
+  }
+
+  /* Basic Markdown Styles */
+  .prose p { margin-bottom: 0.75rem; }
+  .prose p:last-child { margin-bottom: 0; }
+  .prose ul, .prose ol { margin-bottom: 0.75rem; padding-left: 1.25rem; }
+  .prose li { margin-bottom: 0.25rem; }
+  .prose ul { list-style-type: disc; }
+  .prose ol { list-style-type: decimal; }
+  .prose strong { font-weight: 600; color: var(--foreground); }
+  .prose em { font-style: italic; opacity: 0.8; }
+  .prose code { 
+    background: var(--card); 
+    padding: 0.1rem 0.3rem; 
+    border-radius: 0.25rem; 
+    font-family: var(--font-mono); 
+    font-size: 0.85em;
+  }
+}

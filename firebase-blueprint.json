@@ -1,0 +1,39 @@
+{
+  "entities": {
+    "Card": {
+      "title": "Flashcard",
+      "description": "A flashcard for memorizing lyrics phrases using FSRS.",
+      "type": "object",
+      "properties": {
+        "originalPhrase": { "type": "string" },
+        "translatedPhrase": { "type": "string" },
+        "explanation": { "type": "string", "description": "AI-generated context, idioms, or grammar notes." },
+        "parentOriginalPhrase": { "type": "string", "description": "Original line or sentence this component belongs to." },
+        "status": { "type": "string", "enum": ["new", "known", "studying"] },
+        "trackTitle": { "type": "string" },
+        "artist": { "type": "string" },
+        "sourceLanguage": { "type": "string" },
+        "userId": { "type": "string" },
+        "due": { "type": "string", "format": "date-time" },
+        "state": { "type": "number", "description": "FSRS State (0: New, 1: Learning, 2: Review, 3: Relearning)" },
+        "last_review": { "type": "string", "format": "date-time" },
+        "elapsed_days": { "type": "number" },
+        "scheduled_days": { "type": "number" },
+        "stability": { "type": "number" },
+        "difficulty": { "type": "number" },
+        "reps": { "type": "number" },
+        "lapses": { "type": "number" },
+        "learning_steps": { "type": "object" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["originalPhrase", "translatedPhrase", "userId", "state", "createdAt", "due", "status", "trackTitle", "artist", "sourceLanguage"]
+    }
+  },
+  "firestore": {
+    "/cards/{cardId}": {
+      "schema": "Card",
+      "description": "Collection of user flashcards."
+    }
+  }
+}
