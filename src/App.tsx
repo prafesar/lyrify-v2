@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
-import { motion, AnimatePresence } from "motion/react";
+import { motion, AnimatePresence, useMotionValue, useTransform } from "motion/react";
 import {
   Play,
   Pause,
@@ -17,6 +17,7 @@ import {
   Check,
   ChevronLeft,
   ChevronRight,
+  ArrowUpLeft,
   X,
   User as UserIcon,
   Settings,
@@ -44,18 +45,18 @@ import {
   VolumeX,
   BookmarkPlus,
   Loader2,
-  Copy,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
-import { MOCK_TRACKS, Track } from "./constants";
+import { MOCK_TRACKS, Track, Artist, Album } from "./constants";
 import {
   translateLyrics,
   detectLanguage,
   explainPhraseStructured,
   extractLyricsMetadata,
-  generateTrackAnalysis,
-  generatePhraseAnalysis,
+  generateSongMeaning,
+  getCachedSongMeaning,
   completeLyricsAnalysis,
+  ANALYSIS_PROMPT_VERSION,
 } from "./services/geminiService";
 import { cn } from "./lib/utils";
 import { auth, signIn, logOut, testDbConnection } from "./lib/firebase";
@@ -67,7 +68,7 @@ import {
   deleteFlashcard,
   type Flashcard,
   type PhraseStatus,
-} from "./services/cardService";
+} from "./services/localCardService";
 import StudyView from "./components/StudyView";
 import SettingsView from "./components/SettingsView";
 import PhraseDrawer from "./components/PhraseDrawer";
@@ -75,6 +76,8 @@ import { getLocaleByName } from "./lib/languages";
 import LanguageSelector from "./components/LanguageSelector";
 import {
   searchITunes,
+  getArtistDetails,
+  getAlbumDetails,
   fetchLyrics,
   getCachedTrackData,
   saveTrackData,
@@ -82,7 +85,10 @@ import {
   getRecentTracks,
   addRecentTrack,
   splitLyricsIntoLines,
+  searchLyricsOptions,
+  fetchLyricsFromOption,
   type TrackLyricsData,
+  type LyricOption,
   type LyricsLine,
   type Phrase,
 } from "./services/musicService";
@@ -137,8 +143,7 @@ const RESOURCE_TYPES = [
     hoverBorder: "hover:border-yellow-500/50",
     hoverBg: "hover:bg-yellow-500/5",
     getUrl: (track: Track) =>
-      track.geniusUrl ||
-      `https://genius.com/search?q=${encodeURIComponent(track.artist + " " + track.title)}`,
+      `https://www.google.com/search?q=site:genius.com+${encodeURIComponent(track.artist + " " + track.title + " lyrics")}`,
   },
   {
     id: "musixmatch",
@@ -150,8 +155,31 @@ const RESOURCE_TYPES = [
     hoverBorder: "hover:border-orange-500/50",
     hoverBg: "hover:bg-orange-500/5",
     getUrl: (track: Track) =>
-      track.musixmatchUrl ||
-      `https://www.musixmatch.com/search/${encodeURIComponent(track.artist + " " + track.title)}`,
+      `https://www.google.com/search?q=site:musixmatch.com+${encodeURIComponent(track.artist + " " + track.title + " lyrics")}`,
+  },
+  {
+    id: "lrclib",
+    name: "LRCLIB",
+    subtitle: "Synced lyrics database",
+    icon: FileText,
+    color: "text-blue-400",
+    bgColor: "bg-blue-400/10",
+    hoverBorder: "hover:border-blue-400/50",
+    hoverBg: "hover:bg-blue-400/5",
+    getUrl: (track: Track) =>
+      `https://lrclib.net/search/${encodeURIComponent(track.artist + " " + track.title)}`,
+  },
+  {
+    id: "azlyrics",
+    name: "AZLyrics",
+    subtitle: "Clean & simple lyrics",
+    icon: Search,
+    color: "text-zinc-400",
+    bgColor: "bg-zinc-400/10",
+    hoverBorder: "hover:border-zinc-400/50",
+    hoverBg: "hover:bg-zinc-400/5",
+    getUrl: (track: Track) =>
+      `https://www.google.com/search?q=site:azlyrics.com+${encodeURIComponent(track.artist + " " + track.title)}`,
   },
   {
     id: "lastfm",
@@ -167,6 +195,261 @@ const RESOURCE_TYPES = [
       `https://www.last.fm/search?q=${encodeURIComponent(track.artist + " " + track.title)}`,
   },
 ];
+
+interface LyricLineProps {
+  line: string;
+  i: number;
+  isCompact?: boolean;
+  alwaysShowTranslation?: boolean;
+  activeLineIndex: number | null;
+  phraseMetadata: Map<string, any>;
+  currentTrack: any;
+  getLineStatus: (line: string) => string;
+  getStatusStyles: (status: string) => any;
+  getPhrasesForLine: (i: number) => any[];
+  getLineProgress: (i: number) => any;
+  lineRefs: React.MutableRefObject<Map<number, HTMLDivElement>>;
+  handleAddLineWithComponents: (line: string, i: number, status: "known" | "learning") => void;
+  renderHighlightedText: (line: string, phrases: any[]) => React.ReactNode;
+  handleLineClick: (line: string, i: number) => void;
+  openPhraseDrawer: (i: number) => void;
+  isSaving: boolean;
+  isListeningForSpeech: boolean;
+  shadowingFeedback: "none" | "correct" | "incorrect";
+  shadowingAttempts: number;
+}
+
+const LyricLine = ({
+  line,
+  i,
+  isCompact = false,
+  alwaysShowTranslation = false,
+  activeLineIndex,
+  phraseMetadata,
+  currentTrack,
+  getLineStatus,
+  getStatusStyles,
+  getPhrasesForLine,
+  getLineProgress,
+  lineRefs,
+  handleAddLineWithComponents,
+  renderHighlightedText,
+  handleLineClick,
+  openPhraseDrawer,
+  isSaving,
+  isListeningForSpeech,
+  shadowingFeedback,
+  shadowingAttempts
+}: LyricLineProps) => {
+  const x = useMotionValue(0);
+
+  const trimmedLine = line.trim();
+  if (!trimmedLine && isCompact) return null;
+
+  const metadata = phraseMetadata.get(trimmedLine);
+  const userTrans = metadata?.translatedPhrase;
+  const autoTrans = currentTrack?.lines?.[i]?.translation;
+  const displayTranslation = userTrans || autoTrans;
+
+  const lineStatusStatus = getLineStatus(trimmedLine);
+  const style = getStatusStyles(lineStatusStatus);
+  const phrasesInLine = getPhrasesForLine(i);
+  const progress = getLineProgress(i);
+
+  return (
+    <div 
+      className="relative group/line overflow-hidden rounded-[1.5rem]"
+      ref={(el) => {
+        if (!isCompact) {
+          if (el) lineRefs.current.set(i, el as HTMLDivElement);
+          else lineRefs.current.delete(i);
+        }
+      }}
+    >
+      <motion.div
+        style={{ x }}
+        drag="x"
+        dragConstraints={{ left: 0, right: 0 }}
+        dragElastic={1}
+        onDragEnd={(_, info) => {
+          if (info.offset.x < -100) {
+            handleAddLineWithComponents(line, i, "known");
+          } else if (info.offset.x > 100) {
+            handleAddLineWithComponents(line, i, "learning");
+          }
+        }}
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: Math.min(i * 0.01, 1) }}
+        className={cn(
+          "group relative flex flex-col gap-1 rounded-[1.5rem] border cursor-pointer z-10",
+          isCompact ? "px-4 py-3" : "px-6 py-4",
+          activeLineIndex === i
+            ? "scale-[1.01] shadow-2xl z-20 brightness-110 border-app-accent"
+            : "scale-100",
+          trimmedLine ? style.bg : "bg-transparent border-transparent",
+          trimmedLine ? style.border : "border-transparent",
+        )}
+        onClick={() => trimmedLine && handleLineClick(line, i)}
+      >
+        {/* Indicators revealed behind the card as we drag it */}
+        <div className="absolute right-[calc(100%+1px)] top-0 bottom-0 flex items-center pr-3 pointer-events-none">
+          <div className="flex flex-col items-center gap-1 text-orange-500">
+            <div className="p-3 rounded-2xl bg-orange-500 border border-orange-500/20 shadow-lg text-white">
+              <BookOpen size={24} strokeWidth={2.5} />
+            </div>
+            <span className="text-[9px] font-black uppercase tracking-[0.2em] whitespace-nowrap">Learn</span>
+          </div>
+        </div>
+
+        <div className="absolute left-[calc(100%+1px)] top-0 bottom-0 flex items-center pl-3 pointer-events-none">
+          <div className="flex flex-col items-center gap-1 text-green-500">
+            <div className="p-3 rounded-2xl bg-green-500 border border-green-500/20 shadow-lg text-white">
+              <Check size={24} strokeWidth={2.5} />
+            </div>
+            <span className="text-[9px] font-black uppercase tracking-[0.2em] whitespace-nowrap">Known</span>
+          </div>
+        </div>
+        <div className="flex items-center gap-4 w-full relative z-10">
+          <div className="flex-1 min-w-0">
+            <p
+              className={cn(
+                "font-serif leading-snug transition-all duration-300 text-app-fg ml-1",
+                activeLineIndex === i
+                  ? isCompact ? "text-xl" : "text-3xl"
+                  : isCompact ? "text-base opacity-90" : "text-xl opacity-80",
+              )}
+            >
+              {line ? renderHighlightedText(line, phrasesInLine) : "\u00A0"}
+            </p>
+          </div>
+
+          {trimmedLine && (
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  openPhraseDrawer(i);
+                }}
+                className={cn(
+                  "p-2 rounded-xl transition-all hover:scale-110 active:scale-95",
+                  lineStatusStatus === "known"
+                    ? "text-green-500"
+                    : lineStatusStatus === "learning"
+                      ? "text-orange-500"
+                      : "text-app-fg opacity-20 hover:opacity-100",
+                )}
+              >
+                {isSaving && activeLineIndex === i ? (
+                  <Loader2 size={16} className="animate-spin" />
+                ) : (
+                  style.icon
+                )}
+              </button>
+            </div>
+          )}
+        </div>
+
+        <div className="pl-1 relative z-10">
+          <AnimatePresence>
+            {(activeLineIndex === i || alwaysShowTranslation) && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }}
+                className="space-y-4"
+              >
+                {displayTranslation && (
+                  <p
+                    className={cn(
+                      "font-serif italic text-app-fg opacity-40 transition-all duration-300 ml-1 mt-1",
+                      activeLineIndex === i
+                        ? isCompact ? "text-sm" : "text-lg"
+                        : isCompact ? "text-xs" : "text-base",
+                    )}
+                  >
+                    {displayTranslation}
+                  </p>
+                )}
+
+                {activeLineIndex === i && isListeningForSpeech && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="flex items-center gap-3 mt-4 ml-1 bg-[var(--accent)]/5 border border-[var(--accent)]/10 px-4 py-3 rounded-3xl w-fit shadow-lg shadow-[var(--accent)]/5"
+                  >
+                    <div className="flex gap-1 items-center h-4 w-6">
+                      {[0, 1, 2, 3].map((dot) => (
+                        <motion.div
+                          key={dot}
+                          animate={{
+                            height: shadowingFeedback === "none" ? [8, 16, 8] : 10,
+                          }}
+                          transition={{
+                            repeat: shadowingFeedback === "none" ? Infinity : 0,
+                            duration: 0.5,
+                            delay: dot * 0.12,
+                          }}
+                          className={cn(
+                            "w-1 rounded-full transition-colors duration-300",
+                            shadowingFeedback === "correct"
+                              ? "bg-green-500"
+                              : shadowingFeedback === "incorrect"
+                                ? "bg-orange-500"
+                                : "bg-[var(--accent)]",
+                          )}
+                        />
+                      ))}
+                    </div>
+                    <span
+                      className={cn(
+                        "text-[10px] font-black uppercase tracking-[0.2em] transition-colors duration-300",
+                        shadowingFeedback === "correct"
+                          ? "text-green-500"
+                          : shadowingFeedback === "incorrect"
+                            ? "text-orange-500"
+                            : "text-app-fg",
+                      )}
+                    >
+                      {shadowingFeedback === "correct"
+                        ? "Perfect!"
+                        : shadowingFeedback === "incorrect"
+                          ? "Try Again"
+                          : "Shadowing..."}
+                    </span>
+
+                    {shadowingAttempts > 0 && shadowingFeedback === "none" && (
+                      <div className="ml-2 pl-3 border-l border-app-card-border">
+                        <span className="text-[9px] font-bold opacity-40 uppercase tracking-widest">
+                          Attempt {shadowingAttempts}/3
+                        </span>
+                      </div>
+                    )}
+                  </motion.div>
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+
+        {progress && "percentage" in progress && (
+          <div className="absolute bottom-0 left-0 right-0 h-1 bg-app-fg/5">
+            <motion.div
+              initial={{ width: 0 }}
+              animate={{ width: `${progress.percentage}%` }}
+              className={cn(
+                "h-full transition-colors",
+                progress.percentage === 100
+                  ? "bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]"
+                  : "bg-app-accent shadow-[0_0_8px_rgba(var(--accent-rgb),0.4)]"
+              )}
+            />
+          </div>
+        )}
+      </motion.div>
+    </div>
+  );
+};
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -186,8 +469,6 @@ export default function App() {
   );
   const [isTranslating, setIsTranslating] = useState(false);
   const [isGeneratingAnalysis, setIsGeneratingAnalysis] = useState(false);
-  const [isGeneratingPhraseAnalysis, setIsGeneratingPhraseAnalysis] =
-    useState(false);
   const [phraseMetadata, setPhraseMetadata] = useState<Map<string, Flashcard>>(
     new Map(),
   );
@@ -195,8 +476,7 @@ export default function App() {
     new Map(),
   );
   const [activeLineIndex, setActiveLineIndex] = useState<number | null>(null);
-  const [isCopied, setIsCopied] = useState(false);
-  const [isAnalysisCopied, setIsAnalysisCopied] = useState(false);
+
   const [isMuted, setIsMuted] = useState(
     () => localStorage.getItem("lyrify_muted") === "true",
   );
@@ -211,9 +491,7 @@ export default function App() {
     localStorage.setItem("lyrify_muted", String(isMuted));
   }, [isMuted]);
 
-  // Load cards and group them
   const loadUserCards = async () => {
-    if (!user) return;
     try {
       const cards = await getCards();
       const meta = new Map<string, Flashcard>();
@@ -236,8 +514,8 @@ export default function App() {
   };
 
   useEffect(() => {
-    if (user) loadUserCards();
-  }, [user]);
+    loadUserCards();
+  }, []);
   const getLineStatus = (line: string) => {
     const children = childCardsMap.get(line) || [];
 
@@ -257,7 +535,7 @@ export default function App() {
     index: number,
     status: PhraseStatus = "learning",
   ) => {
-    if (!user || !currentTrack) return;
+    if (!currentTrack) return;
     const trimmedLine = line.trim();
     if (!trimmedLine) return;
 
@@ -283,9 +561,11 @@ export default function App() {
           text: item.text,
           translation: item.trans,
           trackId: currentTrack.trackId,
+          trackTitle: currentTrack.title,
+          artist: currentTrack.artist,
+          sourceLanguage: currentTrack.sourceLanguage,
           lineId: trimmedLine,
           explanation: item.expl || '',
-          lemmas: [],
           type: 'phrase'
         }, status);
         addedCount++;
@@ -344,6 +624,9 @@ export default function App() {
         text: phrase,
         translation: translation,
         trackId: currentTrack.trackId,
+        trackTitle: currentTrack.title,
+        artist: currentTrack.artist,
+        sourceLanguage: currentTrack.sourceLanguage,
         lineId: parentLine || '',
         explanation: explanation,
         lemmas: [],
@@ -358,6 +641,7 @@ export default function App() {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isLyricsSettingsOpen, setIsLyricsSettingsOpen] = useState(false);
   const [isResourcesOpen, setIsResourcesOpen] = useState(false);
+  const [resourceTab, setResourceTab] = useState<"links" | "lyrics">("links");
   const [editingLine, setEditingLine] = useState<{
     original: string;
     translation: string;
@@ -385,25 +669,40 @@ export default function App() {
   };
 
   useEffect(() => {
+    let timeoutId: number | undefined;
     if (
       activeLineIndex !== null &&
       lineRefs.current.has(activeLineIndex) &&
       scrollContainerRef.current
     ) {
-      const activeEl = lineRefs.current.get(activeLineIndex);
-      const container = scrollContainerRef.current;
-      if (activeEl) {
-        const containerHeight = container.offsetHeight;
-        const elOffsetTop = activeEl.offsetTop;
-        const elHeight = activeEl.offsetHeight;
+      const scroll = () => {
+        const activeEl = lineRefs.current.get(activeLineIndex!);
+        const container = scrollContainerRef.current;
+        if (activeEl && container) {
+          const containerRect = container.getBoundingClientRect();
+          const activeRect = activeEl.getBoundingClientRect();
+          
+          // Calculate relative position within the scrollable content
+          const relativeTop = activeRect.top - containerRect.top + container.scrollTop;
+          const elHeight = activeRect.height;
+          const containerHeight = containerRect.height;
 
-        container.scrollTo({
-          top: elOffsetTop - containerHeight / 2 + elHeight / 2,
-          behavior: "smooth",
-        });
-      }
+          container.scrollTo({
+            top: relativeTop - containerHeight / 2 + elHeight / 2,
+            behavior: "smooth",
+          });
+        }
+      };
+
+      // Try scrolling immediately
+      scroll();
+      // Also try after a short delay to account for layout shifts/expansions
+      timeoutId = window.setTimeout(scroll, 100);
     }
-  }, [activeLineIndex]);
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+    };
+  }, [activeLineIndex, activeTab]);
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
@@ -411,16 +710,28 @@ export default function App() {
   }, [theme]);
 
   const [searchQuery, setSearchQuery] = useState("");
-  const [searchResults, setSearchResults] = useState<Track[]>([]);
+  const [searchEntityType, setSearchEntityType] = useState<"musicTrack" | "album" | "musicArtist">("musicTrack");
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [artistDetails, setArtistDetails] = useState<{ artist: Artist; albums: Album[]; topTracks: Track[] } | null>(null);
+  const [albumDetails, setAlbumDetails] = useState<{ album: Album; tracks: Track[] } | null>(null);
+  const [isSearchingDetails, setIsSearchingDetails] = useState(false);
   const [recentTracks, setRecentTracks] = useState<Track[]>([]);
+  const [searchHistory, setSearchHistory] = useState<string[]>(
+    () => JSON.parse(localStorage.getItem("lyrify_search_history") || "[]")
+  );
+  const [isSearchInputFocused, setIsSearchInputFocused] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
   const [isLoadingLyrics, setIsLoadingLyrics] = useState(false);
   const [loadingStep, setLoadingStep] = useState<
-    "idle" | "searching" | "analyzing"
+    "idle" | "searching" | "meaning" | "analyzing"
   >("idle");
   const [lyricsFetchError, setLyricsFetchError] = useState<string | null>(null);
   const [manualLyrics, setManualLyrics] = useState("");
   const [dbConnectionError, setDbConnectionError] = useState(false);
+
+  const [lyricOptions, setLyricOptions] = useState<LyricOption[]>([]);
+  const [isSearchingOptions, setIsSearchingOptions] = useState(false);
+  const [manualSearchQuery, setManualSearchQuery] = useState("");
 
   useEffect(() => {
     isReadingAllRef.current = isReadingAll;
@@ -465,6 +776,12 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem("skip_known", String(skipKnownPhrases));
   }, [skipKnownPhrases]);
+
+  useEffect(() => {
+    if (searchQuery.trim()) {
+      handleSearch();
+    }
+  }, [searchEntityType]);
 
   useEffect(() => {
     // Initialize audio feedback
@@ -844,7 +1161,6 @@ export default function App() {
                 explanation: explanation,
                 status: "learning",
                 trackId: currentTrack.trackId,
-                userId: user.uid,
                 due: new Date(),
                 state: 0,
                 elapsed_days: 0,
@@ -1129,14 +1445,74 @@ export default function App() {
     setShadowingFeedback("none");
   };
 
-  const handleSearch = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!searchQuery.trim()) return;
+  const searchContainerRef = useRef<HTMLDivElement>(null);
+
+  const handleSearch = async (e?: React.FormEvent, overrideQuery?: string) => {
+    if (e) e.preventDefault();
+    const query = overrideQuery !== undefined ? overrideQuery : searchQuery;
+    if (!query.trim()) return;
+    
+    setSearchQuery(query);
+
     setIsSearching(true);
-    const results = await searchITunes(searchQuery);
+    setArtistDetails(null);
+    setAlbumDetails(null);
+    const results = await searchITunes(query, searchEntityType);
     setSearchResults(results);
     setIsSearching(false);
+
+    // Save to history
+    const newHistory = [query, ...searchHistory.filter(h => h !== query)].slice(0, 10);
+    setSearchHistory(newHistory);
+    localStorage.setItem("lyrify_search_history", JSON.stringify(newHistory));
+
+    if (searchContainerRef.current) {
+      searchContainerRef.current.scrollTo({ top: 0, behavior: "smooth" });
+    }
   };
+
+  const handleArtistSelect = async (artistId: string) => {
+    if (!artistId || artistId === "undefined") return;
+    setIsSearchingDetails(true);
+    try {
+      const details = await getArtistDetails(artistId);
+      if (details && details.artist) {
+        setArtistDetails(details);
+        setAlbumDetails(null);
+        if (searchContainerRef.current) {
+          searchContainerRef.current.scrollTo({ top: 0, behavior: "smooth" });
+        }
+      }
+    } catch (err) {
+      console.error("Failed to load artist details:", err);
+    } finally {
+      setIsSearchingDetails(false);
+    }
+  };
+
+  const handleAlbumSelect = async (albumId: string) => {
+    if (!albumId || albumId === "undefined") return;
+    setIsSearchingDetails(true);
+    try {
+      const details = await getAlbumDetails(albumId);
+      if (details && details.album) {
+        setAlbumDetails(details);
+        if (searchContainerRef.current) {
+          searchContainerRef.current.scrollTo({ top: 0, behavior: "smooth" });
+        }
+      }
+    } catch (err) {
+      console.error("Failed to load album details:", err);
+    } finally {
+      setIsSearchingDetails(false);
+    }
+  };
+
+  useEffect(() => {
+    if (searchQuery.trim() && !artistDetails && !albumDetails && searchResults.length > 0) {
+      handleSearch();
+    }
+  }, [searchEntityType]);
 
 
   const handleTrackSelect = async (track: any) => {
@@ -1148,118 +1524,147 @@ export default function App() {
     setActiveTab("preview");
     window.speechSynthesis.cancel();
 
-    // 2. Initial cache check
+    // 2. Track IDs
     const trackId = track.id || track.trackId;
+    const trackTitle = track.title || "";
+    const artist = track.artist || "";
+    const artistId = track.artistId || "";
+    const album = track.album || "";
+    const albumId = track.albumId || "";
+    const coverUrl = track.coverUrl || "";
+
+    // 3. Initial cache check
     const cached = getCachedTrackData(trackId);
     if (cached) {
-      setCurrentTrack(cached);
+      const updatedCached = {
+        ...cached,
+        coverUrl: cached.coverUrl || coverUrl,
+        album: cached.album || album,
+        albumId: cached.albumId || albumId,
+        artist: cached.artist || artist,
+        artistId: cached.artistId || artistId,
+        title: cached.title || trackTitle,
+      };
+      if ((!cached.coverUrl && coverUrl) || (!cached.title && trackTitle)) {
+        saveTrackData(trackId, updatedCached);
+      }
+      setCurrentTrack(updatedCached);
       setView("lyrics");
       
-      // If Stage 2 or 3 is missing, kick them off
-      if (!cached.processingStatus.stage2_completed) {
-        runStage2(cached);
-      } else if (!cached.processingStatus.stage3_completed) {
-        runStage3(cached);
-      }
       addRecentTrack(track);
       setRecentTracks(getRecentTracks());
       return;
     }
 
-    // 3. Stage 1: Load Raw Lyrics
+    // 4. Create placeholder track data (no automatic fetching)
+    const initialTrack: TrackLyricsData = {
+      trackId: trackId,
+      artist: artist,
+      artistId: artistId,
+      title: trackTitle,
+      album: album,
+      albumId: albumId,
+      coverUrl: coverUrl,
+      rawLyrics: "",
+      source: null,
+      sourceLanguage: "English",
+      lines: [],
+      processingStatus: {
+        stage1_completed: false,
+        stage2_completed: false,
+        stage3_completed: false,
+      },
+      lastUpdated: Date.now(),
+    };
+
+    setCurrentTrack(initialTrack);
+    setView("lyrics");
+    addRecentTrack(track);
+    setRecentTracks(getRecentTracks());
+
+    // 5. BACKGROUND Cache Check (Firestore)
+    // We do this after setting the initial track to keep UI responsive
+    // but fast enough that the user might not even see the "Analyze" button
+    getCachedSongMeaning(artist, trackTitle, targetLanguage)
+      .then(cachedMeaning => {
+        if (cachedMeaning) {
+          setCurrentTrack(prev => {
+            if (!prev || prev.trackId !== trackId) return prev;
+            const updated = {
+              ...prev,
+              meaning: cachedMeaning,
+              processingStatus: {
+                ...prev.processingStatus,
+                stage2_completed: true
+              }
+            };
+            // Optional: Save to local cache as well so it's instant next time
+            saveTrackData(trackId, updated);
+            return updated;
+          });
+        }
+      })
+      .catch(err => console.error("Firestore cache check failed:", err));
+  };
+
+  const handleAnalyzeSong = async () => {
+    if (!currentTrack || isLoadingLyrics) return;
+    
+    setLyricsFetchError(null);
     setIsLoadingLyrics(true);
     setLoadingStep("searching");
-    try {
-      const lyricsData = await fetchLyrics(track.artist, track.title);
-      const rawLyrics = lyricsData?.lyrics;
 
-      if (!rawLyrics) {
-        setLyricsFetchError("Lyrics not found in databases.");
-        setIsLoadingLyrics(false);
-        return;
+    try {
+      let trackData = { ...currentTrack };
+      let lyrics = trackData.rawLyrics;
+
+      // 1. Fetch lyrics if missing
+      if (!lyrics) {
+        const lyricsResponse = await fetchLyrics(trackData.artist, trackData.title);
+        if (!lyricsResponse.lyrics) {
+          setLyricsFetchError("Lyrics not found. Please try manual input.");
+          setIsLoadingLyrics(false);
+          setLoadingStep("idle");
+          return;
+        }
+        
+        lyrics = lyricsResponse.lyrics;
+        const sourceLang = await detectLanguage(lyrics);
+        
+        trackData = {
+          ...trackData,
+          rawLyrics: lyrics,
+          sourceLanguage: sourceLang || "English",
+          source: (lyricsResponse.source as any) || "Unknown",
+          lines: splitLyricsIntoLines(trackData.trackId, lyrics),
+          processingStatus: { ...trackData.processingStatus, stage1_completed: true }
+        };
       }
 
-      setLoadingStep("analyzing");
-      const [sourceLang, metadata] = await Promise.all([
-        detectLanguage(rawLyrics),
-        extractLyricsMetadata(rawLyrics, track.artist, track.title),
-      ]);
+      // 2. Separate LLM request for meaning if missing
+      if (!trackData.meaning) {
+        setLoadingStep("meaning");
+        const meaning = await generateSongMeaning(
+          lyrics || "",
+          trackData.artist,
+          trackData.title,
+          targetLanguage
+        );
+        trackData = {
+          ...trackData,
+          meaning,
+          processingStatus: { ...trackData.processingStatus, stage2_completed: true }
+        };
+      }
 
-      const initialTrack: TrackLyricsData = {
-        trackId: trackId,
-        artist: track.artist,
-        title: track.title,
-        rawLyrics: rawLyrics,
-        source: (lyricsData.source as any) || "Unknown",
-        sourceLanguage: sourceLang || "English",
-        lines: splitLyricsIntoLines(trackId, rawLyrics),
-        processingStatus: {
-          stage1_completed: true,
-          stage2_completed: false,
-          stage3_completed: false,
-        },
-        lastUpdated: Date.now(),
-      };
-
-      setCurrentTrack(initialTrack);
-      saveTrackData(trackId, initialTrack);
-      setView("lyrics");
-      addRecentTrack(track);
-      setRecentTracks(getRecentTracks());
-
-      // 4. Kick off Stage 2 (Preview)
-      runStage2(initialTrack);
+      saveTrackData(trackData.trackId, trackData);
+      setCurrentTrack(trackData);
     } catch (err) {
-      setLyricsFetchError("Failed to fetch or process lyrics.");
+      console.error("Manual fetch/meaning failed:", err);
+      setLyricsFetchError("Failed to fetch song data.");
     } finally {
       setIsLoadingLyrics(false);
       setLoadingStep("idle");
-    }
-  };
-
-  const runStage2 = async (track: TrackLyricsData) => {
-    setIsGeneratingPhraseAnalysis(true);
-    try {
-      const result = await generatePhraseAnalysis(
-        track.rawLyrics,
-        track.artist,
-        track.title,
-        targetLanguage
-      );
-
-      setCurrentTrack((prev) => {
-        if (!prev || prev.trackId !== track.trackId) return prev;
-        
-        const updatedLines = prev.lines.map(line => {
-          const aiLine = result.lines.find((l: any) => l.original === line.original);
-          if (aiLine) {
-            return {
-              ...line,
-              phrases: aiLine.phrases.map((p: any) => ({
-                ...p,
-                id: `${track.trackId}:p:${p.text.replace(/\s+/g, '_')}`
-              }))
-            };
-          }
-          return line;
-        });
-
-        const updated = {
-          ...prev,
-          meaning: result.meaning,
-          lines: updatedLines,
-          processingStatus: { ...prev.processingStatus, stage2_completed: true }
-        };
-        saveTrackData(track.trackId, updated);
-        return updated;
-      });
-
-      // After Stage 2, automatically start Stage 3
-      runStage3({ ...track, processingStatus: { ...track.processingStatus, stage2_completed: true } });
-    } catch (err) {
-      console.error("Stage 2 failed:", err);
-    } finally {
-      setIsGeneratingPhraseAnalysis(false);
     }
   };
 
@@ -1280,25 +1685,15 @@ export default function App() {
         const updatedLines = prev.lines.map(line => {
           const aiLine = result.lines.find((l: any) => l.original === line.original);
           if (aiLine) {
-            // Merge phrases: keep Stage 2 IDs if text matches, or create new ones
-            const mergedPhrases = [...line.phrases];
-            aiLine.phrases.forEach((newP: any) => {
-              if (!mergedPhrases.find(p => p.text === newP.text)) {
-                mergedPhrases.push({
-                  ...newP,
-                  id: `${track.trackId}:p:${newP.text.replace(/\s+/g, '_')}`
-                });
-              } else {
-                // Update existing Stage 2 phrase with lemmas etc
-                const idx = mergedPhrases.findIndex(p => p.text === newP.text);
-                mergedPhrases[idx] = { ...mergedPhrases[idx], ...newP };
-              }
-            });
+            const phrases = (aiLine.phrases || []).map((p: any) => ({
+              ...p,
+              id: `${track.trackId}:p:${p.text.replace(/\s+/g, '_')}`
+            }));
 
             return {
               ...line,
               translation: aiLine.translation,
-              phrases: mergedPhrases
+              phrases
             };
           }
           return line;
@@ -1307,6 +1702,7 @@ export default function App() {
         const updated = {
           ...prev,
           lines: updatedLines,
+          promptVersion: result.promptVersion || prev.promptVersion,
           processingStatus: { ...prev.processingStatus, stage3_completed: true }
         };
         saveTrackData(track.trackId, updated);
@@ -1355,9 +1751,6 @@ export default function App() {
       setCurrentTrack(initialTrack);
       saveTrackData(currentTrack.trackId, initialTrack);
       setManualLyrics("");
-
-      // Trigger enrichment
-      runStage2(initialTrack);
     } catch (err) {
       setLyricsFetchError("Processing failed. Please check your text.");
     } finally {
@@ -1369,7 +1762,6 @@ export default function App() {
   const handleGenerateAnalysis = async (force: boolean = false) => {
     if (
       !currentTrack ||
-      !currentTrack.rawLyrics ||
       (!force && currentTrack.processingStatus.stage3_completed) ||
       isGeneratingAnalysis
     )
@@ -1377,12 +1769,70 @@ export default function App() {
 
     setIsGeneratingAnalysis(true);
     try {
-      await runStage3(currentTrack);
+      let trackData = { ...currentTrack };
+      
+      // 1. Fetch lyrics if missing
+      if (!trackData.rawLyrics) {
+        setLoadingStep("searching");
+        const lyricsResponse = await fetchLyrics(trackData.artist, trackData.title);
+        if (!lyricsResponse.lyrics) {
+          setLyricsFetchError("Lyrics not found. Cannot proceed with deep analysis.");
+          setIsGeneratingAnalysis(false);
+          setLoadingStep("idle");
+          return;
+        }
+        
+        const lyrics = lyricsResponse.lyrics;
+        const sourceLang = await detectLanguage(lyrics);
+        
+        trackData = {
+          ...trackData,
+          rawLyrics: lyrics,
+          sourceLanguage: sourceLang || "English",
+          source: (lyricsResponse.source as any) || "Unknown",
+          lines: splitLyricsIntoLines(trackData.trackId, lyrics),
+          processingStatus: { ...trackData.processingStatus, stage1_completed: true }
+        };
+        
+        saveTrackData(trackData.trackId, trackData);
+        setCurrentTrack(trackData);
+      }
+
+      setLoadingStep("analyzing");
+      await runStage3(trackData);
     } catch (err) {
       console.error("Analysis generation failed:", err);
     } finally {
       setIsGeneratingAnalysis(false);
+      setLoadingStep("idle");
     }
+  };
+
+  const handleRegenerateAnalysis = async () => {
+    if (!currentTrack || isGeneratingAnalysis) return;
+
+    if (!confirm("Are you sure you want to reset and regenerate the analysis? This will clear current phrases and meaning.")) {
+      return;
+    }
+
+    // Reset current track data relative to analysis
+    const resetTrack = {
+      ...currentTrack,
+      meaning: undefined,
+      lines: currentTrack.lines.map(line => ({
+        ...line,
+        translation: undefined,
+        phrases: []
+      })),
+      processingStatus: {
+        ...currentTrack.processingStatus,
+        stage2_completed: false,
+        stage3_completed: false
+      }
+    };
+
+    setCurrentTrack(resetTrack);
+    saveTrackData(currentTrack.trackId, resetTrack);
   };
 
   const getStatusStyles = (s: PhraseStatus) => {
@@ -1468,206 +1918,30 @@ export default function App() {
     isCompact: boolean = false,
     alwaysShowTranslation: boolean = false,
   ) => {
-    const trimmedLine = line.trim();
-    if (!trimmedLine && isCompact) return null;
-
-    const metadata = phraseMetadata.get(trimmedLine);
-    const userTrans = metadata?.translatedPhrase;
-    const autoTrans = currentTrack?.lines?.[i]?.translation;
-    const displayTranslation = userTrans || autoTrans;
-
-    const lineStatusStatus = getLineStatus(trimmedLine);
-    const style = getStatusStyles(lineStatusStatus);
-    const phrasesInLine = getPhrasesForLine(i);
-    const progress = getLineProgress(i);
-
     return (
-      <motion.div
+      <LyricLine
         key={i}
-        ref={(el) => {
-          if (!isCompact) {
-            if (el) lineRefs.current.set(i, el as HTMLDivElement);
-            else lineRefs.current.delete(i);
-          }
-        }}
-        drag="x"
-        dragConstraints={{ left: 0, right: 0 }}
-        dragElastic={0.2}
-        onDragEnd={(_, info) => {
-          if (info.offset.x < -100) {
-            // Swiped left -> Know
-            handleAddLineWithComponents(line, i, "known");
-          } else if (info.offset.x > 100) {
-            // Swiped right -> Learn
-            handleAddLineWithComponents(line, i, "learning");
-          }
-        }}
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: Math.min(i * 0.01, 1) }}
-        className={cn(
-          "group transition-all duration-300 relative flex flex-col gap-1 rounded-[1.5rem] border cursor-pointer overflow-hidden",
-          isCompact ? "px-4 py-3" : "px-6 py-4",
-          activeLineIndex === i
-            ? "scale-[1.01] shadow-lg z-10 brightness-110"
-            : "scale-100",
-          trimmedLine ? style.bg : "bg-transparent border-transparent",
-          trimmedLine ? style.border : "border-transparent",
-          activeLineIndex === i ? "border-app-accent/50" : "",
-        )}
-        onClick={() => trimmedLine && handleLineClick(line, i)}
-      >
-        <div className="flex items-center gap-4 w-full relative z-10">
-          <div className="flex-1 min-w-0">
-            <p
-              className={cn(
-                "font-serif leading-snug transition-all duration-300 text-app-fg ml-1",
-                activeLineIndex === i
-                  ? isCompact
-                    ? "text-xl"
-                    : "text-3xl"
-                  : isCompact
-                    ? "text-base opacity-90"
-                    : "text-xl opacity-80",
-              )}
-            >
-              {line ? renderHighlightedText(line, phrasesInLine) : "\u00A0"}
-            </p>
-          </div>
-
-          {trimmedLine && (
-            <div className="flex items-center gap-2 shrink-0">
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setPhraseDrawerData({
-                    phrase: line,
-                    translation: displayTranslation || "",
-                    explanation: "",
-                  });
-                  setIsPhraseDrawerOpen(true);
-                }}
-                className={cn(
-                  "p-2 rounded-xl transition-all hover:scale-110 active:scale-95",
-                  lineStatusStatus === "known"
-                    ? "text-green-500"
-                    : lineStatusStatus === "learning"
-                      ? "text-orange-500"
-                      : "text-app-fg opacity-20 hover:opacity-100",
-                )}
-              >
-                {isSaving && activeLineIndex === i ? (
-                  <Loader2 size={16} className="animate-spin" />
-                ) : (
-                  style.icon
-                )}
-              </button>
-            </div>
-          )}
-        </div>
-
-        <div className="pl-1 relative z-10">
-          <AnimatePresence>
-            {(activeLineIndex === i || alwaysShowTranslation) && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: "auto" }}
-                exit={{ opacity: 0, height: 0 }}
-                className="space-y-4"
-              >
-                {displayTranslation && (
-                  <p
-                    className={cn(
-                      "font-serif italic text-app-fg opacity-40 transition-all duration-300 ml-1 mt-1",
-                      activeLineIndex === i
-                        ? isCompact
-                          ? "text-sm"
-                          : "text-lg"
-                        : isCompact
-                          ? "text-xs"
-                          : "text-base",
-                    )}
-                  >
-                    {displayTranslation}
-                  </p>
-                )}
-
-                {activeLineIndex === i && isListeningForSpeech && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="flex items-center gap-3 mt-4 ml-1 bg-[var(--accent)]/5 border border-[var(--accent)]/10 px-4 py-3 rounded-3xl w-fit shadow-lg shadow-[var(--accent)]/5"
-                  >
-                    <div className="flex gap-1 items-center h-4 w-6">
-                      {[0, 1, 2, 3].map((dot) => (
-                        <motion.div
-                          key={dot}
-                          animate={{
-                            height:
-                              shadowingFeedback === "none" ? [8, 16, 8] : 10,
-                          }}
-                          transition={{
-                            repeat: shadowingFeedback === "none" ? Infinity : 0,
-                            duration: 0.5,
-                            delay: dot * 0.12,
-                          }}
-                          className={cn(
-                            "w-1 rounded-full transition-colors duration-300",
-                            shadowingFeedback === "correct"
-                              ? "bg-green-500"
-                              : shadowingFeedback === "incorrect"
-                                ? "bg-orange-500"
-                                : "bg-[var(--accent)]",
-                          )}
-                        />
-                      ))}
-                    </div>
-                    <span
-                      className={cn(
-                        "text-[10px] font-black uppercase tracking-[0.2em] transition-colors duration-300",
-                        shadowingFeedback === "correct"
-                          ? "text-green-500"
-                          : shadowingFeedback === "incorrect"
-                            ? "text-orange-500"
-                            : "text-app-fg",
-                      )}
-                    >
-                      {shadowingFeedback === "correct"
-                        ? "Perfect!"
-                        : shadowingFeedback === "incorrect"
-                          ? "Try Again"
-                          : "Shadowing..."}
-                    </span>
-
-                    {shadowingAttempts > 0 && shadowingFeedback === "none" && (
-                      <div className="ml-2 pl-3 border-l border-app-card-border">
-                        <span className="text-[9px] font-bold opacity-40 uppercase tracking-widest">
-                          Attempt {shadowingAttempts}/3
-                        </span>
-                      </div>
-                    )}
-                  </motion.div>
-                )}
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-
-        {progress && "percentage" in progress && (
-          <div className="absolute bottom-0 left-0 right-0 h-1 bg-app-fg/5">
-            <motion.div
-              initial={{ width: 0 }}
-              animate={{ width: `${progress.percentage}%` }}
-              className={cn(
-                "h-full transition-colors",
-                progress.percentage === 100
-                  ? "bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]"
-                  : "bg-app-accent shadow-[0_0_8px_rgba(var(--accent-rgb),0.4)]"
-              )}
-            />
-          </div>
-        )}
-      </motion.div>
+        line={line}
+        i={i}
+        isCompact={isCompact}
+        alwaysShowTranslation={alwaysShowTranslation}
+        activeLineIndex={activeLineIndex}
+        phraseMetadata={phraseMetadata}
+        currentTrack={currentTrack}
+        getLineStatus={getLineStatus}
+        getStatusStyles={getStatusStyles}
+        getPhrasesForLine={getPhrasesForLine}
+        getLineProgress={getLineProgress}
+        lineRefs={lineRefs}
+        handleAddLineWithComponents={(line, i, status) => handleAddLineWithComponents(line, i, status)}
+        renderHighlightedText={(line, phrases) => renderHighlightedText(line, phrases)}
+        handleLineClick={(line, i) => handleLineClick(line, i)}
+        openPhraseDrawer={(i) => openPhraseDrawer(i)}
+        isSaving={isSaving}
+        isListeningForSpeech={isListeningForSpeech}
+        shadowingFeedback={shadowingFeedback}
+        shadowingAttempts={shadowingAttempts}
+      />
     );
   };
 
@@ -1676,6 +1950,65 @@ export default function App() {
   };
 
   // Analysis tab logic: No auto-trigger. User must click "Generate" or "Reset".
+
+  const handleManualLyricsSearch = async () => {
+    if (!currentTrack) return;
+    setIsSearchingOptions(true);
+    setLyricOptions([]);
+    try {
+      const results = await searchLyricsOptions(currentTrack.artist, currentTrack.title);
+      setLyricOptions(results);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsSearchingOptions(false);
+    }
+  };
+
+  const handleSelectLyricOption = async (option: LyricOption) => {
+    if (!currentTrack) return;
+    setIsLoadingLyrics(true);
+    setLoadingStep("searching");
+    setLyricsFetchError(null);
+    try {
+      const lyricsData = await fetchLyricsFromOption(option);
+      if (lyricsData.lyrics) {
+        setLoadingStep("analyzing");
+        // Perform same enrichment as manual submit to ensure consistency
+        const [sourceLanguage, metadata] = await Promise.all([
+          detectLanguage(lyricsData.lyrics),
+          extractLyricsMetadata(lyricsData.lyrics, option.artist, option.title),
+        ]);
+
+        const updatedTrack: TrackLyricsData = {
+          ...currentTrack,
+          rawLyrics: lyricsData.lyrics,
+          source: (lyricsData.source as any) || "Manual",
+          sourceLanguage: sourceLanguage || "English",
+          authors: metadata?.authors,
+          lines: splitLyricsIntoLines(currentTrack.trackId, lyricsData.lyrics),
+          processingStatus: {
+            stage1_completed: true,
+            stage2_completed: false,
+            stage3_completed: false,
+          },
+          lastUpdated: Date.now(),
+        };
+
+        setCurrentTrack(updatedTrack);
+        saveTrackData(currentTrack.trackId, updatedTrack);
+        setIsResourcesOpen(false); // Close modal on success
+      } else {
+        setLyricsFetchError(`No lyrics found for the selected version from ${option.source}.`);
+      }
+    } catch (err) {
+      console.error("Selection failed:", err);
+      setLyricsFetchError("Failed to fetch or process the selected lyrics.");
+    } finally {
+      setIsLoadingLyrics(false);
+      setLoadingStep("idle");
+    }
+  };
 
   const handleResetLyrics = () => {
     if (!currentTrack) return;
@@ -1693,31 +2026,6 @@ export default function App() {
     });
   };
 
-  const handleCopyLyrics = () => {
-    if (!currentTrack || !currentTrack.rawLyrics) return;
-    const data = {
-      title: currentTrack.title,
-      artist: currentTrack.artist,
-      lyrics: currentTrack.rawLyrics,
-      fullTranslation: currentTrack.fullTranslation,
-      meaning: currentTrack.meaning,
-    };
-    navigator.clipboard.writeText(JSON.stringify(data, null, 2));
-    setIsCopied(true);
-    setTimeout(() => setIsCopied(false), 2000);
-  };
-
-  const handleCopyAnalysis = () => {
-    if (!currentTrack) return;
-    const analysisData = {
-      meaning: currentTrack.meaning,
-      lines: currentTrack.lines,
-      fullTranslation: currentTrack.fullTranslation
-    };
-    navigator.clipboard.writeText(JSON.stringify(analysisData, null, 2));
-    setIsAnalysisCopied(true);
-    setTimeout(() => setIsAnalysisCopied(false), 2000);
-  };
 
   const handlePopoverAction = async (
     phrase: string,
@@ -1855,13 +2163,14 @@ export default function App() {
           {view === "tracks" && (
             <motion.div
               key="tracks"
+              ref={searchContainerRef}
               initial={{ opacity: 0, scale: 0.98 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.98 }}
               className="flex-1 overflow-y-auto px-6 py-8"
             >
               {/* Search Bar */}
-              <div className="mb-8">
+              <div className="mb-6">
                 <form onSubmit={handleSearch} className="relative group">
                   <Search
                     size={20}
@@ -1870,8 +2179,14 @@ export default function App() {
                   <input
                     type="text"
                     value={searchQuery}
+                    onFocus={() => setIsSearchInputFocused(true)}
+                    onBlur={() => setTimeout(() => setIsSearchInputFocused(false), 200)}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Search iTunes library..."
+                    placeholder={
+                      searchEntityType === "musicTrack" ? "Search tracks..." :
+                      searchEntityType === "album" ? "Search albums..." :
+                      "Search artists..."
+                    }
                     className="w-full bg-app-card border border-app-card-border shadow-app-card rounded-2xl py-5 pl-12 pr-12 text-lg font-medium outline-none transition-all focus:border-app-accent/50"
                   />
                   <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-2">
@@ -1884,12 +2199,14 @@ export default function App() {
                         }}
                       />
                     ) : (
-                      searchQuery && (
+                      (searchQuery || searchResults.length > 0 || artistDetails || albumDetails) && (
                         <button
                           type="button"
                           onClick={() => {
                             setSearchQuery("");
                             setSearchResults([]);
+                            setArtistDetails(null);
+                            setAlbumDetails(null);
                           }}
                           className="p-1 hover:bg-app-fg/10 rounded-full transition-colors text-app-fg opacity-40 hover:opacity-100"
                         >
@@ -1898,120 +2215,397 @@ export default function App() {
                       )
                     )}
                   </div>
+
+                  <AnimatePresence>
+                    {isSearchInputFocused && searchHistory.length > 0 && !searchResults.length && (
+                      <motion.div
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: 10 }}
+                        className="absolute left-0 right-0 top-[calc(100%+8px)] bg-app-card border border-app-card-border rounded-2xl shadow-2xl z-50 overflow-hidden"
+                      >
+                        <div className="p-3 border-b border-app-card-border flex items-center justify-between">
+                          <span className="text-[10px] font-black uppercase tracking-widest opacity-30 ml-2">Recent Searches</span>
+                          <button 
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSearchHistory([]);
+                              localStorage.removeItem("lyrify_search_history");
+                            }}
+                            className="text-[10px] font-black uppercase tracking-widest text-red-500/50 hover:text-red-500 px-2 py-1"
+                          >
+                            Clear
+                          </button>
+                        </div>
+                        <div className="max-h-[300px] overflow-y-auto">
+                          {searchHistory.map((h, i) => (
+                            <button
+                              key={i}
+                              type="button"
+                              onClick={() => handleSearch(undefined, h)}
+                              className="w-full text-left px-5 py-3 hover:bg-app-fg/5 transition-colors flex items-center justify-between group/hist"
+                            >
+                              <div className="flex items-center gap-3">
+                                <Search size={14} className="opacity-20 group-hover/hist:opacity-100 transition-opacity" />
+                                <span className="font-medium">{h}</span>
+                              </div>
+                              <ArrowUpLeft size={14} className="opacity-0 group-hover/hist:opacity-20 -rotate-45" />
+                            </button>
+                          ))}
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </form>
               </div>
 
-              {/* Search Results */}
+              {/* Entity Tabs */}
               {searchResults.length > 0 && (
-                <div className="mb-12">
-                  <h2
-                    className="text-[10px] font-black uppercase tracking-[0.3em] mb-6 px-2"
-                    style={{ color: "var(--accent)" }}
-                  >
-                    Results
-                  </h2>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {searchResults.map((track) => (
-                      <button
-                        key={track.id}
-                        disabled={isLoadingLyrics}
-                        onClick={() => handleTrackSelect(track)}
-                        className="flex items-center gap-4 p-3 rounded-2xl bg-app-card border border-app-card-border shadow-app-card active:scale-[0.98] transition-all hover:bg-opacity-80"
-                      >
-                        <img
-                          src={track.coverUrl}
-                          className="w-12 h-12 rounded-xl object-cover"
-                        />
-                        <div className="text-left overflow-hidden">
-                          <p className="font-bold text-app-fg leading-tight truncate">
-                            {track.title}
-                          </p>
-                          <p className="text-xs text-app-muted truncate">
-                            {track.artist}
-                          </p>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
+                <div className="flex items-center gap-1 mb-8 p-1 bg-app-fg/5 rounded-2xl w-fit">
+                  {(
+                    [
+                      { id: "musicTrack", label: "Tracks", icon: Music },
+                      { id: "album", label: "Albums", icon: Disc },
+                      { id: "musicArtist", label: "Artists", icon: UserIcon },
+                    ] as const
+                  ).map((tab) => (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      onClick={() => {
+                        setArtistDetails(null);
+                        setAlbumDetails(null);
+                        setSearchEntityType(tab.id as any);
+                      }}
+                      className={cn(
+                        "flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all",
+                        searchEntityType === tab.id
+                          ? "bg-app-card text-app-fg shadow-sm border border-app-card-border/50"
+                          : "text-app-fg/40 hover:text-app-fg/60"
+                      )}
+                    >
+                      <tab.icon size={14} />
+                      {tab.label}
+                    </button>
+                  ))}
                 </div>
               )}
 
-              {/* Recent Tracks */}
-              {recentTracks.length > 0 && (
-                <div className="mb-12">
-                  <h2 className="text-[10px] font-black uppercase tracking-[0.3em] text-app-fg opacity-40 mb-6 px-2">
-                    Recent
-                  </h2>
-                  <div className="space-y-4">
-                    {recentTracks.map((track) => (
-                      <button
-                        key={`recent-${track.id}`}
-                        onClick={() => handleTrackSelect(track)}
-                        className="w-full flex items-center justify-between p-4 rounded-3xl bg-app-card border border-app-card-border shadow-app-card active:scale-[0.98] transition-all hover:bg-opacity-80"
-                      >
-                        <div className="flex items-center gap-4">
-                          <img
-                            src={track.coverUrl}
-                            className="w-16 h-16 rounded-2xl object-cover shadow-lg"
-                          />
-                          <div className="text-left">
-                            <p className="font-bold text-app-fg leading-tight">
-                              {track.title}
-                            </p>
-                            <p className="text-sm text-app-muted">
-                              {track.artist}
-                            </p>
-                          </div>
-                        </div>
-                        <ChevronRight
-                          size={20}
-                          className="text-app-fg opacity-20 mr-2"
-                        />
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Suggestions / Original Tracks */}
-              {!searchResults.length && !recentTracks.length && (
-                <>
-                  <h2
-                    className="text-xs font-black uppercase tracking-[0.3em] mb-8 px-2 opacity-50"
-                    style={{ color: "var(--accent)" }}
+              {/* Search Results and Details */}
+              <AnimatePresence mode="wait">
+                {isSearchingDetails ? (
+                  <motion.div
+                    key="details-loading"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="flex flex-col items-center justify-center py-20"
                   >
-                    Suggestions
-                  </h2>
-                  <div className="space-y-4">
-                    {MOCK_TRACKS.map((track) => (
-                      <button
-                        key={track.id}
-                        onClick={() => handleTrackSelect(track)}
-                        className="w-full flex items-center justify-between p-4 rounded-3xl bg-app-card border border-app-card-border shadow-app-card active:scale-[0.98] transition-all hover:bg-opacity-80"
-                      >
-                        <div className="flex items-center gap-4">
-                          <img
-                            src={track.coverUrl}
-                            className="w-16 h-16 rounded-2xl object-cover shadow-lg"
-                          />
-                          <div className="text-left">
-                            <p className="font-bold text-app-fg leading-tight">
-                              {track.title}
-                            </p>
-                            <p className="text-sm text-app-muted">
-                              {track.artist}
-                            </p>
-                          </div>
+                    <div
+                      className="w-10 h-10 border-4 border-t-transparent rounded-full animate-spin mb-4"
+                      style={{
+                        borderColor: "var(--accent)",
+                        borderTopColor: "transparent",
+                      }}
+                    />
+                    <p className="text-xs font-black uppercase tracking-widest opacity-40">Fetching details...</p>
+                  </motion.div>
+                ) : albumDetails ? (
+                  <motion.div
+                    key={`album-${albumDetails.album.id}`}
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -20 }}
+                    className="space-y-8 pb-12"
+                  >
+                    <div className="flex gap-6 items-end">
+                      <div className="relative group">
+                        <button 
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setAlbumDetails(null);
+                          }}
+                          className="absolute -top-2 -left-2 z-10 p-2 bg-app-card border border-app-card-border shadow-lg rounded-xl hover:scale-110 transition-transform"
+                        >
+                          <ChevronLeft size={20} />
+                        </button>
+                        <img src={albumDetails.album.coverUrl} className="w-40 h-40 md:w-56 md:h-56 rounded-3xl shadow-2xl border border-app-card-border" />
+                      </div>
+                      <div className="flex-1 min-w-0 pb-2">
+                        <h2 className="text-2xl md:text-3xl font-black text-app-fg mb-1 leading-tight">{albumDetails.album.title}</h2>
+                        <button 
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleArtistSelect(albumDetails.album.artistId);
+                          }}
+                          className="text-app-muted hover:text-app-accent font-bold transition-colors"
+                        >
+                          {albumDetails.album.artist}
+                        </button>
+                        <p className="text-[10px] font-black uppercase tracking-widest mt-4 opacity-50">
+                          {albumDetails.album.trackCount || 0} Tracks • {albumDetails.album.releaseDate ? new Date(albumDetails.album.releaseDate).getFullYear() : "N/A"}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="bg-app-card border border-app-card-border rounded-3xl overflow-hidden shadow-app-card">
+                      {albumDetails.tracks.length > 0 ? (
+                        albumDetails.tracks.map((track, idx) => (
+                          <button
+                            key={track.id}
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleTrackSelect(track);
+                            }}
+                            className="w-full flex items-center gap-4 px-6 py-4 hover:bg-app-fg/5 transition-colors text-left border-b border-app-card-border last:border-0"
+                          >
+                            <span className="text-xs font-black opacity-20 w-4">{idx + 1}</span>
+                            <div className="flex-1 min-w-0">
+                              <p className="font-bold text-app-fg truncate">{track.title}</p>
+                            </div>
+                            <ChevronRight size={16} className="text-app-fg/20" />
+                          </button>
+                        ))
+                      ) : (
+                        <div className="py-12 text-center opacity-40">
+                          <Music size={40} className="mx-auto mb-3 opacity-20" />
+                          <p className="text-sm font-bold uppercase tracking-widest">No tracks found for this album</p>
                         </div>
-                        <ChevronRight
-                          size={20}
-                          className="text-app-fg opacity-20 mr-2"
-                        />
+                      )}
+                    </div>
+                  </motion.div>
+                ) : artistDetails ? (
+                  <motion.div
+                    key={`artist-${artistDetails.artist.id}`}
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -20 }}
+                    className="space-y-8 pb-12"
+                  >
+                    <div className="flex items-center gap-6">
+                      <button 
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setArtistDetails(null);
+                        }}
+                        className="p-2 hover:bg-app-fg/5 rounded-xl transition-colors shrink-0"
+                      >
+                        <ChevronLeft size={24} />
                       </button>
-                    ))}
-                  </div>
-                </>
-              )}
+                      
+                      {artistDetails.artist.artworkUrl && (
+                        <img 
+                          src={artistDetails.artist.artworkUrl} 
+                          className="w-20 h-20 md:w-24 md:h-24 rounded-full object-cover shadow-lg border-2 border-app-card-border" 
+                          alt={artistDetails.artist.name}
+                        />
+                      )}
+                      
+                      <div className="min-w-0">
+                        <h2 className="text-3xl font-black text-app-fg truncate">{artistDetails.artist.name}</h2>
+                        <p className="text-sm text-app-muted uppercase tracking-widest">{artistDetails.artist.genre}</p>
+                      </div>
+                    </div>
+
+                    {artistDetails.topTracks.length > 0 && (
+                      <div>
+                        <h3 className="text-xs font-black uppercase tracking-[0.3em] text-app-fg opacity-40 mb-4 px-2">Top Tracks</h3>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                          {artistDetails.topTracks.map(track => (
+                            <button
+                              key={track.id}
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleTrackSelect(track);
+                              }}
+                              className="flex items-center gap-4 p-3 rounded-2xl bg-app-card border border-app-card-border shadow-sm hover:border-app-accent/30 transition-all text-left"
+                            >
+                              <img src={track.coverUrl} className="w-10 h-10 rounded-lg object-cover" />
+                              <div className="min-w-0">
+                                <p className="font-bold text-sm truncate">{track.title}</p>
+                                <p className="text-[10px] text-app-muted truncate">{track.album || "Unknown Album"}</p>
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {artistDetails.albums.length > 0 && (
+                      <div>
+                        <h3 className="text-xs font-black uppercase tracking-[0.3em] text-app-fg opacity-40 mb-4 px-2">Albums</h3>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                          {artistDetails.albums.map(album => (
+                            <button
+                              key={album.id}
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleAlbumSelect(album.id);
+                              }}
+                              className="group text-left space-y-2"
+                            >
+                              <div className="aspect-square rounded-2xl overflow-hidden bg-app-card border border-app-card-border shadow-sm group-hover:shadow-md transition-all">
+                                <img src={album.coverUrl} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+                              </div>
+                              <div className="px-1">
+                                <p className="font-bold text-xs truncate leading-tight">{album.title}</p>
+                                <p className="text-[10px] text-app-muted">{album.releaseDate ? new Date(album.releaseDate).getFullYear() : "N/A"}</p>
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </motion.div>
+                ) : (
+                  <motion.div
+                    key="search-main"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                  >
+                    {/* Search Results */}
+                    {searchResults.length > 0 && (
+                      <div className="mb-12">
+                        <h2
+                          className="text-[10px] font-black uppercase tracking-[0.3em] mb-6 px-2"
+                          style={{ color: "var(--accent)" }}
+                        >
+                          Results
+                        </h2>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                          {searchResults.map((item) => (
+                            <button
+                              key={item.id}
+                              type="button"
+                              disabled={isLoadingLyrics}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (searchEntityType === "musicTrack") handleTrackSelect(item);
+                                else if (searchEntityType === "album") handleAlbumSelect(item.id);
+                                else if (searchEntityType === "musicArtist") handleArtistSelect(item.id);
+                              }}
+                              className="flex items-center gap-4 p-3 rounded-2xl bg-app-card border border-app-card-border shadow-app-card active:scale-[0.98] transition-all hover:bg-opacity-80 group text-left"
+                            >
+                              {item.coverUrl ? (
+                                <img
+                                  src={item.coverUrl}
+                                  className="w-12 h-12 rounded-xl object-cover shadow-sm group-hover:scale-105 transition-transform"
+                                />
+                              ) : (
+                                <div className="w-12 h-12 rounded-xl bg-app-fg/5 flex items-center justify-center text-app-fg/20">
+                                  {searchEntityType === "musicArtist" ? <UserIcon size={24} /> : <Disc size={24} />}
+                                </div>
+                              )}
+                              <div className="text-left overflow-hidden flex-1">
+                                <p className="font-bold text-app-fg leading-tight truncate">
+                                  {item.title || item.name}
+                                </p>
+                                <p className="text-[10px] font-bold text-app-muted truncate uppercase tracking-widest mt-1">
+                                  {item.artist || item.genre || "Artist"}
+                                </p>
+                              </div>
+                              <ChevronRight size={16} className="text-app-fg opacity-0 group-hover:opacity-20 transition-opacity" />
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Recent Tracks */}
+                    {recentTracks.length > 0 && !searchResults.length && (
+                      <div className="mb-12">
+                        <h2 className="text-[10px] font-black uppercase tracking-[0.3em] text-app-fg opacity-40 mb-6 px-2">
+                          Recent
+                        </h2>
+                        <div className="space-y-4">
+                          {recentTracks.map((track) => (
+                            <button
+                              key={`recent-${track.id}`}
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleTrackSelect(track);
+                              }}
+                              className="w-full flex items-center justify-between p-4 rounded-3xl bg-app-card border border-app-card-border shadow-app-card active:scale-[0.98] transition-all hover:bg-opacity-80"
+                            >
+                              <div className="flex items-center gap-4">
+                                <img
+                                  src={track.coverUrl}
+                                  className="w-16 h-16 rounded-2xl object-cover shadow-lg"
+                                />
+                                <div className="text-left">
+                                  <p className="font-bold text-app-fg leading-tight">
+                                    {track.title}
+                                  </p>
+                                  <p className="text-sm text-app-muted">
+                                    {track.artist}
+                                  </p>
+                                </div>
+                              </div>
+                              <ChevronRight
+                                size={20}
+                                className="text-app-fg opacity-20 mr-2"
+                              />
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Suggestions / Original Tracks */}
+                    {!searchResults.length && !recentTracks.length && (
+                      <>
+                        <h2
+                          className="text-xs font-black uppercase tracking-[0.3em] mb-8 px-2 opacity-50"
+                          style={{ color: "var(--accent)" }}
+                        >
+                          Suggestions
+                        </h2>
+                        <div className="space-y-4">
+                          {MOCK_TRACKS.map((track) => (
+                            <button
+                              key={track.id}
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleTrackSelect(track);
+                              }}
+                              className="w-full flex items-center justify-between p-4 rounded-3xl bg-app-card border border-app-card-border shadow-app-card active:scale-[0.98] transition-all hover:bg-opacity-80"
+                            >
+                              <div className="flex items-center gap-4">
+                                <img
+                                  src={track.coverUrl}
+                                  className="w-16 h-16 rounded-2xl object-cover shadow-lg"
+                                />
+                                <div className="text-left">
+                                  <p className="font-bold text-app-fg leading-tight">
+                                    {track.title}
+                                  </p>
+                                  <p className="text-sm text-app-muted">
+                                    {track.artist}
+                                  </p>
+                                </div>
+                              </div>
+                              <ChevronRight
+                                size={20}
+                                className="text-app-fg opacity-20 mr-2"
+                              />
+                            </button>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </motion.div>
           )}
 
@@ -2032,31 +2626,23 @@ export default function App() {
                 </button>
                 <div className="flex items-center gap-4">
                   {isLoadingLyrics && (
-                    <div className="flex items-center gap-2 px-3 py-1 bg-[var(--accent)]/10 rounded-full border border-[var(--accent)]/20 animate-pulse">
+                    <div className={cn(
+                      "flex items-center gap-2 px-3 py-1 rounded-full border animate-pulse",
+                      loadingStep === "searching" ? "bg-amber-500/10 border-amber-500/20" : "bg-[var(--accent)]/10 border-[var(--accent)]/20"
+                    )}>
                       <RefreshCw
                         size={12}
                         className={cn(
-                          "animate-spin text-[var(--accent)]",
-                          loadingStep === "searching"
-                            ? "duration-[2s]"
-                            : "duration-700",
+                          "animate-spin",
+                          loadingStep === "searching" ? "text-amber-500 duration-[2s]" : "text-[var(--accent)] duration-700"
                         )}
                       />
-                      <span className="text-[10px] font-black uppercase tracking-widest text-[var(--accent)]">
-                        {loadingStep === "searching"
-                          ? "Searching DB"
-                          : "AI Processing"}
-                      </span>
-                    </div>
-                  )}
-                  {isGeneratingPhraseAnalysis && activeTab === "preview" && (
-                    <div className="flex items-center gap-2 px-3 py-1 bg-amber-500/10 rounded-full border border-amber-500/20 animate-pulse">
-                      <RefreshCw
-                        size={12}
-                        className="animate-spin text-amber-500"
-                      />
-                      <span className="text-[10px] font-black uppercase tracking-widest text-amber-500">
-                        Generating Preview
+                      <span className={cn(
+                        "text-[10px] font-black uppercase tracking-widest",
+                        loadingStep === "searching" ? "text-amber-500" : "text-[var(--accent)]"
+                      )}>
+                        {loadingStep === "searching" ? "Searching Lyrics" : 
+                         loadingStep === "meaning" ? "Generating Preview" : "Analyzing Track"}
                       </span>
                     </div>
                   )}
@@ -2079,15 +2665,68 @@ export default function App() {
                       <h1 className="text-3xl font-bold text-app-fg mb-1 leading-tight">
                         {currentTrack.title}
                       </h1>
-                      <p className="text-lg text-app-fg opacity-40 font-serif italic">
-                        {currentTrack.artist}
-                      </p>
+                      <div className="flex flex-col gap-0.5">
+                        <button
+                          onClick={() => {
+                            if (currentTrack.artistId) {
+                               handleArtistSelect(currentTrack.artistId);
+                               setView("tracks");
+                            }
+                          }}
+                          className={cn(
+                             "text-lg text-app-fg opacity-60 font-serif italic text-left w-fit transition-all",
+                             currentTrack.artistId ? "hover:opacity-100 hover:text-app-accent cursor-pointer" : ""
+                          )}
+                        >
+                          {currentTrack.artist}
+                        </button>
+                        {currentTrack.album && (
+                          <button
+                            onClick={() => {
+                              if (currentTrack.albumId) {
+                                handleAlbumSelect(currentTrack.albumId);
+                                setView("tracks");
+                              }
+                            }}
+                            className={cn(
+                               "text-xs text-app-fg opacity-30 font-medium uppercase tracking-wider text-left w-fit transition-all",
+                               currentTrack.albumId ? "hover:opacity-100 hover:text-app-accent cursor-pointer" : ""
+                            )}
+                          >
+                            {currentTrack.album}
+                          </button>
+                        )}
+                      </div>
                     </div>
-                    <img
-                      src={currentTrack.coverUrl}
-                      className="w-20 h-20 rounded-2xl object-cover shadow-2xl shrink-0"
-                      alt="Cover"
-                    />
+                    {currentTrack.coverUrl ? (
+                      <button 
+                        onClick={() => {
+                          if (currentTrack.albumId) {
+                            handleAlbumSelect(currentTrack.albumId);
+                            setView("tracks");
+                          }
+                        }}
+                        className={cn(
+                          "relative group transition-transform active:scale-95",
+                          currentTrack.albumId ? "cursor-pointer" : "cursor-default"
+                        )}
+                      >
+                        <div className="absolute -inset-1 bg-gradient-to-r from-[var(--accent)] to-purple-600 rounded-[1.8rem] opacity-20 blur-xl group-hover:opacity-40 transition-opacity" />
+                        <img
+                          src={currentTrack.coverUrl}
+                          className="relative w-24 h-24 rounded-[1.5rem] object-cover shadow-2xl shrink-0 border border-app-card-border"
+                          alt={`${currentTrack.title} cover`}
+                          referrerPolicy="no-referrer"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).src = `https://ui-avatars.com/api/?name=${encodeURIComponent(currentTrack.title)}&background=random&color=fff&size=256`;
+                          }}
+                        />
+                      </button>
+                    ) : (
+                      <div className="w-24 h-24 rounded-[1.5rem] bg-app-card border border-app-card-border flex items-center justify-center text-app-fg opacity-20 shrink-0 shadow-2xl">
+                        <Music size={32} />
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -2130,90 +2769,36 @@ export default function App() {
                       Analysis
                     </button>
                   </div>
-                </div>
-
-                {activeTab === "preview" && (
+                </div>                {activeTab === "preview" && (
                   <div className="flex flex-col gap-8 pb-32">
-                    {(!currentTrack?.processingStatus?.stage2_completed && (isLoadingLyrics || isGeneratingPhraseAnalysis)) ? (
-                      <div className="flex flex-col items-center justify-center py-20 text-center space-y-6">
-                        <div className="relative">
-                          <div
-                            className={cn(
-                              "w-16 h-16 rounded-full border-4 border-app-fg/5 flex items-center justify-center",
-                            )}
-                          >
-                            <motion.div
-                              animate={{ rotate: 360 }}
-                              transition={{
-                                duration: 2,
-                                repeat: Infinity,
-                                ease: "linear",
-                              }}
-                              className="w-full h-full rounded-full border-4 border-t-[var(--accent)] border-l-[var(--accent)] border-r-transparent border-b-transparent"
-                            />
-                          </div>
-                          <motion.div
-                            animate={{ scale: [1, 1.2, 1] }}
-                            transition={{ duration: 2, repeat: Infinity }}
-                            className="absolute inset-0 flex items-center justify-center"
-                          >
-                            <Sparkles
-                              size={20}
-                              className="text-[var(--accent)]"
-                            />
-                          </motion.div>
-                        </div>
-                        <div className="space-y-2">
-                          <h3 className="text-xl font-bold text-app-fg">
-                            {isLoadingLyrics ? "Finding Lyrics..." : "Creating Preview..."}
-                          </h3>
-                          <p className="text-xs text-app-fg opacity-40 max-w-[240px] font-serif italic mx-auto">
-                            {isLoadingLyrics 
-                              ? "Searching global databases for the original words."
-                              : "Our AI is preparing a concise summary and highlight phrases for you."}
-                          </p>
-                        </div>
-                        <div className="flex gap-2">
-                           <div className={cn("w-1.5 h-1.5 rounded-full transition-all duration-500", isLoadingLyrics ? "bg-[var(--accent)] animate-pulse" : "bg-emerald-500")} />
-                           <div className={cn("w-1.5 h-1.5 rounded-full transition-all duration-500", isGeneratingPhraseAnalysis ? "bg-[var(--accent)] animate-pulse" : currentTrack?.processingStatus?.stage2_completed ? "bg-emerald-500" : "bg-app-fg/10")} />
-                           <div className={cn("w-1.5 h-1.5 rounded-full", "bg-app-fg/10")} />
-                        </div>
-                      </div>
-                    ) : currentTrack?.processingStatus?.stage2_completed ? (
+                    {/* Show Meaning if we have it, even if loading lyrics in background */}
+                    {currentTrack.meaning ? (
                       <motion.div
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
                         className="space-y-8"
                       >
-                        {currentTrack.meaning && (
-                          <section className="p-8 rounded-[2.5rem] bg-app-card/60 border border-app-card-border shadow-app-card">
-                            <h2 className="text-[10px] font-black uppercase tracking-[0.3em] mb-4 text-app-accent">
-                              Song Meaning
-                            </h2>
-                            <p className="text-xl font-serif italic text-app-fg opacity-80 leading-relaxed">
-                              {currentTrack.meaning}
-                            </p>
-                          </section>
-                        )}
+                        <section className="p-8 rounded-[2.5rem] bg-app-card/60 border border-app-card-border shadow-app-card">
+                          <h2 className="text-[10px] font-black uppercase tracking-[0.3em] mb-4 text-app-accent">
+                            Song Meaning
+                          </h2>
+                          <p className="text-xl font-serif italic text-app-fg opacity-80 leading-relaxed">
+                            {currentTrack.meaning}
+                          </p>
+                        </section>
 
                         <div className="flex flex-col gap-3">
                           <h2 className="text-[10px] font-black uppercase tracking-[0.3em] ml-4 opacity-40">
-                             Key Phrases
+                             Lyrics Preview
                           </h2>
-                          {currentTrack.lines
-                            .map((l: any, i: number) => ({ ...l, index: i }))
-                            .filter(
-                              (l: any) => l.phrases && l.phrases.length > 0,
+                          {currentTrack.lines.length > 0 && currentTrack.lines.slice(0, 6).map((lineData: any) =>
+                            renderLyricLine(
+                              lineData.original,
+                              lineData.index,
+                              false,
+                              true,
                             )
-                            .slice(0, 6)
-                            .map((lineData: any) =>
-                              renderLyricLine(
-                                lineData.original,
-                                lineData.index,
-                                false,
-                                true,
-                              ),
-                            )}
+                          )}
                         </div>
 
                         <div className="flex flex-col gap-3 pt-4">
@@ -2232,18 +2817,54 @@ export default function App() {
                         </div>
                       </motion.div>
                     ) : (
-                      <div className="py-20 text-center space-y-4">
-                         <div className="w-16 h-16 rounded-full bg-red-500/10 flex items-center justify-center mx-auto mb-4">
-                            <X size={24} className="text-red-500" />
-                         </div>
-                         <p className="opacity-40 font-serif italic">Could not generate a preview for this track.</p>
-                         <button 
-                            onClick={handleResetLyrics}
-                            className="px-6 py-2 rounded-xl bg-app-card border border-app-card-border text-[10px] font-black uppercase tracking-widest text-[var(--accent)]"
-                          >
-                            Try Reloading
-                          </button>
-                      </div>
+                      /* If meaning is NOT available and we ARE loading it */
+                      isLoadingLyrics && loadingStep === "meaning" ? (
+                        <div className="flex flex-col items-center justify-center py-24 text-center space-y-6">
+                           <div className="relative w-20 h-20 flex items-center justify-center">
+                             <div className="absolute inset-0 border-4 border-app-card-border rounded-full" />
+                             <motion.div
+                               animate={{ rotate: 360 }}
+                               transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+                               className="absolute inset-0 rounded-full border-4 border-t-transparent border-[var(--accent)]"
+                             />
+                             <Brain className="text-app-accent opacity-40" size={32} />
+                           </div>
+                           <div className="space-y-1">
+                             <h3 className="text-lg font-black text-app-fg uppercase tracking-widest leading-none">Analyzing Meaning</h3>
+                             <p className="text-[10px] text-app-muted uppercase tracking-[0.2em]">Consulting Gemini AI</p>
+                           </div>
+                        </div>
+                      ) : (
+                        /* Default state: No meaning, not loading meaning specifically */
+                        <section className="p-8 rounded-[2.5rem] bg-app-card/60 border border-app-card-border shadow-app-card flex flex-col items-center text-center">
+                          <div className={cn(
+                            "w-16 h-16 rounded-2xl bg-app-accent/10 flex items-center justify-center text-app-accent mb-6 transition-opacity",
+                            isLoadingLyrics ? "opacity-20" : "opacity-100"
+                          )}>
+                            <Sparkles size={32} />
+                          </div>
+                          <h3 className="text-xl font-black text-app-fg mb-2">Analyze Song Meaning</h3>
+                          <p className="text-sm text-app-muted max-w-sm mb-8">
+                            Discover the hidden stories, emotions, and vocabulary secrets inside this track.
+                          </p>
+                          {!isLoadingLyrics && (
+                            <button
+                              onClick={handleAnalyzeSong}
+                              className="group relative flex items-center gap-3 px-8 py-4 rounded-2xl bg-app-accent text-white font-black uppercase tracking-widest text-xs transition-all hover:scale-105 active:scale-95"
+                            >
+                              <Brain size={18} />
+                              <span>What is this song about?</span>
+                            </button>
+                          )}
+                          
+                          {lyricsFetchError && (
+                            <p className="mt-4 text-xs text-red-500 font-bold flex items-center gap-2">
+                              <AlertTriangle size={14} />
+                              {lyricsFetchError}
+                            </p>
+                          )}
+                        </section>
+                      )
                     )}
                   </div>
                 )}
@@ -2253,31 +2874,6 @@ export default function App() {
                     <div className="flex justify-end px-1 pb-4">
                       {(currentTrack.rawLyrics || lyricsFetchError) && (
                         <div className="flex gap-2">
-                          <button
-                            onClick={handleCopyLyrics}
-                            disabled={!currentTrack.rawLyrics}
-                            className="px-3 py-1.5 rounded-xl bg-app-card border border-app-card-border text-[10px] font-black uppercase tracking-widest opacity-40 hover:opacity-100 hover:text-[var(--accent)] transition-all flex items-center gap-2"
-                            title="Copy data structure"
-                          >
-                            {isCopied ? (
-                              <Check size={10} className="text-emerald-500" />
-                            ) : (
-                              <Copy size={10} />
-                            )}
-                            {isCopied ? "Copied" : "Copy Data"}
-                          </button>
-                          <button
-                            onClick={handleResetLyrics}
-                            disabled={isLoadingLyrics}
-                            className="px-3 py-1.5 rounded-xl bg-app-card border border-app-card-border text-[10px] font-black uppercase tracking-widest opacity-40 hover:opacity-100 hover:text-[var(--accent)] transition-all flex items-center gap-2"
-                            title="Reset lyrics and translation"
-                          >
-                            <RefreshCw
-                              size={10}
-                              className={isLoadingLyrics ? "animate-spin" : ""}
-                            />
-                            Reset Lyrics
-                          </button>
                         </div>
                       )}
                     </div>
@@ -2387,7 +2983,33 @@ export default function App() {
                               </div>
                             </div>
                           </motion.div>
-                        ) : null}
+                        ) : (
+                          <div className="flex flex-col items-center gap-6 py-20">
+                            <div className="w-16 h-16 rounded-2xl bg-app-fg/5 flex items-center justify-center text-app-fg/20">
+                               <Music2 size={32} />
+                            </div>
+                            <div className="space-y-2 text-center">
+                               <h3 className="text-xl font-black text-app-fg">Lyrics are missing</h3>
+                               <p className="text-sm text-app-muted max-w-xs mx-auto italic font-serif">
+                                 We haven't fetched the original text for this song yet.
+                               </p>
+                            </div>
+                            <div className="flex flex-col gap-3 w-full max-w-xs">
+                              <button
+                                onClick={handleAnalyzeSong}
+                                className="w-full py-4 rounded-2xl bg-app-accent text-white font-black uppercase tracking-widest text-[10px] shadow-xl transition-all hover:scale-105 active:scale-95"
+                              >
+                                Find Lyrics & Phrases
+                              </button>
+                              <button
+                                onClick={() => setLyricsFetchError("manual")}
+                                className="w-full py-4 rounded-2xl bg-app-fg/5 hover:bg-app-fg/10 text-app-fg font-black uppercase tracking-widest text-[10px] transition-all"
+                              >
+                                Enter Manually
+                              </button>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )}
 
@@ -2417,43 +3039,39 @@ export default function App() {
                 {activeTab === "analysis" && (
                   <div className="pb-32 space-y-12">
                     {isGeneratingAnalysis ? (
-                      <div className="flex flex-col items-center justify-center py-20 text-center space-y-6">
-                        {/* Loading spinner */}
+                      <div className="flex flex-col items-center justify-center py-24 text-center space-y-6">
+                        <div className="relative w-20 h-20 flex items-center justify-center">
+                          <div className="absolute inset-0 border-4 border-app-card-border rounded-full" />
+                          <motion.div
+                            animate={{ rotate: 360 }}
+                            transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+                            className="absolute inset-0 rounded-full border-4 border-t-transparent border-[var(--accent)]"
+                          />
+                          {loadingStep === "searching" ? (
+                             <Search size={32} className="text-app-fg opacity-20" />
+                          ) : (
+                             <Brain size={32} className="text-app-accent opacity-40" />
+                          )}
+                        </div>
+                        <div className="space-y-2">
+                          <h3 className="text-lg font-black text-app-fg uppercase tracking-widest">
+                            {loadingStep === "searching" ? "Finding Lyrics" : "Deep Analysis"}
+                          </h3>
+                          <div className="flex items-center justify-center gap-3">
+                             <div className="flex gap-1">
+                                <div className={cn("w-1 h-1 rounded-full", loadingStep === "searching" ? "bg-amber-500 animate-pulse" : "bg-emerald-500")} />
+                                <div className={cn("w-1 h-1 rounded-full", loadingStep === "analyzing" ? "bg-app-accent animate-pulse" : "bg-app-fg/10")} />
+                             </div>
+                             <span className="text-[10px] font-black uppercase tracking-[0.2em] opacity-40">Consulting Gemini</span>
+                          </div>
+                        </div>
                       </div>
-                    ) : currentTrack.meaning ? (
+                    ) : (currentTrack.lines.some(l => l.phrases && l.phrases.length > 0)) ? (
                       <motion.div
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         className="space-y-12"
                       >
-                        {/* Meaning Section */}
-                        <section className="space-y-4">
-                          <div className="flex items-center justify-between gap-3">
-                            <div className="flex items-center gap-3">
-                              <div className="w-8 h-8 rounded-xl bg-[var(--accent)]/10 flex items-center justify-center text-[var(--accent)]">
-                                <Quote size={16} />
-                              </div>
-                              <h2 className="text-xs font-black uppercase tracking-[0.2em] opacity-60">
-                                Song Meaning
-                              </h2>
-                            </div>
-                            <div className="flex gap-2">
-                              <button
-                                onClick={handleCopyAnalysis}
-                                className="px-3 py-1.5 rounded-xl bg-app-card border border-app-card-border text-[10px] font-black uppercase tracking-widest opacity-40 hover:opacity-100 hover:text-[var(--accent)] transition-all flex items-center gap-2"
-                              >
-                                {isAnalysisCopied ? <Check size={10} /> : <Copy size={10} />}
-                                {isAnalysisCopied ? "Copied" : "Copy Analysis"}
-                              </button>
-                            </div>
-                          </div>
-                          <div className="p-6 rounded-[2rem] bg-app-card border border-app-card-border shadow-app-card">
-                            <p className="text-xl font-serif leading-relaxed text-app-fg opacity-80 italic">
-                              "{currentTrack.meaning}"
-                            </p>
-                          </div>
-                        </section>
-
                         {/* Phrases Section - Extracted from lines */}
                         <section className="space-y-6">
                           <div className="flex items-center gap-3">
@@ -2461,8 +3079,31 @@ export default function App() {
                               <Star size={16} />
                             </div>
                             <h2 className="text-xs font-black uppercase tracking-[0.2em] opacity-60">
-                              Key Phrases & Expressions
+                              Key Phrases
                             </h2>
+                            <div className="flex gap-2 ml-auto">
+                              {currentTrack.promptVersion && currentTrack.promptVersion < ANALYSIS_PROMPT_VERSION && (
+                                <div className="px-2 py-1 rounded-lg bg-[var(--accent)]/10 text-[var(--accent)] text-[8px] font-black uppercase tracking-widest flex items-center gap-1.5 animate-pulse">
+                                  <Sparkles size={10} />
+                                  New Version Available
+                                </div>
+                              )}
+                              <button
+                                onClick={handleRegenerateAnalysis}
+                                disabled={isGeneratingAnalysis}
+                                className={cn(
+                                  "px-3 py-1.5 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2",
+                                  currentTrack.promptVersion && currentTrack.promptVersion < ANALYSIS_PROMPT_VERSION
+                                    ? "bg-[var(--accent)] border-[var(--accent)] text-white shadow-lg shadow-[var(--accent)]/20 opacity-100"
+                                    : "bg-app-card border-app-card-border opacity-40 hover:opacity-100 hover:text-[var(--accent)]"
+                                )}
+                                title="Reset and regenerate analysis"
+                              >
+                                <RefreshCw size={10} className={isGeneratingAnalysis ? "animate-spin" : ""} />
+                                {currentTrack.promptVersion && currentTrack.promptVersion < ANALYSIS_PROMPT_VERSION ? "Update Analysis" : "Regenerate"}
+                              </button>
+
+                            </div>
                           </div>
                           <div className="grid gap-4">
                             {currentTrack.lines.flatMap(l => l.phrases).filter((p, i, self) => self.findIndex(t => t.text === p.text) === i).map((item, idx) => {
@@ -2471,29 +3112,34 @@ export default function App() {
                                 <div key={idx} className="group p-1">
                                   <div className="flex flex-col gap-3 p-6 rounded-[2rem] bg-app-card border border-app-card-border transition-all cursor-pointer relative group/phrase">
                                     <div className="flex items-start justify-between gap-2">
-                                      <div className="flex-1">
-                                        <p className="text-xl font-serif text-app-fg ml-1">{item.text}</p>
-                                        <div className="flex flex-col gap-1 mt-1 ml-1">
-                                          {item.translation && <p className="text-lg font-serif italic text-app-fg opacity-60">{item.translation}</p>}
+                                      <div className="flex-1 flex gap-3">
+                                        <span className="text-xs font-black opacity-20 mt-2 shrink-0">{(idx + 1).toString().padStart(2, '0')}</span>
+                                        <div className="flex-1">
+                                          <p className="text-xl font-serif text-app-fg">{item.text}</p>
+                                          <div className="flex flex-col gap-1 mt-1">
+                                            {item.translation && <p className="text-lg font-serif italic text-app-fg opacity-60">{item.translation}</p>}
+                                          </div>
                                         </div>
                                       </div>
                                       <div className="shrink-0 flex items-center gap-2">
                                         {card ? (
-                                          <div className="px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest border border-white/5 shadow-sm text-green-500 bg-green-500/10">
+                                          <div className="px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest border border-white/5 shadow-sm text-green-500 bg-green-500/10 flex items-center gap-2">
+                                            <CheckCircle2 size={12} />
                                             {card.status}
                                           </div>
                                         ) : (
                                           <button
                                             onClick={() => handleAddAnalysisPhrase(item.text, item.translation || "", item.explanation || "")}
-                                            className="p-2.5 rounded-2xl bg-app-fg/5 text-app-fg opacity-40 hover:opacity-100 hover:bg-[var(--accent)] hover:text-white transition-all shadow-sm"
+                                            className="px-4 py-2 rounded-2xl bg-app-fg/5 text-app-fg opacity-60 hover:opacity-100 hover:bg-[var(--accent)] hover:text-white transition-all shadow-sm flex items-center gap-2 group-hover/phrase:opacity-100"
                                           >
-                                            <Plus size={18} />
+                                            <Plus size={14} />
+                                            <span className="text-[10px] font-black uppercase tracking-widest">Learn</span>
                                           </button>
                                         )}
                                       </div>
                                     </div>
                                     {item.explanation && (
-                                       <div className="pl-4 border-l-2 border-app-card-border">
+                                       <div className="pl-4 border-l-2 border-app-card-border ml-7">
                                           <p className="text-lg font-medium text-app-fg opacity-60 group-hover:opacity-80 transition-opacity leading-relaxed">{item.explanation}</p>
                                        </div>
                                     )}
@@ -2716,82 +3362,207 @@ export default function App() {
               className="relative w-full max-w-lg bg-app-bg border border-app-card-border rounded-t-[2.5rem] sm:rounded-[2.5rem] overflow-hidden shadow-2xl"
             >
               <div className="p-8 space-y-8">
-                <div className="flex items-center justify-between">
-                  <div className="space-y-1">
-                    <span
-                      className="text-[10px] font-black uppercase tracking-[0.4em]"
-                      style={{ color: "var(--accent)" }}
-                    >
-                      Resources
-                    </span>
-                    <h3 className="text-xl font-bold text-app-fg">
-                      {currentTrack.title}
-                    </h3>
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex items-center gap-6">
+                    {currentTrack.coverUrl && (
+                      <img
+                        src={currentTrack.coverUrl}
+                        className="w-20 h-20 rounded-2xl object-cover shadow-lg border border-app-card-border"
+                        alt="Cover"
+                        referrerPolicy="no-referrer"
+                      />
+                    )}
+                    <div className="space-y-1">
+                      <span
+                        className="text-[10px] font-black uppercase tracking-[0.4em]"
+                        style={{ color: "var(--accent)" }}
+                      >
+                        Resources & Source
+                      </span>
+                      <h3 className="text-xl font-bold text-app-fg">
+                        {currentTrack.title}
+                      </h3>
+                      <p className="text-sm text-app-fg opacity-40 italic font-serif">
+                        {currentTrack.artist}
+                      </p>
+                    </div>
                   </div>
                   <button
                     onClick={() => setIsResourcesOpen(false)}
-                    className="text-app-fg opacity-20 hover:opacity-100 transition-colors"
+                    className="text-app-fg opacity-20 hover:opacity-100 transition-colors pt-1"
                   >
                     <X size={20} />
                   </button>
                 </div>
 
+                <div className="flex gap-4 border-b border-app-card-border">
+                  <button
+                    onClick={() => setResourceTab("links")}
+                    className={cn(
+                      "pb-2 text-sm font-bold transition-all border-b-2",
+                      resourceTab === "links"
+                        ? "border-accent text-accent"
+                        : "border-transparent text-app-fg opacity-40 hover:opacity-100",
+                    )}
+                  >
+                    External Links
+                  </button>
+                  <button
+                    onClick={() => {
+                      setResourceTab("lyrics");
+                      if (lyricOptions.length === 0) handleManualLyricsSearch();
+                    }}
+                    className={cn(
+                      "pb-2 text-sm font-bold transition-all border-b-2",
+                      resourceTab === "lyrics"
+                        ? "border-accent text-accent"
+                        : "border-transparent text-app-fg opacity-40 hover:opacity-100",
+                    )}
+                  >
+                    Lyrics Source
+                  </button>
+                </div>
+
                 <div className="space-y-4">
-                  <p className="text-sm text-app-fg opacity-60">
-                    External links and materials for this track.
-                  </p>
+                  {resourceTab === "links" ? (
+                    <>
+                      <p className="text-sm text-app-fg opacity-60">
+                        External links and materials for this track.
+                      </p>
 
-                  <div className="grid gap-4 max-h-[45vh] overflow-y-auto pr-2 scrollbar-hide py-1">
-                    {RESOURCE_TYPES.map((resource) => {
-                      const url = resource.getUrl(currentTrack as any);
-                      const Icon = resource.icon;
+                      <div className="grid gap-4 max-h-[45vh] overflow-y-auto pr-2 scrollbar-hide py-1">
+                        {RESOURCE_TYPES.map((resource) => {
+                          const url = resource.getUrl(currentTrack as any);
+                          const Icon = resource.icon;
 
-                      return (
-                        <a
-                          key={resource.id}
-                          href={url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className={cn(
-                            "flex items-center justify-between p-5 rounded-3xl bg-app-card border border-app-card-border group transition-all",
-                            resource.hoverBorder,
-                            resource.hoverBg,
-                          )}
-                        >
-                          <div className="flex items-center gap-4">
-                            <div
+                          return (
+                            <a
+                              key={resource.id}
+                              href={url}
+                              target="_blank"
+                              rel="noopener noreferrer"
                               className={cn(
-                                "w-12 h-12 rounded-2xl flex items-center justify-center",
-                                resource.bgColor,
-                                resource.color,
+                                "flex items-center justify-between p-5 rounded-3xl bg-app-card border border-app-card-border group transition-all",
+                                resource.hoverBorder,
+                                resource.hoverBg,
                               )}
                             >
-                              <Icon size={24} />
-                            </div>
-                            <div className="text-left">
-                              <p className="font-bold text-app-fg">
-                                {resource.name}
-                              </p>
-                              <p className="text-xs text-app-fg opacity-40">
-                                {resource.subtitle}
-                              </p>
-                            </div>
-                          </div>
-                          <ExternalLink
-                            size={18}
-                            className="text-app-fg opacity-10 group-hover:opacity-40 transition-opacity"
+                              <div className="flex items-center gap-4">
+                                <div
+                                  className={cn(
+                                    "w-12 h-12 rounded-2xl flex items-center justify-center",
+                                    resource.bgColor,
+                                    resource.color,
+                                  )}
+                                >
+                                  <Icon size={24} />
+                                </div>
+                                <div className="text-left">
+                                  <p className="font-bold text-app-fg">
+                                    {resource.name}
+                                  </p>
+                                  <p className="text-xs text-app-fg opacity-40">
+                                    {resource.subtitle}
+                                  </p>
+                                </div>
+                              </div>
+                              <ExternalLink
+                                size={18}
+                                className="text-app-fg opacity-10 group-hover:opacity-40 transition-opacity"
+                              />
+                            </a>
+                          );
+                        })}
+                      </div>
+                    </>
+                  ) : (
+                    <div className="space-y-6">
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm text-app-fg opacity-60">
+                          Choose an alternative source for lyrics.
+                        </p>
+                        <button
+                          onClick={handleManualLyricsSearch}
+                          disabled={isSearchingOptions}
+                          className="p-2 rounded-xl bg-app-card border border-app-card-border text-app-fg hover:text-accent transition-colors disabled:opacity-50"
+                        >
+                          <RefreshCw
+                            size={16}
+                            className={cn(isSearchingOptions && "animate-spin")}
                           />
-                        </a>
-                      );
-                    })}
-                  </div>
+                        </button>
+                      </div>
+
+                      {lyricsFetchError && (
+                        <div className="p-4 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-start gap-4">
+                          <AlertTriangle className="text-red-500 shrink-0" size={18} />
+                          <p className="text-sm text-red-500 font-medium">
+                            {lyricsFetchError}
+                          </p>
+                        </div>
+                      )}
+
+                      <div className="grid gap-4 max-h-[45vh] overflow-y-auto pr-2 scrollbar-hide py-1">
+                        {isSearchingOptions ? (
+                          <div className="flex flex-col items-center justify-center py-12 space-y-4 opacity-40">
+                            <Loader2 size={32} className="animate-spin" />
+                            <p className="text-xs font-bold uppercase tracking-widest">
+                              Searching sources...
+                            </p>
+                          </div>
+                        ) : lyricOptions.length > 0 ? (
+                          lyricOptions.map((option) => (
+                            <button
+                              key={option.id}
+                              onClick={() => handleSelectLyricOption(option)}
+                              className="w-full flex items-center justify-between p-5 rounded-3xl bg-app-card border border-app-card-border group hover:border-accent/40 transition-all text-left"
+                            >
+                              <div className="flex items-center gap-4">
+                                <div
+                                  className={cn(
+                                    "w-12 h-12 rounded-2xl flex items-center justify-center bg-accent/10 text-accent",
+                                  )}
+                                >
+                                  <FileText size={20} />
+                                </div>
+                                <div>
+                                  <div className="flex items-center gap-2">
+                                    <p className="font-bold text-app-fg">
+                                      {option.title}
+                                    </p>
+                                    <span className="px-1.5 py-0.5 rounded-md bg-accent/10 text-[8px] font-black uppercase text-accent">
+                                      {option.source}
+                                    </span>
+                                  </div>
+                                  <p className="text-xs text-app-fg opacity-40">
+                                    {option.artist} {option.album ? `• ${option.album}` : ""}
+                                  </p>
+                                </div>
+                              </div>
+                              <CheckCircle2
+                                size={18}
+                                className="text-accent opacity-0 group-hover:opacity-40 transition-opacity"
+                              />
+                            </button>
+                          ))
+                        ) : (
+                          <div className="flex flex-col items-center justify-center py-12 space-y-4 opacity-40">
+                            <Search size={32} />
+                            <p className="text-xs font-bold uppercase tracking-widest">
+                              No alternative sources found
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <button
                   onClick={() => setIsResourcesOpen(false)}
                   className="w-full py-4 rounded-2xl bg-app-fg text-app-bg font-bold tracking-wide active:scale-95 transition-all"
                 >
-                  Close
+                  Done
                 </button>
               </div>
             </motion.div>

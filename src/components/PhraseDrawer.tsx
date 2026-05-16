@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, Plus, Check, Loader2, Sparkles, Quote, BookOpen, RefreshCw, CheckCircle2 } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { addPhraseToStudy, updatePhraseStatus, PhraseStatus, Flashcard } from '../services/cardService';
+import { addPhraseToStudy, updatePhraseStatus, PhraseStatus, Flashcard } from '../services/localCardService';
 
 interface PhraseDrawerProps {
   isOpen: boolean;
@@ -35,11 +35,11 @@ export default function PhraseDrawer({
 }: PhraseDrawerProps) {
   const [busyId, setBusyId] = useState<string | null>(null);
 
-  if (lineIndex === null) return null;
+  if (lineIndex === null || !phraseAnalysis?.lines?.[lineIndex]) return null;
 
-  const lines = lyrics.split('\n');
-  const lineText = lines[lineIndex]?.trim() || '';
-  const linePhrases = phraseAnalysis?.lines?.[lineIndex]?.phrases || [];
+  const lineData = phraseAnalysis.lines[lineIndex];
+  const lineText = lineData.original || '';
+  const linePhrases = lineData.phrases || [];
 
   const getStatusIcon = (status?: PhraseStatus) => {
     switch (status) {
@@ -144,6 +144,15 @@ export default function PhraseDrawer({
                     <span className="text-[10px] font-black uppercase tracking-widest opacity-60">Line Phrases</span>
                   </div>
                   <h2 className="text-2xl font-bold font-serif leading-tight text-app-fg">{lineText}</h2>
+                  {(() => {
+                    const lineMetadata = phraseMetadata.get(lineText);
+                    const lineTranslation = lineMetadata?.translatedPhrase || phraseAnalysis?.lines?.[lineIndex]?.translation;
+                    return lineTranslation ? (
+                      <p className="text-lg text-app-fg opacity-60 font-serif italic mt-2">
+                        {lineTranslation}
+                      </p>
+                    ) : null;
+                  })()}
                 </div>
                 <button 
                   onClick={onClose}

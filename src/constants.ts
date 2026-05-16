@@ -11,13 +11,35 @@ export interface StructuredAnalysis {
     word: string;
     explanation: string;
   }[];
+  promptVersion?: number;
+}
+
+export interface Artist {
+  id: string;
+  name: string;
+  genre?: string;
+  artistLinkUrl?: string;
+  artworkUrl?: string;
+}
+
+export interface Album {
+  id: string;
+  title: string;
+  artist: string;
+  artistId: string;
+  coverUrl: string;
+  trackCount: number;
+  releaseDate: string;
+  artistLinkUrl?: string;
 }
 
 export interface Track {
   id: string;
   title: string;
   artist: string;
+  artistId?: string;
   album: string;
+  albumId?: string;
   coverUrl: string;
   audioUrl?: string;
   lyrics?: string;
@@ -36,6 +58,7 @@ export interface Track {
       learningPriority?: string;
     }[];
     vocabulary: { word: string; translation?: string; explanation: string }[];
+    promptVersion?: number;
   };
   structuredAnalysis?: StructuredAnalysis;
   spotifyUrl?: string;

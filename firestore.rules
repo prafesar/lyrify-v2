@@ -36,11 +36,40 @@ service cloud.firestore {
              data.keys().hasAll(['originalPhrase', 'translatedPhrase', 'trackTitle', 'artist', 'sourceLanguage', 'status', 'userId', 'due', 'state', 'reps', 'lapses', 'stability', 'difficulty', 'elapsed_days', 'scheduled_days', 'createdAt', 'updatedAt']);
     }
 
+    function isValidCompleteAnalysisCache(data) {
+      return data.result is map && 
+             data.trackKey is string && 
+             data.lyricsHash is string &&
+             data.targetLanguage is string &&
+             data.promptVersion is number &&
+             data.createdAt == request.time;
+    }
+
+    function isValidSongMeaningCache(data) {
+      return data.meaning is string && 
+             data.trackKey is string && 
+             data.targetLanguage is string &&
+             data.promptVersion is number &&
+             data.createdAt == request.time;
+    }
+
     match /cards/{cardId} {
       allow create: if isSignedIn() && incoming().userId == request.auth.uid;
       allow update: if isSignedIn() && (existing().userId == request.auth.uid || incoming().userId == request.auth.uid);
       allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
       allow get, list: if isSignedIn() && resource.data.userId == request.auth.uid;
+    }
+
+    match /song_meaning_cache/{cacheId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isValidSongMeaningCache(incoming());
+      allow update, delete: if false;
+    }
+
+    match /complete_analysis_cache/{cacheId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isValidCompleteAnalysisCache(incoming());
+      allow update, delete: if false;
     }
   }
 }

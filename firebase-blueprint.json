@@ -28,12 +28,47 @@
         "updatedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["originalPhrase", "translatedPhrase", "userId", "state", "createdAt", "due", "status", "trackTitle", "artist", "sourceLanguage"]
+    },
+    "SongMeaningCache": {
+      "title": "Song Meaning Cache",
+      "description": "Cached result of generateSongMeaning LLM call.",
+      "type": "object",
+      "properties": {
+        "meaning": { "type": "string" },
+        "trackKey": { "type": "string" },
+        "targetLanguage": { "type": "string" },
+        "promptVersion": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["meaning", "trackKey", "targetLanguage", "promptVersion", "createdAt"]
+    },
+    "CompleteAnalysisCache": {
+      "title": "Complete Analysis Cache",
+      "description": "Cached result of completeLyricsAnalysis LLM call.",
+      "type": "object",
+      "properties": {
+        "result": { "type": "object" },
+        "trackKey": { "type": "string" },
+        "lyricsHash": { "type": "string" },
+        "targetLanguage": { "type": "string" },
+        "promptVersion": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["result", "trackKey", "lyricsHash", "targetLanguage", "promptVersion", "createdAt"]
     }
   },
   "firestore": {
     "/cards/{cardId}": {
       "schema": "Card",
       "description": "Collection of user flashcards."
+    },
+    "/song_meaning_cache/{cacheId}": {
+      "schema": "SongMeaningCache",
+      "description": "Cache for song meanings."
+    },
+    "/complete_analysis_cache/{cacheId}": {
+      "schema": "CompleteAnalysisCache",
+      "description": "Cache for complete lyrics analysis."
     }
   }
 }

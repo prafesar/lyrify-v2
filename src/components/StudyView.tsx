@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import ReactMarkdown from 'react-markdown';
 import { Rating } from 'ts-fsrs';
-import { getCards, reviewCard, Flashcard, deleteFlashcard, PhraseStatus } from '../services/cardService';
+import { getCards, reviewCard, Flashcard, deleteFlashcard, PhraseStatus } from '../services/localCardService';
 import { Check, X, ArrowRight, Brain, Trash2, ChevronLeft, Clock, Music, User, LayoutGrid, PlayCircle, Library, Globe, ChevronDown, ChevronUp, Volume2 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { getLocaleByName } from '../lib/languages';
@@ -70,19 +70,18 @@ export default function StudyView({ onBack }: StudyViewProps) {
   const availableLanguages = useMemo(() => {
     const langs = new Set<string>();
     allCards.forEach(card => {
-      // Fallback for older cards or cards without language field
       const lang = card.sourceLanguage || 'en';
       langs.add(lang);
     });
-    return Array.from(langs).sort();
+    return Array.from(langs).filter(Boolean).sort();
   }, [allCards]);
   
   const tracksList = useMemo(() => {
     const tracks = new Set<string>();
     allCards.forEach(card => {
-      tracks.add(card.trackTitle);
+      if (card.trackTitle) tracks.add(card.trackTitle);
     });
-    return Array.from(tracks).sort();
+    return Array.from(tracks).filter(Boolean).sort();
   }, [allCards]);
 
   const now = useMemo(() => new Date(), [viewMode]);
@@ -120,8 +119,8 @@ export default function StudyView({ onBack }: StudyViewProps) {
         createdAt: sample.createdAt
       };
     }).sort((a, b) => {
-      const dateA = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(a.createdAt || 0);
-      const dateB = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(b.createdAt || 0);
+      const dateA = a.createdAt instanceof Date ? a.createdAt : new Date(a.createdAt || 0);
+      const dateB = b.createdAt instanceof Date ? b.createdAt : new Date(b.createdAt || 0);
       return dateB.getTime() - dateA.getTime();
     });
   }, [filteredCards]);
@@ -135,8 +134,8 @@ export default function StudyView({ onBack }: StudyViewProps) {
     const getDueCount = (cards: Flashcard[]) => cards.filter(c => c.due <= now).length;
     if (groupMode === 'recent') {
       const sorted = [...filteredCards].sort((a, b) => {
-        const dateA = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(a.createdAt || 0);
-        const dateB = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(b.createdAt || 0);
+        const dateA = a.createdAt instanceof Date ? a.createdAt : new Date(a.createdAt || 0);
+        const dateB = b.createdAt instanceof Date ? b.createdAt : new Date(b.createdAt || 0);
         return dateB.getTime() - dateA.getTime();
       });
       
@@ -202,7 +201,7 @@ export default function StudyView({ onBack }: StudyViewProps) {
 
   const handleRating = async (rating: Rating) => {
     const card = sessionCards[currentIndex];
-    await reviewCard(card, rating);
+    await reviewCard(card.id, rating);
     setIsFlipped(false);
     setIsExplanationExpanded(false);
     if (currentIndex < sessionCards.length - 1) {
@@ -324,8 +323,8 @@ export default function StudyView({ onBack }: StudyViewProps) {
                 onChange={(e) => setSelectedLanguage(e.target.value)}
                 className="px-4 py-2 rounded-xl bg-app-card border border-app-card-border text-xs font-black uppercase tracking-widest outline-none"
               >
-                <option value="all">All Languages</option>
-                {availableLanguages.map(l => <option key={l} value={l}>{l.toUpperCase()}</option>)}
+                <option key="lang-opt-all" value="all">All Languages</option>
+                {availableLanguages.map(l => <option key={`lang-opt-${l}`} value={l}>{l.toUpperCase()}</option>)}
               </select>
 
               <select 
@@ -333,8 +332,8 @@ export default function StudyView({ onBack }: StudyViewProps) {
                 onChange={(e) => setSelectedTrack(e.target.value)}
                 className="px-4 py-2 rounded-xl bg-app-card border border-app-card-border text-xs font-black uppercase tracking-widest outline-none max-w-[150px] truncate"
               >
-                <option value="all">All Tracks</option>
-                {tracksList.map(t => <option key={t} value={t}>{t}</option>)}
+                <option key="track-opt-all" value="all">All Tracks</option>
+                {tracksList.map(t => <option key={`track-opt-${t}`} value={t}>{t}</option>)}
               </select>
 
               <select 
@@ -342,10 +341,10 @@ export default function StudyView({ onBack }: StudyViewProps) {
                 onChange={(e) => setSelectedStatus(e.target.value)}
                 className="px-4 py-2 rounded-xl bg-app-card border border-app-card-border text-xs font-black uppercase tracking-widest outline-none"
               >
-                <option value="all">All Status</option>
-                <option value="new">New</option>
-                <option value="learning">Learning</option>
-                <option value="known">Known</option>
+                <option key="status-opt-all" value="all">All Status</option>
+                <option key="status-opt-new" value="new">New</option>
+                <option key="status-opt-learning" value="learning">Learning</option>
+                <option key="status-opt-known" value="known">Known</option>
               </select>
             </div>
             
