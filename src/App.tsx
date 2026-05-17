@@ -93,6 +93,8 @@ import {
   type Phrase,
 } from "./services/musicService";
 
+import ITunesPlayer from "./components/ITunesPlayer";
+
 const RESOURCE_TYPES = [
   {
     id: "youtube",
@@ -772,6 +774,16 @@ export default function App() {
   const recognitionRef = useRef<any>(null);
   const correctAudioRef = useRef<HTMLAudioElement | null>(null);
   const incorrectAudioRef = useRef<HTMLAudioElement | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  const cancelSearchDetails = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    setIsSearchingDetails(false);
+    setIsSearching(false);
+  };
 
   useEffect(() => {
     localStorage.setItem("skip_known", String(skipKnownPhrases));
@@ -1454,12 +1466,28 @@ export default function App() {
     
     setSearchQuery(query);
 
+    // Abort previous request
+    if (abortControllerRef.current) abortControllerRef.current.abort();
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     setIsSearching(true);
     setArtistDetails(null);
     setAlbumDetails(null);
-    const results = await searchITunes(query, searchEntityType);
-    setSearchResults(results);
-    setIsSearching(false);
+    
+    try {
+      const results = await searchITunes(query, searchEntityType, controller.signal);
+      setSearchResults(results);
+    } catch (err: any) {
+      if (err.name !== 'AbortError') {
+        console.error("Search error:", err);
+      }
+    } finally {
+      if (abortControllerRef.current === controller) {
+        setIsSearching(false);
+        abortControllerRef.current = null;
+      }
+    }
 
     // Save to history
     const newHistory = [query, ...searchHistory.filter(h => h !== query)].slice(0, 10);
@@ -1473,9 +1501,22 @@ export default function App() {
 
   const handleArtistSelect = async (artistId: string) => {
     if (!artistId || artistId === "undefined") return;
+    
+    // Abort previous request
+    if (abortControllerRef.current) abortControllerRef.current.abort();
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     setIsSearchingDetails(true);
+    
+    // Set a timeout
+    const timeoutId = setTimeout(() => {
+      controller.abort();
+      setIsSearchingDetails(false);
+    }, 15000);
+
     try {
-      const details = await getArtistDetails(artistId);
+      const details = await getArtistDetails(artistId, controller.signal);
       if (details && details.artist) {
         setArtistDetails(details);
         setAlbumDetails(null);
@@ -1483,28 +1524,56 @@ export default function App() {
           searchContainerRef.current.scrollTo({ top: 0, behavior: "smooth" });
         }
       }
-    } catch (err) {
-      console.error("Failed to load artist details:", err);
+      clearTimeout(timeoutId);
+    } catch (err: any) {
+      clearTimeout(timeoutId);
+      if (err.name !== 'AbortError') {
+        console.error("Failed to load artist details:", err);
+      }
     } finally {
-      setIsSearchingDetails(false);
+      if (abortControllerRef.current === controller) {
+        setIsSearchingDetails(false);
+        abortControllerRef.current = null;
+      }
     }
   };
 
   const handleAlbumSelect = async (albumId: string) => {
     if (!albumId || albumId === "undefined") return;
+
+    // Abort previous request
+    if (abortControllerRef.current) abortControllerRef.current.abort();
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     setIsSearchingDetails(true);
+
+    // Set a timeout
+    const timeoutId = setTimeout(() => {
+      controller.abort();
+      setIsSearchingDetails(false);
+    }, 15000);
+
     try {
-      const details = await getAlbumDetails(albumId);
+      const details = await getAlbumDetails(albumId, controller.signal);
       if (details && details.album) {
         setAlbumDetails(details);
+        setArtistDetails(null);
         if (searchContainerRef.current) {
           searchContainerRef.current.scrollTo({ top: 0, behavior: "smooth" });
         }
       }
-    } catch (err) {
-      console.error("Failed to load album details:", err);
+      clearTimeout(timeoutId);
+    } catch (err: any) {
+      clearTimeout(timeoutId);
+      if (err.name !== 'AbortError') {
+        console.error("Failed to load album details:", err);
+      }
     } finally {
-      setIsSearchingDetails(false);
+      if (abortControllerRef.current === controller) {
+        setIsSearchingDetails(false);
+        abortControllerRef.current = null;
+      }
     }
   };
 
@@ -1544,8 +1613,10 @@ export default function App() {
         artist: cached.artist || artist,
         artistId: cached.artistId || artistId,
         title: cached.title || trackTitle,
+        audioUrl: cached.audioUrl || track.audioUrl,
+        appleMusicUrl: cached.appleMusicUrl || track.appleMusicUrl,
       };
-      if ((!cached.coverUrl && coverUrl) || (!cached.title && trackTitle)) {
+      if ((!cached.coverUrl && coverUrl) || (!cached.title && trackTitle) || (!cached.audioUrl && track.audioUrl)) {
         saveTrackData(trackId, updatedCached);
       }
       setCurrentTrack(updatedCached);
@@ -1565,6 +1636,8 @@ export default function App() {
       album: album,
       albumId: albumId,
       coverUrl: coverUrl,
+      audioUrl: track.audioUrl || "",
+      appleMusicUrl: track.appleMusicUrl || "",
       rawLyrics: "",
       source: null,
       sourceLanguage: "English",
@@ -2309,7 +2382,13 @@ export default function App() {
                         borderTopColor: "transparent",
                       }}
                     />
-                    <p className="text-xs font-black uppercase tracking-widest opacity-40">Fetching details...</p>
+                    <p className="text-xs font-black uppercase tracking-widest opacity-40 mb-6">Fetching details...</p>
+                    <button
+                      onClick={cancelSearchDetails}
+                      className="px-6 py-2 rounded-xl bg-app-card border border-app-card-border text-[10px] font-black uppercase tracking-widest hover:bg-app-card/80 transition-colors"
+                    >
+                      Cancel
+                    </button>
                   </motion.div>
                 ) : albumDetails ? (
                   <motion.div
@@ -2771,6 +2850,17 @@ export default function App() {
                   </div>
                 </div>                {activeTab === "preview" && (
                   <div className="flex flex-col gap-8 pb-32">
+                    {/* iTunes Player */}
+                    {currentTrack.audioUrl && (
+                      <ITunesPlayer
+                        audioUrl={currentTrack.audioUrl}
+                        trackTitle={currentTrack.title}
+                        artistName={currentTrack.artist}
+                        coverUrl={currentTrack.coverUrl}
+                        appleMusicUrl={currentTrack.appleMusicUrl || `https://music.apple.com/search?term=${encodeURIComponent(currentTrack.artist + " " + currentTrack.title)}`}
+                      />
+                    )}
+
                     {/* Show Meaning if we have it, even if loading lyrics in background */}
                     {currentTrack.meaning ? (
                       <motion.div
@@ -2817,45 +2907,54 @@ export default function App() {
                         </div>
                       </motion.div>
                     ) : (
-                      /* If meaning is NOT available and we ARE loading it */
-                      isLoadingLyrics && loadingStep === "meaning" ? (
+                      /* If meaning is NOT available and we ARE loading it (lyrics or meaning) */
+                      isLoadingLyrics ? (
                         <div className="flex flex-col items-center justify-center py-24 text-center space-y-6">
-                           <div className="relative w-20 h-20 flex items-center justify-center">
+                           <div className="relative w-24 h-24 flex items-center justify-center">
                              <div className="absolute inset-0 border-4 border-app-card-border rounded-full" />
                              <motion.div
                                animate={{ rotate: 360 }}
-                               transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+                               transition={{ 
+                                 duration: loadingStep === "searching" ? 2 : 1, 
+                                 repeat: Infinity, 
+                                 ease: "linear" 
+                               }}
                                className="absolute inset-0 rounded-full border-4 border-t-transparent border-[var(--accent)]"
                              />
-                             <Brain className="text-app-accent opacity-40" size={32} />
+                             <div className="absolute inset-0 flex items-center justify-center">
+                               {loadingStep === "searching" ? (
+                                 <SearchCode className="text-[var(--accent)]" size={32} />
+                               ) : (
+                                 <Brain className="text-[var(--accent)]" size={32} />
+                               )}
+                             </div>
                            </div>
                            <div className="space-y-1">
-                             <h3 className="text-lg font-black text-app-fg uppercase tracking-widest leading-none">Analyzing Meaning</h3>
-                             <p className="text-[10px] text-app-muted uppercase tracking-[0.2em]">Consulting Gemini AI</p>
+                             <h3 className="text-lg font-black text-app-fg uppercase tracking-widest leading-none">
+                               {loadingStep === "searching" ? "Finding Lyrics" : "Analyzing Meaning"}
+                             </h3>
+                             <p className="text-[10px] text-app-muted uppercase tracking-[0.2em]">
+                               {loadingStep === "searching" ? "Scanning Databases" : "Consulting Gemini AI"}
+                             </p>
                            </div>
                         </div>
                       ) : (
                         /* Default state: No meaning, not loading meaning specifically */
                         <section className="p-8 rounded-[2.5rem] bg-app-card/60 border border-app-card-border shadow-app-card flex flex-col items-center text-center">
-                          <div className={cn(
-                            "w-16 h-16 rounded-2xl bg-app-accent/10 flex items-center justify-center text-app-accent mb-6 transition-opacity",
-                            isLoadingLyrics ? "opacity-20" : "opacity-100"
-                          )}>
+                          <div className="w-16 h-16 rounded-2xl bg-app-accent/10 flex items-center justify-center text-app-accent mb-6">
                             <Sparkles size={32} />
                           </div>
                           <h3 className="text-xl font-black text-app-fg mb-2">Analyze Song Meaning</h3>
                           <p className="text-sm text-app-muted max-w-sm mb-8">
                             Discover the hidden stories, emotions, and vocabulary secrets inside this track.
                           </p>
-                          {!isLoadingLyrics && (
-                            <button
-                              onClick={handleAnalyzeSong}
-                              className="group relative flex items-center gap-3 px-8 py-4 rounded-2xl bg-app-accent text-white font-black uppercase tracking-widest text-xs transition-all hover:scale-105 active:scale-95"
-                            >
-                              <Brain size={18} />
-                              <span>What is this song about?</span>
-                            </button>
-                          )}
+                          <button
+                            onClick={handleAnalyzeSong}
+                            className="group relative flex items-center gap-3 px-8 py-4 rounded-2xl bg-app-accent text-white font-black uppercase tracking-widest text-xs transition-all hover:scale-105 active:scale-95"
+                          >
+                            <Brain size={18} />
+                            <span>What is this song about?</span>
+                          </button>
                           
                           {lyricsFetchError && (
                             <p className="mt-4 text-xs text-red-500 font-bold flex items-center gap-2">
@@ -3040,18 +3139,24 @@ export default function App() {
                   <div className="pb-32 space-y-12">
                     {isGeneratingAnalysis ? (
                       <div className="flex flex-col items-center justify-center py-24 text-center space-y-6">
-                        <div className="relative w-20 h-20 flex items-center justify-center">
+                        <div className="relative w-24 h-24 flex items-center justify-center">
                           <div className="absolute inset-0 border-4 border-app-card-border rounded-full" />
                           <motion.div
                             animate={{ rotate: 360 }}
-                            transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+                            transition={{ 
+                              duration: loadingStep === "searching" ? 2 : 1, 
+                              repeat: Infinity, 
+                              ease: "linear" 
+                            }}
                             className="absolute inset-0 rounded-full border-4 border-t-transparent border-[var(--accent)]"
                           />
-                          {loadingStep === "searching" ? (
-                             <Search size={32} className="text-app-fg opacity-20" />
-                          ) : (
-                             <Brain size={32} className="text-app-accent opacity-40" />
-                          )}
+                          <div className="absolute inset-0 flex items-center justify-center">
+                            {loadingStep === "searching" ? (
+                               <SearchCode size={32} className="text-[var(--accent)]" />
+                            ) : (
+                               <Brain size={32} className="text-[var(--accent)]" />
+                            )}
+                          </div>
                         </div>
                         <div className="space-y-2">
                           <h3 className="text-lg font-black text-app-fg uppercase tracking-widest">

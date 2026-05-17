@@ -20,6 +20,7 @@ export interface Artist {
   genre?: string;
   artistLinkUrl?: string;
   artworkUrl?: string;
+  appleMusicUrl?: string;
 }
 
 export interface Album {
@@ -31,6 +32,7 @@ export interface Album {
   trackCount: number;
   releaseDate: string;
   artistLinkUrl?: string;
+  appleMusicUrl?: string;
 }
 
 export interface Track {

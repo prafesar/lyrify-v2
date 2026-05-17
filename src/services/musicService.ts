@@ -7,10 +7,10 @@ export interface LyricsData {
   source?: string | null;
 }
 
-export async function searchITunes(query: string, entity: 'musicTrack' | 'album' | 'musicArtist' = 'musicTrack'): Promise<any[]> {
+export async function searchITunes(query: string, entity: 'musicTrack' | 'album' | 'musicArtist' = 'musicTrack', signal?: AbortSignal): Promise<any[]> {
   const url = `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=music&entity=${entity}&limit=30`;
   try {
-    const response = await fetch(url);
+    const response = await fetch(url, { signal });
     const data = await response.json();
     
     // If it's an artist search, try to get some artwork from albums in parallel to show images in search results
@@ -18,7 +18,7 @@ export async function searchITunes(query: string, entity: 'musicTrack' | 'album'
     if (entity === 'musicArtist' && data.results.length > 0) {
       try {
         const albumUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=music&entity=album&limit=50`;
-        const albumRes = await fetch(albumUrl);
+        const albumRes = await fetch(albumUrl, { signal });
         const albumData = await albumRes.json();
         albumData.results.forEach((item: any) => {
           if (item.artistId && item.artworkUrl100) {
@@ -40,7 +40,8 @@ export async function searchITunes(query: string, entity: 'musicTrack' | 'album'
           album: item.collectionName,
           albumId: String(item.collectionId),
           coverUrl: item.artworkUrl100?.replace('100x100', '600x600'),
-          audioUrl: item.previewUrl
+          audioUrl: item.previewUrl,
+          appleMusicUrl: item.trackViewUrl
         } as Track;
       } else if (entity === 'album') {
         return {
@@ -50,7 +51,8 @@ export async function searchITunes(query: string, entity: 'musicTrack' | 'album'
           artistId: String(item.artistId),
           coverUrl: item.artworkUrl100?.replace('100x100', '600x600'),
           trackCount: item.trackCount,
-          releaseDate: item.releaseDate
+          releaseDate: item.releaseDate,
+          appleMusicUrl: item.collectionViewUrl
         } as Album;
       } else {
         const artistId = String(item.artistId);
@@ -69,11 +71,11 @@ export async function searchITunes(query: string, entity: 'musicTrack' | 'album'
   }
 }
 
-export async function getArtistDetails(artistId: string): Promise<{ artist: Artist, albums: Album[], topTracks: Track[] }> {
+export async function getArtistDetails(artistId: string, signal?: AbortSignal): Promise<{ artist: Artist, albums: Album[], topTracks: Track[] }> {
   // Increase limit to 50 to get more context and better chance of getting images/tracks
   const url = `https://itunes.apple.com/lookup?id=${artistId}&entity=album,song&limit=50`;
   try {
-    const response = await fetch(url);
+    const response = await fetch(url, { signal });
     const data = await response.json();
     
     let artistBox: Artist | null = null;
@@ -88,6 +90,7 @@ export async function getArtistDetails(artistId: string): Promise<{ artist: Arti
           name: item.artistName,
           genre: item.primaryGenreName,
           artistLinkUrl: item.artistLinkUrl,
+          appleMusicUrl: item.artistLinkUrl,
           artworkUrl: item.artworkUrl100?.replace('100x100', '600x600')
         };
       }
@@ -103,6 +106,7 @@ export async function getArtistDetails(artistId: string): Promise<{ artist: Arti
           artistId: String(item.artistId),
           coverUrl: item.artworkUrl100?.replace('100x100', '600x600'),
           trackCount: item.trackCount,
+          appleMusicUrl: item.collectionViewUrl,
           releaseDate: item.releaseDate
         };
         albums.push(album);
@@ -120,7 +124,8 @@ export async function getArtistDetails(artistId: string): Promise<{ artist: Arti
           album: item.collectionName,
           albumId: String(item.collectionId),
           coverUrl: item.artworkUrl100?.replace('100x100', '600x600'),
-          audioUrl: item.previewUrl
+          audioUrl: item.previewUrl,
+          appleMusicUrl: item.trackViewUrl
         };
         topTracks.push(track);
         
@@ -142,11 +147,11 @@ export async function getArtistDetails(artistId: string): Promise<{ artist: Arti
   }
 }
 
-export async function getAlbumDetails(albumId: string): Promise<{ album: Album, tracks: Track[] }> {
+export async function getAlbumDetails(albumId: string, signal?: AbortSignal): Promise<{ album: Album, tracks: Track[] }> {
   try {
     const url = `https://itunes.apple.com/lookup?id=${albumId.trim()}&entity=song&limit=200`;
     console.log("Fetching album details from:", url);
-    const response = await fetch(url);
+    const response = await fetch(url, { signal });
     const data = await response.json();
     const results = data.results || [];
     
@@ -166,7 +171,8 @@ export async function getAlbumDetails(albumId: string): Promise<{ album: Album, 
       artistId: String(collectionItem.artistId),
       coverUrl: (collectionItem.artworkUrl100 || '').replace('100x100', '600x600'),
       trackCount: collectionItem.trackCount,
-      releaseDate: collectionItem.releaseDate
+      releaseDate: collectionItem.releaseDate,
+      appleMusicUrl: collectionItem.collectionViewUrl
     } : { 
       id: albumId, 
       title: "Unknown Album", 
@@ -174,7 +180,8 @@ export async function getAlbumDetails(albumId: string): Promise<{ album: Album, 
       artistId: "", 
       coverUrl: "", 
       trackCount: 0, 
-      releaseDate: "" 
+      releaseDate: "",
+      appleMusicUrl: ""
     };
 
     // 3. Collect tracks - look for anything that is NOT the collection item itself
@@ -193,7 +200,8 @@ export async function getAlbumDetails(albumId: string): Promise<{ album: Album, 
         album: item.collectionName || album.title,
         albumId: String(item.collectionId || album.id),
         coverUrl: (item.artworkUrl100 || album.coverUrl || '').replace('100x100', '600x600'),
-        audioUrl: item.previewUrl
+        audioUrl: item.previewUrl,
+        appleMusicUrl: item.trackViewUrl
       }));
 
     console.log(`Found ${tracks.length} tracks via lookup for album ${album.title}`);
@@ -203,7 +211,7 @@ export async function getAlbumDetails(albumId: string): Promise<{ album: Album, 
       console.log(`Fallback: Searching for tracks by album "${album.title}" and artist "${album.artist}"`);
       const searchUrl = `https://itunes.apple.com/search?term=${encodeURIComponent((album.artist + " " + album.title).trim())}&entity=musicTrack&limit=200`;
       try {
-        const sRes = await fetch(searchUrl);
+        const sRes = await fetch(searchUrl, { signal });
         const sData = await sRes.json();
         if (sData.results && sData.results.length > 0) {
           const fallbackTracks = sData.results
@@ -219,7 +227,8 @@ export async function getAlbumDetails(albumId: string): Promise<{ album: Album, 
               album: item.collectionName,
               albumId: String(item.collectionId),
               coverUrl: (item.artworkUrl100 || album.coverUrl).replace('100x100', '600x600'),
-              audioUrl: item.previewUrl
+              audioUrl: item.previewUrl,
+              appleMusicUrl: item.trackViewUrl
             }));
           
           if (fallbackTracks.length > 0) {
@@ -461,6 +470,8 @@ export interface TrackLyricsData {
   album?: string;
   albumId?: string;
   coverUrl?: string;
+  audioUrl?: string;
+  appleMusicUrl?: string;
   rawLyrics: string;
   source: 'Lyrics.ovh' | 'LRCLib' | 'Manual' | null;
   sourceLanguage?: string;
