@@ -7,16 +7,26 @@ export interface Language {
 
 export const SUPPORTED_LANGUAGES: Language[] = [
   { name: 'English', code: 'EN', locale: 'en-US' },
-  { name: 'Russian', code: 'RU', locale: 'ru-RU' },
+  { name: 'Mandarin Chinese', code: 'ZH', locale: 'zh-CN' },
   { name: 'Spanish', code: 'ES', locale: 'es-ES' },
+  { name: 'Hindi', code: 'HI', locale: 'hi-IN' },
+  { name: 'Arabic', code: 'AR', locale: 'ar-SA' },
   { name: 'French', code: 'FR', locale: 'fr-FR' },
+  { name: 'Portuguese', code: 'PT', locale: 'pt-PT' },
+  { name: 'Russian', code: 'RU', locale: 'ru-RU' },
   { name: 'German', code: 'DE', locale: 'de-DE' },
   { name: 'Japanese', code: 'JA', locale: 'ja-JP' },
-  { name: 'Polish', code: 'PL', locale: 'pl-PL' },
-  { name: 'Italian', code: 'IT', locale: 'it-IT' },
-  { name: 'Portuguese', code: 'PT', locale: 'pt-PT' },
-  { name: 'Chinese', code: 'ZH', locale: 'zh-CN' },
   { name: 'Korean', code: 'KO', locale: 'ko-KR' },
+  { name: 'Italian', code: 'IT', locale: 'it-IT' },
+  { name: 'Indonesian', code: 'ID', locale: 'id-ID' },
+  { name: 'Bengali', code: 'BN', locale: 'bn-BD' },
+  { name: 'Vietnamese', code: 'VI', locale: 'vi-VN' },
+  { name: 'Urdu', code: 'UR', locale: 'ur-PK' },
+  { name: 'Swedish', code: 'SV', locale: 'sv-SE' },
+  { name: 'Danish', code: 'DA', locale: 'da-DK' },
+  { name: 'Norwegian', code: 'NO', locale: 'nb-NO' },
+  { name: 'Finnish', code: 'FI', locale: 'fi-FI' },
+  { name: 'Polish', code: 'PL', locale: 'pl-PL' },
 ];
 
 export function getLanguageByCode(code: string): Language | undefined {

@@ -29,18 +29,36 @@
       },
       "required": ["originalPhrase", "translatedPhrase", "userId", "state", "createdAt", "due", "status", "trackTitle", "artist", "sourceLanguage"]
     },
-    "SongMeaningCache": {
-      "title": "Song Meaning Cache",
-      "description": "Cached result of generateSongMeaning LLM call.",
+    "TrackMeaning": {
+      "title": "Track Meaning",
+      "description": "Unified cache for track meaning in multiple languages and original language detection.",
       "type": "object",
       "properties": {
-        "meaning": { "type": "string" },
         "trackKey": { "type": "string" },
-        "targetLanguage": { "type": "string" },
+        "title": { "type": "string" },
+        "artists": { "type": "array", "items": { "type": "string" } },
+        "artistId": { "type": "string" },
+        "albumName": { "type": "string" },
+        "albumId": { "type": "string" },
+        "coverUrl": { "type": "string" },
+        "audioUrl": { "type": "string" },
+        "appleMusicUrl": { "type": "string" },
+        "itunesId": { "type": "number" },
+        "originalLanguage": { "type": "string" },
+        "meanings": {
+          "type": "object",
+          "properties": {
+            "en": { "type": "string" },
+            "es": { "type": "string" },
+            "ru": { "type": "string" },
+            "pl": { "type": "string" }
+          },
+          "required": ["en", "es", "ru", "pl"]
+        },
         "promptVersion": { "type": "number" },
         "createdAt": { "type": "string", "format": "date-time" }
       },
-      "required": ["meaning", "trackKey", "targetLanguage", "promptVersion", "createdAt"]
+      "required": ["trackKey", "title", "artists", "originalLanguage", "meanings", "promptVersion", "createdAt"]
     },
     "CompleteAnalysisCache": {
       "title": "Complete Analysis Cache",
@@ -62,9 +80,9 @@
       "schema": "Card",
       "description": "Collection of user flashcards."
     },
-    "/song_meaning_cache/{cacheId}": {
-      "schema": "SongMeaningCache",
-      "description": "Cache for song meanings."
+    "/track_meanings/{trackKey}": {
+      "schema": "TrackMeaning",
+      "description": "Cache for track meanings and detected languages."
     },
     "/complete_analysis_cache/{cacheId}": {
       "schema": "CompleteAnalysisCache",

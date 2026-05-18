@@ -45,10 +45,12 @@ service cloud.firestore {
              data.createdAt == request.time;
     }
 
-    function isValidSongMeaningCache(data) {
-      return data.meaning is string && 
-             data.trackKey is string && 
-             data.targetLanguage is string &&
+    function isValidTrackMeaning(data) {
+      return data.trackKey is string && 
+             data.title is string && 
+             data.artists is list &&
+             data.originalLanguage is string &&
+             data.meanings is map &&
              data.promptVersion is number &&
              data.createdAt == request.time;
     }
@@ -60,9 +62,9 @@ service cloud.firestore {
       allow get, list: if isSignedIn() && resource.data.userId == request.auth.uid;
     }
 
-    match /song_meaning_cache/{cacheId} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn() && isValidSongMeaningCache(incoming());
+    match /track_meanings/{trackKey} {
+      allow get, list: if true;
+      allow create: if isValidTrackMeaning(incoming());
       allow update, delete: if false;
     }
 
