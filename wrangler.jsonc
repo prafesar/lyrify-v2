@@ -2,6 +2,7 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "lyrify-v2",
   "compatibility_date": "2026-05-18",
+  "main": "./src/worker.js",
   "observability": {
     "enabled": true
   },
