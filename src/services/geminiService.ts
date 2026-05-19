@@ -1,13 +1,28 @@
 import { GoogleGenAI, Type } from "@google/genai";
-import { db } from '../lib/firebase';
-import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { db, auth } from '../lib/firebase';
+import { doc, getDoc, setDoc, serverTimestamp, collection, query, orderBy, limit, getDocs, where } from 'firebase/firestore';
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
-export const ANALYSIS_PROMPT_VERSION = 1;
+export const ANALYSIS_PROMPT_VERSION = 2;
+
+export interface TrackMeaningEntry extends TrackMeaningResult {
+  trackKey: string;
+  title: string;
+  artists: string[];
+  albumName?: string;
+  albumId?: string;
+  artistId?: string;
+  coverUrl?: string;
+  audioUrl?: string;
+  appleMusicUrl?: string;
+  itunesId?: number;
+  createdAt: any;
+  promptVersion: number;
+}
 
 // --- Utility Functions for Caching ---
 
-function normalizeString(str: string): string {
+export function normalizeString(str: string): string {
   return (str || '').trim().toLowerCase().replace(/\s+/g, ' ').replace(/[^\w\s']/g, '');
 }
 
@@ -19,9 +34,10 @@ async function computeSHA256(message: string): Promise<string> {
   return hashHex;
 }
 
-async function computeTrackKey(title: string, artists: string[]): Promise<string> {
+export async function computeTrackKey(title: string, artists: string[]): Promise<string> {
   const normTitle = normalizeString(title);
-  const normArtists = artists.map(a => normalizeString(a)).sort().join(',');
+  const artistsArray = Array.isArray(artists) ? artists : [artists as any as string];
+  const normArtists = artistsArray.map(a => normalizeString(a)).sort().join(',');
   return await computeSHA256(`${normTitle}|${normArtists}`);
 }
 
@@ -32,25 +48,186 @@ async function computeLyricsHash(lyrics: string): Promise<string> {
 
 // -------------------------------------
 
-export async function getCachedSongMeaning(
-  artist: string,
-  title: string,
-  targetLanguage: string
-): Promise<string | null> {
-  const trackKey = await computeTrackKey(title, [artist]);
-  const langKey = targetLanguage.toLowerCase().trim();
-  const docId = `${trackKey}_${langKey}_${ANALYSIS_PROMPT_VERSION}`;
+export interface TrackMetadata {
+  title: string;
+  artists: string[];
+  albumName?: string;
+  albumId?: string;
+  artistId?: string;
+  coverUrl?: string;
+  audioUrl?: string;
+  appleMusicUrl?: string;
+  itunesId?: number;
+}
 
+export interface TrackMeaningResult {
+  originalLanguage: string;
+  meanings: {
+    en: string;
+    es: string;
+    ru: string;
+    pl: string;
+    [key: string]: string;
+  };
+}
+
+export async function fetchTrackMeaning(
+  lyrics: string,
+  metadata: TrackMetadata,
+  promptVersion: number = ANALYSIS_PROMPT_VERSION
+): Promise<TrackMeaningResult> {
+  const trackKey = await computeTrackKey(metadata.title, metadata.artists);
+  const docRef = doc(db, 'track_meanings', trackKey);
+  
   try {
-    const cacheRef = doc(db, 'song_meaning_cache', docId);
-    const cacheSnap = await getDoc(cacheRef);
-    if (cacheSnap.exists()) {
-      return cacheSnap.data().meaning;
+    const docSnap = await getDoc(docRef);
+    if (docSnap.exists()) {
+      const data = docSnap.data();
+      if (data.promptVersion === promptVersion && data.meanings) {
+        return {
+          originalLanguage: data.originalLanguage,
+          meanings: data.meanings,
+        };
+      }
     }
   } catch (err) {
-    console.error("Cache read error (getCachedSongMeaning):", err);
+    console.error("Firestore read error (track_meanings):", err);
+  }
+
+  const prompt = `Role: Expert music analyst and linguist.
+
+Given the lyrics of a song, perform two tasks:
+
+1. Detect the original language of the lyrics. Return the language name in English (e.g., "English", "Spanish", "French", "German", "Russian", etc.).
+
+2. Write a concise meaning/summary of the song in four languages: English (en), Spanish (es), Russian (ru), and Polish (pl). Each summary must be 3-4 sentences long. Focus on the core theme, emotional message, and narrative. Do NOT mention the artist's name. Keep the summaries general and about the song's message.
+
+Lyrics:
+${lyrics.substring(0, 4000)}
+
+Return a valid JSON object with the following structure exactly:
+{
+  "originalLanguage": "detected language",
+  "meanings": {
+    "en": "meaning in English",
+    "es": "meaning in Spanish",
+    "ru": "meaning in Russian"
+  }
+}`;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: prompt,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            originalLanguage: { type: Type.STRING },
+            meanings: {
+              type: Type.OBJECT,
+              properties: {
+                en: { type: Type.STRING },
+                es: { type: Type.STRING },
+                ru: { type: Type.STRING },
+                pl: { type: Type.STRING }
+              },
+              required: ["en", "es", "ru", "pl"]
+            }
+          },
+          required: ["originalLanguage", "meanings"]
+        }
+      }
+    });
+
+    const result = JSON.parse(response.text) as TrackMeaningResult;
+    
+    // Save to Firestore
+    setDoc(docRef, {
+      trackKey,
+      title: metadata.title,
+      artists: metadata.artists,
+      artistId: metadata.artistId || null,
+      albumName: metadata.albumName || null,
+      albumId: metadata.albumId || null,
+      coverUrl: metadata.coverUrl || null,
+      audioUrl: metadata.audioUrl || null,
+      appleMusicUrl: metadata.appleMusicUrl || null,
+      itunesId: metadata.itunesId || null,
+      originalLanguage: result.originalLanguage,
+      meanings: result.meanings,
+      promptVersion,
+      createdAt: serverTimestamp(),
+    }).catch(e => console.error("Firestore write error (track_meanings):", e));
+
+    return result;
+  } catch (error) {
+    console.error("fetchTrackMeaning error:", error);
+    // Return empty result as fallback
+    return {
+      originalLanguage: "English",
+      meanings: { en: "", es: "", ru: "", pl: "" }
+    };
+  }
+}
+
+export async function getOriginalLanguage(trackKey: string): Promise<string | null> {
+  try {
+    const docRef = doc(db, 'track_meanings', trackKey);
+    const docSnap = await getDoc(docRef);
+    if (docSnap.exists()) {
+      return docSnap.data().originalLanguage;
+    }
+  } catch (err) {
+    console.error("getOriginalLanguage error:", err);
   }
   return null;
+}
+
+export async function getTrackMeaningFromCache(
+  title: string,
+  artists: string[],
+  promptVersion: number = ANALYSIS_PROMPT_VERSION
+): Promise<TrackMeaningResult | null> {
+  const trackKey = await computeTrackKey(title, artists);
+  const docRef = doc(db, 'track_meanings', trackKey);
+  
+  try {
+    const docSnap = await getDoc(docRef);
+    if (docSnap.exists()) {
+      const data = docSnap.data();
+      if (data.promptVersion === promptVersion && data.meanings) {
+        return {
+          originalLanguage: data.originalLanguage,
+          meanings: data.meanings,
+        };
+      }
+    }
+  } catch (err) {
+    console.error("Firestore read error (getTrackMeaningFromCache):", err);
+  }
+  return null;
+}
+
+export async function generateSongMeaning(
+  lyrics: string,
+  artist: string,
+  title: string,
+  targetLanguage: string,
+  metadata?: Partial<TrackMetadata>
+): Promise<string> {
+  const result = await fetchTrackMeaning(lyrics, { title, artists: [artist], ...metadata });
+  
+  const langKey = targetLanguage.toLowerCase().trim();
+  if (langKey === 'english') return result.meanings.en;
+  if (langKey === 'spanish') return result.meanings.es;
+  if (langKey === 'russian') return result.meanings.ru;
+  if (langKey === 'polish') return result.meanings.pl;
+  
+  // If it's one of the supported languages but not in the triple-cache, 
+  // we might want a fallback or another call, but user only asked for these three en, es, ru.
+  return result.meanings.en || "";
 }
 
 export async function translateLyrics(lyrics: string, targetLanguage: string) {
@@ -263,63 +440,6 @@ Return ONLY clean JSON.`;
   } catch (error) {
     console.error("Structured explain phrase error:", error);
     throw error;
-  }
-}export async function generateSongMeaning(
-  lyrics: string,
-  artist: string,
-  title: string,
-  targetLanguage: string
-): Promise<string> {
-  const trackKey = await computeTrackKey(title, [artist]);
-  const langKey = targetLanguage.toLowerCase().trim();
-  const docId = `${trackKey}_${langKey}_${ANALYSIS_PROMPT_VERSION}`;
-
-  try {
-    // Check cache
-    const cacheRef = doc(db, 'song_meaning_cache', docId);
-    const cacheSnap = await getDoc(cacheRef);
-    if (cacheSnap.exists()) {
-      console.log(`[Cache Hit] Song Meaning for ${title} - ${artist}`);
-      return cacheSnap.data().meaning;
-    }
-  } catch (err) {
-    console.error("Cache read error (song_meaning):", err);
-  }
-
-  const prompt = `Role: You are an expert music critic and linguistic analyst.
-Analyze the meaning of the song "${title}" by "${artist}".
-Provide a deep, insightful summary of the song's theme, emotional context, and narrative in 3-4 sentences.
-
-CRITICAL: The summary MUST be written in ${targetLanguage}.
-
-Lyrics:
-${lyrics.substring(0, 4000)}
-
-Return ONLY the text of the meaning/summary in ${targetLanguage}.`;
-
-  try {
-    const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
-      contents: prompt,
-    });
-
-    const meaning = response.text.trim();
-
-    // Save to cache async
-    if (meaning) {
-      setDoc(doc(db, 'song_meaning_cache', docId), {
-        meaning,
-        trackKey,
-        targetLanguage: langKey,
-        promptVersion: ANALYSIS_PROMPT_VERSION,
-        createdAt: serverTimestamp(),
-      }).catch(e => console.error("Cache write error (song_meaning):", e));
-    }
-
-    return meaning;
-  } catch (error) {
-    console.error("Generate song meaning error:", error);
-    return "";
   }
 }
 
@@ -537,5 +657,40 @@ ${lyrics}
   } catch (error) {
     console.error("Stage 3 Analysis error:", error);
     throw error;
+  }
+}
+
+export async function getLatestAnalyzedTracks(maxCount: number = 10): Promise<TrackMeaningEntry[]> {
+  console.log("[geminiService] getLatestAnalyzedTracks called, maxCount:", maxCount);
+  try {
+    const q = query(
+      collection(db, 'track_meanings'),
+      where('promptVersion', '==', ANALYSIS_PROMPT_VERSION),
+      orderBy('createdAt', 'desc'),
+      limit(maxCount)
+    );
+    const querySnapshot = await getDocs(q);
+    console.log("[geminiService] Fetched docs count:", querySnapshot.size);
+    
+    if (querySnapshot.empty) {
+      // Fallback: try without orderBy or version if needed, but normally we want to match version
+      console.log("[geminiService] Collection empty with current prompt version and createdAt sort.");
+      return [];
+    }
+
+    return querySnapshot.docs.map(doc => ({
+      ...doc.data(),
+      trackKey: doc.id
+    })) as TrackMeaningEntry[];
+  } catch (err) {
+    console.error("[geminiService] Error fetching latest tracks:", err);
+    // Final fallback: try simple fetch on error
+    try {
+      const q = query(collection(db, 'track_meanings'), limit(maxCount));
+      const snap = await getDocs(q);
+      return snap.docs.map(doc => ({ ...doc.data(), trackKey: doc.id })) as TrackMeaningEntry[];
+    } catch (e) {
+      return [];
+    }
   }
 }

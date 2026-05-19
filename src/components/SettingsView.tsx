@@ -1,7 +1,7 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import { LogOut, User, Shield, Info, Moon, ChevronRight, Languages } from 'lucide-react';
-import { auth, logOut } from '../lib/firebase';
+import { LogOut, User, Shield, Info, Moon, ChevronRight, Languages, RefreshCcw, LogIn } from 'lucide-react';
+import { auth, logOut, signIn } from '../lib/firebase';
 import { type User as FirebaseUser } from 'firebase/auth';
 import { SUPPORTED_LANGUAGES } from '../lib/languages';
 
@@ -11,10 +11,13 @@ interface SettingsViewProps {
   setTargetLanguage: (lang: string) => void;
   theme: string;
   setTheme: (theme: string) => void;
+  onResetData: () => void;
   onClose: () => void;
 }
 
-export default function SettingsView({ user, targetLanguage, setTargetLanguage, theme, setTheme, onClose }: SettingsViewProps) {
+export default function SettingsView({ user, targetLanguage, setTargetLanguage, theme, setTheme, onResetData, onClose }: SettingsViewProps) {
+  const [confirmReset, setConfirmReset] = React.useState(false);
+
   return (
     <motion.div 
       initial={{ opacity: 0, y: 10 }}
@@ -41,8 +44,8 @@ export default function SettingsView({ user, targetLanguage, setTargetLanguage, 
             )}
           </div>
           <div className="flex-1">
-            <p className="font-bold text-lg text-app-fg">{user?.displayName || 'Adventurer'}</p>
-            <p className="text-sm text-app-fg opacity-40">{user?.email}</p>
+            <p className="font-bold text-lg text-app-fg">{user?.displayName || 'Guest User'}</p>
+            <p className="text-sm text-app-fg opacity-40">{user?.email || 'Sign in to sync your progress'}</p>
           </div>
         </div>
       </div>
@@ -99,17 +102,69 @@ export default function SettingsView({ user, targetLanguage, setTargetLanguage, 
         <h3 className="text-[10px] font-bold uppercase tracking-widest text-app-fg opacity-30 mb-4 px-2">Account</h3>
         <div className="space-y-4">
           <button 
-            onClick={() => logOut()}
-            className="w-full text-left p-4 rounded-3xl bg-red-500/5 border border-red-500/10 shadow-app-card flex items-center justify-between hover:bg-red-500/10 transition-all group"
+            onClick={() => {
+              if (confirmReset) {
+                onResetData();
+                setConfirmReset(false);
+              } else {
+                setConfirmReset(true);
+                setTimeout(() => setConfirmReset(false), 3000);
+              }
+            }}
+            className={`w-full text-left p-4 rounded-3xl border shadow-app-card flex items-center justify-between transition-all group ${
+              confirmReset 
+                ? "bg-orange-500 border-orange-500 text-white animate-pulse" 
+                : "bg-orange-500/5 border border-orange-500/10 text-orange-500 hover:bg-orange-500/10"
+            }`}
           >
-            <div className="flex items-center gap-3 text-red-400">
-              <div className="p-2 rounded-xl bg-red-500/10">
-                <LogOut size={18} />
+            <div className="flex items-center gap-3">
+              <div className={`p-2 rounded-xl transition-colors ${
+                confirmReset ? "bg-white/20" : "bg-orange-500/10"
+              }`}>
+                <RefreshCcw size={18} className={confirmReset ? "animate-spin" : ""} />
               </div>
-              <span className="font-medium">Sign Out</span>
+              <div className="flex flex-col">
+                <span className="font-medium">{confirmReset ? "Confirm Reset?" : "Reset User Data"}</span>
+                <span className={`text-[9px] ${confirmReset ? "text-white/80" : "opacity-60"}`}>
+                  {confirmReset ? "Click again to wipe everything" : "Clears history and preferences"}
+                </span>
+              </div>
             </div>
-            <ChevronRight size={18} className="text-red-400/20 group-hover:text-red-400 transition-colors" />
+            <ChevronRight size={18} className={`${
+              confirmReset ? "text-white" : "text-orange-500/20 group-hover:text-orange-500"
+            } transition-colors`} />
           </button>
+
+          {user ? (
+            <button 
+              onClick={() => logOut()}
+              className="w-full text-left p-4 rounded-3xl bg-red-500/5 border border-red-500/10 shadow-app-card flex items-center justify-between hover:bg-red-500/10 transition-all group"
+            >
+              <div className="flex items-center gap-3 text-red-500">
+                <div className="p-2 rounded-xl bg-red-500/10">
+                  <LogOut size={18} />
+                </div>
+                <span className="font-medium">Sign Out</span>
+              </div>
+              <ChevronRight size={18} className="text-red-400/20 group-hover:text-red-400 transition-colors" />
+            </button>
+          ) : (
+            <button 
+              onClick={() => signIn()}
+              className="w-full text-left p-4 rounded-3xl bg-app-accent/10 border border-app-accent/20 shadow-app-card flex items-center justify-between hover:bg-app-accent/20 transition-all group"
+            >
+              <div className="flex items-center gap-3 text-app-accent">
+                <div className="p-2 rounded-xl bg-app-accent/10">
+                  <LogIn size={18} />
+                </div>
+                <div className="flex flex-col">
+                  <span className="font-medium">Sign In with Google</span>
+                  <span className="text-[9px] opacity-60">Sync your history across devices</span>
+                </div>
+              </div>
+              <ChevronRight size={18} className="text-app-accent/20 group-hover:text-app-accent transition-colors" />
+            </button>
+          )}
         </div>
       </div>
 

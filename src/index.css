@@ -22,17 +22,6 @@
 
 @layer base {
   :root {
-    --background: #020617;
-    --foreground: #f8fafc;
-    --card: rgba(255, 255, 255, 0.03);
-    --card-border: rgba(255, 255, 255, 0.05);
-    --card-shadow: none;
-    --muted: #94a3b8;
-    --accent: #6366f1;
-    --glow-color: var(--accent);
-  }
-
-  [data-theme='light'] {
     --background: #f1f5f9;
     --foreground: #0f172a;
     --card: #ffffff;
@@ -41,6 +30,17 @@
     --muted: #64748b;
     --accent: #16a34a;
     --glow-color: transparent;
+  }
+
+  [data-theme='dark'] {
+    --background: #020617;
+    --foreground: #f8fafc;
+    --card: rgba(255, 255, 255, 0.03);
+    --card-border: rgba(255, 255, 255, 0.05);
+    --card-shadow: none;
+    --muted: #94a3b8;
+    --accent: #6366f1;
+    --glow-color: var(--accent);
   }
 
   [data-theme='solarized'] {
@@ -62,9 +62,13 @@
 
   .bg-accent-glow {
     opacity: 0.2;
+    display: none;
   }
 
-  [data-theme='light'] .bg-accent-glow,
+  [data-theme='dark'] .bg-accent-glow {
+    display: block;
+  }
+
   [data-theme='solarized'] .bg-accent-glow {
     display: none;
   }

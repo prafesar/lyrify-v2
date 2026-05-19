@@ -45,21 +45,30 @@ import {
   VolumeX,
   BookmarkPlus,
   Loader2,
+  History,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
-import { MOCK_TRACKS, Track, Artist, Album } from "./constants";
+import { Track, Artist, Album } from "./constants";
+import { SUPPORTED_LANGUAGES } from "./lib/languages";
 import {
   translateLyrics,
   detectLanguage,
   explainPhraseStructured,
   extractLyricsMetadata,
   generateSongMeaning,
-  getCachedSongMeaning,
+  fetchTrackMeaning,
+  getTrackMeaningFromCache,
+  getOriginalLanguage,
+  computeTrackKey,
   completeLyricsAnalysis,
+  getLatestAnalyzedTracks,
+  normalizeString,
+  type TrackMetadata,
+  type TrackMeaningEntry,
   ANALYSIS_PROMPT_VERSION,
 } from "./services/geminiService";
 import { cn } from "./lib/utils";
-import { auth, signIn, logOut, testDbConnection } from "./lib/firebase";
+import { auth, db, signIn, logOut, testDbConnection } from "./lib/firebase";
 import { onAuthStateChanged, type User } from "firebase/auth";
 import {
   addPhraseToStudy,
@@ -69,6 +78,14 @@ import {
   type Flashcard,
   type PhraseStatus,
 } from "./services/localCardService";
+import {
+  collection,
+  query,
+  where,
+  getDocs,
+  deleteDoc,
+  doc,
+} from "firebase/firestore";
 import StudyView from "./components/StudyView";
 import SettingsView from "./components/SettingsView";
 import PhraseDrawer from "./components/PhraseDrawer";
@@ -467,7 +484,7 @@ export default function App() {
     () => localStorage.getItem("lyrify_target_lang") || "Russian",
   );
   const [theme, setTheme] = useState(
-    () => localStorage.getItem("lyrify_theme") || "dark",
+    () => localStorage.getItem("lyrify_theme") || "light",
   );
   const [isTranslating, setIsTranslating] = useState(false);
   const [isGeneratingAnalysis, setIsGeneratingAnalysis] = useState(false);
@@ -482,6 +499,34 @@ export default function App() {
   const [isMuted, setIsMuted] = useState(
     () => localStorage.getItem("lyrify_muted") === "true",
   );
+  const [dynamicTracks, setDynamicTracks] = useState<Track[]>([]);
+  const [isLoadingTracks, setIsLoadingTracks] = useState(true);
+
+  // --- One-time Cleanup of old tracks ---
+  useEffect(() => {
+    const wipeOldTracks = async () => {
+      const hasWiped = localStorage.getItem("lyrify_wiped_v2");
+      if (hasWiped) return;
+
+      console.log("[Cleanup] Checking for old version tracks...");
+      try {
+        const q = query(collection(db, 'track_meanings'), where('promptVersion', '<', 2));
+        const snap = await getDocs(q);
+        if (!snap.empty) {
+          console.log(`[Cleanup] Found ${snap.size} old tracks. Wiping...`);
+          for (const d of snap.docs) {
+            await deleteDoc(doc(db, 'track_meanings', d.id));
+          }
+          console.log(`[Cleanup] Finished wiping old tracks.`);
+        }
+        localStorage.setItem("lyrify_wiped_v2", "true");
+      } catch (err) {
+        console.error("[Cleanup] Failed to wipe old tracks:", err);
+      }
+    };
+    wipeOldTracks();
+  }, [user]); // Run when user is available (auth initialized)
+  // --------------------------------------
   const [popoverData, setPopoverData] = useState<{
     phrase: string;
     translation: string;
@@ -718,6 +763,8 @@ export default function App() {
   const [albumDetails, setAlbumDetails] = useState<{ album: Album; tracks: Track[] } | null>(null);
   const [isSearchingDetails, setIsSearchingDetails] = useState(false);
   const [recentTracks, setRecentTracks] = useState<Track[]>([]);
+  const [activeLibraryTab, setActiveLibraryTab] = useState<'recent' | 'community'>('recent');
+  const [communityLangFilter, setCommunityLangFilter] = useState<string>('All');
   const [searchHistory, setSearchHistory] = useState<string[]>(
     () => JSON.parse(localStorage.getItem("lyrify_search_history") || "[]")
   );
@@ -820,6 +867,7 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    console.log("[useEffect] Initializing app...");
     // Warm up TTS voices
     window.speechSynthesis.getVoices();
     if (window.speechSynthesis.onvoiceschanged !== undefined) {
@@ -827,8 +875,21 @@ export default function App() {
         window.speechSynthesis.getVoices();
     }
 
-    setRecentTracks(getRecentTracks());
+    try {
+      const recent = getRecentTracks();
+      console.log("[useEffect] Recent tracks loaded:", recent.length);
+      setRecentTracks(recent);
+      // Default to community if no recent tracks
+      if (recent.length === 0) {
+        setActiveLibraryTab('community');
+      }
+    } catch (e) {
+      console.error("[useEffect] Failed to get recent tracks:", e);
+      setRecentTracks([]);
+    }
+
     const unsubscribe = onAuthStateChanged(auth, (u) => {
+      console.log("[useEffect] Auth state changed:", u?.uid || "Guest");
       setUser((prev) => {
         if (prev?.uid === u?.uid) return prev;
         return u;
@@ -837,11 +898,69 @@ export default function App() {
 
     // Check DB connection
     testDbConnection().then((connected) => {
+      console.log("[useEffect] DB connected:", connected);
       if (!connected) setDbConnectionError(true);
     });
 
+    loadCommunityTracks();
+
     return () => unsubscribe();
   }, []);
+
+  const loadCommunityTracks = async () => {
+    console.log("[loadCommunityTracks] Starting fetch...");
+    setIsLoadingTracks(true);
+    try {
+      const dbTracks = await getLatestAnalyzedTracks(24);
+      console.log("[loadCommunityTracks] Fetched raw items from DB:", dbTracks.length);
+      const appTracks: Track[] = dbTracks.map((t: any) => {
+        // Robust artist extraction
+        let artistName = "Unknown Artist";
+        if (Array.isArray(t.artists) && t.artists.length > 0) {
+          artistName = t.artists[0];
+        } else if (typeof t.artists === 'string') {
+          artistName = t.artists;
+        } else if (t.artist) {
+          artistName = t.artist;
+        }
+
+        return {
+          id: t.trackKey || String(Math.random()),
+          title: t.title || "Unknown Title",
+          artist: artistName,
+          artistId: t.artistId || "",
+          album: t.albumName || "Unknown Album",
+          albumId: t.albumId || "",
+          coverUrl: t.coverUrl || "https://images.unsplash.com/photo-1470225620780-dba8ba36b745?q=80&w=1000&auto=format&fit=crop",
+          audioUrl: t.audioUrl || "",
+          appleMusicUrl: t.appleMusicUrl || "",
+          sourceLanguage: t.originalLanguage || "English",
+          documentId: t.trackKey
+        };
+      });
+      console.log("[loadCommunityTracks] Mapped tracks count:", appTracks.length);
+      setDynamicTracks(appTracks);
+    } catch (err) {
+      console.error("[loadCommunityTracks] Error during loading/mapping:", err);
+    } finally {
+      setIsLoadingTracks(false);
+    }
+  };
+
+  const resetUserData = async () => {
+    console.log("Resetting user data...");
+    localStorage.clear();
+    console.log("LocalStorage cleared");
+    try {
+      const idb = await import('idb-keyval');
+      await idb.del('lyrify_flashcards');
+      console.log("IndexedDB cleared");
+    } catch (err) {
+      console.error("Failed to clear IndexedDB:", err);
+    }
+    console.log("Reloading...");
+    window.location.reload();
+  };
 
   useEffect(() => {
     setActiveLineIndex(null);
@@ -1627,7 +1746,7 @@ export default function App() {
       return;
     }
 
-    // 4. Create placeholder track data (no automatic fetching)
+    // 4. Create placeholder track data
     const initialTrack: TrackLyricsData = {
       trackId: trackId,
       artist: artist,
@@ -1640,7 +1759,7 @@ export default function App() {
       appleMusicUrl: track.appleMusicUrl || "",
       rawLyrics: "",
       source: null,
-      sourceLanguage: "English",
+      sourceLanguage: track.sourceLanguage || "English",
       lines: [],
       processingStatus: {
         stage1_completed: false,
@@ -1655,23 +1774,58 @@ export default function App() {
     addRecentTrack(track);
     setRecentTracks(getRecentTracks());
 
-    // 5. BACKGROUND Cache Check (Firestore)
-    // We do this after setting the initial track to keep UI responsive
-    // but fast enough that the user might not even see the "Analyze" button
-    getCachedSongMeaning(artist, trackTitle, targetLanguage)
-      .then(cachedMeaning => {
-        if (cachedMeaning) {
+    // 5. ENHANCEMENT: If metadata is missing (common for community tracks), try to find it on iTunes
+    if (!initialTrack.audioUrl || !initialTrack.artistId || !initialTrack.albumId) {
+      console.log("[handleTrackSelect] Missing metadata, attempting iTunes lookup...");
+      searchITunes(`${artist} ${trackTitle}`, "musicTrack")
+        .then(results => {
+          const match = results.find(r => 
+            normalizeString(r.title) === normalizeString(trackTitle) && 
+            normalizeString(r.artist) === normalizeString(artist)
+          ) || results[0];
+
+          if (match) {
+            console.log("[handleTrackSelect] Metadata match found:", match.title);
+            setCurrentTrack(prev => {
+              if (!prev || prev.trackId !== trackId) return prev;
+              const updated = {
+                ...prev,
+                artistId: prev.artistId || match.artistId,
+                albumId: prev.albumId || match.albumId,
+                album: prev.album || match.album,
+                audioUrl: prev.audioUrl || match.audioUrl,
+                appleMusicUrl: prev.appleMusicUrl || match.appleMusicUrl,
+                coverUrl: prev.coverUrl || match.coverUrl
+              };
+              saveTrackData(trackId, updated);
+              return updated;
+            });
+          }
+        })
+        .catch(err => console.error("[handleTrackSelect] Metadata lookup failed:", err));
+    }
+
+    // 6. BACKGROUND Cache Check (Firestore)
+    getTrackMeaningFromCache(trackTitle, [artist])
+      .then(cacheResult => {
+        if (cacheResult) {
+          const langKey = targetLanguage.toLowerCase().trim();
+          let meaning = cacheResult.meanings.en;
+          if (langKey === 'spanish') meaning = cacheResult.meanings.es;
+          if (langKey === 'russian') meaning = cacheResult.meanings.ru;
+          if (langKey === 'polish') meaning = cacheResult.meanings.pl;
+
           setCurrentTrack(prev => {
             if (!prev || prev.trackId !== trackId) return prev;
             const updated = {
               ...prev,
-              meaning: cachedMeaning,
+              meaning,
+              sourceLanguage: cacheResult.originalLanguage || prev.sourceLanguage,
               processingStatus: {
                 ...prev.processingStatus,
                 stage2_completed: true
               }
             };
-            // Optional: Save to local cache as well so it's instant next time
             saveTrackData(trackId, updated);
             return updated;
           });
@@ -1702,36 +1856,48 @@ export default function App() {
         }
         
         lyrics = lyricsResponse.lyrics;
-        const sourceLang = await detectLanguage(lyrics);
         
         trackData = {
           ...trackData,
           rawLyrics: lyrics,
-          sourceLanguage: sourceLang || "English",
           source: (lyricsResponse.source as any) || "Unknown",
           lines: splitLyricsIntoLines(trackData.trackId, lyrics),
           processingStatus: { ...trackData.processingStatus, stage1_completed: true }
         };
       }
 
-      // 2. Separate LLM request for meaning if missing
-      if (!trackData.meaning) {
+      // 2. Fetch/Update meaning and detected language
+      if (!trackData.meaning || !trackData.processingStatus.stage2_completed) {
         setLoadingStep("meaning");
-        const meaning = await generateSongMeaning(
-          lyrics || "",
-          trackData.artist,
-          trackData.title,
-          targetLanguage
-        );
+        const metadata: TrackMetadata = {
+          title: trackData.title,
+          artists: [trackData.artist],
+          artistId: trackData.artistId,
+          albumName: trackData.album,
+          albumId: trackData.albumId,
+          coverUrl: trackData.coverUrl,
+          audioUrl: trackData.audioUrl,
+          appleMusicUrl: trackData.appleMusicUrl
+        };
+        const result = await fetchTrackMeaning(lyrics || "", metadata);
+        
+        const langKey = targetLanguage.toLowerCase().trim();
+        let meaning = result.meanings.en;
+        if (langKey === 'spanish') meaning = result.meanings.es;
+        if (langKey === 'russian') meaning = result.meanings.ru;
+        if (langKey === 'polish') meaning = result.meanings.pl;
+
         trackData = {
           ...trackData,
           meaning,
+          sourceLanguage: result.originalLanguage || trackData.sourceLanguage,
           processingStatus: { ...trackData.processingStatus, stage2_completed: true }
         };
       }
 
       saveTrackData(trackData.trackId, trackData);
       setCurrentTrack(trackData);
+      loadCommunityTracks();
     } catch (err) {
       console.error("Manual fetch/meaning failed:", err);
       setLyricsFetchError("Failed to fetch song data.");
@@ -1796,26 +1962,51 @@ export default function App() {
     setLyricsFetchError(null);
 
     try {
-      const [sourceLanguage, metadata] = await Promise.all([
-        detectLanguage(manualLyrics),
-        extractLyricsMetadata(
-          manualLyrics,
-          currentTrack.artist,
-          currentTrack.title,
-        ),
-      ]);
+      const metadataResult = await extractLyricsMetadata(
+        manualLyrics,
+        currentTrack.artist,
+        currentTrack.title,
+      );
+
+      // Trigger fetchTrackMeaning in background to enrich cache and get source language
+      fetchTrackMeaning(manualLyrics, {
+        title: currentTrack.title,
+        artists: [currentTrack.artist],
+        albumName: currentTrack.album,
+        coverUrl: currentTrack.coverUrl
+      }).then(result => {
+        setCurrentTrack(prev => {
+          if (!prev || prev.trackId !== currentTrack.trackId) return prev;
+          
+          const langKey = targetLanguage.toLowerCase().trim();
+          let meaning = result.meanings.en;
+          if (langKey === 'spanish') meaning = result.meanings.es;
+          if (langKey === 'russian') meaning = result.meanings.ru;
+          if (langKey === 'polish') meaning = result.meanings.pl;
+
+          const updated = {
+            ...prev,
+            sourceLanguage: result.originalLanguage || prev.sourceLanguage,
+            meaning,
+            processingStatus: { ...prev.processingStatus, stage2_completed: true }
+          };
+          saveTrackData(prev.trackId, updated);
+          loadCommunityTracks();
+          return updated;
+        });
+      }).catch(e => console.error("fetchTrackMeaning background failed:", e));
 
       const initialTrack: TrackLyricsData = {
         ...currentTrack,
         rawLyrics: manualLyrics,
         source: "Manual",
-        sourceLanguage: sourceLanguage || "English",
-        authors: metadata?.authors,
+        sourceLanguage: currentTrack.sourceLanguage, // Initially keep current, updated by background fetch
+        authors: metadataResult?.authors,
         lyricSource: "Manual Entry",
         lines: splitLyricsIntoLines(currentTrack.trackId, manualLyrics),
         processingStatus: {
           stage1_completed: true,
-          stage2_completed: false,
+          stage2_completed: false, // Updated by background fetch
           stage3_completed: false,
         },
         lastUpdated: Date.now(),
@@ -1856,19 +2047,41 @@ export default function App() {
         }
         
         const lyrics = lyricsResponse.lyrics;
-        const sourceLang = await detectLanguage(lyrics);
         
+        // Enrich trackData with lyrics first
         trackData = {
           ...trackData,
           rawLyrics: lyrics,
-          sourceLanguage: sourceLang || "English",
           source: (lyricsResponse.source as any) || "Unknown",
           lines: splitLyricsIntoLines(trackData.trackId, lyrics),
           processingStatus: { ...trackData.processingStatus, stage1_completed: true }
         };
+
+        // Then get meaning and original language in one go
+        setLoadingStep("meaning");
+        const meaningResult = await fetchTrackMeaning(lyrics, {
+          title: trackData.title,
+          artists: [trackData.artist],
+          albumName: trackData.album,
+          coverUrl: trackData.coverUrl
+        });
+
+        const langKey = targetLanguage.toLowerCase().trim();
+        let meaning = meaningResult.meanings.en;
+        if (langKey === 'spanish') meaning = meaningResult.meanings.es;
+        if (langKey === 'russian') meaning = meaningResult.meanings.ru;
+        if (langKey === 'polish') meaning = meaningResult.meanings.pl;
+
+        trackData = {
+          ...trackData,
+          meaning,
+          sourceLanguage: meaningResult.originalLanguage || trackData.sourceLanguage,
+          processingStatus: { ...trackData.processingStatus, stage2_completed: true }
+        };
         
         saveTrackData(trackData.trackId, trackData);
         setCurrentTrack(trackData);
+        loadCommunityTracks();
       }
 
       setLoadingStep("analyzing");
@@ -2048,17 +2261,41 @@ export default function App() {
       if (lyricsData.lyrics) {
         setLoadingStep("analyzing");
         // Perform same enrichment as manual submit to ensure consistency
-        const [sourceLanguage, metadata] = await Promise.all([
-          detectLanguage(lyricsData.lyrics),
-          extractLyricsMetadata(lyricsData.lyrics, option.artist, option.title),
-        ]);
+        const metadataResult = await extractLyricsMetadata(lyricsData.lyrics, option.artist, option.title);
+
+        // Background cache enrichment
+        fetchTrackMeaning(lyricsData.lyrics, {
+          title: option.title,
+          artists: [option.artist],
+          albumName: currentTrack.album,
+          coverUrl: currentTrack.coverUrl
+        }).then(result => {
+          setCurrentTrack(prev => {
+            if (!prev || prev.trackId !== currentTrack.trackId) return prev;
+            
+            const langKey = targetLanguage.toLowerCase().trim();
+            let meaning = result.meanings.en;
+            if (langKey === 'spanish') meaning = result.meanings.es;
+            if (langKey === 'russian') meaning = result.meanings.ru;
+            if (langKey === 'polish') meaning = result.meanings.pl;
+
+            const updated = {
+              ...prev,
+              sourceLanguage: result.originalLanguage || prev.sourceLanguage,
+              meaning,
+              processingStatus: { ...prev.processingStatus, stage2_completed: true }
+            };
+            saveTrackData(prev.trackId, updated);
+            return updated;
+          });
+        }).catch(e => console.error("fetchTrackMeaning background failed:", e));
 
         const updatedTrack: TrackLyricsData = {
           ...currentTrack,
           rawLyrics: lyricsData.lyrics,
           source: (lyricsData.source as any) || "Manual",
-          sourceLanguage: sourceLanguage || "English",
-          authors: metadata?.authors,
+          sourceLanguage: currentTrack.sourceLanguage,
+          authors: metadataResult?.authors,
           lines: splitLyricsIntoLines(currentTrack.trackId, lyricsData.lyrics),
           processingStatus: {
             stage1_completed: true,
@@ -2154,52 +2391,38 @@ export default function App() {
           </span>
         </div>
         <div className="flex items-center gap-4">
-          {!user ? (
-            <button
-              onClick={signIn}
-              className="px-4 py-1.5 rounded-full text-white text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 shadow-lg"
+          <button
+            onClick={() => setView("settings")}
+            className="flex items-center gap-3 p-1 pr-3 rounded-full bg-app-card border border-app-card-border shadow-app-card hover:bg-[var(--accent)] hover:bg-opacity-10 transition-all group"
+          >
+            <div className="flex flex-col items-end mr-1">
+              <span className="text-[9px] text-app-fg opacity-30 uppercase font-black tracking-tighter leading-none mb-0.5">
+                {user ? "Profile" : "Guest"}
+              </span>
+              <span className="text-[10px] text-app-fg opacity-80 uppercase font-black leading-none">
+                {user?.displayName?.split(" ")[0] || "Settings"}
+              </span>
+            </div>
+            <div
+              className="w-7 h-7 rounded-lg flex items-center justify-center border transition-colors overflow-hidden"
               style={{
-                backgroundColor: "var(--accent)",
-                boxShadow: "0 4px 15px -3px var(--accent)",
+                backgroundColor:
+                  "color-mix(in srgb, var(--accent) 20%, transparent)",
+                borderColor:
+                  "color-mix(in srgb, var(--accent) 20%, transparent)",
               }}
             >
-              <LogIn size={12} />
-              Join
-            </button>
-          ) : (
-            <button
-              onClick={() => setView("settings")}
-              className="flex items-center gap-3 p-1 pr-3 rounded-full bg-app-card border border-app-card-border shadow-app-card hover:bg-[var(--accent)] hover:bg-opacity-10 transition-all group"
-            >
-              <div className="flex flex-col items-end mr-1">
-                <span className="text-[9px] text-app-fg opacity-30 uppercase font-black tracking-tighter leading-none mb-0.5">
-                  Profile
-                </span>
-                <span className="text-[10px] text-app-fg opacity-80 uppercase font-black leading-none">
-                  {user.displayName?.split(" ")[0] || "User"}
-                </span>
-              </div>
-              <div
-                className="w-7 h-7 rounded-lg flex items-center justify-center border transition-colors"
-                style={{
-                  backgroundColor:
-                    "color-mix(in srgb, var(--accent) 20%, transparent)",
-                  borderColor:
-                    "color-mix(in srgb, var(--accent) 20%, transparent)",
-                }}
-              >
-                {user.photoURL ? (
-                  <img
-                    src={user.photoURL}
-                    alt={user.displayName || ""}
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <UserIcon size={14} style={{ color: "var(--accent)" }} />
-                )}
-              </div>
-            </button>
-          )}
+              {user?.photoURL ? (
+                <img
+                  src={user.photoURL}
+                  alt={user.displayName || ""}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <UserIcon size={14} style={{ color: "var(--accent)" }} />
+              )}
+            </div>
+          </button>
         </div>
       </header>
 
@@ -2550,12 +2773,177 @@ export default function App() {
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
                   >
+                    {/* Library Tabs (Search context) */}
+                    {!searchResults.length && (
+                      <div className="mt-2 pb-12">
+                        {/* Tab Switcher */}
+                        <div className="flex items-center p-1 bg-app-card border border-app-card-border rounded-2xl mb-8 w-fit mx-auto sm:mx-0">
+                          <button
+                            onClick={() => setActiveLibraryTab('recent')}
+                            className={`px-6 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${
+                              activeLibraryTab === 'recent'
+                                ? 'bg-app-fg text-app-bg shadow-lg'
+                                : 'text-app-muted hover:text-app-fg'
+                            }`}
+                          >
+                            Recent
+                          </button>
+                          <button
+                            onClick={() => setActiveLibraryTab('community')}
+                            className={`px-6 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${
+                              activeLibraryTab === 'community'
+                                ? 'bg-app-fg text-app-bg shadow-lg'
+                                : 'text-app-muted hover:text-app-fg'
+                            }`}
+                          >
+                            Community
+                          </button>
+                        </div>
+
+                        {activeLibraryTab === 'recent' ? (
+                          <div className="space-y-4">
+                            <div className="mb-2 px-2">
+                              <h2
+                                className="text-xs font-black uppercase tracking-[0.3em] flex items-center gap-2"
+                                style={{ color: "var(--accent)" }}
+                              >
+                                <History size={16} />
+                                Recently Explored
+                              </h2>
+                            </div>
+                            {recentTracks.length > 0 ? recentTracks.map((track) => (
+                              <button
+                                key={`recent-${track.id}`}
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleTrackSelect(track);
+                                }}
+                                className="w-full flex items-center justify-between p-4 rounded-3xl bg-app-card border border-app-card-border shadow-app-card active:scale-[0.98] transition-all hover:bg-opacity-80"
+                              >
+                                <div className="flex items-center gap-4">
+                                  <img
+                                    src={track.coverUrl}
+                                    className="w-16 h-16 rounded-2xl object-cover shadow-lg"
+                                  />
+                                  <div className="text-left">
+                                    <p className="font-bold text-app-fg leading-tight">
+                                      {track.title}
+                                    </p>
+                                    <p className="text-sm text-app-muted">
+                                      {track.artist}
+                                    </p>
+                                  </div>
+                                </div>
+                                <ChevronRight
+                                  size={20}
+                                  className="text-app-fg opacity-20 mr-2"
+                                />
+                              </button>
+                            )) : (
+                              <div className="text-center py-16 px-6 rounded-3xl border border-dashed border-app-card-border opacity-40 italic bg-app-card/30">
+                                <Search size={40} className="mx-auto mb-4 opacity-20" />
+                                No recent tracks yet. 
+                                <br />Search for a song to start exploring!
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="space-y-6">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-2 px-2">
+                              <h2
+                                className="text-xs font-black uppercase tracking-[0.3em] flex items-center gap-2"
+                                style={{ color: "var(--accent)" }}
+                              >
+                                <Globe size={16} className="animate-pulse" />
+                                Community Trends
+                              </h2>
+
+                              {/* Language Filter */}
+                              <div className="flex items-center gap-2">
+                                <span className="text-[10px] font-bold text-app-muted uppercase tracking-widest">Filter:</span>
+                                <select 
+                                  value={communityLangFilter}
+                                  onChange={(e) => setCommunityLangFilter(e.target.value)}
+                                  className="bg-app-card border border-app-card-border rounded-lg px-3 py-1.5 text-xs font-bold text-app-fg outline-none focus:ring-1 focus:ring-accent transition-all"
+                                >
+                                  <option value="All">All Languages</option>
+                                  {SUPPORTED_LANGUAGES.map(lang => (
+                                    <option key={lang.name} value={lang.name}>{lang.name}</option>
+                                  ))}
+                                </select>
+                              </div>
+                            </div>
+                            
+                            {isLoadingTracks ? (
+                              <div className="space-y-4">
+                                {[1, 2, 3, 4].map(i => (
+                                  <div key={i} className="w-full h-24 rounded-3xl bg-app-card border border-app-card-border animate-pulse flex items-center px-4 gap-4">
+                                    <div className="w-16 h-16 rounded-2xl bg-app-fg/10" />
+                                    <div className="space-y-2 flex-1">
+                                      <div className="h-4 w-1/2 bg-app-fg/10 rounded" />
+                                      <div className="h-3 w-1/3 bg-app-fg/10 rounded" />
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <div className="space-y-4">
+                                {dynamicTracks.filter(t => communityLangFilter === "All" || t.sourceLanguage === communityLangFilter).length > 0 ? 
+                                dynamicTracks
+                                  .filter(t => communityLangFilter === "All" || t.sourceLanguage === communityLangFilter)
+                                  .map((track) => (
+                                    <button
+                                      key={`comm-${track.id}`}
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleTrackSelect(track);
+                                      }}
+                                      className="w-full flex items-center justify-between p-4 rounded-3xl bg-app-card border border-app-card-border shadow-app-card active:scale-[0.98] transition-all hover:bg-opacity-80"
+                                    >
+                                      <div className="flex items-center gap-4">
+                                        <img
+                                          src={track.coverUrl}
+                                          className="w-16 h-16 rounded-2xl object-cover shadow-lg"
+                                        />
+                                        <div className="text-left">
+                                          <div className="flex items-center gap-2">
+                                            <p className="font-bold text-app-fg leading-tight">
+                                              {track.title}
+                                            </p>
+                                            <span className="text-[8px] font-black uppercase px-1.5 py-0.5 rounded bg-app-fg/10 text-app-fg opacity-50 tracking-tighter">
+                                              {track.sourceLanguage}
+                                            </span>
+                                          </div>
+                                          <p className="text-sm text-app-muted">
+                                            {track.artist}
+                                          </p>
+                                        </div>
+                                      </div>
+                                      <ChevronRight
+                                        size={20}
+                                        className="text-app-fg opacity-20 mr-2"
+                                      />
+                                    </button>
+                                  )) : (
+                                  <div className="text-center py-12 px-6 rounded-3xl border border-dashed border-app-card-border opacity-40 italic bg-app-card/30">
+                                    <Music size={40} className="mx-auto mb-4 opacity-20" />
+                                    No tracks found matching "{communityLangFilter}".
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
                     {/* Search Results */}
                     {searchResults.length > 0 && (
                       <div className="mb-12">
                         <h2
-                          className="text-[10px] font-black uppercase tracking-[0.3em] mb-6 px-2"
-                          style={{ color: "var(--accent)" }}
+                          className="text-[10px] font-black uppercase tracking-[0.3em] mb-6 px-2 opacity-50"
                         >
                           Results
                         </h2>
@@ -2596,91 +2984,6 @@ export default function App() {
                           ))}
                         </div>
                       </div>
-                    )}
-
-                    {/* Recent Tracks */}
-                    {recentTracks.length > 0 && !searchResults.length && (
-                      <div className="mb-12">
-                        <h2 className="text-[10px] font-black uppercase tracking-[0.3em] text-app-fg opacity-40 mb-6 px-2">
-                          Recent
-                        </h2>
-                        <div className="space-y-4">
-                          {recentTracks.map((track) => (
-                            <button
-                              key={`recent-${track.id}`}
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleTrackSelect(track);
-                              }}
-                              className="w-full flex items-center justify-between p-4 rounded-3xl bg-app-card border border-app-card-border shadow-app-card active:scale-[0.98] transition-all hover:bg-opacity-80"
-                            >
-                              <div className="flex items-center gap-4">
-                                <img
-                                  src={track.coverUrl}
-                                  className="w-16 h-16 rounded-2xl object-cover shadow-lg"
-                                />
-                                <div className="text-left">
-                                  <p className="font-bold text-app-fg leading-tight">
-                                    {track.title}
-                                  </p>
-                                  <p className="text-sm text-app-muted">
-                                    {track.artist}
-                                  </p>
-                                </div>
-                              </div>
-                              <ChevronRight
-                                size={20}
-                                className="text-app-fg opacity-20 mr-2"
-                              />
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Suggestions / Original Tracks */}
-                    {!searchResults.length && !recentTracks.length && (
-                      <>
-                        <h2
-                          className="text-xs font-black uppercase tracking-[0.3em] mb-8 px-2 opacity-50"
-                          style={{ color: "var(--accent)" }}
-                        >
-                          Suggestions
-                        </h2>
-                        <div className="space-y-4">
-                          {MOCK_TRACKS.map((track) => (
-                            <button
-                              key={track.id}
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleTrackSelect(track);
-                              }}
-                              className="w-full flex items-center justify-between p-4 rounded-3xl bg-app-card border border-app-card-border shadow-app-card active:scale-[0.98] transition-all hover:bg-opacity-80"
-                            >
-                              <div className="flex items-center gap-4">
-                                <img
-                                  src={track.coverUrl}
-                                  className="w-16 h-16 rounded-2xl object-cover shadow-lg"
-                                />
-                                <div className="text-left">
-                                  <p className="font-bold text-app-fg leading-tight">
-                                    {track.title}
-                                  </p>
-                                  <p className="text-sm text-app-muted">
-                                    {track.artist}
-                                  </p>
-                                </div>
-                              </div>
-                              <ChevronRight
-                                size={20}
-                                className="text-app-fg opacity-20 mr-2"
-                              />
-                            </button>
-                          ))}
-                        </div>
-                      </>
                     )}
                   </motion.div>
                 )}
@@ -3298,6 +3601,7 @@ export default function App() {
               setTargetLanguage={setTargetLanguage}
               theme={theme}
               setTheme={setTheme}
+              onResetData={resetUserData}
               onClose={() => setView("tracks")}
             />
           )}
