@@ -46,6 +46,7 @@ export interface Track {
   audioUrl?: string;
   lyrics?: string;
   sourceLanguage?: string;
+  difficulty?: 'beginner' | 'intermediate' | 'advanced';
   autoTranslation?: string;
   youtubeUrl?: string;
   authors?: string;

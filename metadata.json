@@ -1,6 +1,6 @@
 {
-  "name": "Lyrify AI",
-  "description": "Master languages through music. AI-powered lyric analysis, pronunciation shadowing, and spaced-repetition study.",
+  "name": "CantoLex",
+  "description": "Master languages through songs. AI-driven lyric analysis, pronunciation practice, and musical immersion.",
   "requestFramePermissions": [
     "microphone"
   ],

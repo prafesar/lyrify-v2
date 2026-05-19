@@ -110,7 +110,6 @@ import {
   type Phrase,
 } from "./services/musicService";
 
-import ITunesPlayer from "./components/ITunesPlayer";
 
 const RESOURCE_TYPES = [
   {
@@ -502,30 +501,10 @@ export default function App() {
   const [dynamicTracks, setDynamicTracks] = useState<Track[]>([]);
   const [isLoadingTracks, setIsLoadingTracks] = useState(true);
 
-  // --- One-time Cleanup of old tracks ---
+  // --- One-time Cleanup marker ---
   useEffect(() => {
-    const wipeOldTracks = async () => {
-      const hasWiped = localStorage.getItem("lyrify_wiped_v2");
-      if (hasWiped) return;
-
-      console.log("[Cleanup] Checking for old version tracks...");
-      try {
-        const q = query(collection(db, 'track_meanings'), where('promptVersion', '<', 2));
-        const snap = await getDocs(q);
-        if (!snap.empty) {
-          console.log(`[Cleanup] Found ${snap.size} old tracks. Wiping...`);
-          for (const d of snap.docs) {
-            await deleteDoc(doc(db, 'track_meanings', d.id));
-          }
-          console.log(`[Cleanup] Finished wiping old tracks.`);
-        }
-        localStorage.setItem("lyrify_wiped_v2", "true");
-      } catch (err) {
-        console.error("[Cleanup] Failed to wipe old tracks:", err);
-      }
-    };
-    wipeOldTracks();
-  }, [user]); // Run when user is available (auth initialized)
+    localStorage.setItem("lyrify_wiped_v3", "true");
+  }, []);
   // --------------------------------------
   const [popoverData, setPopoverData] = useState<{
     phrase: string;
@@ -765,6 +744,7 @@ export default function App() {
   const [recentTracks, setRecentTracks] = useState<Track[]>([]);
   const [activeLibraryTab, setActiveLibraryTab] = useState<'recent' | 'community'>('recent');
   const [communityLangFilter, setCommunityLangFilter] = useState<string>('All');
+  const [communityDifficultyFilter, setCommunityDifficultyFilter] = useState<string>('All');
   const [searchHistory, setSearchHistory] = useState<string[]>(
     () => JSON.parse(localStorage.getItem("lyrify_search_history") || "[]")
   );
@@ -776,6 +756,11 @@ export default function App() {
   >("idle");
   const [lyricsFetchError, setLyricsFetchError] = useState<string | null>(null);
   const [manualLyrics, setManualLyrics] = useState("");
+  const previewAudioRef = useRef<HTMLAudioElement | null>(null);
+  const [isPreviewPlaying, setIsPreviewPlaying] = useState(false);
+  const [hasStartedPreview, setHasStartedPreview] = useState(false);
+  const [previewProgress, setPreviewProgress] = useState(0);
+  const [previewDuration, setPreviewDuration] = useState(0);
   const [dbConnectionError, setDbConnectionError] = useState(false);
 
   const [lyricOptions, setLyricOptions] = useState<LyricOption[]>([]);
@@ -935,6 +920,15 @@ export default function App() {
           audioUrl: t.audioUrl || "",
           appleMusicUrl: t.appleMusicUrl || "",
           sourceLanguage: t.originalLanguage || "English",
+          difficulty: t.difficulty,
+          promptVersion: t.promptVersion,
+          meaning: (() => {
+            const langKey = targetLanguage.toLowerCase().trim();
+            if (langKey === 'spanish') return t.meanings?.es || t.meanings?.en;
+            if (langKey === 'russian') return t.meanings?.ru || t.meanings?.en;
+            if (langKey === 'polish') return t.meanings?.pl || t.meanings?.en;
+            return t.meanings?.en;
+          })(),
           documentId: t.trackKey
         };
       });
@@ -1002,6 +996,52 @@ export default function App() {
       window.speechSynthesis.cancel();
     }
   }, [view, currentTrack]);
+
+  useEffect(() => {
+    if (previewAudioRef.current) {
+      previewAudioRef.current.pause();
+      setIsPreviewPlaying(false);
+      setHasStartedPreview(false);
+      setPreviewProgress(0);
+    }
+  }, [currentTrack?.audioUrl, activeTab]);
+
+  const togglePreviewAudio = () => {
+    if (!previewAudioRef.current) return;
+    if (isPreviewPlaying) {
+      previewAudioRef.current.pause();
+    } else {
+      previewAudioRef.current.play();
+      setHasStartedPreview(true);
+    }
+    setIsPreviewPlaying(!isPreviewPlaying);
+  };
+
+  const handlePreviewTimeUpdate = () => {
+    if (previewAudioRef.current) {
+      const p = (previewAudioRef.current.currentTime / previewAudioRef.current.duration) * 100;
+      setPreviewProgress(p);
+    }
+  };
+
+  const handlePreviewLoadedMetadata = () => {
+    if (previewAudioRef.current) {
+      setPreviewDuration(previewAudioRef.current.duration);
+    }
+  };
+
+  const handlePreviewEnded = () => {
+    setIsPreviewPlaying(false);
+    setPreviewProgress(0);
+  };
+
+  const seekPreview = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!previewAudioRef.current) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const clickedProgress = Math.max(0, Math.min(1, x / rect.width));
+    previewAudioRef.current.currentTime = clickedProgress * previewAudioRef.current.duration;
+  };
 
   useEffect(() => {
     if (view === "lyrics" && currentTrack?.rawLyrics && targetLanguage) {
@@ -1578,6 +1618,39 @@ export default function App() {
 
   const searchContainerRef = useRef<HTMLDivElement>(null);
 
+  const renderDifficultyIndicator = (difficulty?: string, hideLabel: boolean = false) => {
+    if (!difficulty) return null;
+    
+    let bars = [];
+    const diff = difficulty.toLowerCase();
+    
+    if (diff === 'beginner') {
+      bars = [{ color: 'bg-green-500', active: true }, { color: 'bg-zinc-700', active: false }, { color: 'bg-zinc-700', active: false }];
+    } else if (diff === 'intermediate') {
+      bars = [{ color: 'bg-yellow-500', active: true }, { color: 'bg-yellow-500', active: true }, { color: 'bg-zinc-700', active: false }];
+    } else if (diff === 'advanced') {
+      bars = [{ color: 'bg-red-500', active: true }, { color: 'bg-red-500', active: true }, { color: 'bg-red-500', active: true }];
+    } else {
+      return null;
+    }
+    
+    return (
+      <div className="flex gap-1 items-center" title={`Difficulty: ${difficulty}`}>
+        {bars.map((bar, idx) => (
+          <div 
+            key={idx} 
+            className={`w-3 h-1 rounded-full ${bar.color} ${bar.active ? 'opacity-100' : 'opacity-20 shadow-sm'}`}
+          />
+        ))}
+        {!hideLabel && (
+          <span className="text-[10px] font-bold text-app-muted ml-1 opacity-60 capitalize">
+            {difficulty}
+          </span>
+        )}
+      </div>
+    );
+  };
+
   const handleSearch = async (e?: React.FormEvent, overrideQuery?: string) => {
     if (e) e.preventDefault();
     const query = overrideQuery !== undefined ? overrideQuery : searchQuery;
@@ -1741,7 +1814,10 @@ export default function App() {
       setCurrentTrack(updatedCached);
       setView("lyrics");
       
-      addRecentTrack(track);
+      addRecentTrack({
+        ...track,
+        difficulty: updatedCached.difficulty || track.difficulty
+      });
       setRecentTracks(getRecentTracks());
       return;
     }
@@ -1760,10 +1836,13 @@ export default function App() {
       rawLyrics: "",
       source: null,
       sourceLanguage: track.sourceLanguage || "English",
+      meaning: track.meaning,
+      difficulty: track.difficulty,
+      promptVersion: track.promptVersion,
       lines: [],
       processingStatus: {
         stage1_completed: false,
-        stage2_completed: false,
+        stage2_completed: !!track.meaning,
         stage3_completed: false,
       },
       lastUpdated: Date.now(),
@@ -1771,7 +1850,10 @@ export default function App() {
 
     setCurrentTrack(initialTrack);
     setView("lyrics");
-    addRecentTrack(track);
+    addRecentTrack({
+      ...track,
+      difficulty: track.difficulty
+    });
     setRecentTracks(getRecentTracks());
 
     // 5. ENHANCEMENT: If metadata is missing (common for community tracks), try to find it on iTunes
@@ -1820,6 +1902,8 @@ export default function App() {
             const updated = {
               ...prev,
               meaning,
+              difficulty: cacheResult.difficulty,
+              promptVersion: cacheResult.promptVersion || prev.promptVersion,
               sourceLanguage: cacheResult.originalLanguage || prev.sourceLanguage,
               processingStatus: {
                 ...prev.processingStatus,
@@ -1867,7 +1951,8 @@ export default function App() {
       }
 
       // 2. Fetch/Update meaning and detected language
-      if (!trackData.meaning || !trackData.processingStatus.stage2_completed) {
+      const isOutdated = !trackData.promptVersion || trackData.promptVersion < ANALYSIS_PROMPT_VERSION;
+      if (!trackData.meaning || !trackData.processingStatus.stage2_completed || isOutdated) {
         setLoadingStep("meaning");
         const metadata: TrackMetadata = {
           title: trackData.title,
@@ -1890,6 +1975,8 @@ export default function App() {
         trackData = {
           ...trackData,
           meaning,
+          difficulty: result.difficulty,
+          promptVersion: ANALYSIS_PROMPT_VERSION,
           sourceLanguage: result.originalLanguage || trackData.sourceLanguage,
           processingStatus: { ...trackData.processingStatus, stage2_completed: true }
         };
@@ -1897,6 +1984,15 @@ export default function App() {
 
       saveTrackData(trackData.trackId, trackData);
       setCurrentTrack(trackData);
+      addRecentTrack({
+        id: trackData.trackId,
+        title: trackData.title,
+        artist: trackData.artist,
+        coverUrl: trackData.coverUrl || "",
+        album: trackData.album || "",
+        difficulty: trackData.difficulty
+      } as Track);
+      setRecentTracks(getRecentTracks());
       loadCommunityTracks();
     } catch (err) {
       console.error("Manual fetch/meaning failed:", err);
@@ -1988,9 +2084,19 @@ export default function App() {
             ...prev,
             sourceLanguage: result.originalLanguage || prev.sourceLanguage,
             meaning,
+            difficulty: result.difficulty,
             processingStatus: { ...prev.processingStatus, stage2_completed: true }
           };
           saveTrackData(prev.trackId, updated);
+          addRecentTrack({
+            id: prev.trackId,
+            title: prev.title,
+            artist: prev.artist,
+            coverUrl: prev.coverUrl || "",
+            album: prev.album || "",
+            difficulty: result.difficulty
+          } as Track);
+          setRecentTracks(getRecentTracks());
           loadCommunityTracks();
           return updated;
         });
@@ -2075,6 +2181,8 @@ export default function App() {
         trackData = {
           ...trackData,
           meaning,
+          difficulty: meaningResult.difficulty,
+          promptVersion: ANALYSIS_PROMPT_VERSION,
           sourceLanguage: meaningResult.originalLanguage || trackData.sourceLanguage,
           processingStatus: { ...trackData.processingStatus, stage2_completed: true }
         };
@@ -2105,6 +2213,7 @@ export default function App() {
     const resetTrack = {
       ...currentTrack,
       meaning: undefined,
+      promptVersion: undefined,
       lines: currentTrack.lines.map(line => ({
         ...line,
         translation: undefined,
@@ -2368,6 +2477,15 @@ export default function App() {
 
   return (
     <div className="relative h-screen w-full bg-app-bg text-app-fg font-sans overflow-hidden flex flex-col transition-colors duration-300">
+      {/* Hidden Audio for Preview */}
+      <audio
+        ref={previewAudioRef}
+        onTimeUpdate={handlePreviewTimeUpdate}
+        onLoadedMetadata={handlePreviewLoadedMetadata}
+        onEnded={handlePreviewEnded}
+        muted={isMuted}
+        src={currentTrack?.audioUrl}
+      />
       {/* Background Decor */}
       <div className="fixed inset-0 z-0 pointer-events-none bg-accent-glow transition-all duration-500">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,var(--glow-color),transparent)]" />
@@ -2387,41 +2505,23 @@ export default function App() {
             <Brain size={18} className="text-white" />
           </div>
           <span className="font-black tracking-tighter text-lg uppercase">
-            Lyrify
+            CantoLex
           </span>
         </div>
         <div className="flex items-center gap-4">
           <button
             onClick={() => setView("settings")}
-            className="flex items-center gap-3 p-1 pr-3 rounded-full bg-app-card border border-app-card-border shadow-app-card hover:bg-[var(--accent)] hover:bg-opacity-10 transition-all group"
+            className="w-9 h-9 rounded-xl flex items-center justify-center bg-app-card border border-app-card-border shadow-lg transition-all hover:scale-105 active:scale-95 group overflow-hidden"
           >
-            <div className="flex flex-col items-end mr-1">
-              <span className="text-[9px] text-app-fg opacity-30 uppercase font-black tracking-tighter leading-none mb-0.5">
-                {user ? "Profile" : "Guest"}
-              </span>
-              <span className="text-[10px] text-app-fg opacity-80 uppercase font-black leading-none">
-                {user?.displayName?.split(" ")[0] || "Settings"}
-              </span>
-            </div>
-            <div
-              className="w-7 h-7 rounded-lg flex items-center justify-center border transition-colors overflow-hidden"
-              style={{
-                backgroundColor:
-                  "color-mix(in srgb, var(--accent) 20%, transparent)",
-                borderColor:
-                  "color-mix(in srgb, var(--accent) 20%, transparent)",
-              }}
-            >
-              {user?.photoURL ? (
-                <img
-                  src={user.photoURL}
-                  alt={user.displayName || ""}
-                  className="w-full h-full object-cover"
-                />
-              ) : (
-                <UserIcon size={14} style={{ color: "var(--accent)" }} />
-              )}
-            </div>
+            {user?.photoURL ? (
+              <img
+                src={user.photoURL}
+                alt={user.displayName || ""}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <UserIcon size={18} className="text-app-fg opacity-60 group-hover:text-[var(--accent)] transition-colors" />
+            )}
           </button>
         </div>
       </header>
@@ -2827,12 +2927,19 @@ export default function App() {
                                     className="w-16 h-16 rounded-2xl object-cover shadow-lg"
                                   />
                                   <div className="text-left">
-                                    <p className="font-bold text-app-fg leading-tight">
+                                    <p className="font-bold text-app-fg leading-tight mb-0.5">
                                       {track.title}
                                     </p>
-                                    <p className="text-sm text-app-muted">
-                                      {track.artist}
-                                    </p>
+                                    <div className="flex flex-col gap-1">
+                                      <p className="text-sm text-app-muted">
+                                        {track.artist}
+                                      </p>
+                                      {track.difficulty && (
+                                        <div className="shrink-0 flex items-center">
+                                          {renderDifficultyIndicator(track.difficulty, true)}
+                                        </div>
+                                      )}
+                                    </div>
                                   </div>
                                 </div>
                                 <ChevronRight
@@ -2859,19 +2966,34 @@ export default function App() {
                                 Community Trends
                               </h2>
 
-                              {/* Language Filter */}
-                              <div className="flex items-center gap-2">
-                                <span className="text-[10px] font-bold text-app-muted uppercase tracking-widest">Filter:</span>
-                                <select 
-                                  value={communityLangFilter}
-                                  onChange={(e) => setCommunityLangFilter(e.target.value)}
-                                  className="bg-app-card border border-app-card-border rounded-lg px-3 py-1.5 text-xs font-bold text-app-fg outline-none focus:ring-1 focus:ring-accent transition-all"
-                                >
-                                  <option value="All">All Languages</option>
-                                  {SUPPORTED_LANGUAGES.map(lang => (
-                                    <option key={lang.name} value={lang.name}>{lang.name}</option>
-                                  ))}
-                                </select>
+                              {/* Filters */}
+                              <div className="flex flex-wrap items-center gap-4">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-[10px] font-bold text-app-muted uppercase tracking-widest leading-none">Language:</span>
+                                  <select 
+                                    value={communityLangFilter}
+                                    onChange={(e) => setCommunityLangFilter(e.target.value)}
+                                    className="bg-app-card border border-app-card-border rounded-lg px-3 py-1.5 text-[11px] font-bold text-app-fg outline-none focus:ring-1 focus:ring-accent transition-all appearance-none cursor-pointer"
+                                  >
+                                    <option value="All">All</option>
+                                    {SUPPORTED_LANGUAGES.map(lang => (
+                                      <option key={lang.name} value={lang.name}>{lang.name}</option>
+                                    ))}
+                                  </select>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-[10px] font-bold text-app-muted uppercase tracking-widest leading-none">Difficulty:</span>
+                                  <select 
+                                    value={communityDifficultyFilter}
+                                    onChange={(e) => setCommunityDifficultyFilter(e.target.value)}
+                                    className="bg-app-card border border-app-card-border rounded-lg px-3 py-1.5 text-[11px] font-bold text-app-fg outline-none focus:ring-1 focus:ring-accent transition-all appearance-none cursor-pointer"
+                                  >
+                                    <option value="All">All</option>
+                                    <option value="beginner">Beginner</option>
+                                    <option value="intermediate">Intermediate</option>
+                                    <option value="advanced">Advanced</option>
+                                  </select>
+                                </div>
                               </div>
                             </div>
                             
@@ -2889,9 +3011,17 @@ export default function App() {
                               </div>
                             ) : (
                               <div className="space-y-4">
-                                {dynamicTracks.filter(t => communityLangFilter === "All" || t.sourceLanguage === communityLangFilter).length > 0 ? 
+                                {dynamicTracks.filter(t => {
+                                  const langMatch = communityLangFilter === "All" || t.sourceLanguage === communityLangFilter;
+                                  const diffMatch = communityDifficultyFilter === "All" || (t.difficulty && t.difficulty.toLowerCase().includes(communityDifficultyFilter.toLowerCase()));
+                                  return langMatch && diffMatch;
+                                }).length > 0 ? 
                                 dynamicTracks
-                                  .filter(t => communityLangFilter === "All" || t.sourceLanguage === communityLangFilter)
+                                  .filter(t => {
+                                    const langMatch = communityLangFilter === "All" || t.sourceLanguage === communityLangFilter;
+                                    const diffMatch = communityDifficultyFilter === "All" || (t.difficulty && t.difficulty.toLowerCase().includes(communityDifficultyFilter.toLowerCase()));
+                                    return langMatch && diffMatch;
+                                  })
                                   .map((track) => (
                                     <button
                                       key={`comm-${track.id}`}
@@ -2908,17 +3038,24 @@ export default function App() {
                                           className="w-16 h-16 rounded-2xl object-cover shadow-lg"
                                         />
                                         <div className="text-left">
-                                          <div className="flex items-center gap-2">
+                                          <div className="flex items-center gap-2 mb-0.5">
                                             <p className="font-bold text-app-fg leading-tight">
                                               {track.title}
                                             </p>
-                                            <span className="text-[8px] font-black uppercase px-1.5 py-0.5 rounded bg-app-fg/10 text-app-fg opacity-50 tracking-tighter">
+                                            <span className="text-[8px] font-black uppercase px-1.5 py-0.5 rounded bg-app-fg/10 text-app-fg opacity-50 tracking-tighter shrink-0">
                                               {track.sourceLanguage}
                                             </span>
                                           </div>
-                                          <p className="text-sm text-app-muted">
-                                            {track.artist}
-                                          </p>
+                                          <div className="flex flex-col gap-1">
+                                            <p className="text-sm text-app-muted">
+                                              {track.artist}
+                                            </p>
+                                            {track.difficulty && (
+                                              <div className="flex items-center shrink-0">
+                                                {renderDifficultyIndicator(track.difficulty, true)}
+                                              </div>
+                                            )}
+                                          </div>
                                         </div>
                                       </div>
                                       <ChevronRight
@@ -2929,7 +3066,7 @@ export default function App() {
                                   )) : (
                                   <div className="text-center py-12 px-6 rounded-3xl border border-dashed border-app-card-border opacity-40 italic bg-app-card/30">
                                     <Music size={40} className="mx-auto mb-4 opacity-20" />
-                                    No tracks found matching "{communityLangFilter}".
+                                    No tracks found matching your filters.
                                   </div>
                                 )}
                               </div>
@@ -3153,17 +3290,6 @@ export default function App() {
                   </div>
                 </div>                {activeTab === "preview" && (
                   <div className="flex flex-col gap-8 pb-32">
-                    {/* iTunes Player */}
-                    {currentTrack.audioUrl && (
-                      <ITunesPlayer
-                        audioUrl={currentTrack.audioUrl}
-                        trackTitle={currentTrack.title}
-                        artistName={currentTrack.artist}
-                        coverUrl={currentTrack.coverUrl}
-                        appleMusicUrl={currentTrack.appleMusicUrl || `https://music.apple.com/search?term=${encodeURIComponent(currentTrack.artist + " " + currentTrack.title)}`}
-                      />
-                    )}
-
                     {/* Show Meaning if we have it, even if loading lyrics in background */}
                     {currentTrack.meaning ? (
                       <motion.div
@@ -3172,9 +3298,24 @@ export default function App() {
                         className="space-y-8"
                       >
                         <section className="p-8 rounded-[2.5rem] bg-app-card/60 border border-app-card-border shadow-app-card">
-                          <h2 className="text-[10px] font-black uppercase tracking-[0.3em] mb-4 text-app-accent">
-                            Song Meaning
-                          </h2>
+                          <div className="flex items-center justify-between mb-4">
+                            <div className="flex items-center gap-4">
+                              <h2 className="text-[10px] font-black uppercase tracking-[0.3em] text-app-accent leading-none">
+                                Song Meaning
+                              </h2>
+                              {renderDifficultyIndicator(currentTrack.difficulty, true)}
+                            </div>
+                            {currentTrack.meaning && (!currentTrack.promptVersion || currentTrack.promptVersion < ANALYSIS_PROMPT_VERSION) && (
+                              <button
+                                onClick={handleAnalyzeSong}
+                                title="Update analysis to newest version"
+                                className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-accent/10 border border-accent/20 text-[9px] font-bold text-accent uppercase tracking-wider hover:bg-accent/20 transition-all group"
+                              >
+                                <RefreshCw size={10} className="group-active:rotate-180 transition-transform duration-500" />
+                                Update Available
+                              </button>
+                            )}
+                          </div>
                           <p className="text-xl font-serif italic text-app-fg opacity-80 leading-relaxed">
                             {currentTrack.meaning}
                           </p>
@@ -3490,7 +3631,7 @@ export default function App() {
                               Key Phrases
                             </h2>
                             <div className="flex gap-2 ml-auto">
-                              {currentTrack.promptVersion && currentTrack.promptVersion < ANALYSIS_PROMPT_VERSION && (
+                              {(!currentTrack.promptVersion || currentTrack.promptVersion < ANALYSIS_PROMPT_VERSION) && (
                                 <div className="px-2 py-1 rounded-lg bg-[var(--accent)]/10 text-[var(--accent)] text-[8px] font-black uppercase tracking-widest flex items-center gap-1.5 animate-pulse">
                                   <Sparkles size={10} />
                                   New Version Available
@@ -3501,14 +3642,14 @@ export default function App() {
                                 disabled={isGeneratingAnalysis}
                                 className={cn(
                                   "px-3 py-1.5 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2",
-                                  currentTrack.promptVersion && currentTrack.promptVersion < ANALYSIS_PROMPT_VERSION
+                                  !currentTrack.promptVersion || currentTrack.promptVersion < ANALYSIS_PROMPT_VERSION
                                     ? "bg-[var(--accent)] border-[var(--accent)] text-white shadow-lg shadow-[var(--accent)]/20 opacity-100"
                                     : "bg-app-card border-app-card-border opacity-40 hover:opacity-100 hover:text-[var(--accent)]"
                                 )}
                                 title="Reset and regenerate analysis"
                               >
                                 <RefreshCw size={10} className={isGeneratingAnalysis ? "animate-spin" : ""} />
-                                {currentTrack.promptVersion && currentTrack.promptVersion < ANALYSIS_PROMPT_VERSION ? "Update Analysis" : "Regenerate"}
+                                {!currentTrack.promptVersion || currentTrack.promptVersion < ANALYSIS_PROMPT_VERSION ? "Update Analysis" : "Regenerate"}
                               </button>
 
                             </div>
@@ -3608,10 +3749,10 @@ export default function App() {
         </AnimatePresence>
       </main>
 
-      {/* Player Control Panel (Lyrics & Preview Taps) */}
+      {/* Player Control Panel (Lyrics, Preview & Analysis Tabs) */}
       <AnimatePresence>
         {view === "lyrics" &&
-          (activeTab === "lyrics" || activeTab === "preview") &&
+          (activeTab === "lyrics" || activeTab === "preview" || activeTab === "analysis") &&
           currentTrack && (
           <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 w-full max-w-md px-4 pointer-events-none">
             <motion.div
@@ -3623,90 +3764,170 @@ export default function App() {
               {/* Subtle glass effect behind the panel */}
               <div className="absolute -inset-2 bg-[var(--accent)]/5 rounded-full blur-2xl opacity-50" />
 
-              <div className="relative px-3 py-2 bg-app-card/80 backdrop-blur-3xl border border-app-card-border rounded-full flex items-center justify-between shadow-[0_25px_60px_-15px_rgba(0,0,0,0.3)]">
-                {/* Left: Metadata / Mode Selector */}
-                <div className="flex-1 flex items-center min-w-0 gap-2.5 pl-1.5">
-                  <div className="flex items-center bg-app-bg/50 p-1 rounded-full border border-app-card-border gap-1">
-                    <button
-                      onClick={() => changePlaybackMode("listening")}
-                      className={cn(
-                        "p-2 rounded-full transition-all",
-                        playbackMode === "listening"
-                          ? "bg-[var(--accent)] text-white shadow-lg"
-                          : "text-app-fg opacity-40 hover:opacity-100",
-                      )}
-                      title="Listening Mode"
+              <div className="relative bg-app-card/80 backdrop-blur-3xl border border-app-card-border rounded-[2.5rem] flex flex-col shadow-[0_25px_60px_-15px_rgba(0,0,0,0.3)] overflow-hidden">
+                {/* Progress Bar */}
+                <div 
+                  className={cn(
+                    "absolute top-0 left-0 right-0 h-1 bg-app-fg/5 cursor-pointer group/progress z-20",
+                    activeTab === 'preview' ? 'opacity-100' : 'opacity-40'
+                  )}
+                  onClick={activeTab === 'preview' ? seekPreview : undefined}
+                >
+                  <motion.div 
+                    initial={false}
+                    animate={{ 
+                      width: `${activeTab === 'preview' 
+                        ? previewProgress 
+                        : (activeLineIndex !== null && currentTrack.lines.length > 0 
+                            ? ((activeLineIndex + 1) / currentTrack.lines.length) * 100 
+                            : 0)}%` 
+                    }}
+                    className="h-full bg-gradient-to-r from-[var(--accent)] to-purple-500"
+                  />
+                </div>
+
+                <div className="px-3 py-2 flex items-center justify-between">
+                  {/* Left: Metadata / Mode Selector / Attribution */}
+                  <div className="flex-1 flex items-center min-w-0 gap-2.5 pl-1.5">
+                    {activeTab === "lyrics" ? (
+                      <div className="flex items-center bg-app-bg/50 p-1 rounded-full border border-app-card-border gap-1">
+                        <button
+                          onClick={() => changePlaybackMode("listening")}
+                          className={cn(
+                            "p-2 rounded-full transition-all",
+                            playbackMode === "listening"
+                              ? "bg-[var(--accent)] text-white shadow-lg"
+                              : "text-app-fg opacity-40 hover:opacity-100",
+                          )}
+                          title="Listening Mode"
+                        >
+                          <Headphones size={20} />
+                        </button>
+                        <button
+                          onClick={() => changePlaybackMode("shadowing")}
+                          className={cn(
+                            "p-2 rounded-full transition-all",
+                            playbackMode === "shadowing"
+                              ? "bg-[var(--accent)] text-white shadow-lg"
+                              : "text-app-fg opacity-40 hover:opacity-100",
+                          )}
+                          title="Shadowing Mode"
+                        >
+                          <Mic2 size={20} />
+                        </button>
+                      </div>
+                    ) : (
+                      /* Minimalist info / iTunes Attribution */
+                      <div className="flex items-center gap-3 pl-2 h-10">
+                        {activeTab === "preview" && hasStartedPreview ? (
+                          <motion.a
+                            initial={{ opacity: 0, x: -10 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            href={currentTrack.appleMusicUrl || `https://music.apple.com/search?term=${encodeURIComponent(currentTrack.artist + " " + currentTrack.title)}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-2.5 group pointer-events-auto"
+                          >
+                            <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center shrink-0 shadow-sm border border-black/5">
+                              <img 
+                                src="https://upload.wikimedia.org/wikipedia/commons/f/fa/Apple_logo_black.svg" 
+                                alt="" 
+                                className="h-4"
+                              />
+                            </div>
+                            <div className="flex flex-col leading-none">
+                              <span className="text-[6px] font-black uppercase tracking-wider text-app-muted/60 mb-0.5">
+                                Превью от
+                              </span>
+                              <div className="flex items-center gap-1">
+                                <span className="text-[9px] font-black uppercase tracking-tight text-[#fa243c]">
+                                  iTunes Store
+                                </span>
+                                <ExternalLink size={8} className="text-app-muted group-hover:text-[var(--accent)] transition-colors" />
+                              </div>
+                            </div>
+                          </motion.a>
+                        ) : (
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-lg overflow-hidden bg-app-bg/50 border border-app-card-border shrink-0">
+                              {currentTrack.coverUrl ? (
+                                <img src={currentTrack.coverUrl} alt="" className="w-full h-full object-cover" />
+                              ) : (
+                                <Music className="w-full h-full p-1.5 opacity-20" />
+                              )}
+                            </div>
+                            <div className="min-w-0">
+                               <p className="text-[10px] font-black uppercase tracking-widest text-app-fg truncate">
+                                 {activeTab === 'preview' ? 'Sample' : 'Exploring'}
+                               </p>
+                               <p className="text-[9px] font-medium text-app-muted truncate">
+                                 {currentTrack.title}
+                               </p>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Center: Play Control */}
+                  <div className="flex-shrink-0 mx-2 relative group">
+                    <motion.button
+                      onClick={activeTab === "preview" ? togglePreviewAudio : toggleReadLyrics}
+                      whileHover={{ scale: 1.08 }}
+                      whileTap={{ scale: 0.92 }}
+                      className="w-14 h-14 rounded-full flex items-center justify-center transition-all shadow-2xl relative z-10"
+                      style={{
+                        backgroundColor: (activeTab === "preview" ? isPreviewPlaying : isReadingAll)
+                          ? "var(--accent)"
+                          : "var(--foreground)",
+                        color: (activeTab === "preview" ? isPreviewPlaying : isReadingAll) ? "white" : "var(--background)",
+                        boxShadow: (activeTab === "preview" ? isPreviewPlaying : isReadingAll)
+                          ? "0 12px 30px -5px var(--accent)"
+                          : "0 12px 30px -8px rgba(0,0,0,0.2)",
+                      }}
                     >
-                      <Headphones size={20} />
-                    </button>
-                    <button
-                      onClick={() => changePlaybackMode("shadowing")}
-                      className={cn(
-                        "p-2 rounded-full transition-all",
-                        playbackMode === "shadowing"
-                          ? "bg-[var(--accent)] text-white shadow-lg"
-                          : "text-app-fg opacity-40 hover:opacity-100",
+                      {(activeTab === "preview" ? isPreviewPlaying : isReadingAll) ? (
+                        <Pause size={26} fill="currentColor" />
+                      ) : (
+                        <Play size={26} className="ml-1" fill="currentColor" />
                       )}
-                      title="Shadowing Mode"
+                    </motion.button>
+                  </div>
+
+                  {/* Right: Tools */}
+                  <div className="flex-1 flex justify-end items-center gap-1 pr-1">
+                    {activeTab !== "preview" && (
+                      <>
+                        <button
+                          onClick={() => setIsMuted(!isMuted)}
+                          className={cn(
+                            "w-10 h-10 rounded-full flex items-center justify-center transition-all active:scale-95",
+                            isMuted
+                              ? "text-red-500 bg-red-500/10 opacity-100"
+                              : "text-app-fg opacity-60 hover:opacity-100 hover:bg-app-fg/5",
+                          )}
+                          title={isMuted ? "Unmute" : "Mute"}
+                        >
+                          {isMuted ? <VolumeX size={20} /> : <Volume2 size={20} />}
+                        </button>
+                        <button
+                          onClick={() => setIsLyricsSettingsOpen(true)}
+                          className="w-10 h-10 rounded-full flex items-center justify-center text-app-fg opacity-60 hover:opacity-100 hover:bg-app-fg/5 transition-all active:scale-95"
+                          title="Settings"
+                        >
+                          <Settings size={20} />
+                        </button>
+                      </>
+                    )}
+                    <button
+                      onClick={() => setIsResourcesOpen(true)}
+                      className="w-10 h-10 rounded-full flex items-center justify-center text-app-fg opacity-60 hover:opacity-100 hover:bg-app-fg/5 transition-all active:scale-95"
+                      title="Sources"
                     >
-                      <Mic2 size={20} />
+                      <ListMusic size={20} />
                     </button>
                   </div>
-                </div>
-
-                {/* Center: Play Control */}
-                <div className="flex-shrink-0 mx-2 relative group">
-                  <motion.button
-                    onClick={toggleReadLyrics}
-                    whileHover={{ scale: 1.08 }}
-                    whileTap={{ scale: 0.92 }}
-                    className="w-14 h-14 rounded-full flex items-center justify-center transition-all shadow-2xl relative z-10"
-                    style={{
-                      backgroundColor: isReadingAll
-                        ? "var(--accent)"
-                        : "var(--foreground)",
-                      color: isReadingAll ? "white" : "var(--background)",
-                      boxShadow: isReadingAll
-                        ? "0 12px 30px -5px var(--accent)"
-                        : "0 12px 30px -8px rgba(0,0,0,0.2)",
-                    }}
-                  >
-                    {isReadingAll ? (
-                      <Pause size={26} fill="currentColor" />
-                    ) : (
-                      <Play size={26} className="ml-1" fill="currentColor" />
-                    )}
-                  </motion.button>
-                </div>
-
-                {/* Right: Tools */}
-                <div className="flex-1 flex justify-end items-center gap-1 pr-1">
-                  <button
-                    onClick={() => setIsMuted(!isMuted)}
-                    className={cn(
-                      "w-10 h-10 rounded-full flex items-center justify-center transition-all active:scale-95",
-                      isMuted
-                        ? "text-red-500 bg-red-500/10 opacity-100"
-                        : "text-app-fg opacity-60 hover:opacity-100 hover:bg-app-fg/5",
-                    )}
-                    title={isMuted ? "Unmute" : "Mute"}
-                  >
-                    {isMuted ? <VolumeX size={20} /> : <Volume2 size={20} />}
-                  </button>
-                  <button
-                    onClick={() => setIsLyricsSettingsOpen(true)}
-                    className="w-10 h-10 rounded-full flex items-center justify-center text-app-fg opacity-60 hover:opacity-100 hover:bg-app-fg/5 transition-all active:scale-95"
-                    title="Settings"
-                  >
-                    <Settings size={20} />
-                  </button>
-                  <button
-                    onClick={() => setIsResourcesOpen(true)}
-                    className="w-10 h-10 rounded-full flex items-center justify-center text-app-fg opacity-60 hover:opacity-100 hover:bg-app-fg/5 transition-all active:scale-95"
-                    title="Sources"
-                  >
-                    <ListMusic size={20} />
-                  </button>
                 </div>
               </div>
             </motion.div>

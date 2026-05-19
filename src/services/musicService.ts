@@ -475,6 +475,7 @@ export interface TrackLyricsData {
   rawLyrics: string;
   source: 'Lyrics.ovh' | 'LRCLib' | 'Manual' | null;
   sourceLanguage?: string;
+  difficulty?: 'beginner' | 'intermediate' | 'advanced';
   authors?: string;
   lyricSource?: string;
   meaning?: string;

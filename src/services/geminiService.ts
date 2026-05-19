@@ -3,7 +3,7 @@ import { db, auth } from '../lib/firebase';
 import { doc, getDoc, setDoc, serverTimestamp, collection, query, orderBy, limit, getDocs, where } from 'firebase/firestore';
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
-export const ANALYSIS_PROMPT_VERSION = 2;
+export const ANALYSIS_PROMPT_VERSION = 3;
 
 export interface TrackMeaningEntry extends TrackMeaningResult {
   trackKey: string;
@@ -62,6 +62,7 @@ export interface TrackMetadata {
 
 export interface TrackMeaningResult {
   originalLanguage: string;
+  difficulty: 'beginner' | 'intermediate' | 'advanced';
   meanings: {
     en: string;
     es: string;
@@ -69,6 +70,7 @@ export interface TrackMeaningResult {
     pl: string;
     [key: string]: string;
   };
+  promptVersion?: number;
 }
 
 export async function fetchTrackMeaning(
@@ -86,7 +88,9 @@ export async function fetchTrackMeaning(
       if (data.promptVersion === promptVersion && data.meanings) {
         return {
           originalLanguage: data.originalLanguage,
+          difficulty: data.difficulty,
           meanings: data.meanings,
+          promptVersion: data.promptVersion as number
         };
       }
     }
@@ -100,7 +104,9 @@ Given the lyrics of a song, perform two tasks:
 
 1. Detect the original language of the lyrics. Return the language name in English (e.g., "English", "Spanish", "French", "German", "Russian", etc.).
 
-2. Write a concise meaning/summary of the song in four languages: English (en), Spanish (es), Russian (ru), and Polish (pl). Each summary must be 3-4 sentences long. Focus on the core theme, emotional message, and narrative. Do NOT mention the artist's name. Keep the summaries general and about the song's message.
+2. Assess the vocabulary difficulty of the lyrics for a language learner. Choose one of: "beginner", "intermediate", "advanced".
+
+3. Write a concise meaning/summary of the song in four languages: English (en), Spanish (es), Russian (ru), and Polish (pl). Each summary must be 3-4 sentences long. Focus on the core theme, emotional message, and narrative. Do NOT mention the artist's name. Keep the summaries general and about the song's message.
 
 Lyrics:
 ${lyrics.substring(0, 4000)}
@@ -108,10 +114,12 @@ ${lyrics.substring(0, 4000)}
 Return a valid JSON object with the following structure exactly:
 {
   "originalLanguage": "detected language",
+  "difficulty": "beginner|intermediate|advanced",
   "meanings": {
     "en": "meaning in English",
     "es": "meaning in Spanish",
-    "ru": "meaning in Russian"
+    "ru": "meaning in Russian",
+    "pl": "meaning in Polish"
   }
 }`;
 
@@ -125,6 +133,10 @@ Return a valid JSON object with the following structure exactly:
           type: Type.OBJECT,
           properties: {
             originalLanguage: { type: Type.STRING },
+            difficulty: { 
+              type: Type.STRING, 
+              enum: ["beginner", "intermediate", "advanced"] 
+            },
             meanings: {
               type: Type.OBJECT,
               properties: {
@@ -136,7 +148,7 @@ Return a valid JSON object with the following structure exactly:
               required: ["en", "es", "ru", "pl"]
             }
           },
-          required: ["originalLanguage", "meanings"]
+          required: ["originalLanguage", "difficulty", "meanings"]
         }
       }
     });
@@ -144,7 +156,7 @@ Return a valid JSON object with the following structure exactly:
     const result = JSON.parse(response.text) as TrackMeaningResult;
     
     // Save to Firestore
-    setDoc(docRef, {
+    await setDoc(docRef, {
       trackKey,
       title: metadata.title,
       artists: metadata.artists,
@@ -156,10 +168,11 @@ Return a valid JSON object with the following structure exactly:
       appleMusicUrl: metadata.appleMusicUrl || null,
       itunesId: metadata.itunesId || null,
       originalLanguage: result.originalLanguage,
+      difficulty: result.difficulty,
       meanings: result.meanings,
       promptVersion,
       createdAt: serverTimestamp(),
-    }).catch(e => console.error("Firestore write error (track_meanings):", e));
+    });
 
     return result;
   } catch (error) {
@@ -167,6 +180,7 @@ Return a valid JSON object with the following structure exactly:
     // Return empty result as fallback
     return {
       originalLanguage: "English",
+      difficulty: "beginner",
       meanings: { en: "", es: "", ru: "", pl: "" }
     };
   }
@@ -200,7 +214,9 @@ export async function getTrackMeaningFromCache(
       if (data.promptVersion === promptVersion && data.meanings) {
         return {
           originalLanguage: data.originalLanguage,
+          difficulty: data.difficulty,
           meanings: data.meanings,
+          promptVersion: data.promptVersion as number
         };
       }
     }
@@ -663,34 +679,59 @@ ${lyrics}
 export async function getLatestAnalyzedTracks(maxCount: number = 10): Promise<TrackMeaningEntry[]> {
   console.log("[geminiService] getLatestAnalyzedTracks called, maxCount:", maxCount);
   try {
-    const q = query(
-      collection(db, 'track_meanings'),
-      where('promptVersion', '==', ANALYSIS_PROMPT_VERSION),
-      orderBy('createdAt', 'desc'),
-      limit(maxCount)
-    );
-    const querySnapshot = await getDocs(q);
-    console.log("[geminiService] Fetched docs count:", querySnapshot.size);
-    
-    if (querySnapshot.empty) {
-      // Fallback: try without orderBy or version if needed, but normally we want to match version
-      console.log("[geminiService] Collection empty with current prompt version and createdAt sort.");
-      return [];
+    // Step 1: Try the preferred query (requires composite index)
+    try {
+      const q = query(
+        collection(db, 'track_meanings'),
+        where('promptVersion', '==', ANALYSIS_PROMPT_VERSION),
+        orderBy('createdAt', 'desc'),
+        limit(maxCount)
+      );
+      const querySnapshot = await getDocs(q);
+      if (!querySnapshot.empty) {
+        console.log("[geminiService] Fetched tracks using optimized query.");
+        return querySnapshot.docs.map(doc => ({
+          ...doc.data(),
+          trackKey: doc.id
+        })) as TrackMeaningEntry[];
+      }
+    } catch (indexErr) {
+      console.warn("[geminiService] Composite index likely missing, falling back to in-memory filtering:", indexErr);
     }
 
-    return querySnapshot.docs.map(doc => ({
+    // Step 2: Fallback - Fetch latest tracks regardless of version, then filter in memory
+    // This only requires a single-field index on 'createdAt' (usually exists by default)
+    const qFallback = query(
+      collection(db, 'track_meanings'),
+      orderBy('createdAt', 'desc'),
+      limit(maxCount * 3) // Fetch extra to have enough after filtering
+    );
+    
+    const querySnapshot = await getDocs(qFallback);
+    const tracks = querySnapshot.docs.map(doc => ({
       ...doc.data(),
       trackKey: doc.id
     })) as TrackMeaningEntry[];
-  } catch (err) {
-    console.error("[geminiService] Error fetching latest tracks:", err);
-    // Final fallback: try simple fetch on error
-    try {
-      const q = query(collection(db, 'track_meanings'), limit(maxCount));
-      const snap = await getDocs(q);
-      return snap.docs.map(doc => ({ ...doc.data(), trackKey: doc.id })) as TrackMeaningEntry[];
-    } catch (e) {
-      return [];
+    
+    // Filter for current version and sort again just in case (though Firestore returns sorted)
+    const filtered = tracks.filter(t => t.promptVersion === ANALYSIS_PROMPT_VERSION).slice(0, maxCount);
+    
+    if (filtered.length > 0) {
+      console.log(`[geminiService] Found ${filtered.length} tracks after in-memory filtering.`);
+      return filtered;
     }
+
+    // Step 3: Last resort - just get anything
+    console.log("[geminiService] No tracks found with current version, trying last resort fetch.");
+    const qLastResort = query(collection(db, 'track_meanings'), limit(maxCount));
+    const snapLastResort = await getDocs(qLastResort);
+    return snapLastResort.docs.map(doc => ({
+      ...doc.data(),
+      trackKey: doc.id
+    })) as TrackMeaningEntry[];
+
+  } catch (err) {
+    console.error("[geminiService] Critical error in getLatestAnalyzedTracks:", err);
+    return [];
   }
 }
