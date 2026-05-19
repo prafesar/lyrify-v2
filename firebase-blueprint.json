@@ -45,6 +45,7 @@
         "appleMusicUrl": { "type": "string" },
         "itunesId": { "type": "number" },
         "originalLanguage": { "type": "string" },
+        "difficulty": { "type": "string", "enum": ["beginner", "intermediate", "advanced"] },
         "meanings": {
           "type": "object",
           "properties": {

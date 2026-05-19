@@ -1,4 +1,4 @@
-# Security Specification for Lyrify 2
+# Security Specification for CantoLex
 
 ## 1. Data Invariants
 - A flashcard must belong to the authenticated user who created it (`userId` match).

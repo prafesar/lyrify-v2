@@ -64,14 +64,13 @@ service cloud.firestore {
 
     match /track_meanings/{trackKey} {
       allow get, list: if true;
-      allow create: if isValidTrackMeaning(incoming());
-      allow update, delete: if false;
+      allow create, update: if true;
+      allow delete: if false;
     }
 
     match /complete_analysis_cache/{cacheId} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn() && isValidCompleteAnalysisCache(incoming());
-      allow update, delete: if false;
+      allow get, list, create, update: if true;
+      allow delete: if false;
     }
   }
 }
