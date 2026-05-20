@@ -6,7 +6,7 @@ import { Rating } from 'ts-fsrs';
 if (typeof globalThis.crypto === 'undefined') {
   globalThis.crypto = {} as any;
 }
-globalThis.crypto.randomUUID = () => 'test-uuid-999';
+globalThis.crypto.randomUUID = () => '12345678-1234-1234-1234-123456789012';
 
 // Mock idb-keyval
 const mockInMemoryStore = new Map<string, any>();
@@ -43,12 +43,12 @@ describe('localCardService regression tests', () => {
     };
 
     const cardId = await addPhraseToStudy(phrase, 'learning');
-    expect(cardId).toBe('test-uuid-999');
+    expect(cardId).toBe('12345678-1234-1234-1234-123456789012');
 
     const cards = await getCards();
     expect(cards).toHaveLength(1);
     expect(cards[0]).toMatchObject({
-      id: 'test-uuid-999',
+      id: '12345678-1234-1234-1234-123456789012',
       text: 'Nous allons chanter',
       translation: 'We are going to sing',
       status: 'learning',

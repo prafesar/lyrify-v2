@@ -72,6 +72,7 @@ export default function PhraseDrawer({
           trackId: trackId,
           lineId: lineText,
           explanation: phrase.explanation || '',
+          sourceLanguage: phrase.language,
           lemmas: [],
           type: 'phrase'
         }, 'learning');
@@ -102,6 +103,7 @@ export default function PhraseDrawer({
           trackId: trackId,
           lineId: lineText,
           explanation: phrase.explanation || '',
+          sourceLanguage: phrase.language,
           lemmas: [],
           type: 'phrase'
         }, 'known');

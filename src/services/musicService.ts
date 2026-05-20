@@ -452,6 +452,7 @@ export interface Phrase {
   explanation?: string;
   isUniversal?: boolean;
   learningPriority?: string;
+  language?: string;
 }
 
 export interface LyricsLine {
@@ -459,6 +460,7 @@ export interface LyricsLine {
   index: number;
   original: string;
   translation?: string;
+  language?: string;
   phrases: Phrase[];
 }
 
