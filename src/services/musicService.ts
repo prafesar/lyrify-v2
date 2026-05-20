@@ -481,6 +481,12 @@ export interface TrackLyricsData {
   authors?: string;
   lyricSource?: string;
   meaning?: string;
+  meanings?: {
+    en?: string;
+    es?: string;
+    ru?: string;
+    pl?: string;
+  };
   lines: LyricsLine[];
   fullTranslation?: string;
   promptVersion?: number;

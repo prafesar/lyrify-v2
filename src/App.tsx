@@ -1034,6 +1034,7 @@ export default function App() {
             if (langKey === 'polish') return t.meanings?.pl || t.meanings?.en;
             return t.meanings?.en;
           })(),
+          meanings: t.meanings,
           documentId: t.trackKey
         };
       });
@@ -1155,6 +1156,52 @@ export default function App() {
       }
     }
   }, [targetLanguage]);
+
+  useEffect(() => {
+    if (!currentTrack) return;
+    
+    // If we have meanings dictionary
+    if (currentTrack.meanings) {
+      const langKey = targetLanguage.toLowerCase().trim();
+      let meaning = currentTrack.meanings.en || "";
+      if (langKey === 'spanish') meaning = currentTrack.meanings.es || currentTrack.meanings.en || "";
+      else if (langKey === 'russian') meaning = currentTrack.meanings.ru || currentTrack.meanings.en || "";
+      else if (langKey === 'polish') meaning = currentTrack.meanings.pl || currentTrack.meanings.en || "";
+
+      if (meaning && currentTrack.meaning !== meaning) {
+        setCurrentTrack(prev => {
+          if (!prev || prev.trackId !== currentTrack.trackId) return prev;
+          const updated = { ...prev, meaning };
+          saveTrackData(prev.trackId, updated);
+          return updated;
+        });
+      }
+    } else {
+      // If meanings is missing, let's look it up from Firestore cache to find all translations
+      getTrackMeaningFromCache(currentTrack.title, [currentTrack.artist])
+        .then(cacheResult => {
+          if (cacheResult && cacheResult.meanings) {
+            const langKey = targetLanguage.toLowerCase().trim();
+            let meaning = cacheResult.meanings.en || "";
+            if (langKey === 'spanish') meaning = cacheResult.meanings.es || cacheResult.meanings.en || "";
+            else if (langKey === 'russian') meaning = cacheResult.meanings.ru || cacheResult.meanings.en || "";
+            else if (langKey === 'polish') meaning = cacheResult.meanings.pl || cacheResult.meanings.en || "";
+
+            setCurrentTrack(prev => {
+              if (!prev || prev.trackId !== currentTrack.trackId) return prev;
+              const updated = { 
+                ...prev, 
+                meaning, 
+                meanings: cacheResult.meanings 
+              };
+              saveTrackData(prev.trackId, updated);
+              return updated;
+            });
+          }
+        })
+        .catch(err => console.error("Auto background meanings reload failed:", err));
+    }
+  }, [targetLanguage, currentTrack?.trackId]);
 
   const currentUtteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
 
@@ -1980,6 +2027,7 @@ export default function App() {
       source: null,
       sourceLanguage: track.sourceLanguage || "English",
       meaning: track.meaning,
+      meanings: track.meanings,
       difficulty: track.difficulty,
       promptVersion: track.promptVersion,
       lines: [],
@@ -2045,6 +2093,7 @@ export default function App() {
             const updated = {
               ...prev,
               meaning,
+              meanings: cacheResult.meanings,
               difficulty: cacheResult.difficulty,
               promptVersion: cacheResult.promptVersion || prev.promptVersion,
               sourceLanguage: cacheResult.originalLanguage || prev.sourceLanguage,
@@ -2134,6 +2183,7 @@ export default function App() {
         trackData = {
           ...trackData,
           meaning,
+          meanings: result.meanings,
           difficulty: result.difficulty,
           promptVersion: ANALYSIS_PROMPT_VERSION,
           sourceLanguage: result.originalLanguage || trackData.sourceLanguage,
@@ -2263,6 +2313,7 @@ export default function App() {
             ...prev,
             sourceLanguage: result.originalLanguage || prev.sourceLanguage,
             meaning,
+            meanings: result.meanings,
             difficulty: result.difficulty,
             processingStatus: { ...prev.processingStatus, stage2_completed: true }
           };
@@ -2375,6 +2426,7 @@ export default function App() {
         trackData = {
           ...trackData,
           meaning,
+          meanings: meaningResult.meanings,
           difficulty: meaningResult.difficulty,
           promptVersion: ANALYSIS_PROMPT_VERSION,
           sourceLanguage: meaningResult.originalLanguage || trackData.sourceLanguage,
@@ -2585,6 +2637,7 @@ export default function App() {
               ...prev,
               sourceLanguage: result.originalLanguage || prev.sourceLanguage,
               meaning,
+              meanings: result.meanings,
               processingStatus: { ...prev.processingStatus, stage2_completed: true }
             };
             saveTrackData(prev.trackId, updated);
