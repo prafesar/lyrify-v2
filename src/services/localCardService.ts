@@ -1,4 +1,4 @@
-import { get, set, keys, del } from 'idb-keyval';
+import { get, set } from 'idb-keyval';
 import { FSRS, generatorParameters, createEmptyCard, Rating, Card } from 'ts-fsrs';
 
 export type PhraseStatus = 'new' | 'learning' | 'known';
