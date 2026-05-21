@@ -1,5 +1,5 @@
 
-import { Track, StructuredAnalysis, Artist, Album } from '../constants';
+import { Track, Artist, Album } from '../constants';
 
 export interface LyricsData {
   lyrics: string | null;
@@ -14,7 +14,7 @@ export async function searchITunes(query: string, entity: 'musicTrack' | 'album'
     const data = await response.json();
     
     // If it's an artist search, try to get some artwork from albums in parallel to show images in search results
-    let artworksMap: Map<string, string> = new Map();
+    const artworksMap: Map<string, string> = new Map();
     if (entity === 'musicArtist' && data.results.length > 0) {
       try {
         const albumUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=music&entity=album&limit=50`;
@@ -505,8 +505,11 @@ export function getCachedTrackData(trackId: string): TrackLyricsData | null {
   const cache = JSON.parse(localStorage.getItem(LYRICS_CACHE_KEY) || '{}');
   return cache[trackId] || null;
 }
+type TrackLyricsDataPatch = Omit<Partial<TrackLyricsData>, 'processingStatus'> & {
+  processingStatus?: Partial<TrackLyricsData['processingStatus']>;
+};
 
-export function saveTrackData(trackId: string, data: Partial<TrackLyricsData>) {
+export function saveTrackData(trackId: string, data: TrackLyricsDataPatch) {
   const cache = JSON.parse(localStorage.getItem(LYRICS_CACHE_KEY) || '{}');
   const existing = cache[trackId] || {};
   
@@ -546,13 +549,22 @@ export function saveLyricsToCache(trackId: string, data: any) { return saveTrack
 export function clearCachedLyrics(trackId: string) {
   const cache = JSON.parse(localStorage.getItem(LYRICS_CACHE_KEY) || '{}');
   if (cache[trackId]) {
-    // Only clear lyrics-related fields, preserve analysis
-    const { analysis, ...rest } = cache[trackId];
-    if (analysis) {
-      cache[trackId] = { analysis };
-    } else {
-      delete cache[trackId];
-    }
+    const existing = cache[trackId];
+    cache[trackId] = {
+      ...existing,
+      rawLyrics: '',
+      source: null,
+      authors: undefined,
+      lyricSource: undefined,
+      lines: [],
+      fullTranslation: undefined,
+      processingStatus: {
+        ...(existing.processingStatus || {}),
+        stage1_completed: false,
+        stage3_completed: false,
+      },
+      lastUpdated: Date.now(),
+    };
   }
   localStorage.setItem(LYRICS_CACHE_KEY, JSON.stringify(cache));
 }

@@ -1,5 +1,5 @@
 import { GoogleGenAI, Type } from "@google/genai";
-import { db, auth } from '../lib/firebase';
+import { db } from '../lib/firebase';
 import { doc, getDoc, setDoc, serverTimestamp, collection, query, orderBy, limit, getDocs, where } from 'firebase/firestore';
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
@@ -23,7 +23,11 @@ export interface TrackMeaningEntry extends TrackMeaningResult {
 // --- Utility Functions for Caching ---
 
 export function normalizeString(str: string): string {
-  return (str || '').trim().toLowerCase().replace(/\s+/g, ' ').replace(/[^\w\s']/g, '');
+  return (str || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .replace(/[^\p{L}\p{N}\s']/gu, '');
 }
 
 async function computeSHA256(message: string): Promise<string> {
@@ -297,12 +301,12 @@ Return ONLY JSON.`;
     if (jsonMatch) {
       try {
         return JSON.parse(jsonMatch[0]);
-      } catch (e) {
+      } catch (_e) {
         return { authors: null, source_confirmation: null };
       }
     }
     return { authors: null, source_confirmation: null };
-  } catch (error) {
+  } catch (_error) {
     return { authors: null, source_confirmation: null };
   }
 }
