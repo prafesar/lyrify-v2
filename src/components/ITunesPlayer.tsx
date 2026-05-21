@@ -44,14 +44,16 @@ export default function ITunesPlayer({
 
   const handleTimeUpdate = () => {
     if (audioRef.current) {
-      const p = (audioRef.current.currentTime / audioRef.current.duration) * 100;
-      setProgress(p);
+      const dur = audioRef.current.duration;
+      const p = dur && !isNaN(dur) ? (audioRef.current.currentTime / dur) * 100 : 0;
+      setProgress(isNaN(p) ? 0 : p);
     }
   };
 
   const handleLoadedMetadata = () => {
     if (audioRef.current) {
-      setDuration(audioRef.current.duration);
+      const dur = audioRef.current.duration;
+      setDuration(isNaN(dur) ? 0 : dur);
     }
   };
 

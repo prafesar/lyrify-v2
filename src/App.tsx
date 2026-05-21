@@ -872,6 +872,7 @@ export default function App() {
     "idle" | "searching" | "meaning" | "analyzing"
   >("idle");
   const [lyricsFetchError, setLyricsFetchError] = useState<string | null>(null);
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [manualLyrics, setManualLyrics] = useState("");
   const previewAudioRef = useRef<HTMLAudioElement | null>(null);
   const [isPreviewPlaying, setIsPreviewPlaying] = useState(false);
@@ -1137,14 +1138,16 @@ export default function App() {
 
   const handlePreviewTimeUpdate = () => {
     if (previewAudioRef.current) {
-      const p = (previewAudioRef.current.currentTime / previewAudioRef.current.duration) * 100;
-      setPreviewProgress(p);
+      const dur = previewAudioRef.current.duration;
+      const p = dur && !isNaN(dur) ? (previewAudioRef.current.currentTime / dur) * 100 : 0;
+      setPreviewProgress(isNaN(p) ? 0 : p);
     }
   };
 
   const handlePreviewLoadedMetadata = () => {
     if (previewAudioRef.current) {
-      setPreviewDuration(previewAudioRef.current.duration);
+      const dur = previewAudioRef.current.duration;
+      setPreviewDuration(isNaN(dur) ? 0 : dur);
     }
   };
 
@@ -2293,8 +2296,8 @@ export default function App() {
     }
   };
 
-  const runStage3 = async (track: TrackLyricsData) => {
-    if (track.processingStatus.stage3_completed) return;
+  const runStage3 = async (track: TrackLyricsData, force: boolean = false) => {
+    if (!force && track.processingStatus.stage3_completed) return;
     setIsTranslating(true);
     try {
       const trackKey = await computeTrackKey(track.title, [track.artist]);
@@ -2304,7 +2307,8 @@ export default function App() {
         track.rawLyrics,
         targetLanguage,
         trackKey,
-        lyricsHash
+        lyricsHash,
+        force
       );
 
       setCurrentTrack((prev) => {
@@ -2426,30 +2430,35 @@ export default function App() {
     }
   };
 
-  const handleGenerateAnalysis = async (force: boolean = false) => {
+  const handleGenerateAnalysis = async (force: boolean = false, customTrack?: TrackLyricsData) => {
+    const targetTrack = customTrack || currentTrack;
     if (
-      !currentTrack ||
-      (!force && currentTrack.processingStatus.stage3_completed) ||
+      !targetTrack ||
+      (!force && targetTrack.processingStatus.stage3_completed) ||
       isGeneratingAnalysis
     )
       return;
 
     setIsGeneratingAnalysis(true);
+    setAnalysisError(null);
     try {
-      let trackData = { ...currentTrack };
+      let trackData = { ...targetTrack };
+      let lyrics = trackData.rawLyrics;
       
       // 1. Fetch lyrics if missing
-      if (!trackData.rawLyrics) {
+      if (!lyrics) {
         setLoadingStep("searching");
         const lyricsResponse = await fetchLyrics(trackData.artist, trackData.title);
         if (!lyricsResponse.lyrics) {
-          setLyricsFetchError("Lyrics not found. Cannot proceed with deep analysis.");
+          const errMsg = "Lyrics not found. Cannot proceed with deep analysis.";
+          setLyricsFetchError(errMsg);
+          setAnalysisError(errMsg);
           setIsGeneratingAnalysis(false);
           setLoadingStep("idle");
           return;
         }
         
-        const lyrics = lyricsResponse.lyrics;
+        lyrics = lyricsResponse.lyrics;
         
         // Enrich trackData with lyrics first
         trackData = {
@@ -2459,20 +2468,31 @@ export default function App() {
           lines: splitLyricsIntoLines(trackData.trackId, lyrics),
           processingStatus: { ...trackData.processingStatus, stage1_completed: true }
         };
+      }
 
-        // Then get meaning and original language in one go
+      const trackKey = await computeTrackKey(trackData.title, [trackData.artist]);
+      const lyricsHash = await computeLyricsHash(lyrics || "");
+
+      const isOutdated = !trackData.promptVersion || trackData.promptVersion < ANALYSIS_PROMPT_VERSION;
+      const isTranslationOutdated = !trackData.translationPromptVersion || trackData.translationPromptVersion < TRANSLATION_PROMPT_VERSION;
+
+      // 2. Fetch/Update meaning and line translations if missing, outdated, or forced
+      if (force || !trackData.meaning || !trackData.processingStatus.stage2_completed || isOutdated || isTranslationOutdated) {
         setLoadingStep("meaning");
-        const trackKey = await computeTrackKey(trackData.title, [trackData.artist]);
-        const lyricsHash = await computeLyricsHash(lyrics);
+        const metadata: TrackMetadata = {
+          title: trackData.title,
+          artists: [trackData.artist],
+          artistId: trackData.artistId,
+          albumName: trackData.album,
+          albumId: trackData.albumId,
+          coverUrl: trackData.coverUrl,
+          audioUrl: trackData.audioUrl,
+          appleMusicUrl: trackData.appleMusicUrl
+        };
 
         const [meaningResult, translationsResult] = await Promise.all([
-          fetchTrackMeaning(lyrics, {
-            title: trackData.title,
-            artists: [trackData.artist],
-            albumName: trackData.album,
-            coverUrl: trackData.coverUrl
-          }),
-          getLineTranslations(lyrics, trackKey, lyricsHash, targetLanguage)
+          fetchTrackMeaning(lyrics || "", metadata, ANALYSIS_PROMPT_VERSION, force),
+          getLineTranslations(lyrics || "", trackKey, lyricsHash, targetLanguage, force)
         ]);
 
         const langKey = targetLanguage.toLowerCase().trim();
@@ -2482,7 +2502,7 @@ export default function App() {
         if (langKey === 'polish') meaning = meaningResult.meanings.pl;
 
         const updatedLines = trackData.lines.map((line, idx) => {
-          const matched = translationsResult.find(t => t.originalText === line.original) || translationsResult[idx];
+          const matched = translationsResult[idx] || translationsResult.find(t => t.originalText === line.original);
           return {
             ...line,
             translation: matched ? matched.translation : (line.translation || ""),
@@ -2496,6 +2516,7 @@ export default function App() {
           meanings: meaningResult.meanings,
           difficulty: meaningResult.difficulty,
           promptVersion: ANALYSIS_PROMPT_VERSION,
+          translationPromptVersion: TRANSLATION_PROMPT_VERSION,
           sourceLanguage: meaningResult.originalLanguage || trackData.sourceLanguage,
           lines: updatedLines,
           processingStatus: { ...trackData.processingStatus, stage2_completed: true }
@@ -2508,9 +2529,10 @@ export default function App() {
       }
 
       setLoadingStep("analyzing");
-      await runStage3(trackData);
-    } catch (err) {
+      await runStage3(trackData, force);
+    } catch (err: any) {
       console.error("Analysis generation failed:", err);
+      setAnalysisError(err?.message || "An unexpected error occurred during deep analysis. Please try again.");
     } finally {
       setIsGeneratingAnalysis(false);
       setLoadingStep("idle");
@@ -2525,10 +2547,11 @@ export default function App() {
     }
 
     // Reset current track data relative to analysis
-    const resetTrack = {
+    const resetTrack: TrackLyricsData = {
       ...currentTrack,
       meaning: undefined,
       promptVersion: undefined,
+      translationPromptVersion: undefined,
       lines: currentTrack.lines.map(line => ({
         ...line,
         translation: undefined,
@@ -2543,6 +2566,9 @@ export default function App() {
 
     setCurrentTrack(resetTrack);
     saveTrackData(currentTrack.trackId, resetTrack);
+
+    // Call handleGenerateAnalysis with force=true and passing resetTrack immediately to bypass async state update lag
+    handleGenerateAnalysis(true, resetTrack);
   };
 
   const getStatusStyles = (s: PhraseStatus) => {
@@ -4190,14 +4216,22 @@ export default function App() {
                         </section>
                       </motion.div>
                     ) : (
-                      <div className="py-20 flex flex-col items-center justify-center text-center space-y-8">
+                      <div className="py-20 flex flex-col items-center justify-center text-center space-y-8 font-sans">
                         <div className="w-20 h-20 rounded-[2rem] bg-app-card border border-app-card-border flex items-center justify-center text-app-fg opacity-10">
                           <Brain size={40} />
                         </div>
                         <div className="space-y-3">
                           <h3 className="text-2xl font-bold text-app-fg">No Analysis Yet</h3>
-                          <p className="text-app-fg opacity-40 max-w-sm mx-auto">Click below to start deep learning for this song.</p>
+                          <p className="text-app-fg opacity-40 max-w-sm mx-auto font-sans">Click below to start deep learning for this song.</p>
                         </div>
+
+                        {analysisError && (
+                          <div id="analysis-error-banner" className="max-w-md mx-auto p-5 rounded-[1.5rem] bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs text-center space-y-2">
+                            <p className="font-bold uppercase tracking-wider text-[10px]">Analysis Error</p>
+                            <p className="opacity-90">{analysisError}</p>
+                          </div>
+                        )}
+
                         <button
                           onClick={() => handleGenerateAnalysis()}
                           className="px-10 py-5 rounded-3xl bg-app-fg text-app-bg font-black uppercase tracking-[0.2em] text-[10px] shadow-2xl hover:scale-105 transition-all flex items-center gap-3"
