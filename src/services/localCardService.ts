@@ -11,6 +11,7 @@ export interface Flashcard {
   translation: string;
   translatedPhrase?: string; // Compatibility alias
   explanation?: string;
+  type?: string;
   status: PhraseStatus;
   lineId?: string;
   trackId: string;
@@ -73,6 +74,7 @@ export async function addPhraseToStudy(
     translation: phraseData.translation,
     translatedPhrase: phraseData.translation,
     explanation: phraseData.explanation,
+    type: phraseData.type || 'phrase',
     lineId: phraseData.lineId,
     trackId: phraseData.trackId,
     trackTitle: phraseData.trackTitle,
