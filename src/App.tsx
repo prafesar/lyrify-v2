@@ -60,6 +60,9 @@ import {
   getTrackMeaningFromCache,
   getOriginalLanguage,
   computeTrackKey,
+  computeLyricsHash,
+  getLineTranslations,
+  getPhraseAnalysis,
   completeLyricsAnalysis,
   getLatestAnalyzedTracks,
   normalizeString,
@@ -219,22 +222,19 @@ interface LyricLineProps {
   i: number;
   isCompact?: boolean;
   alwaysShowTranslation?: boolean;
+  displayMode?: "lyrics" | "translation" | "both";
   activeLineIndex: number | null;
   phraseMetadata: Map<string, any>;
   currentTrack: any;
-  getLineStatus: (line: string) => string;
-  getStatusStyles: (status: string) => any;
   getPhrasesForLine: (i: number) => any[];
-  getLineProgress: (i: number) => any;
   lineRefs: React.MutableRefObject<Map<number, HTMLDivElement>>;
-  handleAddLineWithComponents: (line: string, i: number, status: "known" | "learning") => void;
   renderHighlightedText: (line: string, phrases: any[]) => React.ReactNode;
   handleLineClick: (line: string, i: number) => void;
-  openPhraseDrawer: (i: number) => void;
   isSaving: boolean;
   isListeningForSpeech: boolean;
   shadowingFeedback: "none" | "correct" | "incorrect";
   shadowingAttempts: number;
+  handleToggleStarLine: (index: number) => void;
 }
 
 const LyricLine = ({
@@ -242,41 +242,43 @@ const LyricLine = ({
   i,
   isCompact = false,
   alwaysShowTranslation = false,
+  displayMode = "both",
   activeLineIndex,
   phraseMetadata,
   currentTrack,
-  getLineStatus,
-  getStatusStyles,
   getPhrasesForLine,
-  getLineProgress,
   lineRefs,
-  handleAddLineWithComponents,
   renderHighlightedText,
   handleLineClick,
-  openPhraseDrawer,
   isSaving,
   isListeningForSpeech,
   shadowingFeedback,
-  shadowingAttempts
+  shadowingAttempts,
+  handleToggleStarLine,
 }: LyricLineProps) => {
-  const x = useMotionValue(0);
-
   const trimmedLine = line.trim();
   if (!trimmedLine && isCompact) return null;
+  if (!trimmedLine) return <div className="h-6" />;
 
   const metadata = phraseMetadata.get(trimmedLine);
   const userTrans = metadata?.translatedPhrase;
   const autoTrans = currentTrack?.lines?.[i]?.translation;
   const displayTranslation = userTrans || autoTrans;
 
-  const lineStatusStatus = getLineStatus(trimmedLine);
-  const style = getStatusStyles(lineStatusStatus);
+  const isLyricsOnly = displayMode === "lyrics";
+  const isTranslationOnly = displayMode === "translation";
+  const isBoth = displayMode === "both";
+
+  const mainText = isTranslationOnly ? (displayTranslation || line) : line;
+
+  const showUnderTranslation = isBoth || (isLyricsOnly && activeLineIndex === i) || (alwaysShowTranslation && !isTranslationOnly);
+
   const phrasesInLine = getPhrasesForLine(i);
-  const progress = getLineProgress(i);
+  const isStarred = currentTrack?.lines?.[i]?.isStarred;
 
   return (
     <div 
-      className="relative group/line overflow-hidden rounded-[1.5rem]"
+      className="relative group/line overflow-hidden rounded-[1.5rem] transition-all duration-300"
       ref={(el) => {
         if (!isCompact) {
           if (el) lineRefs.current.set(i, el as HTMLDivElement);
@@ -285,60 +287,29 @@ const LyricLine = ({
       }}
     >
       <motion.div
-        style={{ x }}
-        drag="x"
-        dragConstraints={{ left: 0, right: 0 }}
-        dragElastic={1}
-        onDragEnd={(_, info) => {
-          if (info.offset.x < -100) {
-            handleAddLineWithComponents(line, i, "known");
-          } else if (info.offset.x > 100) {
-            handleAddLineWithComponents(line, i, "learning");
-          }
-        }}
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: Math.min(i * 0.01, 1) }}
         className={cn(
-          "group relative flex flex-col gap-1 rounded-[1.5rem] border cursor-pointer z-10",
-          isCompact ? "px-4 py-3" : "px-6 py-4",
+          "group relative flex flex-col gap-1 rounded-[1.5rem] border cursor-pointer z-10 transition-all duration-300",
+          isCompact ? "px-4 py-1" : "px-6 py-1.5",
           activeLineIndex === i
-            ? "scale-[1.01] shadow-2xl z-20 brightness-110 border-app-accent"
-            : "scale-100",
-          trimmedLine ? style.bg : "bg-transparent border-transparent",
-          trimmedLine ? style.border : "border-transparent",
+            ? "scale-[1.01] bg-app-card/60 border-app-card-border shadow-xl z-20 brightness-110"
+            : "border-transparent bg-transparent opacity-65 hover:opacity-100 hover:bg-app-card/5",
         )}
         onClick={() => trimmedLine && handleLineClick(line, i)}
       >
-        {/* Indicators revealed behind the card as we drag it */}
-        <div className="absolute right-[calc(100%+1px)] top-0 bottom-0 flex items-center pr-3 pointer-events-none">
-          <div className="flex flex-col items-center gap-1 text-orange-500">
-            <div className="p-3 rounded-2xl bg-orange-500 border border-orange-500/20 shadow-lg text-white">
-              <BookOpen size={24} strokeWidth={2.5} />
-            </div>
-            <span className="text-[9px] font-black uppercase tracking-[0.2em] whitespace-nowrap">Learn</span>
-          </div>
-        </div>
-
-        <div className="absolute left-[calc(100%+1px)] top-0 bottom-0 flex items-center pl-3 pointer-events-none">
-          <div className="flex flex-col items-center gap-1 text-green-500">
-            <div className="p-3 rounded-2xl bg-green-500 border border-green-500/20 shadow-lg text-white">
-              <Check size={24} strokeWidth={2.5} />
-            </div>
-            <span className="text-[9px] font-black uppercase tracking-[0.2em] whitespace-nowrap">Known</span>
-          </div>
-        </div>
         <div className="flex items-center gap-4 w-full relative z-10">
           <div className="flex-1 min-w-0">
             <p
               className={cn(
                 "font-serif leading-snug transition-all duration-300 text-app-fg ml-1",
                 activeLineIndex === i
-                  ? isCompact ? "text-xl" : "text-3xl"
+                  ? isCompact ? "text-xl font-bold" : "text-3xl font-bold text-app-fg"
                   : isCompact ? "text-base opacity-90" : "text-xl opacity-80",
               )}
             >
-              {line ? renderHighlightedText(line, phrasesInLine) : "\u00A0"}
+              {mainText ? (isTranslationOnly ? mainText : renderHighlightedText(mainText, phrasesInLine)) : "\u00A0"}
             </p>
           </div>
 
@@ -347,21 +318,14 @@ const LyricLine = ({
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  openPhraseDrawer(i);
+                  handleToggleStarLine(i);
                 }}
-                className={cn(
-                  "p-2 rounded-xl transition-all hover:scale-110 active:scale-95",
-                  lineStatusStatus === "known"
-                    ? "text-green-500"
-                    : lineStatusStatus === "learning"
-                      ? "text-orange-500"
-                      : "text-app-fg opacity-20 hover:opacity-100",
-                )}
+                className="p-2 rounded-xl transition-all hover:scale-120 active:scale-90"
               >
-                {isSaving && activeLineIndex === i ? (
-                  <Loader2 size={16} className="animate-spin" />
+                {isStarred ? (
+                  <Star size={20} className="fill-amber-400 text-amber-500 drop-shadow-sm" />
                 ) : (
-                  style.icon
+                  <Star size={20} className="text-app-fg/20 hover:text-amber-500/80 transition-all" />
                 )}
               </button>
             </div>
@@ -370,14 +334,14 @@ const LyricLine = ({
 
         <div className="pl-1 relative z-10">
           <AnimatePresence>
-            {(activeLineIndex === i || alwaysShowTranslation) && (
+            {(activeLineIndex === i || alwaysShowTranslation || isBoth) && (
               <motion.div
                 initial={{ opacity: 0, height: 0 }}
                 animate={{ opacity: 1, height: "auto" }}
                 exit={{ opacity: 0, height: 0 }}
                 className="space-y-4"
               >
-                {displayTranslation && (
+                {displayTranslation && showUnderTranslation && (
                   <p
                     className={cn(
                       "font-serif italic text-app-fg opacity-40 transition-all duration-300 ml-1 mt-1",
@@ -449,19 +413,102 @@ const LyricLine = ({
             )}
           </AnimatePresence>
         </div>
+      </motion.div>
+    </div>
+  );
+};
 
-        {progress && "percentage" in progress && (
-          <div className="absolute bottom-0 left-0 right-0 h-1 bg-app-fg/5">
-            <motion.div
-              initial={{ width: 0 }}
-              animate={{ width: `${progress.percentage}%` }}
-              className={cn(
-                "h-full transition-colors",
-                progress.percentage === 100
-                  ? "bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]"
-                  : "bg-app-accent shadow-[0_0_8px_rgba(var(--accent-rgb),0.4)]"
-              )}
-            />
+const AnalysisPhraseCard = ({
+  item,
+  idx,
+  card,
+  handleAddAnalysisPhrase,
+  handleSetAnalysisPhraseStatus,
+}: {
+  item: any;
+  idx: number;
+  card: any;
+  handleAddAnalysisPhrase: any;
+  handleSetAnalysisPhraseStatus: any;
+}) => {
+  const x = useMotionValue(0);
+  const currentStatus: PhraseStatus = card ? card.status : "new";
+
+  return (
+    <div className="relative group/phrase overflow-hidden rounded-[2rem] touch-pan-y">
+      <motion.div
+        style={{ x }}
+        drag="x"
+        dragConstraints={{ left: 0, right: 0 }}
+        dragElastic={1}
+        onDragEnd={(_, info) => {
+          if (info.offset.x < -100) {
+            handleSetAnalysisPhraseStatus(item.text, item.translation || "", item.explanation || "", "known");
+          } else if (info.offset.x > 100) {
+            handleSetAnalysisPhraseStatus(item.text, item.translation || "", item.explanation || "", "learning");
+          }
+        }}
+        className={cn(
+          "flex flex-col gap-3 p-6 rounded-[2rem] bg-app-card border transition-all cursor-pointer relative z-10 touch-pan-y select-none",
+          currentStatus === "known"
+            ? "border-green-500/30 shadow-md shadow-green-500/5 bg-[var(--green-bg,rgba(16,185,129,0.02))]"
+            : currentStatus === "learning"
+              ? "border-orange-500/30 shadow-md shadow-orange-500/5 bg-[var(--orange-bg,rgba(249,115,22,0.02))]"
+              : "border-blue-500/20 bg-blue-500/[0.01]"
+        )}
+      >
+        {/* Swiping Indicator on Left (revealed when dragging right) */}
+        <div className="absolute right-[calc(100%+1px)] top-0 bottom-0 flex items-center pr-4 pointer-events-none">
+          <div className="flex flex-col items-center gap-1 text-orange-500">
+            <div className="p-3 rounded-2xl bg-orange-500 border border-orange-500/20 shadow-lg text-white">
+              <BookOpen size={24} strokeWidth={2.5} />
+            </div>
+            <span className="text-[9px] font-black uppercase tracking-[0.2em] whitespace-nowrap">Learn</span>
+          </div>
+        </div>
+
+        {/* Swiping Indicator on Right (revealed when dragging left) */}
+        <div className="absolute left-[calc(100%+1px)] top-0 bottom-0 flex items-center pl-4 pointer-events-none">
+          <div className="flex flex-col items-center gap-1 text-green-500">
+            <div className="p-3 rounded-2xl bg-green-500 border border-green-500/20 shadow-lg text-white">
+              <Check size={24} strokeWidth={2.5} />
+            </div>
+            <span className="text-[9px] font-black uppercase tracking-[0.2em] whitespace-nowrap">Known</span>
+          </div>
+        </div>
+
+        <div className="flex items-start justify-between gap-2 relative z-10">
+          <div className="flex-1 flex gap-3">
+            <span className="text-xs font-black opacity-20 mt-2 shrink-0">{(idx + 1).toString().padStart(2, '0')}</span>
+            <div className="flex-1">
+              <p className="text-xl font-serif text-app-fg">{item.text}</p>
+              <div className="flex flex-col gap-1 mt-1">
+                {item.translation && <p className="text-lg font-serif italic text-app-fg opacity-60">{item.translation}</p>}
+              </div>
+            </div>
+          </div>
+          <div className="shrink-0 flex items-center gap-2">
+            {currentStatus === "known" ? (
+              <div className="px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest border border-green-500/10 shadow-sm text-green-500 bg-green-500/10 flex items-center gap-2">
+                <CheckCircle2 size={12} />
+                <span>known</span>
+              </div>
+            ) : currentStatus === "learning" ? (
+              <div className="px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest border border-orange-500/10 shadow-sm text-orange-500 bg-orange-500/10 flex items-center gap-2">
+                <BookOpen size={12} />
+                <span>learning</span>
+              </div>
+            ) : (
+              <div className="px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest border border-blue-500/10 shadow-sm text-blue-500 bg-blue-500/10 flex items-center gap-2">
+                <Plus size={12} />
+                <span>new</span>
+              </div>
+            )}
+          </div>
+        </div>
+        {item.explanation && (
+          <div className="pl-4 border-l-2 border-app-card-border ml-7">
+            <p className="text-lg font-medium text-app-fg opacity-60 group-hover:opacity-80 transition-opacity leading-relaxed">{item.explanation}</p>
           </div>
         )}
       </motion.div>
@@ -494,6 +541,63 @@ export default function App() {
     new Map(),
   );
   const [activeLineIndex, setActiveLineIndex] = useState<number | null>(null);
+  const [lyricsDisplayMode, setLyricsDisplayMode] = useState<"lyrics" | "translation" | "both">(
+    () => (localStorage.getItem("cantolex_lyrics_display_mode") as any) || "both"
+  );
+  const [isStarFilterActive, setIsStarFilterActive] = useState<boolean>(
+    () => localStorage.getItem("cantolex_star_filter_active") === "true"
+  );
+  const [previewLyricsMode, setPreviewLyricsMode] = useState<"original" | "translation">("original");
+
+  const handleSetLyricsDisplayMode = (mode: "lyrics" | "translation" | "both") => {
+    setLyricsDisplayMode(mode);
+    localStorage.setItem("cantolex_lyrics_display_mode", mode);
+  };
+
+  const handleToggleStarFilter = () => {
+    setIsStarFilterActive((prev) => {
+      const nextVal = !prev;
+      localStorage.setItem("cantolex_star_filter_active", String(nextVal));
+      return nextVal;
+    });
+  };
+
+  const handleToggleStarLine = (index: number) => {
+    if (!currentTrack) return;
+    const updatedLines = currentTrack.lines.map((l: any) => {
+      if (l.index === index) {
+        return { ...l, isStarred: !l.isStarred };
+      }
+      return l;
+    });
+
+    const updatedTrack = {
+      ...currentTrack,
+      lines: updatedLines,
+    };
+    setCurrentTrack(updatedTrack);
+    saveTrackData(currentTrack.trackId, updatedTrack);
+  };
+
+  const handleSetAnalysisPhraseStatus = async (
+    phrase: string,
+    translation: string,
+    explanation: string,
+    status: PhraseStatus
+  ) => {
+    if (!currentTrack) return;
+    const existingCard = phraseMetadata.get(phrase);
+    if (existingCard) {
+      try {
+        await updatePhraseStatus(existingCard.id, status);
+        await loadUserCards();
+      } catch (err) {
+        console.error(err);
+      }
+    } else {
+      await handleAddAnalysisPhrase(phrase, translation, explanation, status);
+    }
+  };
 
   const [isMuted, setIsMuted] = useState(
     () => localStorage.getItem("lyrify_muted") === "true",
@@ -620,7 +724,6 @@ export default function App() {
     card: Flashcard,
     status: PhraseStatus,
   ) => {
-    if (!user) return;
     try {
       await updatePhraseStatus(card.id, status);
       await loadUserCards();
@@ -633,8 +736,9 @@ export default function App() {
     phrase: string,
     translation: string,
     explanation: string,
+    status: PhraseStatus = "learning"
   ) => {
-    if (!user || !currentTrack) return;
+    if (!currentTrack) return;
 
     // Find parent line if any
     let parentLine = "";
@@ -657,7 +761,7 @@ export default function App() {
         explanation: explanation,
         lemmas: [],
         type: 'phrase'
-      }, "learning");
+      }, status);
       await loadUserCards();
     } catch (err) {
       console.error(err);
@@ -675,6 +779,7 @@ export default function App() {
     cardId?: string;
     status: PhraseStatus;
     index: number;
+    language?: string;
   }>({
     original: "",
     translation: "",
@@ -929,6 +1034,7 @@ export default function App() {
             if (langKey === 'polish') return t.meanings?.pl || t.meanings?.en;
             return t.meanings?.en;
           })(),
+          meanings: t.meanings,
           documentId: t.trackKey
         };
       });
@@ -1051,9 +1157,55 @@ export default function App() {
     }
   }, [targetLanguage]);
 
+  useEffect(() => {
+    if (!currentTrack) return;
+    
+    // If we have meanings dictionary
+    if (currentTrack.meanings) {
+      const langKey = targetLanguage.toLowerCase().trim();
+      let meaning = currentTrack.meanings.en || "";
+      if (langKey === 'spanish') meaning = currentTrack.meanings.es || currentTrack.meanings.en || "";
+      else if (langKey === 'russian') meaning = currentTrack.meanings.ru || currentTrack.meanings.en || "";
+      else if (langKey === 'polish') meaning = currentTrack.meanings.pl || currentTrack.meanings.en || "";
+
+      if (meaning && currentTrack.meaning !== meaning) {
+        setCurrentTrack(prev => {
+          if (!prev || prev.trackId !== currentTrack.trackId) return prev;
+          const updated = { ...prev, meaning };
+          saveTrackData(prev.trackId, updated);
+          return updated;
+        });
+      }
+    } else {
+      // If meanings is missing, let's look it up from Firestore cache to find all translations
+      getTrackMeaningFromCache(currentTrack.title, [currentTrack.artist])
+        .then(cacheResult => {
+          if (cacheResult && cacheResult.meanings) {
+            const langKey = targetLanguage.toLowerCase().trim();
+            let meaning = cacheResult.meanings.en || "";
+            if (langKey === 'spanish') meaning = cacheResult.meanings.es || cacheResult.meanings.en || "";
+            else if (langKey === 'russian') meaning = cacheResult.meanings.ru || cacheResult.meanings.en || "";
+            else if (langKey === 'polish') meaning = cacheResult.meanings.pl || cacheResult.meanings.en || "";
+
+            setCurrentTrack(prev => {
+              if (!prev || prev.trackId !== currentTrack.trackId) return prev;
+              const updated = { 
+                ...prev, 
+                meaning, 
+                meanings: cacheResult.meanings 
+              };
+              saveTrackData(prev.trackId, updated);
+              return updated;
+            });
+          }
+        })
+        .catch(err => console.error("Auto background meanings reload failed:", err));
+    }
+  }, [targetLanguage, currentTrack?.trackId]);
+
   const currentUtteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
 
-  const speak = (text: string, onEnd?: () => void) => {
+  const speak = (text: string, onEnd?: () => void, lang?: string) => {
     window.speechSynthesis.cancel();
 
     if (isMuted) {
@@ -1066,9 +1218,16 @@ export default function App() {
       const utterance = new SpeechSynthesisUtterance(text);
       currentUtteranceRef.current = utterance;
 
-      // Use detected source language for lyrics
-      const sourceLang = currentTrack?.sourceLanguage || "English";
-      utterance.lang = getLocaleByName(sourceLang);
+      if (lang) {
+        const norm = lang.toLowerCase().trim();
+        const found = SUPPORTED_LANGUAGES.find(
+          l => l.code.toLowerCase() === norm || l.name.toLowerCase() === norm || l.locale.toLowerCase() === norm
+        );
+        utterance.lang = found ? found.locale : getLocaleByName(currentTrack?.sourceLanguage || "English");
+      } else {
+        const sourceLang = currentTrack?.sourceLanguage || "English";
+        utterance.lang = getLocaleByName(sourceLang);
+      }
       utterance.rate = 0.95;
 
       if (onEnd) {
@@ -1191,6 +1350,8 @@ export default function App() {
     const fullTransLines = currentTrack?.fullTranslation?.split("\n") || [];
     const fullTrans = fullTransLines[currentIndex];
 
+    const matchedLineItem = currentTrack?.lines.find(l => l.index === currentIndex);
+
     setEditingLine({
       original: trimmedLine,
       translation:
@@ -1199,6 +1360,7 @@ export default function App() {
       cardId: existingMetadata?.id,
       status: existingMetadata?.status || "learning",
       index: currentIndex,
+      language: matchedLineItem?.language,
     });
     setIsEditModalOpen(true);
 
@@ -1405,6 +1567,24 @@ export default function App() {
     }
   };
 
+  const getPlaybackLines = () => {
+    if (!currentTrack || !currentTrack.lines) return [];
+    if (isStarFilterActive) {
+      // Filter by starred
+      let starred = currentTrack.lines.filter((l: any) => l.isStarred);
+      // De-duplicate repeats of identical lines
+      const seen = new Set<string>();
+      starred = starred.filter((l: any) => {
+        const trimmed = l.original.trim();
+        if (!trimmed || seen.has(trimmed)) return false;
+        seen.add(trimmed);
+        return true;
+      });
+      return starred;
+    }
+    return currentTrack.lines;
+  };
+
   const toggleReadLyrics = () => {
     if (isReadingAll) {
       setIsReadingAll(false);
@@ -1416,18 +1596,27 @@ export default function App() {
       if (!currentTrack?.rawLyrics) return;
       setIsReadingAll(true);
       isReadingAllRef.current = true;
-      const allLines = currentTrack.rawLyrics.split("\n");
+
+      const playbackLines = getPlaybackLines();
+      if (playbackLines.length === 0) {
+        setIsReadingAll(false);
+        isReadingAllRef.current = false;
+        return;
+      }
 
       let startIndex = 0;
       if (activeLineIndex !== null) {
-        startIndex = activeLineIndex + 1;
-        if (startIndex >= allLines.length) {
+        // Find index of the next playable line after activeLineIndex
+        const nextIdx = playbackLines.findIndex((l: any) => l.index > activeLineIndex);
+        if (nextIdx !== -1) {
+          startIndex = nextIdx;
+        } else {
           startIndex = 0;
         }
       }
 
       setShadowingAttempts(0);
-      readNextLine(allLines, startIndex);
+      readNextLine(playbackLines, startIndex);
     }
   };
 
@@ -1530,27 +1719,28 @@ export default function App() {
     }, 300);
   };
 
-  const readNextLine = (allLines: string[], index: number) => {
-    if (index >= allLines.length || !isReadingAllRef.current) {
+  const readNextLine = (playbackLines: any[], index: number) => {
+    if (index >= playbackLines.length || !isReadingAllRef.current) {
       setIsReadingAll(false);
       isReadingAllRef.current = false;
       return;
     }
 
-    const currentLine = allLines[index].trim();
+    const lineObj = playbackLines[index];
+    const currentLine = lineObj.original.trim();
     if (!currentLine) {
-      readNextLine(allLines, index + 1);
+      readNextLine(playbackLines, index + 1);
       return;
     }
 
     // Skip known phrases if setting is enabled
     const metadata = phraseMetadata.get(currentLine);
     if (skipKnownPhrases && metadata?.status === "known") {
-      readNextLine(allLines, index + 1);
+      readNextLine(playbackLines, index + 1);
       return;
     }
 
-    setActiveLineIndex(index);
+    setActiveLineIndex(lineObj.index);
     speak(currentLine, () => {
       // Use ref to check the LATEST mode, ensuring the behavior updates if user toggles mid-speech
       const currentMode = playbackModeRef.current;
@@ -1564,7 +1754,7 @@ export default function App() {
             setShadowingAttempts(0);
             setTimeout(() => {
               setShadowingFeedback("none");
-              if (isReadingAllRef.current) readNextLine(allLines, index + 1);
+              if (isReadingAllRef.current) readNextLine(playbackLines, index + 1);
             }, 1200);
           } else {
             setShadowingFeedback("incorrect");
@@ -1576,14 +1766,14 @@ export default function App() {
                 setTimeout(() => {
                   setShadowingFeedback("none");
                   if (isReadingAllRef.current)
-                    readNextLine(allLines, index + 1);
+                    readNextLine(playbackLines, index + 1);
                 }, 1500);
                 return 0;
               } else {
                 // Repeat current line
                 setTimeout(() => {
                   setShadowingFeedback("none");
-                  if (isReadingAllRef.current) readNextLine(allLines, index);
+                  if (isReadingAllRef.current) readNextLine(playbackLines, index);
                 }, 1200);
                 return newAttempts;
               }
@@ -1594,11 +1784,11 @@ export default function App() {
         // Listening mode
         setTimeout(() => {
           if (isReadingAllRef.current) {
-            readNextLine(allLines, index + 1);
+            readNextLine(playbackLines, index + 1);
           }
         }, 700);
       }
-    });
+    }, lineObj.language);
   };
 
   const changePlaybackMode = (mode: "listening" | "shadowing") => {
@@ -1837,6 +2027,7 @@ export default function App() {
       source: null,
       sourceLanguage: track.sourceLanguage || "English",
       meaning: track.meaning,
+      meanings: track.meanings,
       difficulty: track.difficulty,
       promptVersion: track.promptVersion,
       lines: [],
@@ -1902,6 +2093,7 @@ export default function App() {
             const updated = {
               ...prev,
               meaning,
+              meanings: cacheResult.meanings,
               difficulty: cacheResult.difficulty,
               promptVersion: cacheResult.promptVersion || prev.promptVersion,
               sourceLanguage: cacheResult.originalLanguage || prev.sourceLanguage,
@@ -1950,7 +2142,10 @@ export default function App() {
         };
       }
 
-      // 2. Fetch/Update meaning and detected language
+      const trackKey = await computeTrackKey(trackData.title, [trackData.artist]);
+      const lyricsHash = await computeLyricsHash(lyrics || "");
+
+      // 2. Fetch/Update meaning and line translations in parallel
       const isOutdated = !trackData.promptVersion || trackData.promptVersion < ANALYSIS_PROMPT_VERSION;
       if (!trackData.meaning || !trackData.processingStatus.stage2_completed || isOutdated) {
         setLoadingStep("meaning");
@@ -1964,7 +2159,11 @@ export default function App() {
           audioUrl: trackData.audioUrl,
           appleMusicUrl: trackData.appleMusicUrl
         };
-        const result = await fetchTrackMeaning(lyrics || "", metadata);
+
+        const [result, translationsResult] = await Promise.all([
+          fetchTrackMeaning(lyrics || "", metadata),
+          getLineTranslations(lyrics || "", trackKey, lyricsHash, targetLanguage)
+        ]);
         
         const langKey = targetLanguage.toLowerCase().trim();
         let meaning = result.meanings.en;
@@ -1972,13 +2171,39 @@ export default function App() {
         if (langKey === 'russian') meaning = result.meanings.ru;
         if (langKey === 'polish') meaning = result.meanings.pl;
 
+        const updatedLines = trackData.lines.map((line, idx) => {
+          const matched = translationsResult.find(t => t.originalText === line.original) || translationsResult[idx];
+          return {
+            ...line,
+            translation: matched ? matched.translation : (line.translation || ""),
+            language: matched ? matched.language : (line.language || "en")
+          };
+        });
+
         trackData = {
           ...trackData,
           meaning,
+          meanings: result.meanings,
           difficulty: result.difficulty,
           promptVersion: ANALYSIS_PROMPT_VERSION,
           sourceLanguage: result.originalLanguage || trackData.sourceLanguage,
+          lines: updatedLines,
           processingStatus: { ...trackData.processingStatus, stage2_completed: true }
+        };
+      } else {
+        // Meaning is already cached, but load/refresh line translations to get individual languages
+        const translationsResult = await getLineTranslations(lyrics || "", trackKey, lyricsHash, targetLanguage);
+        const updatedLines = trackData.lines.map((line, idx) => {
+          const matched = translationsResult.find(t => t.originalText === line.original) || translationsResult[idx];
+          return {
+            ...line,
+            translation: matched ? matched.translation : (line.translation || ""),
+            language: matched ? matched.language : (line.language || "en")
+          };
+        });
+        trackData = {
+          ...trackData,
+          lines: updatedLines
         };
       }
 
@@ -2007,44 +2232,48 @@ export default function App() {
     if (track.processingStatus.stage3_completed) return;
     setIsTranslating(true);
     try {
-      const result = await completeLyricsAnalysis(
+      const trackKey = await computeTrackKey(track.title, [track.artist]);
+      const lyricsHash = await computeLyricsHash(track.rawLyrics);
+
+      const phraseAnalysisResult = await getPhraseAnalysis(
         track.rawLyrics,
-        track.artist,
-        track.title,
-        targetLanguage
+        targetLanguage,
+        trackKey,
+        lyricsHash
       );
 
       setCurrentTrack((prev) => {
         if (!prev || prev.trackId !== track.trackId) return prev;
 
         const updatedLines = prev.lines.map(line => {
-          const aiLine = result.lines.find((l: any) => l.original === line.original);
-          if (aiLine) {
-            const phrases = (aiLine.phrases || []).map((p: any) => ({
-              ...p,
-              id: `${track.trackId}:p:${p.text.replace(/\s+/g, '_')}`
+          const linePhrases = phraseAnalysisResult
+            .filter((p: any) => p.lineIndex === line.index)
+            .map((p: any) => ({
+              id: `${track.trackId}:p:${p.text.replace(/\s+/g, '_')}`,
+              text: p.text,
+              translation: p.translation,
+              explanation: p.explanation,
+              language: p.language,
+              lemmas: [],
+              type: 'phrase' as const
             }));
 
-            return {
-              ...line,
-              translation: aiLine.translation,
-              phrases
-            };
-          }
-          return line;
+          return {
+            ...line,
+            phrases: linePhrases
+          };
         });
 
         const updated = {
           ...prev,
           lines: updatedLines,
-          promptVersion: result.promptVersion || prev.promptVersion,
           processingStatus: { ...prev.processingStatus, stage3_completed: true }
         };
         saveTrackData(track.trackId, updated);
         return updated;
       });
     } catch (err) {
-      console.error("Stage 3 failed:", err);
+      console.error("Stage 3 (Phrase Analysis) failed:", err);
     } finally {
       setIsTranslating(false);
     }
@@ -2084,6 +2313,7 @@ export default function App() {
             ...prev,
             sourceLanguage: result.originalLanguage || prev.sourceLanguage,
             meaning,
+            meanings: result.meanings,
             difficulty: result.difficulty,
             processingStatus: { ...prev.processingStatus, stage2_completed: true }
           };
@@ -2165,12 +2395,18 @@ export default function App() {
 
         // Then get meaning and original language in one go
         setLoadingStep("meaning");
-        const meaningResult = await fetchTrackMeaning(lyrics, {
-          title: trackData.title,
-          artists: [trackData.artist],
-          albumName: trackData.album,
-          coverUrl: trackData.coverUrl
-        });
+        const trackKey = await computeTrackKey(trackData.title, [trackData.artist]);
+        const lyricsHash = await computeLyricsHash(lyrics);
+
+        const [meaningResult, translationsResult] = await Promise.all([
+          fetchTrackMeaning(lyrics, {
+            title: trackData.title,
+            artists: [trackData.artist],
+            albumName: trackData.album,
+            coverUrl: trackData.coverUrl
+          }),
+          getLineTranslations(lyrics, trackKey, lyricsHash, targetLanguage)
+        ]);
 
         const langKey = targetLanguage.toLowerCase().trim();
         let meaning = meaningResult.meanings.en;
@@ -2178,12 +2414,23 @@ export default function App() {
         if (langKey === 'russian') meaning = meaningResult.meanings.ru;
         if (langKey === 'polish') meaning = meaningResult.meanings.pl;
 
+        const updatedLines = trackData.lines.map((line, idx) => {
+          const matched = translationsResult.find(t => t.originalText === line.original) || translationsResult[idx];
+          return {
+            ...line,
+            translation: matched ? matched.translation : (line.translation || ""),
+            language: matched ? matched.language : (line.language || "en")
+          };
+        });
+
         trackData = {
           ...trackData,
           meaning,
+          meanings: meaningResult.meanings,
           difficulty: meaningResult.difficulty,
           promptVersion: ANALYSIS_PROMPT_VERSION,
           sourceLanguage: meaningResult.originalLanguage || trackData.sourceLanguage,
+          lines: updatedLines,
           processingStatus: { ...trackData.processingStatus, stage2_completed: true }
         };
         
@@ -2312,6 +2559,7 @@ export default function App() {
     i: number,
     isCompact: boolean = false,
     alwaysShowTranslation: boolean = false,
+    displayModeOverride?: "lyrics" | "translation" | "both",
   ) => {
     return (
       <LyricLine
@@ -2320,22 +2568,19 @@ export default function App() {
         i={i}
         isCompact={isCompact}
         alwaysShowTranslation={alwaysShowTranslation}
+        displayMode={displayModeOverride || (activeTab === "lyrics" ? lyricsDisplayMode : "both")}
         activeLineIndex={activeLineIndex}
         phraseMetadata={phraseMetadata}
         currentTrack={currentTrack}
-        getLineStatus={getLineStatus}
-        getStatusStyles={getStatusStyles}
         getPhrasesForLine={getPhrasesForLine}
-        getLineProgress={getLineProgress}
         lineRefs={lineRefs}
-        handleAddLineWithComponents={(line, i, status) => handleAddLineWithComponents(line, i, status)}
         renderHighlightedText={(line, phrases) => renderHighlightedText(line, phrases)}
         handleLineClick={(line, i) => handleLineClick(line, i)}
-        openPhraseDrawer={(i) => openPhraseDrawer(i)}
         isSaving={isSaving}
         isListeningForSpeech={isListeningForSpeech}
         shadowingFeedback={shadowingFeedback}
         shadowingAttempts={shadowingAttempts}
+        handleToggleStarLine={handleToggleStarLine}
       />
     );
   };
@@ -2392,6 +2637,7 @@ export default function App() {
               ...prev,
               sourceLanguage: result.originalLanguage || prev.sourceLanguage,
               meaning,
+              meanings: result.meanings,
               processingStatus: { ...prev.processingStatus, stage2_completed: true }
             };
             saveTrackData(prev.trackId, updated);
@@ -3321,34 +3567,147 @@ export default function App() {
                           </p>
                         </section>
 
-                        <div className="flex flex-col gap-3">
-                          <h2 className="text-[10px] font-black uppercase tracking-[0.3em] ml-4 opacity-40">
-                             Lyrics Preview
-                          </h2>
-                          {currentTrack.lines.length > 0 && currentTrack.lines.slice(0, 6).map((lineData: any) =>
-                            renderLyricLine(
-                              lineData.original,
-                              lineData.index,
-                              false,
-                              true,
-                            )
-                          )}
-                        </div>
+                        <section className="p-8 rounded-[2.5rem] bg-app-card/60 border border-app-card-border shadow-app-card flex flex-col gap-6">
+                          <div className="flex items-center justify-between">
+                            <h2 className="text-[10px] font-black uppercase tracking-[0.3em] text-app-accent leading-none">
+                              Verse & Chorus (Lyrics Preview)
+                            </h2>
+                            <div className="flex gap-1 bg-app-card-border/30 p-1 rounded-xl">
+                              <button
+                                onClick={() => setPreviewLyricsMode("original")}
+                                className={cn(
+                                  "px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all",
+                                  previewLyricsMode === "original"
+                                    ? "bg-app-fg text-app-bg shadow"
+                                    : "text-app-fg opacity-55 hover:opacity-100"
+                                )}
+                              >
+                                Original
+                              </button>
+                              <button
+                                onClick={() => setPreviewLyricsMode("translation")}
+                                className={cn(
+                                  "px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all",
+                                  previewLyricsMode === "translation"
+                                    ? "bg-app-fg text-app-bg shadow"
+                                    : "text-app-fg opacity-55 hover:opacity-100"
+                                )}
+                              >
+                                Translation
+                              </button>
+                            </div>
+                          </div>
 
-                        <div className="flex flex-col gap-3 pt-4">
-                          <button
-                            onClick={() => {
-                              setActiveTab("analysis");
-                              if (!currentTrack?.processingStatus?.stage3_completed) {
-                                handleGenerateAnalysis();
-                              }
-                            }}
-                            className="w-full py-5 rounded-[2rem] bg-app-fg text-app-bg font-black uppercase tracking-[0.2em] text-[10px] shadow-2xl hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-3"
-                          >
-                            <Brain size={16} />
-                            Deep Song Analysis
-                          </button>
-                        </div>
+                          <div className="space-y-1 py-1 text-left select-text">
+                            {currentTrack.lines && currentTrack.lines.length > 0 ? (
+                              currentTrack.lines.slice(0, 15).map((lineData: any, i: number) => {
+                                const text = previewLyricsMode === "original" ? lineData.original : lineData.translation;
+                                const trimmed = text?.trim();
+                                if (!trimmed) {
+                                  return <div key={i} className="h-2" />;
+                                }
+                                return (
+                                  <p key={i} className="text-base font-serif text-app-fg opacity-85 leading-tight">
+                                    {trimmed}
+                                  </p>
+                                );
+                              })
+                            ) : (
+                              <p className="text-sm italic text-app-fg opacity-45">No lyrics content.</p>
+                            )}
+                          </div>
+
+                          <div className="border-t border-app-card-border/60 pt-4 flex justify-start">
+                            <button
+                              onClick={() => setActiveTab("lyrics")}
+                              className="flex items-center gap-2 text-app-accent hover:text-app-accent/80 font-black uppercase tracking-[0.15em] text-[10px] transition-all"
+                            >
+                              <Music size={14} />
+                              <span>Go to Lyrics</span>
+                            </button>
+                          </div>
+                        </section>
+
+                        {(() => {
+                          const analysisPhrases = currentTrack.lines 
+                            ? currentTrack.lines.flatMap((l: any) => l.phrases || []).filter((p: any, i: number, self: any[]) => self.findIndex(t => t.text === p.text) === i)
+                            : [];
+                          const featuredPhrases = analysisPhrases.slice(0, 3);
+
+                          if (featuredPhrases.length > 0) {
+                            return (
+                              <section className="p-8 rounded-[2.5rem] bg-app-card/60 border border-app-card-border shadow-app-card flex flex-col gap-6">
+                                <div className="flex items-center justify-between">
+                                  <h2 className="text-[10px] font-black uppercase tracking-[0.3em] text-app-accent leading-none">
+                                    Key Phrases for Analysis
+                                  </h2>
+                                  <span className="text-[10px] font-black uppercase tracking-widest text-app-accent/60 px-2.5 py-1 bg-app-card-border/30 rounded-lg">
+                                    Analysis
+                                  </span>
+                                </div>
+
+                                <div className="flex flex-col gap-4">
+                                  {featuredPhrases.map((phrase: any, idx: number) => {
+                                    return (
+                                      <div key={idx} className="flex flex-col gap-2 p-4 rounded-2xl bg-app-card border border-app-card-border/40 hover:bg-app-card/90 transition-all select-none text-left font-serif">
+                                        <div className="flex flex-col gap-1">
+                                          <p className="text-lg font-serif text-app-fg text-left">{phrase.text}</p>
+                                          {phrase.translation && (
+                                            <p className="text-sm font-serif italic text-app-fg opacity-60 text-left">
+                                              {phrase.translation}
+                                            </p>
+                                          )}
+                                        </div>
+                                        {phrase.explanation && (
+                                          <p className="text-xs text-app-fg opacity-60 leading-relaxed border-l-2 border-app-card-border/80 pl-3 text-left font-sans">
+                                            {phrase.explanation}
+                                          </p>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+
+                                <div className="border-t border-app-card-border/60 pt-4 flex justify-start">
+                                  <button
+                                    onClick={() => {
+                                      setActiveTab("analysis");
+                                      if (!currentTrack?.processingStatus?.stage3_completed) {
+                                        handleGenerateAnalysis();
+                                      }
+                                    }}
+                                    className="flex items-center gap-2 text-app-accent hover:text-app-accent/80 font-black uppercase tracking-[0.15em] text-[10px] transition-all"
+                                  >
+                                    <Brain size={14} />
+                                    <span>Go to Analysis</span>
+                                  </button>
+                                </div>
+                              </section>
+                            );
+                          } else {
+                            return (
+                              <section className="p-8 rounded-[2.5rem] bg-app-card/60 border border-app-card-border shadow-app-card flex flex-col gap-6 items-center text-center">
+                                <Brain size={32} className="text-app-accent/60" />
+                                <div>
+                                  <h3 className="text-sm font-black text-app-fg uppercase tracking-wider mb-1">Analysis not generated</h3>
+                                  <p className="text-xs text-app-fg opacity-60 max-w-xs">Run deep track analysis to extract key phrases.</p>
+                                </div>
+                                <button
+                                  onClick={() => {
+                                    setActiveTab("analysis");
+                                    if (!currentTrack?.processingStatus?.stage3_completed) {
+                                      handleGenerateAnalysis();
+                                    }
+                                  }}
+                                  className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-app-fg text-app-bg font-black uppercase tracking-[0.15em] text-[10px] transition-all hover:scale-105"
+                                >
+                                  <Brain size={12} />
+                                  <span>Run Song Analysis</span>
+                                </button>
+                              </section>
+                            );
+                          }
+                        })()}
                       </motion.div>
                     ) : (
                       /* If meaning is NOT available and we ARE loading it (lyrics or meaning) */
@@ -3413,18 +3772,105 @@ export default function App() {
                 )}
 
                 {activeTab === "lyrics" && (
-                  <div className="flex flex-col gap-2 pb-32">
+                  <div className="flex flex-col gap-1 pb-32">
                     <div className="flex justify-end px-1 pb-4">
                       {(currentTrack.rawLyrics || lyricsFetchError) && (
-                        <div className="flex gap-2">
+                        <div className="flex gap-2 items-center">
+                          {currentTrack.rawLyrics && (
+                            <div className="flex bg-app-card/80 backdrop-blur-md border border-app-card-border p-1 rounded-2xl shadow-sm text-xs gap-1.5 items-center">
+                              {(() => {
+                                const srcLangObj = SUPPORTED_LANGUAGES.find(l => 
+                                  l.name.toLowerCase() === (currentTrack?.sourceLanguage || "English").toLowerCase() ||
+                                  l.code.toLowerCase() === (currentTrack?.sourceLanguage || "English").toLowerCase()
+                                );
+                                const srcLangCode = srcLangObj ? srcLangObj.code : "EN";
+
+                                const targetLangObj = SUPPORTED_LANGUAGES.find(l => 
+                                  l.name.toLowerCase() === (targetLanguage || "Russian").toLowerCase() ||
+                                  l.code.toLowerCase() === (targetLanguage || "Russian").toLowerCase()
+                                );
+                                const targetLangCode = targetLangObj ? targetLangObj.code : "RU";
+
+                                const isSrcActive = lyricsDisplayMode === "lyrics" || lyricsDisplayMode === "both";
+                                const isTargetActive = lyricsDisplayMode === "translation" || lyricsDisplayMode === "both";
+
+                                return (
+                                  <>
+                                    <button
+                                      onClick={() => {
+                                        if (isSrcActive) {
+                                          if (!isTargetActive) return; // cannot turn off both
+                                          handleSetLyricsDisplayMode("translation");
+                                        } else {
+                                          handleSetLyricsDisplayMode("both");
+                                        }
+                                      }}
+                                      className={cn(
+                                        "px-3 py-1.5 rounded-xl font-black transition-all uppercase tracking-wider text-[10px] flex items-center gap-1",
+                                        isSrcActive
+                                          ? "bg-app-accent text-white shadow-md scale-105"
+                                          : "text-app-fg opacity-65 hover:opacity-100"
+                                      )}
+                                    >
+                                      {isSrcActive && <Check size={10} />}
+                                      <span>{srcLangCode}</span>
+                                    </button>
+                                    <button
+                                      onClick={() => {
+                                        if (isTargetActive) {
+                                          if (!isSrcActive) return; // cannot turn off both
+                                          handleSetLyricsDisplayMode("lyrics");
+                                        } else {
+                                          handleSetLyricsDisplayMode("both");
+                                        }
+                                      }}
+                                      className={cn(
+                                        "px-3 py-1.5 rounded-xl font-black transition-all uppercase tracking-wider text-[10px] flex items-center gap-1",
+                                        isTargetActive
+                                          ? "bg-app-accent text-white shadow-md scale-105"
+                                          : "text-app-fg opacity-65 hover:opacity-100"
+                                      )}
+                                    >
+                                      {isTargetActive && <Check size={10} />}
+                                      <span>{targetLangCode}</span>
+                                    </button>
+                                  </>
+                                );
+                              })()}
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
-                    {currentTrack.rawLyrics ? (
-                      currentTrack.lines.map((line, i) =>
-                        renderLyricLine(line.original, i, false, false),
-                      )
-                    ) : (
+                    {currentTrack.rawLyrics ? (() => {
+                      let linesToRender = currentTrack.lines || [];
+                      if (isStarFilterActive) {
+                        // Filter for starred lines
+                        linesToRender = linesToRender.filter((line: any) => line.isStarred);
+                        
+                        // Additionally remove repetitions of identical lines to avoid duplicates
+                        const seen = new Set<string>();
+                        linesToRender = linesToRender.filter((line: any) => {
+                          const trimmed = line.original.trim();
+                          if (!trimmed || seen.has(trimmed)) return false;
+                          seen.add(trimmed);
+                          return true;
+                        });
+                      }
+
+                      if (isStarFilterActive && linesToRender.length === 0) {
+                        return (
+                          <div className="py-24 text-center space-y-4">
+                            <Star size={40} className="mx-auto text-amber-500/40" />
+                            <p className="text-sm font-bold text-app-fg opacity-45">No starred lines.</p>
+                          </div>
+                        );
+                      }
+
+                      return linesToRender.map((line: any) =>
+                        renderLyricLine(line.original, line.index, false, false),
+                      );
+                    })() : (
                       <div className="flex flex-col items-center justify-center py-20 text-center space-y-8">
                         {isLoadingLyrics ? (
                           <div className="space-y-6">
@@ -3658,42 +4104,14 @@ export default function App() {
                             {currentTrack.lines.flatMap(l => l.phrases).filter((p, i, self) => self.findIndex(t => t.text === p.text) === i).map((item, idx) => {
                               const card = phraseMetadata.get(item.text);
                               return (
-                                <div key={idx} className="group p-1">
-                                  <div className="flex flex-col gap-3 p-6 rounded-[2rem] bg-app-card border border-app-card-border transition-all cursor-pointer relative group/phrase">
-                                    <div className="flex items-start justify-between gap-2">
-                                      <div className="flex-1 flex gap-3">
-                                        <span className="text-xs font-black opacity-20 mt-2 shrink-0">{(idx + 1).toString().padStart(2, '0')}</span>
-                                        <div className="flex-1">
-                                          <p className="text-xl font-serif text-app-fg">{item.text}</p>
-                                          <div className="flex flex-col gap-1 mt-1">
-                                            {item.translation && <p className="text-lg font-serif italic text-app-fg opacity-60">{item.translation}</p>}
-                                          </div>
-                                        </div>
-                                      </div>
-                                      <div className="shrink-0 flex items-center gap-2">
-                                        {card ? (
-                                          <div className="px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest border border-white/5 shadow-sm text-green-500 bg-green-500/10 flex items-center gap-2">
-                                            <CheckCircle2 size={12} />
-                                            {card.status}
-                                          </div>
-                                        ) : (
-                                          <button
-                                            onClick={() => handleAddAnalysisPhrase(item.text, item.translation || "", item.explanation || "")}
-                                            className="px-4 py-2 rounded-2xl bg-app-fg/5 text-app-fg opacity-60 hover:opacity-100 hover:bg-[var(--accent)] hover:text-white transition-all shadow-sm flex items-center gap-2 group-hover/phrase:opacity-100"
-                                          >
-                                            <Plus size={14} />
-                                            <span className="text-[10px] font-black uppercase tracking-widest">Learn</span>
-                                          </button>
-                                        )}
-                                      </div>
-                                    </div>
-                                    {item.explanation && (
-                                       <div className="pl-4 border-l-2 border-app-card-border ml-7">
-                                          <p className="text-lg font-medium text-app-fg opacity-60 group-hover:opacity-80 transition-opacity leading-relaxed">{item.explanation}</p>
-                                       </div>
-                                    )}
-                                  </div>
-                                </div>
+                                <AnalysisPhraseCard
+                                  key={idx}
+                                  item={item}
+                                  idx={idx}
+                                  card={card}
+                                  handleAddAnalysisPhrase={handleAddAnalysisPhrase}
+                                  handleSetAnalysisPhraseStatus={handleSetAnalysisPhraseStatus}
+                                />
                               );
                             })}
                           </div>
@@ -3814,6 +4232,19 @@ export default function App() {
                           title="Shadowing Mode"
                         >
                           <Mic2 size={20} />
+                        </button>
+                        <div className="w-[1px] h-4 bg-app-card-border/65 self-center mx-1" />
+                        <button
+                          onClick={handleToggleStarFilter}
+                          className={cn(
+                            "p-2 rounded-full transition-all active:scale-90",
+                            isStarFilterActive
+                              ? "bg-amber-500 text-white shadow-lg"
+                              : "text-amber-500/60 hover:text-amber-500 hover:bg-amber-500/5",
+                          )}
+                          title="Star Filter"
+                        >
+                          <Star size={20} className={isStarFilterActive ? "fill-white text-white" : "text-current"} />
                         </button>
                       </div>
                     ) : (
@@ -4343,7 +4774,7 @@ export default function App() {
                         {editingLine.original}
                       </p>
                       <button
-                        onClick={() => speak(editingLine.original)}
+                        onClick={() => speak(editingLine.original, undefined, editingLine.language)}
                         className="w-10 h-10 rounded-full flex items-center justify-center bg-app-bg border border-app-card-border text-app-fg opacity-20 hover:opacity-100 hover:text-[var(--accent)] transition-all shrink-0"
                       >
                         <Volume2 size={18} />

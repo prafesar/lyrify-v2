@@ -72,5 +72,15 @@ service cloud.firestore {
       allow get, list, create, update: if true;
       allow delete: if false;
     }
+
+    match /line_translations_cache/{cacheId} {
+      allow get, list, create, update: if true;
+      allow delete: if false;
+    }
+
+    match /phrase_analysis_cache/{cacheId} {
+      allow get, list, create, update: if true;
+      allow delete: if false;
+    }
   }
 }

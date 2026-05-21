@@ -74,6 +74,67 @@
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["result", "trackKey", "lyricsHash", "targetLanguage", "promptVersion", "createdAt"]
+    },
+    "LineTranslationsCache": {
+      "title": "Line Translations Cache",
+      "description": "Cached line translations (unique list + sequence order) in three languages (en, es, ru).",
+      "type": "object",
+      "properties": {
+        "uniqueLines": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "originalText": { "type": "string" },
+              "language": { "type": "string" },
+              "type": { "type": "string" },
+              "translations": {
+                "type": "object",
+                "properties": {
+                  "en": { "type": "string" },
+                  "es": { "type": "string" },
+                  "ru": { "type": "string" }
+                },
+                "required": ["en", "es", "ru"]
+              }
+            },
+            "required": ["originalText", "language", "type", "translations"]
+          }
+        },
+        "lineOrder": { "type": "array", "items": { "type": "integer" } },
+        "trackKey": { "type": "string" },
+        "lyricsHash": { "type": "string" },
+        "promptVersion": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uniqueLines", "lineOrder", "trackKey", "lyricsHash", "promptVersion", "createdAt"]
+    },
+    "PhraseAnalysisCache": {
+      "title": "Phrase Analysis Cache",
+      "description": "Cached phrase segments analysis for a target language.",
+      "type": "object",
+      "properties": {
+        "phrases": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "text": { "type": "string" },
+              "language": { "type": "string" },
+              "translation": { "type": "string" },
+              "explanation": { "type": "string" },
+              "lineIndex": { "type": "integer" }
+            },
+            "required": ["text", "language", "translation", "explanation", "lineIndex"]
+          }
+        },
+        "trackKey": { "type": "string" },
+        "lyricsHash": { "type": "string" },
+        "targetLanguage": { "type": "string" },
+        "promptVersion": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["phrases", "trackKey", "lyricsHash", "targetLanguage", "promptVersion", "createdAt"]
     }
   },
   "firestore": {
@@ -88,6 +149,14 @@
     "/complete_analysis_cache/{cacheId}": {
       "schema": "CompleteAnalysisCache",
       "description": "Cache for complete lyrics analysis."
+    },
+    "/line_translations_cache/{cacheId}": {
+      "schema": "LineTranslationsCache",
+      "description": "Cache for line-by-line lyrics translations."
+    },
+    "/phrase_analysis_cache/{cacheId}": {
+      "schema": "PhraseAnalysisCache",
+      "description": "Cache for phrase segments extraction and grammatical analysis."
     }
   }
 }

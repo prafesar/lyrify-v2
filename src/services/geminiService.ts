@@ -41,7 +41,7 @@ export async function computeTrackKey(title: string, artists: string[]): Promise
   return await computeSHA256(`${normTitle}|${normArtists}`);
 }
 
-async function computeLyricsHash(lyrics: string): Promise<string> {
+export async function computeLyricsHash(lyrics: string): Promise<string> {
   const normLyrics = (lyrics || '').trim().replace(/\r\n/g, '\n').replace(/\n+/g, '\n');
   return await computeSHA256(normLyrics);
 }
@@ -735,3 +735,274 @@ export async function getLatestAnalyzedTracks(maxCount: number = 10): Promise<Tr
     return [];
   }
 }
+
+// --- New Functions for Divided Translation & Phrase Analysis Cache ---
+
+export interface LineTranslationResult {
+  originalText: string;
+  translation: string;
+  language: string;
+  type: string;
+}
+
+export interface PhraseAnalysisResult {
+  text: string;
+  language: string;
+  translation: string;
+  explanation: string;
+  lineIndex: number;
+}
+
+export function getTargetLangCode2Letter(lang: string): 'en' | 'es' | 'ru' {
+  const norm = lang.toLowerCase().trim();
+  if (norm.startsWith('ru') || norm === 'russian' || norm === 'русский') return 'ru';
+  if (norm.startsWith('es') || norm === 'spanish' || norm === 'испанский') return 'es';
+  return 'en'; // default to english
+}
+
+export async function getLineTranslations(
+  lyrics: string,
+  trackKey: string,
+  lyricsHash: string,
+  targetLang: string
+): Promise<LineTranslationResult[]> {
+  const docId = `${trackKey}_${lyricsHash}_${ANALYSIS_PROMPT_VERSION}`;
+  const docRef = doc(db, 'line_translations_cache', docId);
+
+  try {
+    const docSnap = await getDoc(docRef);
+    if (docSnap.exists()) {
+      const data = docSnap.data();
+      const uniqueLines = data.uniqueLines || [];
+      const lineOrder = data.lineOrder || [];
+      const targetLangCode = getTargetLangCode2Letter(targetLang);
+
+      return lineOrder.map((idx: number) => {
+        const item = uniqueLines[idx];
+        return {
+          originalText: item.originalText,
+          translation: item.translations?.[targetLangCode] || item.translations?.['en'] || '',
+          language: item.language || 'en',
+          type: item.type || 'verse'
+        };
+      });
+    }
+  } catch (err) {
+    console.error("Error reading line_translations_cache:", err);
+  }
+
+  const prompt = `Role: Expert lyric translator and linguist.
+Translate the following song lyrics line-by-line. Correct any line segmentation if necessary, but keep exactly the same lines in sequence.
+For each line:
+1. Provide the exact originalText.
+2. Detect the original language of the line (e.g. "en" for English, "es" for Spanish, "fr" for French, "de" for German, "ru" for Russian, etc.).
+3. Classify paragraph type as either "verse" or "chorus".
+4. Provide translations into three languages: English (en), Spanish (es), and Russian (ru).
+
+Lyrics:
+${lyrics}
+
+Return JSON with this exact schema structure:
+{
+  "lines": [
+    {
+      "originalText": "exact line from lyrics",
+      "language": "two-letter line language",
+      "type": "verse|chorus",
+      "translations": {
+        "en": "English translation",
+        "es": "Spanish translation",
+        "ru": "Russian translation"
+      }
+    }
+  ]
+}`;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-3.5-flash",
+      contents: prompt,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            lines: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  originalText: { type: Type.STRING },
+                  language: { type: Type.STRING },
+                  type: { type: Type.STRING, enum: ["verse", "chorus"] },
+                  translations: {
+                    type: Type.OBJECT,
+                    properties: {
+                      en: { type: Type.STRING },
+                      es: { type: Type.STRING },
+                      ru: { type: Type.STRING }
+                    },
+                    required: ["en", "es", "ru"]
+                  }
+                },
+                required: ["originalText", "language", "type", "translations"]
+              }
+            }
+          },
+          required: ["lines"]
+        }
+      }
+    });
+
+    const jsonResult = JSON.parse(response.text);
+    const rawLines = jsonResult.lines || [];
+
+    const uniqueLines: any[] = [];
+    const lineOrder: number[] = [];
+    const lineMap = new Map<string, number>();
+
+    for (const line of rawLines) {
+      const key = line.originalText.trim().toLowerCase();
+      let idx = lineMap.get(key);
+      if (idx === undefined) {
+        idx = uniqueLines.length;
+        uniqueLines.push({
+          originalText: line.originalText,
+          language: line.language || 'en',
+          type: line.type || 'verse',
+          translations: line.translations
+        });
+        lineMap.set(key, idx);
+      }
+      lineOrder.push(idx);
+    }
+
+    // Save async to Firestore
+    setDoc(docRef, {
+      uniqueLines,
+      lineOrder,
+      trackKey,
+      lyricsHash,
+      promptVersion: ANALYSIS_PROMPT_VERSION,
+      createdAt: serverTimestamp()
+    }).catch(e => console.error("Cache write error for line_translations_cache:", e));
+
+    const targetLangCode = getTargetLangCode2Letter(targetLang);
+    return lineOrder.map((idx: number) => {
+      const item = uniqueLines[idx];
+      return {
+        originalText: item.originalText,
+        translation: item.translations?.[targetLangCode] || item.translations?.['en'] || '',
+        language: item.language || 'en',
+        type: item.type || 'verse'
+      };
+    });
+  } catch (error) {
+    console.error("getLineTranslations error, falling back to local fallback:", error);
+    // Simple fallback logic
+    const lines = lyrics.split('\n').map(l => l.trim()).filter(Boolean);
+    return lines.map(line => ({
+      originalText: line,
+      translation: line,
+      language: 'en',
+      type: 'verse'
+    }));
+  }
+}
+
+export async function getPhraseAnalysis(
+  lyrics: string,
+  targetLang: string,
+  trackKey: string,
+  lyricsHash: string
+): Promise<PhraseAnalysisResult[]> {
+  const targetLangCode = getTargetLangCode2Letter(targetLang);
+  const docId = `${trackKey}_${lyricsHash}_${targetLangCode}_${ANALYSIS_PROMPT_VERSION}`;
+  const docRef = doc(db, 'phrase_analysis_cache', docId);
+
+  try {
+    const docSnap = await getDoc(docRef);
+    if (docSnap.exists()) {
+      return docSnap.data().phrases || [];
+    }
+  } catch (err) {
+    console.error("Error reading phrase_analysis_cache:", err);
+  }
+
+  const lyricsLines = lyrics.split('\n').map(l => l.trim()).filter(Boolean);
+  const numberedLyrics = lyricsLines.map((line, idx) => `[Line ${idx}]: ${line}`).join('\n');
+
+  const prompt = `Role: Expert linguistic analyst and language teacher.
+Given song lyrics with numbered lines, identify 10-15 high-value phrase segments (2-6 words each) that are highly useful for language learners.
+For each phrase segment:
+1. Extract exact original text from lyrics segment ("text"). It must correspond to a substring in the specified "lineIndex".
+2. Detect original language of the phrase segment ("language").
+3. Translate the phrase segment into the target language (${targetLang}) under "translation".
+4. Provide detailed explanation of the grammar, collocation, slang, or idiom in ${targetLang} under "explanation".
+5. Specify the exact 0-based index of the line (from the numbered list below) that contains this phrase ("lineIndex").
+
+Numbered Lyrics:
+${numberedLyrics}
+
+Return JSON with this exact schema:
+{
+  "phrases": [
+    {
+      "text": "exact segment from lyrics",
+      "language": "two-letter language of the phrase",
+      "translation": "translation in ${targetLang}",
+      "explanation": "concise grammatical/idiomatic annotation in ${targetLang}",
+      "lineIndex": integer
+    }
+  ]
+}`;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-3.5-flash",
+      contents: prompt,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            phrases: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  text: { type: Type.STRING },
+                  language: { type: Type.STRING },
+                  translation: { type: Type.STRING },
+                  explanation: { type: Type.STRING },
+                  lineIndex: { type: Type.INTEGER }
+                },
+                required: ["text", "language", "translation", "explanation", "lineIndex"]
+              }
+            }
+          },
+          required: ["phrases"]
+        }
+      }
+    });
+
+    const jsonResult = JSON.parse(response.text);
+    const phrases: PhraseAnalysisResult[] = jsonResult.phrases || [];
+
+    // Save cache asynchronously
+    setDoc(docRef, {
+      phrases,
+      trackKey,
+      lyricsHash,
+      targetLanguage: targetLangCode,
+      promptVersion: ANALYSIS_PROMPT_VERSION,
+      createdAt: serverTimestamp()
+    }).catch(e => console.error("Cache write error for phrase_analysis_cache:", e));
+
+    return phrases;
+  } catch (error) {
+    console.error("getPhraseAnalysis error:", error);
+    return [];
+  }
+}
+
