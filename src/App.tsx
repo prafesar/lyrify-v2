@@ -69,6 +69,8 @@ import {
   type TrackMetadata,
   type TrackMeaningEntry,
   ANALYSIS_PROMPT_VERSION,
+  TRANSLATION_PROMPT_VERSION,
+  saveTrackToSharedCache,
 } from "./services/geminiService";
 import { cn } from "./lib/utils";
 import { auth, db, signIn, logOut, testDbConnection } from "./lib/firebase";
@@ -487,7 +489,17 @@ const AnalysisPhraseCard = ({
               </div>
             </div>
           </div>
-          <div className="shrink-0 flex items-center gap-2">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              const nextStatus: PhraseStatus = 
+                currentStatus === "new" ? "learning" :
+                currentStatus === "learning" ? "known" : "new";
+              handleSetAnalysisPhraseStatus(item.text, item.translation || "", item.explanation || "", nextStatus);
+            }}
+            className="shrink-0 flex items-center gap-2 hover:scale-105 active:scale-95 transition-transform cursor-pointer button-badge"
+            aria-label={`Change status from ${currentStatus}`}
+          >
             {currentStatus === "known" ? (
               <div className="px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest border border-green-500/10 shadow-sm text-green-500 bg-green-500/10 flex items-center gap-2">
                 <CheckCircle2 size={12} />
@@ -504,7 +516,7 @@ const AnalysisPhraseCard = ({
                 <span>new</span>
               </div>
             )}
-          </div>
+          </button>
         </div>
         {item.explanation && (
           <div className="pl-4 border-l-2 border-app-card-border ml-7">
@@ -1178,7 +1190,7 @@ export default function App() {
       }
     } else {
       // If meanings is missing, let's look it up from Firestore cache to find all translations
-      getTrackMeaningFromCache(currentTrack.title, [currentTrack.artist])
+      getTrackMeaningFromCache(currentTrack.title, [currentTrack.artist], targetLanguage)
         .then(cacheResult => {
           if (cacheResult && cacheResult.meanings) {
             const langKey = targetLanguage.toLowerCase().trim();
@@ -2079,7 +2091,7 @@ export default function App() {
     }
 
     // 6. BACKGROUND Cache Check (Firestore)
-    getTrackMeaningFromCache(trackTitle, [artist])
+    getTrackMeaningFromCache(trackTitle, [artist], targetLanguage)
       .then(cacheResult => {
         if (cacheResult) {
           const langKey = targetLanguage.toLowerCase().trim();
@@ -2090,16 +2102,22 @@ export default function App() {
 
           setCurrentTrack(prev => {
             if (!prev || prev.trackId !== trackId) return prev;
+            
+            const hasLyricsAndLinesCache = !!(cacheResult.rawLyrics && cacheResult.lines && cacheResult.lines.length > 0);
             const updated = {
               ...prev,
+              rawLyrics: hasLyricsAndLinesCache ? cacheResult.rawLyrics : prev.rawLyrics,
               meaning,
               meanings: cacheResult.meanings,
               difficulty: cacheResult.difficulty,
               promptVersion: cacheResult.promptVersion || prev.promptVersion,
               sourceLanguage: cacheResult.originalLanguage || prev.sourceLanguage,
+              lines: hasLyricsAndLinesCache ? cacheResult.lines : prev.lines,
               processingStatus: {
                 ...prev.processingStatus,
-                stage2_completed: true
+                stage1_completed: hasLyricsAndLinesCache ? true : prev.processingStatus.stage1_completed,
+                stage2_completed: true,
+                stage3_completed: hasLyricsAndLinesCache ? cacheResult.lines.some((l: any) => l.phrases && l.phrases.length > 0) : prev.processingStatus.stage3_completed
               }
             };
             saveTrackData(trackId, updated);
@@ -2147,6 +2165,8 @@ export default function App() {
 
       // 2. Fetch/Update meaning and line translations in parallel
       const isOutdated = !trackData.promptVersion || trackData.promptVersion < ANALYSIS_PROMPT_VERSION;
+      const isTranslationOutdated = !trackData.translationPromptVersion || trackData.translationPromptVersion < TRANSLATION_PROMPT_VERSION;
+
       if (!trackData.meaning || !trackData.processingStatus.stage2_completed || isOutdated) {
         setLoadingStep("meaning");
         const metadata: TrackMetadata = {
@@ -2172,7 +2192,7 @@ export default function App() {
         if (langKey === 'polish') meaning = result.meanings.pl;
 
         const updatedLines = trackData.lines.map((line, idx) => {
-          const matched = translationsResult.find(t => t.originalText === line.original) || translationsResult[idx];
+          const matched = translationsResult[idx] || translationsResult.find(t => t.originalText === line.original);
           return {
             ...line,
             translation: matched ? matched.translation : (line.translation || ""),
@@ -2186,6 +2206,7 @@ export default function App() {
           meanings: result.meanings,
           difficulty: result.difficulty,
           promptVersion: ANALYSIS_PROMPT_VERSION,
+          translationPromptVersion: TRANSLATION_PROMPT_VERSION,
           sourceLanguage: result.originalLanguage || trackData.sourceLanguage,
           lines: updatedLines,
           processingStatus: { ...trackData.processingStatus, stage2_completed: true }
@@ -2194,7 +2215,7 @@ export default function App() {
         // Meaning is already cached, but load/refresh line translations to get individual languages
         const translationsResult = await getLineTranslations(lyrics || "", trackKey, lyricsHash, targetLanguage);
         const updatedLines = trackData.lines.map((line, idx) => {
-          const matched = translationsResult.find(t => t.originalText === line.original) || translationsResult[idx];
+          const matched = translationsResult[idx] || translationsResult.find(t => t.originalText === line.original);
           return {
             ...line,
             translation: matched ? matched.translation : (line.translation || ""),
@@ -2203,11 +2224,13 @@ export default function App() {
         });
         trackData = {
           ...trackData,
+          translationPromptVersion: TRANSLATION_PROMPT_VERSION,
           lines: updatedLines
         };
       }
 
       saveTrackData(trackData.trackId, trackData);
+      saveTrackToSharedCache(trackData).catch(e => console.error("Firestore cache upload failed:", e));
       setCurrentTrack(trackData);
       addRecentTrack({
         id: trackData.trackId,
@@ -2224,6 +2247,48 @@ export default function App() {
       setLyricsFetchError("Failed to fetch song data.");
     } finally {
       setIsLoadingLyrics(false);
+      setLoadingStep("idle");
+    }
+  };
+
+  const handleRegenerateTranslations = async () => {
+    if (!currentTrack || isTranslating) return;
+    setIsTranslating(true);
+    setLoadingStep("translating");
+    try {
+      const trackKey = await computeTrackKey(currentTrack.title, [currentTrack.artist]);
+      const lyricsHash = await computeLyricsHash(currentTrack.rawLyrics);
+
+      const translationsResult = await getLineTranslations(
+        currentTrack.rawLyrics,
+        trackKey,
+        lyricsHash,
+        targetLanguage,
+        true
+      );
+
+      const updatedLines = currentTrack.lines.map((line, idx) => {
+        const matched = translationsResult[idx] || translationsResult.find(t => t.originalText === line.original);
+        return {
+          ...line,
+          translation: matched ? matched.translation : (line.translation || ""),
+          language: matched ? matched.language : (line.language || "en")
+        };
+      });
+
+      const updatedTrack: TrackLyricsData = {
+        ...currentTrack,
+        translationPromptVersion: TRANSLATION_PROMPT_VERSION,
+        lines: updatedLines
+      };
+
+      saveTrackData(updatedTrack.trackId, updatedTrack);
+      await saveTrackToSharedCache(updatedTrack);
+      setCurrentTrack(updatedTrack);
+    } catch (err) {
+      console.error("Failed to regenerate translations:", err);
+    } finally {
+      setIsTranslating(false);
       setLoadingStep("idle");
     }
   };
@@ -2270,6 +2335,7 @@ export default function App() {
           processingStatus: { ...prev.processingStatus, stage3_completed: true }
         };
         saveTrackData(track.trackId, updated);
+        saveTrackToSharedCache(updated).catch(e => console.error("Firestore cache upload failed:", e));
         return updated;
       });
     } catch (err) {
@@ -2318,6 +2384,7 @@ export default function App() {
             processingStatus: { ...prev.processingStatus, stage2_completed: true }
           };
           saveTrackData(prev.trackId, updated);
+          saveTrackToSharedCache(updated).catch(e => console.error("Firestore cache upload failed:", e));
           addRecentTrack({
             id: prev.trackId,
             title: prev.title,
@@ -2435,6 +2502,7 @@ export default function App() {
         };
         
         saveTrackData(trackData.trackId, trackData);
+        saveTrackToSharedCache(trackData).catch(e => console.error("Firestore cache upload failed:", e));
         setCurrentTrack(trackData);
         loadCommunityTracks();
       }
@@ -2641,6 +2709,7 @@ export default function App() {
               processingStatus: { ...prev.processingStatus, stage2_completed: true }
             };
             saveTrackData(prev.trackId, updated);
+            saveTrackToSharedCache(updated).catch(e => console.error("Firestore cache upload failed:", e));
             return updated;
           });
         }).catch(e => console.error("fetchTrackMeaning background failed:", e));
@@ -3570,7 +3639,7 @@ export default function App() {
                         <section className="p-8 rounded-[2.5rem] bg-app-card/60 border border-app-card-border shadow-app-card flex flex-col gap-6">
                           <div className="flex items-center justify-between">
                             <h2 className="text-[10px] font-black uppercase tracking-[0.3em] text-app-accent leading-none">
-                              Verse & Chorus (Lyrics Preview)
+                              Lyrics Preview
                             </h2>
                             <div className="flex gap-1 bg-app-card-border/30 p-1 rounded-xl">
                               <button
@@ -3607,7 +3676,7 @@ export default function App() {
                                   return <div key={i} className="h-2" />;
                                 }
                                 return (
-                                  <p key={i} className="text-base font-serif text-app-fg opacity-85 leading-tight">
+                                  <p key={i} className="text-lg font-serif text-app-fg opacity-85 leading-tight">
                                     {trimmed}
                                   </p>
                                 );
@@ -3632,18 +3701,15 @@ export default function App() {
                           const analysisPhrases = currentTrack.lines 
                             ? currentTrack.lines.flatMap((l: any) => l.phrases || []).filter((p: any, i: number, self: any[]) => self.findIndex(t => t.text === p.text) === i)
                             : [];
-                          const featuredPhrases = analysisPhrases.slice(0, 3);
+                          const featuredPhrases = analysisPhrases.slice(0, 5);
 
                           if (featuredPhrases.length > 0) {
                             return (
                               <section className="p-8 rounded-[2.5rem] bg-app-card/60 border border-app-card-border shadow-app-card flex flex-col gap-6">
                                 <div className="flex items-center justify-between">
                                   <h2 className="text-[10px] font-black uppercase tracking-[0.3em] text-app-accent leading-none">
-                                    Key Phrases for Analysis
+                                    Key Phrases
                                   </h2>
-                                  <span className="text-[10px] font-black uppercase tracking-widest text-app-accent/60 px-2.5 py-1 bg-app-card-border/30 rounded-lg">
-                                    Analysis
-                                  </span>
                                 </div>
 
                                 <div className="flex flex-col gap-4">
@@ -3658,11 +3724,6 @@ export default function App() {
                                             </p>
                                           )}
                                         </div>
-                                        {phrase.explanation && (
-                                          <p className="text-xs text-app-fg opacity-60 leading-relaxed border-l-2 border-app-card-border/80 pl-3 text-left font-sans">
-                                            {phrase.explanation}
-                                          </p>
-                                        )}
                                       </div>
                                     );
                                   })}
@@ -3833,6 +3894,17 @@ export default function App() {
                                     >
                                       {isTargetActive && <Check size={10} />}
                                       <span>{targetLangCode}</span>
+                                    </button>
+                                    <button
+                                      onClick={handleRegenerateTranslations}
+                                      disabled={isTranslating}
+                                      title="Регенерировать перевод"
+                                      className={cn(
+                                        "p-2 rounded-xl transition-all text-app-fg hover:bg-app-fg/5 flex items-center justify-center outline-none",
+                                        isTranslating ? "opacity-50 cursor-not-allowed" : "opacity-60 hover:opacity-100"
+                                      )}
+                                    >
+                                      <RefreshCw size={12} className={cn("transition-transform duration-500", isTranslating ? "animate-spin" : "")} />
                                     </button>
                                   </>
                                 );

@@ -490,6 +490,7 @@ export interface TrackLyricsData {
   lines: LyricsLine[];
   fullTranslation?: string;
   promptVersion?: number;
+  translationPromptVersion?: number;
   processingStatus: {
     stage1_completed: boolean; // Raw lyrics loaded & split
     stage2_completed: boolean; // Preview (meaning + key phrases) 

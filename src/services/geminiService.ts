@@ -1,9 +1,11 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { db } from '../lib/firebase';
 import { doc, getDoc, setDoc, serverTimestamp, collection, query, orderBy, limit, getDocs, where } from 'firebase/firestore';
+import { TrackLyricsData } from "./musicService";
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
 export const ANALYSIS_PROMPT_VERSION = 3;
+export const TRANSLATION_PROMPT_VERSION = 4;
 
 export interface TrackMeaningEntry extends TrackMeaningResult {
   trackKey: string;
@@ -75,6 +77,9 @@ export interface TrackMeaningResult {
     [key: string]: string;
   };
   promptVersion?: number;
+  translationPromptVersion?: number;
+  rawLyrics?: string;
+  lines?: any[];
 }
 
 export async function fetchTrackMeaning(
@@ -94,7 +99,9 @@ export async function fetchTrackMeaning(
           originalLanguage: data.originalLanguage,
           difficulty: data.difficulty,
           meanings: data.meanings,
-          promptVersion: data.promptVersion as number
+          promptVersion: data.promptVersion as number,
+          rawLyrics: data.rawLyrics || null,
+          lines: data.lines || null
         };
       }
     }
@@ -206,6 +213,7 @@ export async function getOriginalLanguage(trackKey: string): Promise<string | nu
 export async function getTrackMeaningFromCache(
   title: string,
   artists: string[],
+  targetLanguage?: string,
   promptVersion: number = ANALYSIS_PROMPT_VERSION
 ): Promise<TrackMeaningResult | null> {
   const trackKey = await computeTrackKey(title, artists);
@@ -216,11 +224,148 @@ export async function getTrackMeaningFromCache(
     if (docSnap.exists()) {
       const data = docSnap.data();
       if (data.promptVersion === promptVersion && data.meanings) {
+        let rawLyrics = data.rawLyrics || null;
+        let lines = data.lines || null;
+        const currentTranslationPromptVersion = data.translationPromptVersion || 0;
+
+        // Try to align, repair, or load custom translations using v4 cache if available
+        if (rawLyrics) {
+          try {
+            const lyricsHash = await computeLyricsHash(rawLyrics);
+            const v4DocId = `${trackKey}_${lyricsHash}_v${TRANSLATION_PROMPT_VERSION}`;
+            const v4DocRef = doc(db, 'line_translations_cache', v4DocId);
+            const v4Snap = await getDoc(v4DocRef);
+
+            if (v4Snap.exists()) {
+              const v4Data = v4Snap.data();
+              const returnedTranslations = v4Data.returnedTranslations || [];
+              const transMap = new Map<number, any>();
+              for (const item of returnedTranslations) {
+                transMap.set(item.index, item);
+              }
+              const targetLang = targetLanguage || 'English';
+              const targetLangCode = getTargetLangCode2Letter(targetLang);
+              const originalLines = rawLyrics.split('\n').map((l: string) => l.trim());
+
+              lines = originalLines.map((lineText: string, index: number) => {
+                const matched = transMap.get(index);
+                return {
+                  id: `${trackKey}:line:${index}`,
+                  index: index,
+                  original: lineText,
+                  translation: matched?.translations?.[targetLangCode] || matched?.translations?.['en'] || '',
+                  language: matched?.language || 'en',
+                  phrases: []
+                };
+              });
+            } else if (!lines || lines.length === 0) {
+              // Legacy/v3 fallback if v4 is missing and we don't have lines
+              const qTrans = query(
+                collection(db, 'line_translations_cache'),
+                where('trackKey', '==', trackKey),
+                limit(1)
+              );
+              const transSnap = await getDocs(qTrans);
+              if (!transSnap.empty) {
+                const transData = transSnap.docs[0].data();
+                const uniqueLines = transData.uniqueLines || [];
+                const lineOrder = transData.lineOrder || [];
+                
+                const targetLang = targetLanguage || 'English';
+                const targetLangCode = getTargetLangCode2Letter(targetLang);
+
+                const linesText = lineOrder.map((idx: number) => {
+                  const item = uniqueLines[idx];
+                  return item ? item.originalText : '';
+                });
+                rawLyrics = linesText.join('\n');
+
+                lines = lineOrder.map((idx: number, index: number) => {
+                  const item = uniqueLines[idx];
+                  return {
+                    id: `${trackKey}:line:${index}`,
+                    index: index,
+                    original: item?.originalText || '',
+                    translation: item?.translations?.[targetLangCode] || item?.translations?.['en'] || '',
+                    language: item?.language || 'en',
+                    phrases: []
+                  };
+                });
+              }
+            } else if (targetLanguage && lines && lines.length > 0) {
+              // If lines exist but are legacy and no v4 doc yet, we can do a fallback alignment using legacy cache if present
+              const qTrans = query(
+                collection(db, 'line_translations_cache'),
+                where('trackKey', '==', trackKey),
+                limit(1)
+              );
+              const transSnap = await getDocs(qTrans);
+              if (!transSnap.empty) {
+                const transData = transSnap.docs[0].data();
+                const uniqueLines = transData.uniqueLines || [];
+                const lineOrder = transData.lineOrder || [];
+                const targetLangCode = getTargetLangCode2Letter(targetLanguage);
+
+                lines = lines.map((line: any, index: number) => {
+                  const matchedIdx = lineOrder[index];
+                  const item = uniqueLines[matchedIdx];
+                  if (item) {
+                    return {
+                      ...line,
+                      translation: item.translations?.[targetLangCode] || item.translations?.['en'] || line.translation || ''
+                    };
+                  }
+                  return line;
+                });
+              }
+            }
+          } catch (v4Err) {
+            console.error("Error evaluating v4 translation cache in getTrackMeaningFromCache:", v4Err);
+          }
+        }
+
+        // Attach key phrases if missing from the lines
+        if (lines && lines.length > 0) {
+          const hasPhrases = lines.some((l: any) => l.phrases && l.phrases.length > 0);
+          if (!hasPhrases) {
+            const qPhrases = query(
+              collection(db, 'phrase_analysis_cache'),
+              where('trackKey', '==', trackKey),
+              limit(1)
+            );
+            const phrasesSnap = await getDocs(qPhrases);
+            if (!phrasesSnap.empty) {
+              const phrasesData = phrasesSnap.docs[0].data();
+              const phrases = phrasesData.phrases || [];
+              phrases.forEach((p: any) => {
+                const line = lines[p.lineIndex];
+                if (line) {
+                  if (!line.phrases) line.phrases = [];
+                  if (!line.phrases.some((existingPhrase: any) => existingPhrase.text === p.text)) {
+                    line.phrases.push({
+                      id: `${trackKey}:p:${p.text.replace(/\s+/g, '_')}`,
+                      text: p.text,
+                      translation: p.translation,
+                      explanation: p.explanation,
+                      language: p.language,
+                      lemmas: [],
+                      type: 'phrase'
+                    });
+                  }
+                }
+              });
+            }
+          }
+        }
+
         return {
           originalLanguage: data.originalLanguage,
           difficulty: data.difficulty,
           meanings: data.meanings,
-          promptVersion: data.promptVersion as number
+          promptVersion: data.promptVersion as number,
+          translationPromptVersion: currentTranslationPromptVersion,
+          rawLyrics,
+          lines
         };
       }
     }
@@ -768,51 +913,75 @@ export async function getLineTranslations(
   lyrics: string,
   trackKey: string,
   lyricsHash: string,
-  targetLang: string
+  targetLang: string,
+  forceRegenerate: boolean = false
 ): Promise<LineTranslationResult[]> {
-  const docId = `${trackKey}_${lyricsHash}_${ANALYSIS_PROMPT_VERSION}`;
+  const docId = `${trackKey}_${lyricsHash}_v${TRANSLATION_PROMPT_VERSION}`;
   const docRef = doc(db, 'line_translations_cache', docId);
+  const originalLines = lyrics.split('\n').map(l => l.trim());
 
-  try {
-    const docSnap = await getDoc(docRef);
-    if (docSnap.exists()) {
-      const data = docSnap.data();
-      const uniqueLines = data.uniqueLines || [];
-      const lineOrder = data.lineOrder || [];
-      const targetLangCode = getTargetLangCode2Letter(targetLang);
+  if (!forceRegenerate) {
+    try {
+      const docSnap = await getDoc(docRef);
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        const returnedTranslations = data.returnedTranslations || [];
+        const transMap = new Map<number, any>();
+        for (const item of returnedTranslations) {
+          transMap.set(item.index, item);
+        }
+        const targetLangCode = getTargetLangCode2Letter(targetLang);
 
-      return lineOrder.map((idx: number) => {
-        const item = uniqueLines[idx];
-        return {
-          originalText: item.originalText,
-          translation: item.translations?.[targetLangCode] || item.translations?.['en'] || '',
-          language: item.language || 'en',
-          type: item.type || 'verse'
-        };
-      });
+        return originalLines.map((lineText: string, idx: number) => {
+          if (lineText.length === 0) {
+            return {
+              originalText: "",
+              translation: "",
+              language: "en",
+              type: "verse"
+            };
+          }
+          const matched = transMap.get(idx);
+          return {
+            originalText: lineText,
+            translation: matched?.translations?.[targetLangCode] || matched?.translations?.['en'] || "",
+            language: matched?.language || "en",
+            type: "verse"
+          };
+        });
+      }
+    } catch (err) {
+      console.error("Error reading line_translations_cache:", err);
     }
-  } catch (err) {
-    console.error("Error reading line_translations_cache:", err);
   }
 
+  // Filter out empty lines to save tokens and ensure perfect indexing
+  const nonSeparators = originalLines
+    .map((text, index) => ({ text, index }))
+    .filter(item => item.text.length > 0);
+
+  const linesToTranslate = nonSeparators.map(item => `[${item.index}]: ${item.text}`).join('\n');
+
   const prompt = `Role: Expert lyric translator and linguist.
-Translate the following song lyrics line-by-line. Correct any line segmentation if necessary, but keep exactly the same lines in sequence.
+Translate the following song lyrics line-by-line.
+You must strictly keep the index of each line as provided in brackets like [number]. Do NOT merge, skip, or modify lines. The output must include the same indices mapping to their correct translation.
+
+Input Lines:
+${linesToTranslate}
+
 For each line:
-1. Provide the exact originalText.
-2. Detect the original language of the line (e.g. "en" for English, "es" for Spanish, "fr" for French, "de" for German, "ru" for Russian, etc.).
-3. Classify paragraph type as either "verse" or "chorus".
-4. Provide translations into three languages: English (en), Spanish (es), and Russian (ru).
+1. "index": the number from the brackets.
+2. "originalText": the exact lyric line text (excluding the [index] prefix).
+3. "language": detect the original language of this specific line (e.g. "en", "es", "ru", "fr", "de", etc).
+4. "translations": provide translations into three languages: English (en), Spanish (es), and Russian (ru).
 
-Lyrics:
-${lyrics}
-
-Return JSON with this exact schema structure:
+Return JSON with this exact schema:
 {
   "lines": [
     {
-      "originalText": "exact line from lyrics",
-      "language": "two-letter line language",
-      "type": "verse|chorus",
+      "index": 0,
+      "originalText": "exact text of line",
+      "language": "two-letter language code",
       "translations": {
         "en": "English translation",
         "es": "Spanish translation",
@@ -836,9 +1005,9 @@ Return JSON with this exact schema structure:
               items: {
                 type: Type.OBJECT,
                 properties: {
+                  index: { type: Type.INTEGER },
                   originalText: { type: Type.STRING },
                   language: { type: Type.STRING },
-                  type: { type: Type.STRING, enum: ["verse", "chorus"] },
                   translations: {
                     type: Type.OBJECT,
                     properties: {
@@ -849,7 +1018,7 @@ Return JSON with this exact schema structure:
                     required: ["en", "es", "ru"]
                   }
                 },
-                required: ["originalText", "language", "type", "translations"]
+                required: ["index", "originalText", "language", "translations"]
               }
             }
           },
@@ -859,53 +1028,44 @@ Return JSON with this exact schema structure:
     });
 
     const jsonResult = JSON.parse(response.text);
-    const rawLines = jsonResult.lines || [];
+    const returnedTranslations = jsonResult.lines || [];
 
-    const uniqueLines: any[] = [];
-    const lineOrder: number[] = [];
-    const lineMap = new Map<string, number>();
-
-    for (const line of rawLines) {
-      const key = line.originalText.trim().toLowerCase();
-      let idx = lineMap.get(key);
-      if (idx === undefined) {
-        idx = uniqueLines.length;
-        uniqueLines.push({
-          originalText: line.originalText,
-          language: line.language || 'en',
-          type: line.type || 'verse',
-          translations: line.translations
-        });
-        lineMap.set(key, idx);
-      }
-      lineOrder.push(idx);
-    }
-
-    // Save async to Firestore
+    // Save async/merged to Firestore
     setDoc(docRef, {
-      uniqueLines,
-      lineOrder,
+      returnedTranslations,
       trackKey,
       lyricsHash,
-      promptVersion: ANALYSIS_PROMPT_VERSION,
+      translationPromptVersion: TRANSLATION_PROMPT_VERSION,
       createdAt: serverTimestamp()
     }).catch(e => console.error("Cache write error for line_translations_cache:", e));
 
     const targetLangCode = getTargetLangCode2Letter(targetLang);
-    return lineOrder.map((idx: number) => {
-      const item = uniqueLines[idx];
+    const transMap = new Map<number, any>();
+    for (const item of returnedTranslations) {
+      transMap.set(item.index, item);
+    }
+
+    return originalLines.map((lineText: string, idx: number) => {
+      if (lineText.length === 0) {
+        return {
+          originalText: "",
+          translation: "",
+          language: "en",
+          type: "verse"
+        };
+      }
+      const matched = transMap.get(idx);
       return {
-        originalText: item.originalText,
-        translation: item.translations?.[targetLangCode] || item.translations?.['en'] || '',
-        language: item.language || 'en',
-        type: item.type || 'verse'
+        originalText: lineText,
+        translation: matched?.translations?.[targetLangCode] || matched?.translations?.['en'] || '',
+        language: matched?.language || 'en',
+        type: 'verse'
       };
     });
   } catch (error) {
     console.error("getLineTranslations error, falling back to local fallback:", error);
     // Simple fallback logic
-    const lines = lyrics.split('\n').map(l => l.trim()).filter(Boolean);
-    return lines.map(line => ({
+    return originalLines.map(line => ({
       originalText: line,
       translation: line,
       language: 'en',
@@ -1009,4 +1169,45 @@ Return JSON with this exact schema:
     return [];
   }
 }
+
+export async function saveTrackToSharedCache(track: TrackLyricsData): Promise<void> {
+  const trackKey = await computeTrackKey(track.title, [track.artist]);
+  const docRef = doc(db, 'track_meanings', trackKey);
+
+  try {
+    const docSnap = await getDoc(docRef);
+    const existing = docSnap.exists() ? docSnap.data() : {};
+
+    await setDoc(docRef, {
+      ...existing,
+      trackKey,
+      title: track.title,
+      artists: [track.artist],
+      artistId: track.artistId || existing.artistId || null,
+      albumName: track.album || existing.albumName || null,
+      albumId: track.albumId || existing.albumId || null,
+      coverUrl: track.coverUrl || existing.coverUrl || null,
+      audioUrl: track.audioUrl || existing.audioUrl || null,
+      appleMusicUrl: track.appleMusicUrl || existing.appleMusicUrl || null,
+      originalLanguage: track.sourceLanguage || existing.originalLanguage || "English",
+      difficulty: track.difficulty || existing.difficulty || "intermediate",
+      promptVersion: ANALYSIS_PROMPT_VERSION,
+      translationPromptVersion: TRANSLATION_PROMPT_VERSION,
+      meanings: track.meanings || existing.meanings || {
+        en: track.meaning || "",
+        es: track.meaning || "",
+        ru: track.meaning || "",
+        pl: track.meaning || ""
+      },
+      rawLyrics: track.rawLyrics || existing.rawLyrics || "",
+      lines: track.lines || existing.lines || [],
+      createdAt: existing.createdAt || serverTimestamp(),
+      updatedAt: serverTimestamp()
+    }, { merge: true });
+    console.log(`[SharedCache] Saved track analysis for ${track.title} directly to Firestore!`);
+  } catch (err) {
+    console.error("[SharedCache] Failed to save track analysis to Firestore:", err);
+  }
+}
+
 

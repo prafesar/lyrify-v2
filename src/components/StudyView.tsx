@@ -24,8 +24,17 @@ export default function StudyView({ onBack }: StudyViewProps) {
   const [isExplanationExpanded, setIsExplanationExpanded] = useState(false);
   const [selectedLanguage, setSelectedLanguage] = useState<string>(() => localStorage.getItem('study_selected_language') || 'all');
   const [selectedTrack, setSelectedTrack] = useState<string>('all');
-  const [selectedStatus, setSelectedStatus] = useState<string>('all');
+  const [selectedType, setSelectedType] = useState<string>('all');
   const [expandedParents, setExpandedParents] = useState<Set<string>>(new Set());
+
+  const typeLabels: Record<string, string> = {
+    idiom: 'Idioms',
+    collocation: 'Collocations',
+    phrasal_verb: 'Phrasal Verbs',
+    cultural_ref: 'Cultural References',
+    vocabulary: 'Vocabulary',
+    phrase: 'Phrases',
+  };
 
   const toggleParent = (phrase: string) => {
     setExpandedParents(prev => {
@@ -77,11 +86,23 @@ export default function StudyView({ onBack }: StudyViewProps) {
   }, [allCards]);
   
   const tracksList = useMemo(() => {
-    const tracks = new Set<string>();
+    const tracks = new Map<string, string>(); // trackId -> trackTitle
     allCards.forEach(card => {
-      if (card.trackTitle) tracks.add(card.trackTitle);
+      if (card.trackId) {
+        tracks.set(card.trackId, card.trackTitle || card.trackId);
+      }
     });
-    return Array.from(tracks).filter(Boolean).sort();
+    return Array.from(tracks.entries()).map(([id, title]) => ({ id, title })).sort((a, b) => a.title.localeCompare(b.title));
+  }, [allCards]);
+
+  const availableTypes = useMemo(() => {
+    const types = new Set<string>();
+    allCards.forEach(card => {
+      if (card.status === 'learning') {
+        types.add(card.type || 'phrase');
+      }
+    });
+    return Array.from(types).sort();
   }, [allCards]);
 
   const now = useMemo(() => new Date(), [viewMode]);
@@ -94,16 +115,19 @@ export default function StudyView({ onBack }: StudyViewProps) {
     if (selectedTrack !== 'all') {
       list = list.filter(card => card.trackId === selectedTrack);
     }
+    if (selectedType !== 'all') {
+      list = list.filter(card => (card.type || 'phrase') === selectedType);
+    }
     list = list.filter(card => card.status === 'learning');
     return list;
-  }, [allCards, selectedLanguage, selectedTrack]);
+  }, [allCards, selectedLanguage, selectedTrack, selectedType]);
 
   const groupedCards = useMemo(() => {
-    // Group phrases by track and line for display
+    // Group phrases by track for display
     const groups = new Map<string, Flashcard[]>();
     
     filteredCards.forEach(card => {
-      const key = `${card.trackId}-${card.lineId}`;
+      const key = card.trackId || 'unknown-track';
       const list = groups.get(key) || [];
       list.push(card);
       groups.set(key, list);
@@ -113,8 +137,8 @@ export default function StudyView({ onBack }: StudyViewProps) {
       const sample = phrases[0];
       return {
         id: key,
-        title: sample.lineId || 'Vocabulary',
-        trackTitle: sample.trackId,
+        trackTitle: sample.trackTitle || sample.trackId || 'Unknown Track',
+        artist: sample.artist || 'Unknown Artist',
         phrases: phrases,
         createdAt: sample.createdAt
       };
@@ -333,18 +357,20 @@ export default function StudyView({ onBack }: StudyViewProps) {
                 className="px-4 py-2 rounded-xl bg-app-card border border-app-card-border text-xs font-black uppercase tracking-widest outline-none max-w-[150px] truncate"
               >
                 <option key="track-opt-all" value="all">All Tracks</option>
-                {tracksList.map(t => <option key={`track-opt-${t}`} value={t}>{t}</option>)}
+                {tracksList.map(t => <option key={`track-opt-${t.id}`} value={t.id}>{t.title}</option>)}
               </select>
 
               <select 
-                value={selectedStatus}
-                onChange={(e) => setSelectedStatus(e.target.value)}
+                value={selectedType}
+                onChange={(e) => setSelectedType(e.target.value)}
                 className="px-4 py-2 rounded-xl bg-app-card border border-app-card-border text-xs font-black uppercase tracking-widest outline-none"
               >
-                <option key="status-opt-all" value="all">All Status</option>
-                <option key="status-opt-new" value="new">New</option>
-                <option key="status-opt-learning" value="learning">Learning</option>
-                <option key="status-opt-known" value="known">Known</option>
+                <option key="type-opt-all" value="all">All Types</option>
+                {availableTypes.map(t => (
+                  <option key={`type-opt-${t}`} value={t}>
+                    {typeLabels[t] || t}
+                  </option>
+                ))}
               </select>
             </div>
             
@@ -391,8 +417,8 @@ export default function StudyView({ onBack }: StudyViewProps) {
                            <Library size={20} />
                         </div>
                         <div className="min-w-0">
-                          <h3 className="font-serif text-lg leading-tight truncate">{group.title || 'General Vocabulary'}</h3>
-                          <p className="text-[10px] font-black uppercase tracking-widest opacity-20 truncate">{group.trackTitle}</p>
+                          <h3 className="font-serif text-lg leading-tight truncate">{group.trackTitle}</h3>
+                          <p className="text-[10px] font-black uppercase tracking-widest opacity-40 truncate mt-1">{group.artist}</p>
                         </div>
                       </div>
                       
@@ -411,7 +437,7 @@ export default function StudyView({ onBack }: StudyViewProps) {
                           <PlayCircle size={18} />
                         </button>
                         <div className={cn("transition-transform duration-300", isExpanded ? "rotate-180" : "")}>
-                          <ChevronDown size={20} className="opacity-20" />
+                           <ChevronDown size={20} className="opacity-20" />
                         </div>
                       </div>
                     </div>
@@ -422,23 +448,40 @@ export default function StudyView({ onBack }: StudyViewProps) {
                           initial={{ height: 0 }}
                           animate={{ height: 'auto' }}
                           exit={{ height: 0 }}
-                          className="overflow-hidden border-t border-app-card-border bg-app-fg/[0.02]"
+                          className="overflow-hidden border-t border-app-card-border bg-app-fg/[0.01]"
                         >
-                          <div className="p-2 space-y-1">
+                          <div className="p-4 space-y-3">
                             {group.phrases.map(child => (
-                              <div key={child.id} className="flex items-center justify-between p-4 pl-10 rounded-2xl hover:bg-app-fg/[0.03] transition-all">
-                                <div className="flex items-center gap-3">
-                                  <div className={cn(
-                                    "w-1.5 h-1.5 rounded-full",
-                                    child.status === 'known' ? 'bg-green-500' : (child.status === 'learning' ? 'bg-orange-500' : 'bg-blue-500')
-                                  )} />
-                                  <span className="text-sm font-medium opacity-80">{child.text}</span>
+                              <div key={child.id} className="p-4 rounded-2xl border border-app-card-border/40 bg-app-card/30 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-app-fg/[0.02] transition-all">
+                                <div className="space-y-1.5 flex-1 min-w-0">
+                                  {/* Phrase and Type Tag */}
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <span className="text-base font-serif font-medium text-app-fg">{child.text}</span>
+                                    {child.type && child.type !== 'phrase' && (
+                                      <span className="text-[9px] font-black uppercase tracking-widest text-[var(--accent)] bg-[var(--accent)]/10 px-2 py-0.5 rounded-md">
+                                        {typeLabels[child.type] || child.type}
+                                      </span>
+                                    )}
+                                  </div>
+                                  
+                                  {/* Translation */}
+                                  <p className="text-sm text-app-fg opacity-60 font-sans">{child.translation}</p>
+                                  
+                                  {/* Original Lyric Line if available */}
+                                  {child.lineId && (
+                                    <div className="text-xs text-app-fg/40 italic flex items-center gap-1.5 mt-1">
+                                      <span className="inline-block w-1.5 h-1.5 rounded-full bg-app-card-border" />
+                                      Context: «{child.lineId}»
+                                    </div>
+                                  )}
                                 </div>
+                                
                                 <button 
                                   onClick={() => startSession([child])}
-                                  className="p-2 rounded-lg text-app-fg opacity-20 hover:opacity-100 hover:bg-app-fg/5 transition-all"
+                                  className="self-end md:self-center shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-app-fg/5 text-app-fg text-[10px] font-black uppercase tracking-widest hover:bg-[var(--accent)] hover:text-white hover:opacity-100 transition-all"
                                 >
-                                  <PlayCircle size={16} />
+                                  <PlayCircle size={14} />
+                                  Study
                                 </button>
                               </div>
                             ))}
