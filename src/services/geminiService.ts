@@ -1,9 +1,38 @@
-import { GoogleGenAI, Type } from "@google/genai";
 import { db } from '../lib/firebase';
 import { doc, getDoc, setDoc, serverTimestamp, collection, query, orderBy, limit, getDocs, where } from 'firebase/firestore';
 import { TrackLyricsData } from "./musicService";
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
+export enum Type {
+  TYPE_UNSPECIFIED = "TYPE_UNSPECIFIED",
+  STRING = "STRING",
+  NUMBER = "NUMBER",
+  INTEGER = "INTEGER",
+  BOOLEAN = "BOOLEAN",
+  ARRAY = "ARRAY",
+  OBJECT = "OBJECT",
+  NULL = "NULL",
+}
+
+async function callGeminiApi(params: { model: string; contents: any; config?: any }) {
+  const response = await fetch("/api/gemini/generate-content", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(params)
+  });
+  if (!response.ok) {
+    const errText = await response.text();
+    let parsedError;
+    try {
+      parsedError = JSON.parse(errText);
+    } catch {
+      throw new Error(errText);
+    }
+    throw new Error(parsedError.error || parsedError.message || errText);
+  }
+  return await response.json();
+}
 export const ANALYSIS_PROMPT_VERSION = 3;
 export const TRANSLATION_PROMPT_VERSION = 4;
 
@@ -85,28 +114,36 @@ export interface TrackMeaningResult {
 export async function fetchTrackMeaning(
   lyrics: string,
   metadata: TrackMetadata,
-  promptVersion: number = ANALYSIS_PROMPT_VERSION
+  promptVersion: number = ANALYSIS_PROMPT_VERSION,
+  forceRegenerate: boolean = false
 ): Promise<TrackMeaningResult> {
   const trackKey = await computeTrackKey(metadata.title, metadata.artists);
   const docRef = doc(db, 'track_meanings', trackKey);
   
-  try {
-    const docSnap = await getDoc(docRef);
-    if (docSnap.exists()) {
-      const data = docSnap.data();
-      if (data.promptVersion === promptVersion && data.meanings) {
-        return {
-          originalLanguage: data.originalLanguage,
-          difficulty: data.difficulty,
-          meanings: data.meanings,
-          promptVersion: data.promptVersion as number,
-          rawLyrics: data.rawLyrics || null,
-          lines: data.lines || null
-        };
+  if (!forceRegenerate) {
+    try {
+      const docSnap = await getDoc(docRef);
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        if (
+          data.promptVersion === promptVersion &&
+          data.meanings &&
+          typeof data.meanings.en === 'string' &&
+          data.meanings.en.trim().length > 0
+        ) {
+          return {
+            originalLanguage: data.originalLanguage,
+            difficulty: data.difficulty,
+            meanings: data.meanings,
+            promptVersion: data.promptVersion as number,
+            rawLyrics: data.rawLyrics || null,
+            lines: data.lines || null
+          };
+        }
       }
+    } catch (err) {
+      console.error("Firestore read error (track_meanings):", err);
     }
-  } catch (err) {
-    console.error("Firestore read error (track_meanings):", err);
   }
 
   const prompt = `Role: Expert music analyst and linguist.
@@ -135,8 +172,8 @@ Return a valid JSON object with the following structure exactly:
 }`;
 
   try {
-    const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+    const response = await callGeminiApi({
+      model: "gemini-2.5-flash",
       contents: prompt,
       config: {
         responseMimeType: "application/json",
@@ -223,7 +260,12 @@ export async function getTrackMeaningFromCache(
     const docSnap = await getDoc(docRef);
     if (docSnap.exists()) {
       const data = docSnap.data();
-      if (data.promptVersion === promptVersion && data.meanings) {
+      if (
+        data.promptVersion === promptVersion &&
+        data.meanings &&
+        typeof data.meanings.en === 'string' &&
+        data.meanings.en.trim().length > 0
+      ) {
         let rawLyrics = data.rawLyrics || null;
         let lines = data.lines || null;
         const currentTranslationPromptVersion = data.translationPromptVersion || 0;
@@ -396,10 +438,6 @@ export async function generateSongMeaning(
 }
 
 export async function translateLyrics(lyrics: string, targetLanguage: string) {
-  if (!process.env.GEMINI_API_KEY) {
-    throw new Error("GEMINI_API_KEY is not configured.");
-  }
-
   const prompt = `Translate the following song lyrics into ${targetLanguage}. 
 Maintain the poetic feel and rhythm where possible. 
 IMPORTANT: Return exactly the same number of lines as the input. Each line in the translation MUST correspond to the same line in the original lyrics.
@@ -409,8 +447,8 @@ Lyrics:
 ${lyrics}`;
 
   try {
-    const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+    const response = await callGeminiApi({
+      model: "gemini-2.5-flash",
       contents: prompt,
     });
 
@@ -436,8 +474,8 @@ Return JSON:
 Return ONLY JSON.`;
 
   try {
-    const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+    const response = await callGeminiApi({
+      model: "gemini-2.5-flash",
       contents: prompt,
     });
 
@@ -501,8 +539,8 @@ ${lyrics}
 Return ONLY clean JSON.`;
 
   try {
-    const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+    const response = await callGeminiApi({
+      model: "gemini-2.5-flash",
       contents: prompt,
       config: {
         responseMimeType: "application/json",
@@ -557,8 +595,8 @@ If you are unsure, return "English".
 Text: ${text.slice(0, 300)}`;
 
   try {
-    const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+    const response = await callGeminiApi({
+      model: "gemini-2.5-flash",
       contents: prompt,
     });
     return response.text.trim();
@@ -569,10 +607,6 @@ Text: ${text.slice(0, 300)}`;
 }
 
 export async function explainPhraseStructured(phrase: string, targetLanguage: string) {
-  if (!process.env.GEMINI_API_KEY) {
-    throw new Error("GEMINI_API_KEY is not configured.");
-  }
-
   const prompt = `Explain the following foreign phrase in ${targetLanguage}: "${phrase}".
 CRITICAL: The explanation MUST be written entirely in ${targetLanguage}.
 
@@ -585,8 +619,8 @@ Return a JSON object:
 Return ONLY clean JSON.`;
 
   try {
-    const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+    const response = await callGeminiApi({
+      model: "gemini-2.5-flash",
       contents: prompt,
       config: {
         responseMimeType: "application/json",
@@ -658,8 +692,8 @@ ${lyrics}
 `;
 
   try {
-    const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+    const response = await callGeminiApi({
+      model: "gemini-2.5-flash",
       contents: prompt,
       config: {
         responseMimeType: "application/json",
@@ -766,8 +800,8 @@ ${lyrics}
 `;
 
   try {
-    const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+    const response = await callGeminiApi({
+      model: "gemini-2.5-flash",
       contents: prompt,
       config: {
         responseMimeType: "application/json",
@@ -992,8 +1026,8 @@ Return JSON with this exact schema:
 }`;
 
   try {
-    const response = await ai.models.generateContent({
-      model: "gemini-3.5-flash",
+    const response = await callGeminiApi({
+      model: "gemini-2.5-flash",
       contents: prompt,
       config: {
         responseMimeType: "application/json",
@@ -1078,19 +1112,22 @@ export async function getPhraseAnalysis(
   lyrics: string,
   targetLang: string,
   trackKey: string,
-  lyricsHash: string
+  lyricsHash: string,
+  forceRegenerate: boolean = false
 ): Promise<PhraseAnalysisResult[]> {
   const targetLangCode = getTargetLangCode2Letter(targetLang);
   const docId = `${trackKey}_${lyricsHash}_${targetLangCode}_${ANALYSIS_PROMPT_VERSION}`;
   const docRef = doc(db, 'phrase_analysis_cache', docId);
 
-  try {
-    const docSnap = await getDoc(docRef);
-    if (docSnap.exists()) {
-      return docSnap.data().phrases || [];
+  if (!forceRegenerate) {
+    try {
+      const docSnap = await getDoc(docRef);
+      if (docSnap.exists()) {
+        return docSnap.data().phrases || [];
+      }
+    } catch (err) {
+      console.error("Error reading phrase_analysis_cache:", err);
     }
-  } catch (err) {
-    console.error("Error reading phrase_analysis_cache:", err);
   }
 
   const lyricsLines = lyrics.split('\n').map(l => l.trim()).filter(Boolean);
@@ -1122,8 +1159,8 @@ Return JSON with this exact schema:
 }`;
 
   try {
-    const response = await ai.models.generateContent({
-      model: "gemini-3.5-flash",
+    const response = await callGeminiApi({
+      model: "gemini-2.5-flash",
       contents: prompt,
       config: {
         responseMimeType: "application/json",
