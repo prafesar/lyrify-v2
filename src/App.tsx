@@ -126,6 +126,8 @@ import { determineNextStep } from "./services/nextStepService";
 import { NextStepCTA } from "./components/NextStepCTA";
 import { getTrackStudySummary } from "./services/trackSummaryService";
 import { TrackStudyBridge } from "./components/TrackStudyBridge";
+import { buildResumeViewModel } from "./services/resumeService";
+import { ResumeStudyBlock } from "./components/ResumeStudyBlock";
 
 
 
@@ -582,6 +584,7 @@ export default function App() {
     const cards = Array.from(phraseMetadata.values());
     return getTrackStudySummary(cards, currentTrack.trackId);
   }, [currentTrack, phraseMetadata]);
+
   const [activeLineIndex, setActiveLineIndex] = useState<number | null>(null);
   const [lyricsDisplayMode, setLyricsDisplayMode] = useState<"lyrics" | "translation" | "both">(
     () => (localStorage.getItem("cantolex_lyrics_display_mode") as any) || "both"
@@ -950,6 +953,11 @@ export default function App() {
   const [structuredCache, setStructuredCache] = useState<Map<string, any>>(
     new Map(),
   );
+
+  const resumeViewModel = useMemo(() => {
+    const cards = Array.from(phraseMetadata.values());
+    return buildResumeViewModel(cards, recentTracks);
+  }, [phraseMetadata, recentTracks]);
 
   const recognitionRef = useRef<any>(null);
   const correctAudioRef = useRef<HTMLAudioElement | null>(null);
@@ -3290,6 +3298,13 @@ export default function App() {
                           <OnboardingHero
                             onSelectTrack={handleOnboardingSelect}
                             onDismiss={handleOnboardingDismiss}
+                          />
+                        )}
+                        {resumeViewModel && (
+                          <ResumeStudyBlock
+                            viewModel={resumeViewModel}
+                            onResumeTrack={(track) => handleTrackSelect(track)}
+                            onResumeStudy={() => setView("study")}
                           />
                         )}
                         {/* Tab Switcher */}
