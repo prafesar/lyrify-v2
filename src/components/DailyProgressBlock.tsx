@@ -56,7 +56,7 @@ export const DailyProgressBlock: React.FC<DailyProgressBlockProps> = ({
           title: 'Review Cards',
           desc: 'Train with your saved flashcards in the Study Hub.',
           buttonText: 'Study Hub',
-          icon: <Brain size={16} className="text-emerald-500" />,
+          icon: <Brain size={16} className="text-app-accent" />,
           action: onNavigateToStudy,
         };
       case 'done':
@@ -138,16 +138,16 @@ export const DailyProgressBlock: React.FC<DailyProgressBlockProps> = ({
       className="w-full bg-app-card border border-app-card-border rounded-3xl p-5 shadow-app-card relative overflow-hidden flex flex-col gap-6 mb-8"
     >
       {/* Decorative colored glow line like track progress */}
-      <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-500/20 via-emerald-500 to-transparent" />
+      <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-app-accent/20 via-app-accent to-transparent" />
 
       {/* Header Info */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <div className="p-2 bg-emerald-500/10 rounded-xl text-emerald-600 shrink-0">
+          <div className="p-2 bg-app-accent/10 rounded-xl text-app-accent shrink-0">
             <Target size={16} />
           </div>
           <div className="space-y-0.5">
-            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-600 block leading-none">
+            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-app-accent block leading-none">
               Daily Milestones
             </span>
             <h3 className="text-xs font-bold text-app-fg tracking-tight">
@@ -175,7 +175,7 @@ export const DailyProgressBlock: React.FC<DailyProgressBlockProps> = ({
         
         {/* Active colored path progress line */}
         <div
-          className="absolute top-[28px] left-[1.5rem] h-1 bg-emerald-500 transition-all duration-700 ease-out rounded-full"
+          className="absolute top-[28px] left-[1.5rem] h-1 bg-app-accent transition-all duration-700 ease-out rounded-full"
           style={{ width: `calc(${progressPercentage}% - 0px)` }}
         />
 
@@ -198,7 +198,7 @@ export const DailyProgressBlock: React.FC<DailyProgressBlockProps> = ({
                     <motion.div
                       initial={{ scale: 0.8 }}
                       animate={{ scale: 1 }}
-                      className="absolute inset-0 bg-emerald-500 text-white rounded-full flex items-center justify-center shadow-md border border-emerald-500"
+                      className="absolute inset-0 bg-app-accent text-white rounded-full flex items-center justify-center shadow-md border border-app-accent"
                     >
                       <CheckCircle size={14} className="stroke-[3]" />
                     </motion.div>
@@ -207,9 +207,9 @@ export const DailyProgressBlock: React.FC<DailyProgressBlockProps> = ({
                   {isCurrent && (
                     <>
                       {/* Pulse ring decoration */}
-                      <span className="absolute -inset-1.5 bg-emerald-500/20 rounded-full animate-ping pointer-events-none" />
-                      <div className="absolute inset-0 bg-app-card border-2 border-emerald-500 rounded-full flex items-center justify-center shadow-lg shadow-emerald-500/10">
-                        <span className="text-emerald-600 font-bold">
+                      <span className="absolute -inset-1.5 bg-app-accent/20 rounded-full animate-ping pointer-events-none" />
+                      <div className="absolute inset-0 bg-app-card border-2 border-app-accent rounded-full flex items-center justify-center shadow-lg shadow-app-accent/10">
+                        <span className="text-app-accent font-bold">
                           {step.icon}
                         </span>
                       </div>
@@ -239,7 +239,7 @@ export const DailyProgressBlock: React.FC<DailyProgressBlockProps> = ({
                     {step.label}
                   </span>
                   <span className={`text-[8px] font-black block mt-0.5 leading-none ${
-                    isCurrent ? 'text-emerald-600' : 'text-app-muted opacity-80'
+                    isCurrent ? 'text-app-accent' : 'text-app-muted opacity-80'
                   }`}>
                     {step.subtitle}
                   </span>
@@ -253,11 +253,11 @@ export const DailyProgressBlock: React.FC<DailyProgressBlockProps> = ({
       {/* Suggestion Card Banner */}
       <div className="bg-app-bg/50 border border-app-card-border/60 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mt-1">
         <div className="flex items-start gap-3 min-w-0">
-          <div className="p-2.5 bg-app-card border border-app-card-border rounded-xl shrink-0 mt-0.5 shadow-sm text-emerald-600">
+          <div className="p-2.5 bg-app-card border border-app-card-border rounded-xl shrink-0 mt-0.5 shadow-sm text-app-accent">
             {isGoalAchieved ? <Trophy size={16} className="text-yellow-500" /> : rec.icon}
           </div>
           <div className="space-y-1 min-w-0">
-            <h4 className="text-[10px] font-black uppercase tracking-wider text-emerald-600 select-none">
+            <h4 className="text-[10px] font-black uppercase tracking-wider text-app-accent select-none">
               {isGoalAchieved ? 'Perfect Streak!' : 'RECOMMENDED DAILY TARGET'}
             </h4>
             <p className="text-xs font-black text-app-fg leading-tight">

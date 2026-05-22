@@ -54,6 +54,17 @@
     --glow-color: transparent;
   }
 
+  [data-theme='solarized-emerald'] {
+    --background: #fdf6e3;
+    --foreground: #073642;
+    --card: #fdf6e3;
+    --card-border: rgba(7, 54, 66, 0.05);
+    --card-shadow: 0 10px 30px -5px rgba(7, 54, 66, 0.05);
+    --muted: #586e75;
+    --accent: #059669;
+    --glow-color: transparent;
+  }
+
   body {
     background-color: var(--background);
     color: var(--foreground);
@@ -69,7 +80,8 @@
     display: block;
   }
 
-  [data-theme='solarized'] .bg-accent-glow {
+  [data-theme='solarized'] .bg-accent-glow,
+  [data-theme='solarized-emerald'] .bg-accent-glow {
     display: none;
   }
 }
