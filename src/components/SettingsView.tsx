@@ -92,6 +92,7 @@ export default function SettingsView({ user, targetLanguage, setTargetLanguage, 
               <option value="dark" className="bg-app-bg text-app-fg">Dark</option>
               <option value="light" className="bg-app-bg text-app-fg">Light</option>
               <option value="solarized" className="bg-app-bg text-app-fg">Solarized</option>
+              <option value="solarized-emerald" className="bg-app-bg text-app-fg">Solarized Emerald</option>
             </select>
           </div>
         </div>

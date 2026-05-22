@@ -126,6 +126,19 @@ import { determineNextStep } from "./services/nextStepService";
 import { NextStepCTA } from "./components/NextStepCTA";
 import { getTrackStudySummary } from "./services/trackSummaryService";
 import { TrackStudyBridge } from "./components/TrackStudyBridge";
+import { buildResumeViewModel } from "./services/resumeService";
+import { ResumeStudyBlock } from "./components/ResumeStudyBlock";
+import {
+  getDailyActivity,
+  recordTrackExplored,
+  recordPhraseSaved,
+  recordReviewCompleted,
+  getDailyProgressSummary,
+  DailyActivity,
+} from "./services/dailyTrackerService";
+import { DailyProgressBlock } from "./components/DailyProgressBlock";
+import { buildTrackProgressViewModel } from "./services/trackProgressService";
+import { TrackProgressTracker } from "./components/TrackProgressTracker";
 
 
 
@@ -582,6 +595,12 @@ export default function App() {
     const cards = Array.from(phraseMetadata.values());
     return getTrackStudySummary(cards, currentTrack.trackId);
   }, [currentTrack, phraseMetadata]);
+
+  const trackProgressViewModel = useMemo(() => {
+    const cards = Array.from(phraseMetadata.values());
+    return buildTrackProgressViewModel(currentTrack, cards);
+  }, [currentTrack, phraseMetadata]);
+
   const [activeLineIndex, setActiveLineIndex] = useState<number | null>(null);
   const [lyricsDisplayMode, setLyricsDisplayMode] = useState<"lyrics" | "translation" | "both">(
     () => (localStorage.getItem("cantolex_lyrics_display_mode") as any) || "both"
@@ -741,6 +760,7 @@ export default function App() {
           type: 'phrase'
         }, status);
         addedCount++;
+        setDailyActivity(recordPhraseSaved());
       } else {
         // Update existing component status if we're marking line as known/learn
         if (existing.status !== status) {
@@ -804,6 +824,7 @@ export default function App() {
         lemmas: [],
         type: 'phrase'
       }, status);
+      setDailyActivity(recordPhraseSaved());
       await loadUserCards();
     } catch (err) {
       console.error(err);
@@ -950,6 +971,17 @@ export default function App() {
   const [structuredCache, setStructuredCache] = useState<Map<string, any>>(
     new Map(),
   );
+
+  const resumeViewModel = useMemo(() => {
+    const cards = Array.from(phraseMetadata.values());
+    return buildResumeViewModel(cards, recentTracks);
+  }, [phraseMetadata, recentTracks]);
+
+  const [dailyActivity, setDailyActivity] = useState<DailyActivity>(() => getDailyActivity());
+
+  const dailyProgressSummary = useMemo(() => {
+    return getDailyProgressSummary(dailyActivity);
+  }, [dailyActivity]);
 
   const recognitionRef = useRef<any>(null);
   const correctAudioRef = useRef<HTMLAudioElement | null>(null);
@@ -1480,6 +1512,7 @@ export default function App() {
             lemmas: [],
             type: 'phrase'
           }, status);
+          setDailyActivity(recordPhraseSaved());
           await loadUserCards();
         }
       }
@@ -1528,6 +1561,7 @@ export default function App() {
             type: 'phrase'
           }, "learning");
           if (cardId) {
+            setDailyActivity(recordPhraseSaved());
             setEditingLine((prev) => ({ ...prev, cardId, status: "learning" }));
             setPhraseMetadata((prev) => {
               const next = new Map(prev);
@@ -2048,6 +2082,9 @@ export default function App() {
   };
 
   const handleTrackSelect = async (track: any) => {
+    // Record track exploration to daily goals
+    setDailyActivity(recordTrackExplored());
+
     // 1. CLEAR previous states
     setLyricsFetchError(null);
     setManualLyrics("");
@@ -2878,6 +2915,7 @@ export default function App() {
           lemmas: [],
           type: 'phrase'
         }, status);
+        setDailyActivity(recordPhraseSaved());
       }
       loadUserCards();
     } catch (err) {
@@ -3292,6 +3330,26 @@ export default function App() {
                             onDismiss={handleOnboardingDismiss}
                           />
                         )}
+                        {resumeViewModel && (
+                          <ResumeStudyBlock
+                            viewModel={resumeViewModel}
+                            onResumeTrack={(track) => handleTrackSelect(track)}
+                            onResumeStudy={() => setView("study")}
+                          />
+                        )}
+                        <DailyProgressBlock
+                          summary={dailyProgressSummary}
+                          onNavigateToExplore={() => {
+                            setActiveLibraryTab('community');
+                          }}
+                          onNavigateToStudy={() => setView("study")}
+                          onNavigateToCurrentTrack={() => {
+                            if (currentTrack) {
+                              setView("lyrics");
+                            }
+                          }}
+                          hasCurrentTrack={!!currentTrack}
+                        />
                         {/* Tab Switcher */}
                         <div className="flex items-center p-1 bg-app-card border border-app-card-border rounded-2xl mb-8 w-fit mx-auto sm:mx-0">
                           <button
@@ -3706,12 +3764,25 @@ export default function App() {
                   </div>
                 </div>
 
-                {nextStepState && (
-                  <NextStepCTA
-                    state={nextStepState}
-                    onClick={handleNextStepClick}
-                    isLoading={isLoadingLyrics || isGeneratingAnalysis}
-                  />
+                {trackProgressViewModel && (
+                  <div className="mb-6">
+                    <TrackProgressTracker
+                      viewModel={trackProgressViewModel}
+                      onAction={(actionType) => {
+                        if (actionType === 'find_lyrics') {
+                          handleNextStepClick();
+                        } else if (actionType === 'generate_analysis') {
+                          // Need to handle analysis trigger
+                          handleNextStepClick();
+                        } else if (actionType === 'save_phrase') {
+                          setActiveTab('analysis');
+                        } else if (actionType === 'go_to_study' || actionType === 'review_again') {
+                          setStudyTrackId(currentTrack.trackId);
+                          setView('study');
+                        }
+                      }}
+                    />
+                  </div>
                 )}
 
                 {trackStudySummary && (
@@ -4359,6 +4430,10 @@ export default function App() {
                   setStudyTrackId(undefined);
                 }}
                 initialTrackId={studyTrackId}
+                onReviewCompleted={() => {
+                  setDailyActivity(recordReviewCompleted());
+                  loadUserCards();
+                }}
               />
             </motion.div>
           )}
