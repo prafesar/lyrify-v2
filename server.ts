@@ -69,7 +69,27 @@ async function startServer() {
       });
     } catch (error: any) {
       console.error("[server] Gemini API error:", error);
-      res.status(error.status || error.statusCode || 500).json({
+      
+      let statusCode = 500;
+      if (typeof error.status === "number") {
+        statusCode = error.status;
+      } else if (typeof error.statusCode === "number") {
+        statusCode = error.statusCode;
+      } else if (typeof error.code === "number") {
+        statusCode = error.code;
+      } else if (error.status === "UNAVAILABLE" || error.message?.includes("UNAVAILABLE") || error.message?.includes("high demand")) {
+        statusCode = 503;
+      } else if (error.status === "INVALID_ARGUMENT" || error.message?.includes("INVALID_ARGUMENT")) {
+        statusCode = 400;
+      } else if (error.status === "PERMISSION_DENIED" || error.message?.includes("PERMISSION_DENIED")) {
+        statusCode = 403;
+      } else if (error.status === "NOT_FOUND" || error.message?.includes("NOT_FOUND")) {
+        statusCode = 404;
+      } else if (error.status === "RESOURCE_EXHAUSTED" || error.message?.includes("RESOURCE_EXHAUSTED")) {
+        statusCode = 429;
+      }
+
+      res.status(statusCode).json({
         error: error.message || "An error occurred during Gemini API generation"
       });
     }
