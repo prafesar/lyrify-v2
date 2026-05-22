@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useMemo } from "react";
 import { motion, AnimatePresence, useMotionValue, useTransform } from "motion/react";
 import {
   Play,
@@ -121,6 +121,9 @@ import {
   shouldShowOnboarding,
 } from "./services/onboardingService";
 import { OnboardingHero } from "./components/OnboardingHero";
+
+import { determineNextStep } from "./services/nextStepService";
+import { NextStepCTA } from "./components/NextStepCTA";
 
 
 
@@ -539,6 +542,7 @@ const AnalysisPhraseCard = ({
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [onboardingCompleted, setOnboardingCompleted] = useState(() => isOnboardingCompleted());
+  const [studyTrackId, setStudyTrackId] = useState<string | undefined>(undefined);
 
   const [view, setView] = useState<"tracks" | "study" | "lyrics" | "settings">(
     "tracks",
@@ -562,6 +566,14 @@ export default function App() {
   const [childCardsMap, setChildCardsMap] = useState<Map<string, Flashcard[]>>(
     new Map(),
   );
+
+  const nextStepState = useMemo(() => {
+    if (!currentTrack) return null;
+    const hasSavedCardsForTrack = Array.from(phraseMetadata.values()).some(
+      (card) => card.trackId === currentTrack.trackId
+    );
+    return determineNextStep(currentTrack, hasSavedCardsForTrack);
+  }, [currentTrack, phraseMetadata]);
   const [activeLineIndex, setActiveLineIndex] = useState<number | null>(null);
   const [lyricsDisplayMode, setLyricsDisplayMode] = useState<"lyrics" | "translation" | "both">(
     () => (localStorage.getItem("cantolex_lyrics_display_mode") as any) || "both"
@@ -2008,6 +2020,23 @@ export default function App() {
       difficulty: demoTrack.difficulty,
       sourceLanguage: demoTrack.sourceLanguage
     });
+  };
+
+  const handleNextStepClick = () => {
+    if (!nextStepState || !currentTrack) return;
+    
+    if (nextStepState.type === "FIND_LYRICS") {
+      handleAnalyzeSong();
+    } else if (nextStepState.type === "GENERATE_ANALYSIS") {
+      setActiveTab("analysis");
+      handleGenerateAnalysis();
+    } else if (nextStepState.type === "SAVE_FIRST_PHRASE") {
+      const hasPhrasesInAnalysis = currentTrack.lines.some(l => l.phrases && l.phrases.length > 0);
+      setActiveTab(hasPhrasesInAnalysis ? "analysis" : "lyrics");
+    } else if (nextStepState.type === "GO_TO_STUDY") {
+      setStudyTrackId(currentTrack.trackId);
+      setView("study");
+    }
   };
 
   const handleTrackSelect = async (track: any) => {
@@ -3667,7 +3696,17 @@ export default function App() {
                       Analysis
                     </button>
                   </div>
-                </div>                {activeTab === "preview" && (
+                </div>
+
+                {nextStepState && (
+                  <NextStepCTA
+                    state={nextStepState}
+                    onClick={handleNextStepClick}
+                    isLoading={isLoadingLyrics || isGeneratingAnalysis}
+                  />
+                )}
+
+                {activeTab === "preview" && (
                   <div className="flex flex-col gap-8 pb-32">
                     {/* Show Meaning if we have it, even if loading lyrics in background */}
                     {currentTrack.meaning ? (
@@ -4293,7 +4332,13 @@ export default function App() {
               exit={{ opacity: 0, y: 20 }}
               className="flex-1 flex flex-col"
             >
-              <StudyView onBack={() => setView("tracks")} />
+              <StudyView
+                onBack={() => {
+                  setView("tracks");
+                  setStudyTrackId(undefined);
+                }}
+                initialTrackId={studyTrackId}
+              />
             </motion.div>
           )}
 

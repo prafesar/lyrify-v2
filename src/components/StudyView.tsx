@@ -9,21 +9,25 @@ import { getLocaleByName } from '../lib/languages';
 
 interface StudyViewProps {
   onBack: () => void;
+  initialTrackId?: string;
 }
 
 type GroupMode = 'recent' | 'track' | 'artist';
 
-export default function StudyView({ onBack }: StudyViewProps) {
+export default function StudyView({ onBack, initialTrackId }: StudyViewProps) {
   const [allCards, setAllCards] = useState<Flashcard[]>([]);
   const [sessionCards, setSessionCards] = useState<Flashcard[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isFlipped, setIsFlipped] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'hub' | 'session' | 'complete'>('hub');
-  const [groupMode, setGroupMode] = useState<GroupMode>('recent');
+  const [groupMode, setGroupMode] = useState<GroupMode>(initialTrackId ? 'track' : 'recent');
   const [isExplanationExpanded, setIsExplanationExpanded] = useState(false);
-  const [selectedLanguage, setSelectedLanguage] = useState<string>(() => localStorage.getItem('study_selected_language') || 'all');
-  const [selectedTrack, setSelectedTrack] = useState<string>('all');
+  const [selectedLanguage, setSelectedLanguage] = useState<string>(() => {
+    if (initialTrackId) return 'all';
+    return localStorage.getItem('study_selected_language') || 'all';
+  });
+  const [selectedTrack, setSelectedTrack] = useState<string>(initialTrackId || 'all');
   const [selectedType, setSelectedType] = useState<string>('all');
   const [expandedParents, setExpandedParents] = useState<Set<string>>(new Set());
 
@@ -67,6 +71,7 @@ export default function StudyView({ onBack }: StudyViewProps) {
     const available = Array.from(langs).sort();
     
     setSelectedLanguage(prev => {
+      if (initialTrackId) return 'all';
       const persisted = localStorage.getItem('study_selected_language');
       if (persisted && available.includes(persisted)) return persisted;
       if (available.length > 0) return available[0];
