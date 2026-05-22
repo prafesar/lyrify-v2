@@ -14,12 +14,13 @@ export enum Type {
 }
 
 async function callGeminiApi(params: { model: string; contents: any; config?: any }) {
+  const modelToUse = params.model === "gemini-2.5-flash" ? "gemini-3.5-flash" : params.model;
   const response = await fetch("/api/gemini/generate-content", {
     method: "POST",
     headers: {
       "Content-Type": "application/json"
     },
-    body: JSON.stringify(params)
+    body: JSON.stringify({ ...params, model: modelToUse })
   });
   if (!response.ok) {
     const errText = await response.text();
@@ -27,9 +28,12 @@ async function callGeminiApi(params: { model: string; contents: any; config?: an
     try {
       parsedError = JSON.parse(errText);
     } catch {
-      throw new Error(errText);
+      if (errText.trim().startsWith("<") || errText.includes("<!doctype") || errText.includes("<html") || response.status === 504 || response.status === 502) {
+        throw new Error("The AI service is temporarily unavailable (high traffic or timeout). Please try again in a few moments.");
+      }
+      throw new Error(errText || `Server returned status ${response.status}`);
     }
-    throw new Error(parsedError.error || parsedError.message || errText);
+    throw new Error(parsedError.error || parsedError.message || errText || "Request failed");
   }
   return await response.json();
 }
@@ -223,14 +227,9 @@ Return a valid JSON object with the following structure exactly:
     });
 
     return result;
-  } catch (error) {
+  } catch (error: any) {
     console.error("fetchTrackMeaning error:", error);
-    // Return empty result as fallback
-    return {
-      originalLanguage: "English",
-      difficulty: "beginner",
-      meanings: { en: "", es: "", ru: "", pl: "" }
-    };
+    throw new Error(error?.message || "Failed to analyze track meaning. Please try again.", { cause: error });
   }
 }
 
@@ -1096,15 +1095,9 @@ Return JSON with this exact schema:
         type: 'verse'
       };
     });
-  } catch (error) {
-    console.error("getLineTranslations error, falling back to local fallback:", error);
-    // Simple fallback logic
-    return originalLines.map(line => ({
-      originalText: line,
-      translation: line,
-      language: 'en',
-      type: 'verse'
-    }));
+  } catch (error: any) {
+    console.error("getLineTranslations error:", error);
+    throw new Error(error?.message || "Failed to generate lyric line translations. Please try again.", { cause: error });
   }
 }
 
@@ -1201,9 +1194,9 @@ Return JSON with this exact schema:
     }).catch(e => console.error("Cache write error for phrase_analysis_cache:", e));
 
     return phrases;
-  } catch (error) {
+  } catch (error: any) {
     console.error("getPhraseAnalysis error:", error);
-    return [];
+    throw new Error(error?.message || "Failed to generate linguistic phrase analysis. Please try again.", { cause: error });
   }
 }
 

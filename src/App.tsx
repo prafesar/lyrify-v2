@@ -1167,7 +1167,7 @@ export default function App() {
   useEffect(() => {
     if (view === "lyrics" && currentTrack?.rawLyrics && targetLanguage) {
       if (!currentTrack.processingStatus.stage3_completed) {
-        runStage3(currentTrack);
+        runStage3(currentTrack).catch(e => console.error("Auto background stage 3 failed:", e));
       }
     }
   }, [targetLanguage]);
@@ -2297,7 +2297,8 @@ export default function App() {
   };
 
   const runStage3 = async (track: TrackLyricsData, force: boolean = false) => {
-    if (!force && track.processingStatus.stage3_completed) return;
+    const hasPhrases = track.lines.some(l => l.phrases && l.phrases.length > 0);
+    if (!force && track.processingStatus.stage3_completed && hasPhrases) return;
     setIsTranslating(true);
     try {
       const trackKey = await computeTrackKey(track.title, [track.artist]);
@@ -2342,8 +2343,10 @@ export default function App() {
         saveTrackToSharedCache(updated).catch(e => console.error("Firestore cache upload failed:", e));
         return updated;
       });
-    } catch (err) {
+    } catch (err: any) {
       console.error("Stage 3 (Phrase Analysis) failed:", err);
+      setAnalysisError(err?.message || "An unexpected error occurred during deep analysis. Please try again.");
+      throw err;
     } finally {
       setIsTranslating(false);
     }
@@ -2432,12 +2435,12 @@ export default function App() {
 
   const handleGenerateAnalysis = async (force: boolean = false, customTrack?: TrackLyricsData) => {
     const targetTrack = customTrack || currentTrack;
-    if (
-      !targetTrack ||
-      (!force && targetTrack.processingStatus.stage3_completed) ||
-      isGeneratingAnalysis
-    )
-      return;
+    if (!targetTrack || isGeneratingAnalysis) return;
+
+    const hasPhrases = targetTrack.lines.some(l => l.phrases && l.phrases.length > 0);
+    const completed = targetTrack.processingStatus.stage3_completed && hasPhrases;
+
+    if (!force && completed) return;
 
     setIsGeneratingAnalysis(true);
     setAnalysisError(null);
