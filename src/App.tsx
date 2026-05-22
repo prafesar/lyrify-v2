@@ -124,6 +124,8 @@ import { OnboardingHero } from "./components/OnboardingHero";
 
 import { determineNextStep } from "./services/nextStepService";
 import { NextStepCTA } from "./components/NextStepCTA";
+import { getTrackStudySummary } from "./services/trackSummaryService";
+import { TrackStudyBridge } from "./components/TrackStudyBridge";
 
 
 
@@ -573,6 +575,12 @@ export default function App() {
       (card) => card.trackId === currentTrack.trackId
     );
     return determineNextStep(currentTrack, hasSavedCardsForTrack);
+  }, [currentTrack, phraseMetadata]);
+
+  const trackStudySummary = useMemo(() => {
+    if (!currentTrack) return null;
+    const cards = Array.from(phraseMetadata.values());
+    return getTrackStudySummary(cards, currentTrack.trackId);
   }, [currentTrack, phraseMetadata]);
   const [activeLineIndex, setActiveLineIndex] = useState<number | null>(null);
   const [lyricsDisplayMode, setLyricsDisplayMode] = useState<"lyrics" | "translation" | "both">(
@@ -3704,6 +3712,19 @@ export default function App() {
                     onClick={handleNextStepClick}
                     isLoading={isLoadingLyrics || isGeneratingAnalysis}
                   />
+                )}
+
+                {trackStudySummary && (
+                  <div className="mb-6">
+                    <TrackStudyBridge
+                      summary={trackStudySummary}
+                      onGoToStudy={() => {
+                        setStudyTrackId(currentTrack.trackId);
+                        setView("study");
+                      }}
+                      trackTitle={`${currentTrack.title} — ${currentTrack.artist}`}
+                    />
+                  </div>
                 )}
 
                 {activeTab === "preview" && (
