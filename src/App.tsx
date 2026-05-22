@@ -115,6 +115,14 @@ import {
   type Phrase,
 } from "./services/musicService";
 
+import {
+  isOnboardingCompleted,
+  completeOnboarding,
+  shouldShowOnboarding,
+} from "./services/onboardingService";
+import { OnboardingHero } from "./components/OnboardingHero";
+
+
 
 const RESOURCE_TYPES = [
   {
@@ -530,6 +538,8 @@ const AnalysisPhraseCard = ({
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
+  const [onboardingCompleted, setOnboardingCompleted] = useState(() => isOnboardingCompleted());
+
   const [view, setView] = useState<"tracks" | "study" | "lyrics" | "settings">(
     "tracks",
   );
@@ -869,7 +879,7 @@ export default function App() {
   const [isSearching, setIsSearching] = useState(false);
   const [isLoadingLyrics, setIsLoadingLyrics] = useState(false);
   const [loadingStep, setLoadingStep] = useState<
-    "idle" | "searching" | "meaning" | "analyzing"
+    "idle" | "searching" | "meaning" | "analyzing" | "translating"
   >("idle");
   const [lyricsFetchError, setLyricsFetchError] = useState<string | null>(null);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
@@ -1980,6 +1990,25 @@ export default function App() {
     }
   }, [searchEntityType]);
 
+
+  const handleOnboardingDismiss = () => {
+    completeOnboarding();
+    setOnboardingCompleted(true);
+  };
+
+  const handleOnboardingSelect = (demoTrack: any) => {
+    completeOnboarding();
+    setOnboardingCompleted(true);
+    handleTrackSelect({
+      id: demoTrack.id,
+      title: demoTrack.title,
+      artist: demoTrack.artist,
+      coverUrl: demoTrack.coverUrl,
+      audioUrl: demoTrack.audioUrl,
+      difficulty: demoTrack.difficulty,
+      sourceLanguage: demoTrack.sourceLanguage
+    });
+  };
 
   const handleTrackSelect = async (track: any) => {
     // 1. CLEAR previous states
@@ -3220,6 +3249,12 @@ export default function App() {
                     {/* Library Tabs (Search context) */}
                     {!searchResults.length && (
                       <div className="mt-2 pb-12">
+                        {shouldShowOnboarding(recentTracks.length) && !onboardingCompleted && (
+                          <OnboardingHero
+                            onSelectTrack={handleOnboardingSelect}
+                            onDismiss={handleOnboardingDismiss}
+                          />
+                        )}
                         {/* Tab Switcher */}
                         <div className="flex items-center p-1 bg-app-card border border-app-card-border rounded-2xl mb-8 w-fit mx-auto sm:mx-0">
                           <button
