@@ -10,11 +10,12 @@ import { getLocaleByName } from '../lib/languages';
 interface StudyViewProps {
   onBack: () => void;
   initialTrackId?: string;
+  onReviewCompleted?: () => void;
 }
 
 type GroupMode = 'recent' | 'track' | 'artist';
 
-export default function StudyView({ onBack, initialTrackId }: StudyViewProps) {
+export default function StudyView({ onBack, initialTrackId, onReviewCompleted }: StudyViewProps) {
   const [allCards, setAllCards] = useState<Flashcard[]>([]);
   const [sessionCards, setSessionCards] = useState<Flashcard[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -231,6 +232,9 @@ export default function StudyView({ onBack, initialTrackId }: StudyViewProps) {
   const handleRating = async (rating: Rating) => {
     const card = sessionCards[currentIndex];
     await reviewCard(card.id, rating);
+    if (onReviewCompleted) {
+      onReviewCompleted();
+    }
     setIsFlipped(false);
     setIsExplanationExpanded(false);
     if (currentIndex < sessionCards.length - 1) {
