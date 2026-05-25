@@ -89,41 +89,68 @@ export const TracksHomeShell: React.FC<TracksHomeShellProps> = ({
         />
       )}
 
-      {/* Tab Switcher */}
-      <div className="flex items-center p-1 bg-app-card border border-app-card-border rounded-2xl mb-8 w-fit mx-auto sm:mx-0">
-        <button
-          onClick={() => setActiveLibraryTab('recent')}
-          className={`px-6 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${
-            activeLibraryTab === 'recent'
-              ? 'bg-app-fg text-app-bg shadow-lg'
-              : 'text-app-muted hover:text-app-fg'
-          }`}
-        >
-          Recent
-        </button>
-        <button
-          onClick={() => setActiveLibraryTab('community')}
-          className={`px-6 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${
-            activeLibraryTab === 'community'
-              ? 'bg-app-fg text-app-bg shadow-lg'
-              : 'text-app-muted hover:text-app-fg'
-          }`}
-        >
-          Community
-        </button>
+      {/* Tab Switcher and Filter Row */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+        <div className="flex items-center p-1 bg-app-card border border-app-card-border rounded-2xl w-fit mx-auto sm:mx-0 shadow-sm">
+          <button
+            onClick={() => setActiveLibraryTab('recent')}
+            className={`px-5 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all flex items-center gap-1.5 ${
+              activeLibraryTab === 'recent'
+                ? 'bg-app-fg text-app-bg shadow-md'
+                : 'text-app-muted hover:text-app-fg'
+            }`}
+          >
+            <History size={13} />
+            <span>Recent</span>
+          </button>
+          <button
+            onClick={() => setActiveLibraryTab('community')}
+            className={`px-5 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all flex items-center gap-1.5 ${
+              activeLibraryTab === 'community'
+                ? 'bg-app-fg text-app-bg shadow-md'
+                : 'text-app-muted hover:text-app-fg'
+            }`}
+          >
+            <Globe size={13} className={activeLibraryTab === 'community' ? "animate-pulse text-app-accent" : ""} />
+            <span>Community</span>
+          </button>
+        </div>
+
+        {/* Filters shown elegantly only when Community tab is active */}
+        {activeLibraryTab === 'community' && (
+          <div className="flex flex-wrap items-center justify-center sm:justify-end gap-3 px-2 animate-in fade-in duration-200">
+            <div className="flex items-center gap-2">
+              <span className="text-[9px] font-black text-app-muted uppercase tracking-widest leading-none">Language:</span>
+              <select 
+                value={communityLangFilter}
+                onChange={(e) => setCommunityLangFilter(e.target.value)}
+                className="bg-app-card border border-app-card-border rounded-xl px-2.5 py-1.5 text-[10px] font-bold text-app-fg outline-none focus:ring-1 focus:ring-accent transition-all appearance-none cursor-pointer"
+              >
+                <option value="All">All</option>
+                {SUPPORTED_LANGUAGES.map(lang => (
+                  <option key={lang.name} value={lang.name}>{lang.name}</option>
+                ))}
+              </select>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-[9px] font-black text-app-muted uppercase tracking-widest leading-none">Difficulty:</span>
+              <select 
+                value={communityDifficultyFilter}
+                onChange={(e) => setCommunityDifficultyFilter(e.target.value)}
+                className="bg-app-card border border-app-card-border rounded-xl px-2.5 py-1.5 text-[10px] font-bold text-app-fg outline-none focus:ring-1 focus:ring-accent transition-all appearance-none cursor-pointer"
+              >
+                <option value="All">All</option>
+                <option value="beginner">Beginner</option>
+                <option value="intermediate">Intermediate</option>
+                <option value="advanced">Advanced</option>
+              </select>
+            </div>
+          </div>
+        )}
       </div>
 
       {activeLibraryTab === 'recent' ? (
         <div className="space-y-4">
-          <div className="mb-2 px-2">
-            <h2
-              className="text-xs font-black uppercase tracking-[0.3em] flex items-center gap-2"
-              style={{ color: "var(--accent)" }}
-            >
-              <History size={16} />
-              Recently Explored
-            </h2>
-          </div>
           {recentTracks.length > 0 ? recentTracks.map((track) => (
             <button
               key={`recent-${track.id}`}
@@ -169,47 +196,7 @@ export const TracksHomeShell: React.FC<TracksHomeShellProps> = ({
           )}
         </div>
       ) : (
-        <div className="space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-2 px-2">
-            <h2
-              className="text-xs font-black uppercase tracking-[0.3em] flex items-center gap-2"
-              style={{ color: "var(--accent)" }}
-            >
-              <Globe size={16} className="animate-pulse" />
-              Community Trends
-            </h2>
-
-            {/* Filters */}
-            <div className="flex flex-wrap items-center gap-4">
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] font-bold text-app-muted uppercase tracking-widest leading-none">Language:</span>
-                <select 
-                  value={communityLangFilter}
-                  onChange={(e) => setCommunityLangFilter(e.target.value)}
-                  className="bg-app-card border border-app-card-border rounded-lg px-3 py-1.5 text-[11px] font-bold text-app-fg outline-none focus:ring-1 focus:ring-accent transition-all appearance-none cursor-pointer"
-                >
-                  <option value="All">All</option>
-                  {SUPPORTED_LANGUAGES.map(lang => (
-                    <option key={lang.name} value={lang.name}>{lang.name}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] font-bold text-app-muted uppercase tracking-widest leading-none">Difficulty:</span>
-                <select 
-                  value={communityDifficultyFilter}
-                  onChange={(e) => setCommunityDifficultyFilter(e.target.value)}
-                  className="bg-app-card border border-app-card-border rounded-lg px-3 py-1.5 text-[11px] font-bold text-app-fg outline-none focus:ring-1 focus:ring-accent transition-all appearance-none cursor-pointer"
-                >
-                  <option value="All">All</option>
-                  <option value="beginner">Beginner</option>
-                  <option value="intermediate">Intermediate</option>
-                  <option value="advanced">Advanced</option>
-                </select>
-              </div>
-            </div>
-          </div>
-          
+        <div className="space-y-4">
           {isLoadingTracks ? (
             <div className="space-y-4">
               {[1, 2, 3, 4].map(i => (
