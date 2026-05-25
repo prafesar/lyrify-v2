@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
-import { History, ChevronRight, Search, Globe, Music } from 'lucide-react';
+import { History, ChevronRight, Search, Globe, Music, ChevronDown, Check, X } from 'lucide-react';
 import { Track, TrackLyricsData } from '../services/musicService';
 import { ResumeStudyViewModel } from '../services/resumeService';
 import { DailyProgressSummary } from '../services/dailyTrackerService';
@@ -77,8 +77,23 @@ export const TracksHomeShell: React.FC<TracksHomeShellProps> = ({
   isLoadingTracks,
 }) => {
   const [activeLibraryTab, setActiveLibraryTab] = useState<'recent' | 'community'>('recent');
-  const [communityLangFilter, setCommunityLangFilter] = useState<string>('All');
+  const [selectedLanguages, setSelectedLanguages] = useState<string[]>([]);
+  const [isLangPanelOpen, setIsLangPanelOpen] = useState<boolean>(false);
   const [communityDifficultyFilter, setCommunityDifficultyFilter] = useState<string>('All');
+
+  const toggleLang = (langName: string) => {
+    setSelectedLanguages(prev => 
+      prev.includes(langName)
+        ? prev.filter(l => l !== langName)
+        : [...prev, langName]
+    );
+  };
+
+  const clearLanguages = () => {
+    setSelectedLanguages([]);
+  };
+
+  const isLangSelected = (langName: string) => selectedLanguages.includes(langName);
 
   return (
     <div className="mt-2 pb-12 w-full" id="tracks-home-composition-shell">
@@ -90,7 +105,7 @@ export const TracksHomeShell: React.FC<TracksHomeShellProps> = ({
       )}
 
       {/* Tab Switcher and Filter Row */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-3">
         <div className="flex items-center p-1 bg-app-card border border-app-card-border rounded-2xl w-fit mx-auto sm:mx-0 shadow-sm">
           <button
             onClick={() => setActiveLibraryTab('recent')}
@@ -104,7 +119,9 @@ export const TracksHomeShell: React.FC<TracksHomeShellProps> = ({
             <span>Recent</span>
           </button>
           <button
-            onClick={() => setActiveLibraryTab('community')}
+            onClick={() => {
+              setActiveLibraryTab('community');
+            }}
             className={`px-5 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all flex items-center gap-1.5 ${
               activeLibraryTab === 'community'
                 ? 'bg-app-fg text-app-bg shadow-md'
@@ -121,16 +138,27 @@ export const TracksHomeShell: React.FC<TracksHomeShellProps> = ({
           <div className="flex flex-wrap items-center justify-center sm:justify-end gap-3 px-2 animate-in fade-in duration-200">
             <div className="flex items-center gap-2">
               <span className="text-[9px] font-black text-app-muted uppercase tracking-widest leading-none">Language:</span>
-              <select 
-                value={communityLangFilter}
-                onChange={(e) => setCommunityLangFilter(e.target.value)}
-                className="bg-app-card border border-app-card-border rounded-xl px-2.5 py-1.5 text-[10px] font-bold text-app-fg outline-none focus:ring-1 focus:ring-accent transition-all appearance-none cursor-pointer"
+              <button
+                type="button"
+                onClick={() => setIsLangPanelOpen(!isLangPanelOpen)}
+                className={`bg-app-card border rounded-xl px-2.5 py-1.5 text-[10px] font-bold text-app-fg hover:border-app-accent hover:text-app-accent active:scale-95 transition-all flex items-center gap-1 cursor-pointer ${
+                  selectedLanguages.length > 0 
+                    ? 'border-app-accent/65 bg-app-accent/5 font-extrabold text-app-accent' 
+                    : 'border-app-card-border'
+                }`}
               >
-                <option value="All">All</option>
-                {SUPPORTED_LANGUAGES.map(lang => (
-                  <option key={lang.name} value={lang.name}>{lang.name}</option>
-                ))}
-              </select>
+                <span>
+                  {selectedLanguages.length === 0 
+                    ? 'All' 
+                    : selectedLanguages.length === 1 
+                    ? selectedLanguages[0] 
+                    : `${selectedLanguages.length} Selected`}
+                </span>
+                <ChevronDown 
+                  size={12} 
+                  className={`opacity-60 transition-transform duration-200 ${isLangPanelOpen ? 'rotate-180 text-app-accent' : ''}`} 
+                />
+              </button>
             </div>
             <div className="flex items-center gap-2">
               <span className="text-[9px] font-black text-app-muted uppercase tracking-widest leading-none">Difficulty:</span>
@@ -148,6 +176,53 @@ export const TracksHomeShell: React.FC<TracksHomeShellProps> = ({
           </div>
         )}
       </div>
+
+      {/* Expandable Badge Selection Container */}
+      {activeLibraryTab === 'community' && isLangPanelOpen && (
+        <motion.div
+          initial={{ opacity: 0, height: 0 }}
+          animate={{ opacity: 1, height: 'auto' }}
+          exit={{ opacity: 0, height: 0 }}
+          transition={{ duration: 0.2 }}
+          className="w-full bg-app-card border border-app-card-border rounded-3xl p-4 md:p-5 mb-8 flex flex-col gap-3 origin-top shadow-sm select-none"
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-[9px] font-black text-app-muted uppercase tracking-widest leading-none">
+              Filter by Languages:
+            </span>
+            {selectedLanguages.length > 0 && (
+              <button
+                type="button"
+                onClick={clearLanguages}
+                className="text-[9.5px] font-black text-red-500 uppercase tracking-widest hover:text-red-600 transition-colors flex items-center gap-1 cursor-pointer"
+              >
+                <X size={11} strokeWidth={2.5} />
+                Clear Selection ({selectedLanguages.length})
+              </button>
+            )}
+          </div>
+          <div className="flex flex-wrap gap-1.5 mt-1">
+            {SUPPORTED_LANGUAGES.map((lang) => {
+              const active = isLangSelected(lang.name);
+              return (
+                <button
+                  key={lang.name}
+                  type="button"
+                  onClick={() => toggleLang(lang.name)}
+                  className={`px-3 py-1.5 rounded-full text-[10px] font-bold tracking-tight transition-all flex items-center gap-1 border cursor-pointer select-none ${
+                    active
+                      ? 'bg-app-accent text-white border-app-accent shadow-sm'
+                      : 'bg-app-bg text-app-muted border-app-card-border hover:bg-app-fg/5 hover:text-app-fg hover:border-app-card-border/85'
+                  }`}
+                >
+                  {active && <Check size={10} strokeWidth={3} />}
+                  <span>{lang.name}</span>
+                </button>
+              );
+            })}
+          </div>
+        </motion.div>
+      )}
 
       {activeLibraryTab === 'recent' ? (
         <div className="space-y-4">
@@ -212,13 +287,13 @@ export const TracksHomeShell: React.FC<TracksHomeShellProps> = ({
           ) : (
             <div className="space-y-4">
               {dynamicTracks.filter(t => {
-                const langMatch = communityLangFilter === "All" || t.sourceLanguage === communityLangFilter;
+                const langMatch = selectedLanguages.length === 0 || selectedLanguages.includes(t.sourceLanguage);
                 const diffMatch = communityDifficultyFilter === "All" || (t.difficulty && t.difficulty.toLowerCase().includes(communityDifficultyFilter.toLowerCase()));
                 return langMatch && diffMatch;
               }).length > 0 ? 
               dynamicTracks
                 .filter(t => {
-                  const langMatch = communityLangFilter === "All" || t.sourceLanguage === communityLangFilter;
+                  const langMatch = selectedLanguages.length === 0 || selectedLanguages.includes(t.sourceLanguage);
                   const diffMatch = communityDifficultyFilter === "All" || (t.difficulty && t.difficulty.toLowerCase().includes(communityDifficultyFilter.toLowerCase()));
                   return langMatch && diffMatch;
                 })
