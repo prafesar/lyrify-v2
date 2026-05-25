@@ -31,7 +31,7 @@ describe('Resume Service and View-Model Builder', () => {
     expect(vm!.trackingTrack!.id).toBe('track-101');
   });
 
-  it('Scenario 3: Returns a study review VM when there are due cards, even if a recent track exists (Study priority)', () => {
+  it('Scenario 3: Returns a track resume VM when there are due cards, because study resume blocks are disabled in favor of navigation badge', () => {
     const dueCard: Flashcard = {
       id: 'fc-1',
       text: 'Je me souviens',
@@ -52,10 +52,8 @@ describe('Resume Service and View-Model Builder', () => {
 
     const vm = buildResumeViewModel([dueCard], [sampleTrack], dummyDate);
     expect(vm).not.toBeNull();
-    expect(vm!.type).toBe('study');
-    expect(vm!.title).toBe('Review Ready');
-    expect(vm!.subtitle).toContain('1 flashcard waiting to be reviewed');
-    expect(vm!.ctaText).toBe('Review Due Cards');
+    expect(vm!.type).toBe('track');
+    expect(vm!.ctaText).toBe('Continue Track');
   });
 
   it('Scenario 4: Prefers track Resume if card exists but is not yet due (future date check)', () => {

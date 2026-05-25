@@ -120,14 +120,11 @@ import {
   completeOnboarding,
   shouldShowOnboarding,
 } from "./services/onboardingService";
-import { OnboardingHero } from "./components/OnboardingHero";
-
 import { determineNextStep } from "./services/nextStepService";
 import { NextStepCTA } from "./components/NextStepCTA";
 import { getTrackStudySummary } from "./services/trackSummaryService";
 import { TrackStudyBridge } from "./components/TrackStudyBridge";
 import { buildResumeViewModel } from "./services/resumeService";
-import { ResumeStudyBlock } from "./components/ResumeStudyBlock";
 import {
   getDailyActivity,
   recordTrackExplored,
@@ -136,9 +133,11 @@ import {
   getDailyProgressSummary,
   DailyActivity,
 } from "./services/dailyTrackerService";
-import { DailyProgressBlock } from "./components/DailyProgressBlock";
 import { buildTrackProgressViewModel } from "./services/trackProgressService";
 import { TrackProgressTracker } from "./components/TrackProgressTracker";
+import { TracksHomeShell } from "./components/TracksHomeShell";
+import { DailyProgressBlock } from "./components/DailyProgressBlock";
+import { ResumeStudyBlock } from "./components/ResumeStudyBlock";
 
 
 
@@ -910,9 +909,6 @@ export default function App() {
   const [albumDetails, setAlbumDetails] = useState<{ album: Album; tracks: Track[] } | null>(null);
   const [isSearchingDetails, setIsSearchingDetails] = useState(false);
   const [recentTracks, setRecentTracks] = useState<Track[]>([]);
-  const [activeLibraryTab, setActiveLibraryTab] = useState<'recent' | 'community'>('recent');
-  const [communityLangFilter, setCommunityLangFilter] = useState<string>('All');
-  const [communityDifficultyFilter, setCommunityDifficultyFilter] = useState<string>('All');
   const [searchHistory, setSearchHistory] = useState<string[]>(
     () => JSON.parse(localStorage.getItem("lyrify_search_history") || "[]")
   );
@@ -976,6 +972,15 @@ export default function App() {
     const cards = Array.from(phraseMetadata.values());
     return buildResumeViewModel(cards, recentTracks);
   }, [phraseMetadata, recentTracks]);
+
+  const dueCardsCount = useMemo(() => {
+    const cards = Array.from(phraseMetadata.values());
+    const now = new Date();
+    return cards.filter(card => {
+      const dueTime = card.due instanceof Date ? card.due.getTime() : new Date(card.due || 0).getTime();
+      return dueTime <= now.getTime();
+    }).length;
+  }, [phraseMetadata]);
 
   const [dailyActivity, setDailyActivity] = useState<DailyActivity>(() => getDailyActivity());
 
@@ -3011,8 +3016,53 @@ export default function App() {
               initial={{ opacity: 0, scale: 0.98 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.98 }}
-              className="flex-1 overflow-y-auto px-6 py-8"
+              className="flex-1 overflow-y-auto px-6 pt-8 pb-32"
             >
+              {/* 🎯 Daily Goal Details (Daily Milestones) */}
+              {!searchResults.length && !artistDetails && !albumDetails && (
+                <DailyProgressBlock
+                  summary={dailyProgressSummary}
+                  onNavigateToExplore={() => {
+                    const el = document.querySelector('input[placeholder*="Search"]');
+                    if (el) {
+                      (el as HTMLInputElement).focus();
+                      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }
+                  }}
+                  onNavigateToStudy={() => setView("study")}
+                  onNavigateToCurrentTrack={() => setView("lyrics")}
+                  hasCurrentTrack={!!currentTrack}
+                  mode="details"
+                />
+              )}
+
+              {/* ✨ Daily Progress & Recommended Next Step (Next Goal) */}
+              {!searchResults.length && !artistDetails && !albumDetails && (
+                <DailyProgressBlock
+                  summary={dailyProgressSummary}
+                  onNavigateToExplore={() => {
+                    const el = document.querySelector('input[placeholder*="Search"]');
+                    if (el) {
+                      (el as HTMLInputElement).focus();
+                      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }
+                  }}
+                  onNavigateToStudy={() => setView("study")}
+                  onNavigateToCurrentTrack={() => setView("lyrics")}
+                  hasCurrentTrack={!!currentTrack}
+                  mode="next-step"
+                />
+              )}
+
+              {/* 📚 Continue Learning */}
+              {!searchResults.length && !artistDetails && !albumDetails && resumeViewModel && (
+                <ResumeStudyBlock
+                  viewModel={resumeViewModel}
+                  onResumeTrack={handleTrackSelect}
+                  onResumeStudy={() => setView("study")}
+                />
+              )}
+
               {/* Search Bar */}
               <div className="mb-6">
                 <form onSubmit={handleSearch} className="relative group">
@@ -3323,231 +3373,20 @@ export default function App() {
                   >
                     {/* Library Tabs (Search context) */}
                     {!searchResults.length && (
-                      <div className="mt-2 pb-12">
-                        {shouldShowOnboarding(recentTracks.length) && !onboardingCompleted && (
-                          <OnboardingHero
-                            onSelectTrack={handleOnboardingSelect}
-                            onDismiss={handleOnboardingDismiss}
-                          />
-                        )}
-                        {resumeViewModel && (
-                          <ResumeStudyBlock
-                            viewModel={resumeViewModel}
-                            onResumeTrack={(track) => handleTrackSelect(track)}
-                            onResumeStudy={() => setView("study")}
-                          />
-                        )}
-                        <DailyProgressBlock
-                          summary={dailyProgressSummary}
-                          onNavigateToExplore={() => {
-                            setActiveLibraryTab('community');
-                          }}
-                          onNavigateToStudy={() => setView("study")}
-                          onNavigateToCurrentTrack={() => {
-                            if (currentTrack) {
-                              setView("lyrics");
-                            }
-                          }}
-                          hasCurrentTrack={!!currentTrack}
-                        />
-                        {/* Tab Switcher */}
-                        <div className="flex items-center p-1 bg-app-card border border-app-card-border rounded-2xl mb-8 w-fit mx-auto sm:mx-0">
-                          <button
-                            onClick={() => setActiveLibraryTab('recent')}
-                            className={`px-6 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${
-                              activeLibraryTab === 'recent'
-                                ? 'bg-app-fg text-app-bg shadow-lg'
-                                : 'text-app-muted hover:text-app-fg'
-                            }`}
-                          >
-                            Recent
-                          </button>
-                          <button
-                            onClick={() => setActiveLibraryTab('community')}
-                            className={`px-6 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${
-                              activeLibraryTab === 'community'
-                                ? 'bg-app-fg text-app-bg shadow-lg'
-                                : 'text-app-muted hover:text-app-fg'
-                            }`}
-                          >
-                            Community
-                          </button>
-                        </div>
-
-                        {activeLibraryTab === 'recent' ? (
-                          <div className="space-y-4">
-                            <div className="mb-2 px-2">
-                              <h2
-                                className="text-xs font-black uppercase tracking-[0.3em] flex items-center gap-2"
-                                style={{ color: "var(--accent)" }}
-                              >
-                                <History size={16} />
-                                Recently Explored
-                              </h2>
-                            </div>
-                            {recentTracks.length > 0 ? recentTracks.map((track) => (
-                              <button
-                                key={`recent-${track.id}`}
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleTrackSelect(track);
-                                }}
-                                className="w-full flex items-center justify-between p-4 rounded-3xl bg-app-card border border-app-card-border shadow-app-card active:scale-[0.98] transition-all hover:bg-opacity-80"
-                              >
-                                <div className="flex items-center gap-4">
-                                  <img
-                                    src={track.coverUrl}
-                                    className="w-16 h-16 rounded-2xl object-cover shadow-lg"
-                                  />
-                                  <div className="text-left">
-                                    <p className="font-bold text-app-fg leading-tight mb-0.5">
-                                      {track.title}
-                                    </p>
-                                    <div className="flex flex-col gap-1">
-                                      <p className="text-sm text-app-muted">
-                                        {track.artist}
-                                      </p>
-                                      {track.difficulty && (
-                                        <div className="shrink-0 flex items-center">
-                                          {renderDifficultyIndicator(track.difficulty, true)}
-                                        </div>
-                                      )}
-                                    </div>
-                                  </div>
-                                </div>
-                                <ChevronRight
-                                  size={20}
-                                  className="text-app-fg opacity-20 mr-2"
-                                />
-                              </button>
-                            )) : (
-                              <div className="text-center py-16 px-6 rounded-3xl border border-dashed border-app-card-border opacity-40 italic bg-app-card/30">
-                                <Search size={40} className="mx-auto mb-4 opacity-20" />
-                                No recent tracks yet. 
-                                <br />Search for a song to start exploring!
-                              </div>
-                            )}
-                          </div>
-                        ) : (
-                          <div className="space-y-6">
-                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-2 px-2">
-                              <h2
-                                className="text-xs font-black uppercase tracking-[0.3em] flex items-center gap-2"
-                                style={{ color: "var(--accent)" }}
-                              >
-                                <Globe size={16} className="animate-pulse" />
-                                Community Trends
-                              </h2>
-
-                              {/* Filters */}
-                              <div className="flex flex-wrap items-center gap-4">
-                                <div className="flex items-center gap-2">
-                                  <span className="text-[10px] font-bold text-app-muted uppercase tracking-widest leading-none">Language:</span>
-                                  <select 
-                                    value={communityLangFilter}
-                                    onChange={(e) => setCommunityLangFilter(e.target.value)}
-                                    className="bg-app-card border border-app-card-border rounded-lg px-3 py-1.5 text-[11px] font-bold text-app-fg outline-none focus:ring-1 focus:ring-accent transition-all appearance-none cursor-pointer"
-                                  >
-                                    <option value="All">All</option>
-                                    {SUPPORTED_LANGUAGES.map(lang => (
-                                      <option key={lang.name} value={lang.name}>{lang.name}</option>
-                                    ))}
-                                  </select>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                  <span className="text-[10px] font-bold text-app-muted uppercase tracking-widest leading-none">Difficulty:</span>
-                                  <select 
-                                    value={communityDifficultyFilter}
-                                    onChange={(e) => setCommunityDifficultyFilter(e.target.value)}
-                                    className="bg-app-card border border-app-card-border rounded-lg px-3 py-1.5 text-[11px] font-bold text-app-fg outline-none focus:ring-1 focus:ring-accent transition-all appearance-none cursor-pointer"
-                                  >
-                                    <option value="All">All</option>
-                                    <option value="beginner">Beginner</option>
-                                    <option value="intermediate">Intermediate</option>
-                                    <option value="advanced">Advanced</option>
-                                  </select>
-                                </div>
-                              </div>
-                            </div>
-                            
-                            {isLoadingTracks ? (
-                              <div className="space-y-4">
-                                {[1, 2, 3, 4].map(i => (
-                                  <div key={i} className="w-full h-24 rounded-3xl bg-app-card border border-app-card-border animate-pulse flex items-center px-4 gap-4">
-                                    <div className="w-16 h-16 rounded-2xl bg-app-fg/10" />
-                                    <div className="space-y-2 flex-1">
-                                      <div className="h-4 w-1/2 bg-app-fg/10 rounded" />
-                                      <div className="h-3 w-1/3 bg-app-fg/10 rounded" />
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            ) : (
-                              <div className="space-y-4">
-                                {dynamicTracks.filter(t => {
-                                  const langMatch = communityLangFilter === "All" || t.sourceLanguage === communityLangFilter;
-                                  const diffMatch = communityDifficultyFilter === "All" || (t.difficulty && t.difficulty.toLowerCase().includes(communityDifficultyFilter.toLowerCase()));
-                                  return langMatch && diffMatch;
-                                }).length > 0 ? 
-                                dynamicTracks
-                                  .filter(t => {
-                                    const langMatch = communityLangFilter === "All" || t.sourceLanguage === communityLangFilter;
-                                    const diffMatch = communityDifficultyFilter === "All" || (t.difficulty && t.difficulty.toLowerCase().includes(communityDifficultyFilter.toLowerCase()));
-                                    return langMatch && diffMatch;
-                                  })
-                                  .map((track) => (
-                                    <button
-                                      key={`comm-${track.id}`}
-                                      type="button"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleTrackSelect(track);
-                                      }}
-                                      className="w-full flex items-center justify-between p-4 rounded-3xl bg-app-card border border-app-card-border shadow-app-card active:scale-[0.98] transition-all hover:bg-opacity-80"
-                                    >
-                                      <div className="flex items-center gap-4">
-                                        <img
-                                          src={track.coverUrl}
-                                          className="w-16 h-16 rounded-2xl object-cover shadow-lg"
-                                        />
-                                        <div className="text-left">
-                                          <div className="flex items-center gap-2 mb-0.5">
-                                            <p className="font-bold text-app-fg leading-tight">
-                                              {track.title}
-                                            </p>
-                                            <span className="text-[8px] font-black uppercase px-1.5 py-0.5 rounded bg-app-fg/10 text-app-fg opacity-50 tracking-tighter shrink-0">
-                                              {track.sourceLanguage}
-                                            </span>
-                                          </div>
-                                          <div className="flex flex-col gap-1">
-                                            <p className="text-sm text-app-muted">
-                                              {track.artist}
-                                            </p>
-                                            {track.difficulty && (
-                                              <div className="flex items-center shrink-0">
-                                                {renderDifficultyIndicator(track.difficulty, true)}
-                                              </div>
-                                            )}
-                                          </div>
-                                        </div>
-                                      </div>
-                                      <ChevronRight
-                                        size={20}
-                                        className="text-app-fg opacity-20 mr-2"
-                                      />
-                                    </button>
-                                  )) : (
-                                  <div className="text-center py-12 px-6 rounded-3xl border border-dashed border-app-card-border opacity-40 italic bg-app-card/30">
-                                    <Music size={40} className="mx-auto mb-4 opacity-20" />
-                                    No tracks found matching your filters.
-                                  </div>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
+                      <TracksHomeShell
+                        onboardingCompleted={onboardingCompleted}
+                        recentTracks={recentTracks}
+                        onSelectOnboardingTrack={handleOnboardingSelect}
+                        onDismissOnboarding={handleOnboardingDismiss}
+                        resumeViewModel={resumeViewModel}
+                        onTrackSelect={handleTrackSelect}
+                        onNavigateToStudy={() => setView("study")}
+                        dailyProgressSummary={dailyProgressSummary}
+                        currentTrack={currentTrack}
+                        onNavigateToLyrics={() => setView("lyrics")}
+                        dynamicTracks={dynamicTracks}
+                        isLoadingTracks={isLoadingTracks}
+                      />
                     )}
 
                     {/* Search Results */}
@@ -3723,56 +3562,15 @@ export default function App() {
                   </div>
                 </div>
 
-                <div className="mb-4">
-                  <div className="flex items-center gap-1 p-1 bg-app-card/30 rounded-2xl border border-app-card-border w-fit">
-                    <button
-                      onClick={() => setActiveTab("preview")}
-                      className={cn(
-                        "flex items-center gap-2 px-6 py-2 rounded-xl text-xs font-bold transition-all",
-                        activeTab === "preview"
-                          ? "bg-app-fg text-app-bg shadow-lg"
-                          : "text-app-fg opacity-40 hover:opacity-100",
-                      )}
-                    >
-                      <Activity size={14} />
-                      Preview
-                    </button>
-                    <button
-                      onClick={() => setActiveTab("lyrics")}
-                      className={cn(
-                        "flex items-center gap-2 px-6 py-2 rounded-xl text-xs font-bold transition-all",
-                        activeTab === "lyrics"
-                          ? "bg-app-fg text-app-bg shadow-lg"
-                          : "text-app-fg opacity-40 hover:opacity-100",
-                      )}
-                    >
-                      <FileText size={14} />
-                      Lyrics
-                    </button>
-                    <button
-                      onClick={() => setActiveTab("analysis")}
-                      className={cn(
-                        "flex items-center gap-2 px-6 py-2 rounded-xl text-xs font-bold transition-all",
-                        activeTab === "analysis"
-                          ? "bg-app-fg text-app-bg shadow-lg"
-                          : "text-app-fg opacity-40 hover:opacity-100",
-                      )}
-                    >
-                      <Sparkles size={14} />
-                      Analysis
-                    </button>
-                  </div>
-                </div>
-
                 {trackProgressViewModel && (
                   <div className="mb-6">
                     <TrackProgressTracker
                       viewModel={trackProgressViewModel}
+                      activeTab={activeTab}
                       onAction={(actionType) => {
                         if (actionType === 'find_lyrics') {
                           handleNextStepClick();
                         } else if (actionType === 'generate_analysis') {
-                          // Need to handle analysis trigger
                           handleNextStepClick();
                         } else if (actionType === 'save_phrase') {
                           setActiveTab('analysis');
@@ -3781,6 +3579,7 @@ export default function App() {
                           setView('study');
                         }
                       }}
+                      onTabChange={(tab) => setActiveTab(tab)}
                     />
                   </div>
                 )}
@@ -4093,7 +3892,7 @@ export default function App() {
                                     <button
                                       onClick={handleRegenerateTranslations}
                                       disabled={isTranslating}
-                                      title="Регенерировать перевод"
+                                      title="Regenerate Translation"
                                       className={cn(
                                         "p-2 rounded-xl transition-all text-app-fg hover:bg-app-fg/5 flex items-center justify-center outline-none",
                                         isTranslating ? "opacity-50 cursor-not-allowed" : "opacity-60 hover:opacity-100"
@@ -4422,7 +4221,7 @@ export default function App() {
               initial={{ opacity: 0, y: -20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 20 }}
-              className="flex-1 flex flex-col"
+              className="flex-1 flex flex-col min-h-0 overflow-hidden relative"
             >
               <StudyView
                 onBack={() => {
@@ -4553,7 +4352,7 @@ export default function App() {
                             </div>
                             <div className="flex flex-col leading-none">
                               <span className="text-[6px] font-black uppercase tracking-wider text-app-muted/60 mb-0.5">
-                                Превью от
+                                Preview from
                               </span>
                               <div className="flex items-center gap-1">
                                 <span className="text-[9px] font-black uppercase tracking-tight text-[#fa243c]">
@@ -4658,28 +4457,35 @@ export default function App() {
             initial={{ y: 100 }}
             animate={{ y: 0 }}
             exit={{ y: 100 }}
-            className="relative z-20 pb-2 pt-2 px-6 bg-app-card backdrop-blur-3xl border-t border-app-card-border flex justify-around items-center"
+            className="fixed bottom-0 left-0 right-0 z-40 pb-4 pt-3 px-6 bg-app-card/95 backdrop-blur-3xl border-t border-app-card-border flex justify-around items-center shadow-[0_-8px_30px_rgba(0,0,0,0.15)]"
           >
             <button
               onClick={() => setView("tracks")}
-              className="p-2 transition-colors"
+              className="p-2 transition-all hover:scale-105 active:scale-95"
               style={{
                 color: view === "tracks" ? "var(--accent)" : "var(--app-fg)",
-                opacity: view === "tracks" ? 1 : 0.2,
               }}
             >
-              <Music size={24} />
+              <Music size={24} className={cn("transition-opacity duration-200", view === "tracks" ? "opacity-100" : "opacity-40 hover:opacity-100")} />
             </button>
 
             <button
+              id="navigation-tab-study-btn"
               onClick={() => setView("study")}
-              className="p-2 transition-colors"
+              className="p-2 transition-all hover:scale-105 active:scale-95 relative"
               style={{
                 color: view === "study" ? "var(--accent)" : "var(--app-fg)",
-                opacity: view === "study" ? 1 : 0.2,
               }}
             >
-              <Brain size={24} />
+              <Brain size={24} className={cn("transition-opacity duration-200", view === "study" ? "opacity-100" : "opacity-40 hover:opacity-100")} />
+              {dueCardsCount > 0 && (
+                <span 
+                  id="navigation-tab-study-badge"
+                  className="absolute -top-0.5 -right-1 bg-app-accent text-white text-[8px] font-black h-4 min-w-4 px-1 rounded-full flex items-center justify-center border border-app-card shadow-lg animate-pulse"
+                >
+                  {dueCardsCount}
+                </span>
+              )}
             </button>
           </motion.footer>
         )}
@@ -5124,7 +4930,7 @@ export default function App() {
                       disabled={isSaving}
                       className="py-4 rounded-2xl font-bold uppercase text-[10px] tracking-widest transition-all bg-app-card border border-app-card-border text-app-fg hover:bg-opacity-80"
                     >
-                      Знаю
+                      I know it
                     </button>
                     <button
                       onClick={() => handleUpdateStatus("learning")}
@@ -5135,7 +4941,7 @@ export default function App() {
                         boxShadow: "0 10px 20px -5px rgba(249, 115, 22, 0.4)",
                       }}
                     >
-                      {isSaving ? "Сохраняю..." : "Учить"}
+                      {isSaving ? "Saving..." : "Learn"}
                     </button>
                   </div>
 
@@ -5144,7 +4950,7 @@ export default function App() {
                     disabled={isExplaining || isSaving}
                     className="w-full py-4 rounded-2xl font-bold uppercase text-[10px] tracking-widest transition-all border border-[var(--accent)] text-[var(--accent)] hover:bg-[var(--accent)] hover:text-white"
                   >
-                    {isExplaining ? "Думаю..." : "Объяснить"}
+                    {isExplaining ? "Thinking..." : "Explain"}
                   </button>
                 </div>
               </div>
