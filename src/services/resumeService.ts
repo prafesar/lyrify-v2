@@ -17,25 +17,12 @@ export interface ResumeViewModel {
 export function buildResumeViewModel(
   cards: Flashcard[],
   recentTracks: Track[],
-  now: Date = new Date()
+  _now: Date = new Date()
 ): ResumeViewModel | null {
-  // 1. Check if there are due / reviewable cards
-  const dueCardsCount = cards.filter(card => {
-    const dueTime = card.due instanceof Date ? card.due.getTime() : new Date(card.due || 0).getTime();
-    return dueTime <= now.getTime();
-  }).length;
+  // We no longer display a study block/banner here. Instead, cards ready for repetition
+  // are shown elegantly as a badge on the bottom navigation.
 
-  if (dueCardsCount > 0) {
-    return {
-      type: 'study',
-      title: 'Review Ready',
-      subtitle: `You have ${dueCardsCount} flashcard${dueCardsCount > 1 ? 's' : ''} waiting to be reviewed. Let's practice!`,
-      ctaText: 'Review Due Cards',
-      dueCount: dueCardsCount,
-    };
-  }
-
-  // 2. Check if there is a recent track with history
+  // Check if there is a recent track with history
   if (recentTracks && recentTracks.length > 0) {
     const mostRecentTrack = recentTracks[0];
     const trackCards = cards.filter(card => card.trackId === mostRecentTrack.id);
@@ -58,6 +45,6 @@ export function buildResumeViewModel(
     };
   }
 
-  // 3. Otherwise don't show the resume block
+  // Otherwise don't show the resume block
   return null;
 }

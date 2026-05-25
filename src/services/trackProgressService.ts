@@ -64,10 +64,10 @@ export function buildTrackProgressViewModel(
 
   // Build the list of 5 stations with their status
   const stationIds: { id: TrackStationId; label: string }[] = [
-    { id: 'opened', label: 'Opened' },
+    { id: 'opened', label: 'Preview' },
     { id: 'lyrics', label: 'Lyrics' },
     { id: 'analysis', label: 'Analysis' },
-    { id: 'saved', label: 'Saved' },
+    { id: 'saved', label: 'Cards' },
     { id: 'review', label: 'Review' },
   ];
 

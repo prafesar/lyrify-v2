@@ -329,7 +329,7 @@ export default function StudyView({ onBack, initialTrackId, onReviewCompleted }:
 
   if (viewMode === 'hub') {
     return (
-      <div className="flex-1 flex flex-col p-4 sm:p-6 max-w-5xl mx-auto w-full overflow-y-auto scrollbar-hide">
+      <div className="flex-1 flex flex-col h-full min-h-0 p-4 sm:p-6 max-w-5xl mx-auto w-full overflow-y-auto scrollbar-hide">
         <header className="mb-6 space-y-4 shrink-0">
           <div className="flex items-center justify-between">
             <h1 className="text-3xl font-bold">Study Hub</h1>
@@ -407,7 +407,7 @@ export default function StudyView({ onBack, initialTrackId, onReviewCompleted }:
           </div>
         </header>
 
-        <div className="space-y-4 pb-20">
+        <div className="space-y-4 pb-32">
           {groupMode === 'recent' ? (
             <div className="grid gap-3">
               {groupedCards.map((group) => {
