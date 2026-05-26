@@ -82,9 +82,9 @@ export class GeminiAIAdapter implements AiPort {
     artist: string,
     title: string,
     targetLanguage: string,
-    metadata?: Partial<TrackMetadata>
+    _metadata?: Partial<TrackMetadata>
   ): Promise<TrackLyricsData> {
-    return originalGeminiService.completeLyricsAnalysis(lyrics, artist, title, targetLanguage, metadata);
+    return originalGeminiService.completeLyricsAnalysis(lyrics, artist, title, targetLanguage);
   }
 
   async getLatestAnalyzedTracks(maxCount?: number): Promise<TrackMeaningEntry[]> {
@@ -96,7 +96,8 @@ export class GeminiAIAdapter implements AiPort {
     trackKey: string,
     targetLanguage: string
   ): Promise<any[]> {
-    return originalGeminiService.getLineTranslations(lyrics, trackKey, targetLanguage);
+    const lyricsHash = await originalGeminiService.computeLyricsHash(lyrics);
+    return originalGeminiService.getLineTranslations(lyrics, trackKey, lyricsHash, targetLanguage);
   }
 
   async getPhraseAnalysis(
@@ -104,7 +105,8 @@ export class GeminiAIAdapter implements AiPort {
     trackKey: string,
     targetLanguage: string
   ): Promise<any[]> {
-    return originalGeminiService.getPhraseAnalysis(lyrics, trackKey, targetLanguage);
+    const lyricsHash = await originalGeminiService.computeLyricsHash(lyrics);
+    return originalGeminiService.getPhraseAnalysis(lyrics, targetLanguage, trackKey, lyricsHash);
   }
 
   async saveTrackToSharedCache(track: TrackLyricsData): Promise<void> {

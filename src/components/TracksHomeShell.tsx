@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import { History, ChevronRight, Search, Globe, Music, ChevronDown, Check, X } from 'lucide-react';
 import { Track, TrackLyricsData } from '../services/musicService';
-import { ResumeStudyViewModel } from '../services/resumeService';
+import { ResumeViewModel } from '../services/resumeService';
 import { DailyProgressSummary } from '../application';
 import { shouldShowOnboarding } from '../services/onboardingService';
 import { SUPPORTED_LANGUAGES } from '../lib/languages';
@@ -14,7 +14,7 @@ interface TracksHomeShellProps {
   onSelectOnboardingTrack: (track: Track) => void;
   onDismissOnboarding: () => void;
 
-  resumeViewModel: ResumeStudyViewModel | null;
+  resumeViewModel: ResumeViewModel | null;
   onTrackSelect: (track: Track) => void;
   onNavigateToStudy: () => void;
 

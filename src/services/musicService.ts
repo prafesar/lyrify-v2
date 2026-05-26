@@ -1,5 +1,6 @@
 
-import { Track, Artist, Album } from '../constants';
+import { type Track, Artist, Album } from '../constants';
+export type { Track };
 
 export interface LyricsData {
   lyrics: string | null;
@@ -475,7 +476,7 @@ export interface TrackLyricsData {
   audioUrl?: string;
   appleMusicUrl?: string;
   rawLyrics: string;
-  source: 'Lyrics.ovh' | 'LRCLib' | 'Manual' | null;
+  source?: 'Lyrics.ovh' | 'LRCLib' | 'Manual' | null;
   sourceLanguage?: string;
   difficulty?: 'beginner' | 'intermediate' | 'advanced';
   authors?: string;

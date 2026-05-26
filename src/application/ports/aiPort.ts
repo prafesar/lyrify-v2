@@ -77,7 +77,7 @@ export interface AiPort {
     lyrics: string,
     artist: string,
     title: string
-  ): Promise<{ authors: string | null; source_confirmation: string | null }>;
+  ): Promise<{ authors: string | null; source_confirmation?: string | null }>;
 
   generateTrackAnalysis(
     lyrics: string,

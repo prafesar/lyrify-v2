@@ -58,6 +58,7 @@ describe("TrackSessionFacade Unit Tests", () => {
         trackId: "track-123",
         artist: "The Beatles",
         title: "Let It Be",
+        rawLyrics: "Let it be",
         lines: [],
         processingStatus: { stage1_completed: true, stage2_completed: true, stage3_completed: false },
         lastUpdated: Date.now(),
@@ -95,6 +96,7 @@ describe("TrackSessionFacade Unit Tests", () => {
         trackId: "track-abc",
         artist: "Coldplay",
         title: "Yellow",
+        rawLyrics: "",
         lines: [],
         processingStatus: { stage1_completed: false, stage2_completed: false, stage3_completed: false },
         lastUpdated: Date.now(),
@@ -105,7 +107,7 @@ describe("TrackSessionFacade Unit Tests", () => {
 
       const mockMeaningResult = {
         originalLanguage: "English",
-        difficulty: "easy" as const,
+        difficulty: "beginner" as const,
         meanings: {
           en: "Overview of Yellow",
           es: "Overview Spanish",
@@ -171,6 +173,7 @@ describe("TrackSessionFacade Unit Tests", () => {
         trackId: "track-manual",
         artist: "Artist",
         title: "Title",
+        rawLyrics: "",
         lines: [],
         processingStatus: { stage1_completed: false, stage2_completed: false, stage3_completed: false },
         lastUpdated: Date.now(),
@@ -179,7 +182,7 @@ describe("TrackSessionFacade Unit Tests", () => {
       vi.mocked(aiClient.extractLyricsMetadata).mockResolvedValue({ authors: "Composer ABC" });
       vi.mocked(aiClient.fetchTrackMeaning).mockResolvedValue({
         originalLanguage: "English",
-        difficulty: "easy",
+        difficulty: "beginner",
         meanings: { en: "Meaning", es: "Significado", ru: "Значение", pl: "Znaczenie" },
       });
 
