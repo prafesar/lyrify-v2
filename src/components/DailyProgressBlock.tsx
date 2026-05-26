@@ -1,7 +1,7 @@
 import React from 'react';
 import { motion } from 'motion/react';
 import { Target, Search, Bookmark, Brain, ArrowRight, Play, Trophy, ChevronDown } from 'lucide-react';
-import { DailyProgressSummary } from '../services/dailyTrackerService';
+import { DailyProgressSummary } from '../application';
 
 interface DailyProgressBlockProps {
   summary: DailyProgressSummary;

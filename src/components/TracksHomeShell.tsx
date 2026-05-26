@@ -3,7 +3,7 @@ import { motion } from 'motion/react';
 import { History, ChevronRight, Search, Globe, Music, ChevronDown, Check, X } from 'lucide-react';
 import { Track, TrackLyricsData } from '../services/musicService';
 import { ResumeStudyViewModel } from '../services/resumeService';
-import { DailyProgressSummary } from '../services/dailyTrackerService';
+import { DailyProgressSummary } from '../application';
 import { shouldShowOnboarding } from '../services/onboardingService';
 import { SUPPORTED_LANGUAGES } from '../lib/languages';
 import { OnboardingHero } from './OnboardingHero';

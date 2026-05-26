@@ -50,39 +50,37 @@ import {
 import ReactMarkdown from "react-markdown";
 import { Track, Artist, Album } from "./constants";
 import { SUPPORTED_LANGUAGES } from "./lib/languages";
+import { aiClient, type TrackMetadata, type TrackMeaningEntry } from "./application";
 import {
-  translateLyrics,
-  detectLanguage,
-  explainPhraseStructured,
-  extractLyricsMetadata,
-  generateSongMeaning,
-  fetchTrackMeaning,
-  getTrackMeaningFromCache,
-  getOriginalLanguage,
-  computeTrackKey,
-  computeLyricsHash,
-  getLineTranslations,
-  getPhraseAnalysis,
-  completeLyricsAnalysis,
-  getLatestAnalyzedTracks,
-  normalizeString,
-  type TrackMetadata,
-  type TrackMeaningEntry,
   ANALYSIS_PROMPT_VERSION,
   TRANSLATION_PROMPT_VERSION,
-  saveTrackToSharedCache,
 } from "./services/geminiService";
+
+const translateLyrics = (lyrics: string, targetLanguage: string) => aiClient.translateLyrics(lyrics, targetLanguage);
+const detectLanguage = (text: string) => aiClient.detectLanguage(text);
+const explainPhraseStructured = (phrase: string, targetLanguage: string) => aiClient.explainPhraseStructured(phrase, targetLanguage);
+const extractLyricsMetadata = (lyrics: string, artist: string, title: string) => aiClient.extractLyricsMetadata(lyrics, artist, title);
+const generateSongMeaning = (lyrics: string, artist: string, title: string, targetLanguage: string, metadata?: any) => aiClient.generateSongMeaning(lyrics, artist, title, targetLanguage, metadata);
+const fetchTrackMeaning = (lyrics: string, metadata: any, version?: any, force?: boolean) => aiClient.fetchTrackMeaning(lyrics, metadata, version, force);
+const getTrackMeaningFromCache = (title: string, artists: string[], targetLanguage?: string, version?: any) => aiClient.getTrackMeaningFromCache(title, artists, targetLanguage, version);
+const getOriginalLanguage = (trackKey: string) => aiClient.getOriginalLanguage(trackKey);
+const computeTrackKey = (title: string, artists: string[]) => aiClient.computeTrackKey(title, artists);
+const computeLyricsHash = (lyrics: string) => aiClient.computeLyricsHash(lyrics);
+const getLineTranslations = (lyrics: string, trackKey: string, targetLanguage: string) => aiClient.getLineTranslations(lyrics, trackKey, targetLanguage);
+const getPhraseAnalysis = (lyrics: string, trackKey: string, targetLanguage: string) => aiClient.getPhraseAnalysis(lyrics, trackKey, targetLanguage);
+const completeLyricsAnalysis = (lyrics: string, artist: string, title: string, targetLanguage: string, metadata?: any) => aiClient.completeLyricsAnalysis(lyrics, artist, title, targetLanguage, metadata);
+const getLatestAnalyzedTracks = (maxCount?: number) => aiClient.getLatestAnalyzedTracks(maxCount);
+const normalizeString = (str: string) => aiClient.normalizeString(str);
+const saveTrackToSharedCache = (track: any) => aiClient.saveTrackToSharedCache(track);
 import { cn } from "./lib/utils";
 import { auth, db, signIn, logOut, testDbConnection } from "./lib/firebase";
 import { onAuthStateChanged, type User } from "firebase/auth";
-import {
-  addPhraseToStudy,
-  getCards,
-  updatePhraseStatus,
-  deleteFlashcard,
-  type Flashcard,
-  type PhraseStatus,
-} from "./services/localCardService";
+import { userDataRepository, type Flashcard, type PhraseStatus } from "./application";
+
+const addPhraseToStudy = (phraseData: any, status?: PhraseStatus) => userDataRepository.addPhraseToStudy(phraseData, status);
+const getCards = () => userDataRepository.getCards();
+const updatePhraseStatus = (cardId: string, status: PhraseStatus) => userDataRepository.updatePhraseStatus(cardId, status);
+const deleteFlashcard = (cardId: string) => userDataRepository.deleteFlashcard(cardId);
 import {
   collection,
   query,
@@ -104,8 +102,6 @@ import {
   getCachedTrackData,
   saveTrackData,
   clearCachedLyrics,
-  getRecentTracks,
-  addRecentTrack,
   splitLyricsIntoLines,
   searchLyricsOptions,
   fetchLyricsFromOption,
@@ -114,6 +110,9 @@ import {
   type LyricsLine,
   type Phrase,
 } from "./services/musicService";
+
+const getRecentTracks = () => userDataRepository.getRecentTracks();
+const addRecentTrack = (track: any) => userDataRepository.addRecentTrack(track);
 
 import {
   isOnboardingCompleted,
@@ -125,14 +124,13 @@ import { NextStepCTA } from "./components/NextStepCTA";
 import { getTrackStudySummary } from "./services/trackSummaryService";
 import { TrackStudyBridge } from "./components/TrackStudyBridge";
 import { buildResumeViewModel } from "./services/resumeService";
-import {
-  getDailyActivity,
-  recordTrackExplored,
-  recordPhraseSaved,
-  recordReviewCompleted,
-  getDailyProgressSummary,
-  DailyActivity,
-} from "./services/dailyTrackerService";
+import { type DailyActivity } from "./application";
+
+const getDailyActivity = (date?: Date) => userDataRepository.getDailyActivity(date);
+const recordTrackExplored = (date?: Date) => userDataRepository.recordTrackExplored(date);
+const recordPhraseSaved = (date?: Date) => userDataRepository.recordPhraseSaved(date);
+const recordReviewCompleted = (date?: Date) => userDataRepository.recordReviewCompleted(date);
+const getDailyProgressSummary = (activity: any) => userDataRepository.getDailyProgressSummary(activity);
 import { buildTrackProgressViewModel } from "./services/trackProgressService";
 import { TrackProgressTracker } from "./components/TrackProgressTracker";
 import { TracksHomeShell } from "./components/TracksHomeShell";
