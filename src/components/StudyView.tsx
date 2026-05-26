@@ -2,7 +2,10 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import ReactMarkdown from 'react-markdown';
 import { Rating } from 'ts-fsrs';
-import { getCards, reviewCard, Flashcard, deleteFlashcard, PhraseStatus } from '../services/localCardService';
+import { userDataRepository, Flashcard, PhraseStatus } from '../application';
+const getCards = () => userDataRepository.getCards();
+const reviewCard = (cardId: string, rating: Rating) => userDataRepository.reviewCard(cardId, rating);
+const deleteFlashcard = (cardId: string) => userDataRepository.deleteFlashcard(cardId);
 import { Check, X, ArrowRight, Brain, Trash2, ChevronLeft, Clock, Music, User, LayoutGrid, PlayCircle, Library, Globe, ChevronDown, ChevronUp, Volume2 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { getLocaleByName } from '../lib/languages';
@@ -26,7 +29,7 @@ export default function StudyView({ onBack, initialTrackId, onReviewCompleted }:
   const [isExplanationExpanded, setIsExplanationExpanded] = useState(false);
   const [selectedLanguage, setSelectedLanguage] = useState<string>(() => {
     if (initialTrackId) return 'all';
-    return localStorage.getItem('study_selected_language') || 'all';
+    return userDataRepository.getPreference('study_selected_language', 'all');
   });
   const [selectedTrack, setSelectedTrack] = useState<string>(initialTrackId || 'all');
   const [selectedType, setSelectedType] = useState<string>('all');
@@ -51,7 +54,7 @@ export default function StudyView({ onBack, initialTrackId, onReviewCompleted }:
   };
 
   useEffect(() => {
-    localStorage.setItem('study_selected_language', selectedLanguage);
+    userDataRepository.setPreference('study_selected_language', selectedLanguage);
   }, [selectedLanguage]);
 
   useEffect(() => {
@@ -73,7 +76,7 @@ export default function StudyView({ onBack, initialTrackId, onReviewCompleted }:
     
     setSelectedLanguage(prev => {
       if (initialTrackId) return 'all';
-      const persisted = localStorage.getItem('study_selected_language');
+      const persisted = userDataRepository.getPreference('study_selected_language', '');
       if (persisted && available.includes(persisted)) return persisted;
       if (available.length > 0) return available[0];
       return 'en';

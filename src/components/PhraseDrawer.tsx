@@ -2,7 +2,9 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, Plus, Check, Loader2, Sparkles, Quote, BookOpen, RefreshCw, CheckCircle2 } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { addPhraseToStudy, updatePhraseStatus, PhraseStatus, Flashcard } from '../services/localCardService';
+import { userDataRepository, PhraseStatus, Flashcard } from '../application';
+const addPhraseToStudy = (phraseData: any, status?: PhraseStatus) => userDataRepository.addPhraseToStudy(phraseData, status);
+const updatePhraseStatus = (cardId: string, status: PhraseStatus) => userDataRepository.updatePhraseStatus(cardId, status);
 
 interface PhraseDrawerProps {
   isOpen: boolean;
