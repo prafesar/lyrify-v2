@@ -1,15 +1,17 @@
-import { aiClient } from "./adapters/geminiAIAdapter";
-import { userDataRepository } from "./adapters/browserUserDataRepository";
-import { 
-  TrackLyricsData, 
-  Track, 
-  fetchLyrics, 
-  splitLyricsIntoLines, 
-  searchITunes 
-} from "../services/musicService";
-import { ANALYSIS_PROMPT_VERSION, TRANSLATION_PROMPT_VERSION } from "./ports/aiPort";
+import { AiPort, ANALYSIS_PROMPT_VERSION, TRANSLATION_PROMPT_VERSION } from "./ports/aiPort";
+import { UserDataRepositoryPort } from "./ports/userDataRepositoryPort";
+import { LyricsProviderPort } from "./ports/lyricsProviderPort";
+import { MusicMetadataPort } from "./ports/musicMetadataPort";
+import { TrackLyricsData, Track } from "../services/musicService";
 
 export class TrackSessionFacade {
+  constructor(
+    private aiClient: AiPort,
+    private userDataRepository: UserDataRepositoryPort,
+    private lyricsProvider: LyricsProviderPort,
+    private musicMetadataProvider: MusicMetadataPort
+  ) {}
+
   /**
    * Orchestrates track selection.
    * - Records track exploration in user data.
@@ -26,7 +28,7 @@ export class TrackSessionFacade {
     } = {}
   ): Promise<TrackLyricsData> {
     // 1. Record track exploration to daily goals
-    userDataRepository.recordTrackExplored();
+    this.userDataRepository.recordTrackExplored();
 
     const trackId = track.id || track.trackId;
     const trackTitle = track.title || "";
@@ -39,7 +41,7 @@ export class TrackSessionFacade {
     const appleMusicUrl = track.appleMusicUrl || "";
 
     // 2. Check local database/cache
-    const cached = userDataRepository.getCachedTrack(trackId);
+    const cached = this.userDataRepository.getCachedTrack(trackId);
     if (cached) {
       const updatedCached = {
         ...cached,
@@ -54,10 +56,10 @@ export class TrackSessionFacade {
       };
 
       if ((!cached.coverUrl && coverUrl) || (!cached.title && trackTitle) || (!cached.audioUrl && audioUrl)) {
-        userDataRepository.saveTrackData(trackId, updatedCached);
+        this.userDataRepository.saveTrackData(trackId, updatedCached);
       }
 
-      userDataRepository.addRecentTrack({
+      this.userDataRepository.addRecentTrack({
         ...track,
         difficulty: updatedCached.difficulty || track.difficulty
       });
@@ -92,23 +94,23 @@ export class TrackSessionFacade {
       lastUpdated: Date.now(),
     };
 
-    userDataRepository.saveTrackData(trackId, initialTrack);
-    userDataRepository.addRecentTrack({
+    this.userDataRepository.saveTrackData(trackId, initialTrack);
+    this.userDataRepository.addRecentTrack({
       ...track,
       difficulty: track.difficulty
     });
 
     // 4. Background iTunes Lookup
     if (!initialTrack.audioUrl || !initialTrack.artistId || !initialTrack.albumId) {
-      searchITunes(`${artist} ${trackTitle}`, "musicTrack")
+      this.musicMetadataProvider.searchITunes(`${artist} ${trackTitle}`, "musicTrack")
         .then(results => {
           const match = results.find(r => 
-            aiClient.normalizeString(r.title) === aiClient.normalizeString(trackTitle) && 
-            aiClient.normalizeString(r.artist) === aiClient.normalizeString(artist)
+            this.aiClient.normalizeString(r.title) === this.aiClient.normalizeString(trackTitle) && 
+            this.aiClient.normalizeString(r.artist) === this.aiClient.normalizeString(artist)
           ) || results[0];
 
           if (match) {
-            const currentCached = userDataRepository.getCachedTrack(trackId) || initialTrack;
+            const currentCached = this.userDataRepository.getCachedTrack(trackId) || initialTrack;
             const updated = {
               ...currentCached,
               artistId: currentCached.artistId || match.artistId,
@@ -118,7 +120,7 @@ export class TrackSessionFacade {
               appleMusicUrl: currentCached.appleMusicUrl || match.appleMusicUrl,
               coverUrl: currentCached.coverUrl || match.coverUrl
             };
-            userDataRepository.saveTrackData(trackId, updated);
+            this.userDataRepository.saveTrackData(trackId, updated);
             if (callbacks.onMetadataUpdate) {
               callbacks.onMetadataUpdate(updated);
             }
@@ -128,7 +130,7 @@ export class TrackSessionFacade {
     }
 
     // 5. Background Firestore Cache Check
-    aiClient.getTrackMeaningFromCache(trackTitle, [artist], targetLanguage)
+    this.aiClient.getTrackMeaningFromCache(trackTitle, [artist], targetLanguage)
       .then(cacheResult => {
         if (cacheResult) {
           const langKey = targetLanguage.toLowerCase().trim();
@@ -137,7 +139,7 @@ export class TrackSessionFacade {
           if (langKey === 'russian') meaning = cacheResult.meanings.ru;
           if (langKey === 'polish') meaning = cacheResult.meanings.pl;
 
-          const currentCached = userDataRepository.getCachedTrack(trackId) || initialTrack;
+          const currentCached = this.userDataRepository.getCachedTrack(trackId) || initialTrack;
           const hasLyricsAndLinesCache = !!(cacheResult.rawLyrics && cacheResult.lines && cacheResult.lines.length > 0);
           
           const updated = {
@@ -148,7 +150,7 @@ export class TrackSessionFacade {
             difficulty: cacheResult.difficulty,
             promptVersion: cacheResult.promptVersion || currentCached.promptVersion,
             sourceLanguage: cacheResult.originalLanguage || currentCached.sourceLanguage,
-            lines: hasLyricsAndLinesCache ? cacheResult.lines : currentCached.lines,
+            lines: hasLyricsAndLyricsLinesCheck(cacheResult.lines) ? cacheResult.lines : currentCached.lines,
             processingStatus: {
               ...currentCached.processingStatus,
               stage1_completed: hasLyricsAndLinesCache ? true : currentCached.processingStatus.stage1_completed,
@@ -157,7 +159,7 @@ export class TrackSessionFacade {
             }
           };
 
-          userDataRepository.saveTrackData(trackId, updated);
+          this.userDataRepository.saveTrackData(trackId, updated);
           if (callbacks.onCacheUpdate) {
             callbacks.onCacheUpdate(updated);
           }
@@ -182,7 +184,7 @@ export class TrackSessionFacade {
     // 1. Fetch lyrics if missing
     if (!lyrics) {
       if (onStepChange) onStepChange("searching");
-      const lyricsResponse = await fetchLyrics(trackData.artist, trackData.title);
+      const lyricsResponse = await this.lyricsProvider.fetchLyrics(trackData.artist, trackData.title);
       if (!lyricsResponse.lyrics) {
         throw new Error("Lyrics not found. Please try manual input.");
       }
@@ -192,14 +194,14 @@ export class TrackSessionFacade {
         ...trackData,
         rawLyrics: lyrics,
         source: (lyricsResponse.source as any) || "Unknown",
-        lines: splitLyricsIntoLines(trackData.trackId, lyrics),
+        lines: this.lyricsProvider.splitLyricsIntoLines(trackData.trackId, lyrics),
         processingStatus: { ...trackData.processingStatus, stage1_completed: true }
       };
     }
 
     if (onStepChange) onStepChange("meaning");
 
-    const trackKey = await aiClient.computeTrackKey(trackData.title, [trackData.artist]);
+    const trackKey = await this.aiClient.computeTrackKey(trackData.title, [trackData.artist]);
 
     const isOutdated = !trackData.promptVersion || trackData.promptVersion < ANALYSIS_PROMPT_VERSION;
 
@@ -216,8 +218,8 @@ export class TrackSessionFacade {
       };
 
       const [result, translationsResult] = await Promise.all([
-        aiClient.fetchTrackMeaning(lyrics || "", metadata),
-        aiClient.getLineTranslations(lyrics || "", trackKey, targetLanguage)
+        this.aiClient.fetchTrackMeaning(lyrics || "", metadata),
+        this.aiClient.getLineTranslations(lyrics || "", trackKey, targetLanguage)
       ]);
       
       const langKey = targetLanguage.toLowerCase().trim();
@@ -248,7 +250,7 @@ export class TrackSessionFacade {
       };
     } else {
       // Meaning cached, but reload translations to confirm accuracy or ensure they're loaded
-      const translationsResult = await aiClient.getLineTranslations(lyrics || "", trackKey, targetLanguage);
+      const translationsResult = await this.aiClient.getLineTranslations(lyrics || "", trackKey, targetLanguage);
       const updatedLines = trackData.lines.map((line, idx) => {
         const matched = translationsResult[idx] || translationsResult.find((t: any) => t.originalText === line.original);
         return {
@@ -264,10 +266,10 @@ export class TrackSessionFacade {
       };
     }
 
-    userDataRepository.saveTrackData(trackData.trackId, trackData);
-    await aiClient.saveTrackToSharedCache(trackData).catch(e => console.error("Firestore cache upload failed:", e));
+    this.userDataRepository.saveTrackData(trackData.trackId, trackData);
+    await this.aiClient.saveTrackToSharedCache(trackData).catch(e => console.error("Firestore cache upload failed:", e));
 
-    userDataRepository.addRecentTrack({
+    this.userDataRepository.addRecentTrack({
       id: trackData.trackId,
       title: trackData.title,
       artist: trackData.artist,
@@ -293,9 +295,9 @@ export class TrackSessionFacade {
       return track;
     }
 
-    const trackKey = await aiClient.computeTrackKey(track.title, [track.artist]);
+    const trackKey = await this.aiClient.computeTrackKey(track.title, [track.artist]);
 
-    const phraseAnalysisResult = await aiClient.getPhraseAnalysis(
+    const phraseAnalysisResult = await this.aiClient.getPhraseAnalysis(
       track.rawLyrics,
       trackKey,
       targetLanguage
@@ -326,8 +328,8 @@ export class TrackSessionFacade {
       processingStatus: { ...track.processingStatus, stage3_completed: true }
     };
 
-    userDataRepository.saveTrackData(track.trackId, updated);
-    await aiClient.saveTrackToSharedCache(updated).catch(e => console.error("Firestore cache upload failed:", e));
+    this.userDataRepository.saveTrackData(track.trackId, updated);
+    await this.aiClient.saveTrackToSharedCache(updated).catch(e => console.error("Firestore cache upload failed:", e));
     return updated;
   }
 
@@ -342,7 +344,7 @@ export class TrackSessionFacade {
       onBackgroundComplete?: (completedTrack: TrackLyricsData) => void;
     } = {}
   ): Promise<TrackLyricsData> {
-    const metadataResult = await aiClient.extractLyricsMetadata(
+    const metadataResult = await this.aiClient.extractLyricsMetadata(
       manualLyrics,
       track.artist,
       track.title
@@ -356,7 +358,7 @@ export class TrackSessionFacade {
       sourceLanguage: track.sourceLanguage, // Background will fetch original
       authors: metadataResult?.authors,
       lyricSource: "Manual Entry",
-      lines: splitLyricsIntoLines(track.trackId, manualLyrics),
+      lines: this.lyricsProvider.splitLyricsIntoLines(track.trackId, manualLyrics),
       processingStatus: {
         stage1_completed: true,
         stage2_completed: false, // Updated by background
@@ -365,17 +367,17 @@ export class TrackSessionFacade {
       lastUpdated: Date.now(),
     };
 
-    userDataRepository.saveTrackData(track.trackId, initialTrack);
+    this.userDataRepository.saveTrackData(track.trackId, initialTrack);
 
     // Background enrichment
-    aiClient.fetchTrackMeaning(manualLyrics, {
+    this.aiClient.fetchTrackMeaning(manualLyrics, {
       title: track.title,
       artists: [track.artist],
       albumName: track.album,
       coverUrl: track.coverUrl
     })
       .then(result => {
-        const cached = userDataRepository.getCachedTrack(track.trackId) || initialTrack;
+        const cached = this.userDataRepository.getCachedTrack(track.trackId) || initialTrack;
         const langKey = targetLanguage.toLowerCase().trim();
         let meaning = result.meanings.en;
         if (langKey === 'spanish') meaning = result.meanings.es;
@@ -391,10 +393,10 @@ export class TrackSessionFacade {
           processingStatus: { ...cached.processingStatus, stage2_completed: true }
         };
 
-        userDataRepository.saveTrackData(track.trackId, updated);
-        aiClient.saveTrackToSharedCache(updated).catch(e => console.error("Firestore cache upload failed:", e));
+        this.userDataRepository.saveTrackData(track.trackId, updated);
+        this.aiClient.saveTrackToSharedCache(updated).catch(e => console.error("Firestore cache upload failed:", e));
 
-        userDataRepository.addRecentTrack({
+        this.userDataRepository.addRecentTrack({
           id: track.trackId,
           title: track.title,
           artist: track.artist,
@@ -419,8 +421,8 @@ export class TrackSessionFacade {
     track: TrackLyricsData,
     targetLanguage: string
   ): Promise<TrackLyricsData> {
-    const trackKey = await aiClient.computeTrackKey(track.title, [track.artist]);
-    const translationsResult = await aiClient.getLineTranslations(
+    const trackKey = await this.aiClient.computeTrackKey(track.title, [track.artist]);
+    const translationsResult = await this.aiClient.getLineTranslations(
       track.rawLyrics,
       trackKey,
       targetLanguage
@@ -441,10 +443,12 @@ export class TrackSessionFacade {
       lines: updatedLines
     };
 
-    userDataRepository.saveTrackData(updatedTrack.trackId, updatedTrack);
-    await aiClient.saveTrackToSharedCache(updatedTrack).catch(e => console.error("Firestore cache upload failed:", e));
+    this.userDataRepository.saveTrackData(updatedTrack.trackId, updatedTrack);
+    await this.aiClient.saveTrackToSharedCache(updatedTrack).catch(e => console.error("Firestore cache upload failed:", e));
     return updatedTrack;
   }
 }
 
-export const trackSessionFacade = new TrackSessionFacade();
+function hasLyricsAndLyricsLinesCheck(lines: any[] | undefined): boolean {
+  return !!(lines && lines.length > 0);
+}

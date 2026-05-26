@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { trackSessionFacade } from "../application/trackSessionFacade";
+import { trackSessionFacade } from "../application";
 import { aiClient } from "../application/adapters/geminiAIAdapter";
 import { userDataRepository } from "../application/adapters/browserUserDataRepository";
 import { TrackLyricsData } from "../services/musicService";
