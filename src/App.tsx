@@ -50,7 +50,7 @@ import {
 import ReactMarkdown from "react-markdown";
 import { Track, Artist, Album } from "./constants";
 import { SUPPORTED_LANGUAGES } from "./lib/languages";
-import { aiClient, trackSessionFacade, type TrackMetadata, type TrackMeaningEntry } from "./application";
+import { aiClient, trackSessionFacade, userDataRepository, type TrackMetadata, type TrackMeaningEntry } from "./application";
 import {
   ANALYSIS_PROMPT_VERSION,
   TRANSLATION_PROMPT_VERSION,
@@ -565,10 +565,10 @@ export default function App() {
   const [currentTrack, setCurrentTrack] = useState<TrackLyricsData | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [targetLanguage, setTargetLanguage] = useState(
-    () => localStorage.getItem("lyrify_target_lang") || "Russian",
+    () => userDataRepository.getPreference("lyrify_target_lang", "Russian"),
   );
   const [theme, setTheme] = useState(
-    () => localStorage.getItem("lyrify_theme") || "light",
+    () => userDataRepository.getPreference("lyrify_theme", "light"),
   );
   const [isTranslating, setIsTranslating] = useState(false);
   const [isGeneratingAnalysis, setIsGeneratingAnalysis] = useState(false);
@@ -600,22 +600,22 @@ export default function App() {
 
   const [activeLineIndex, setActiveLineIndex] = useState<number | null>(null);
   const [lyricsDisplayMode, setLyricsDisplayMode] = useState<"lyrics" | "translation" | "both">(
-    () => (localStorage.getItem("cantolex_lyrics_display_mode") as any) || "both"
+    () => (userDataRepository.getPreference("cantolex_lyrics_display_mode", "both") as any)
   );
   const [isStarFilterActive, setIsStarFilterActive] = useState<boolean>(
-    () => localStorage.getItem("cantolex_star_filter_active") === "true"
+    () => userDataRepository.getBoolPreference("cantolex_star_filter_active", false)
   );
   const [previewLyricsMode, setPreviewLyricsMode] = useState<"original" | "translation">("original");
 
   const handleSetLyricsDisplayMode = (mode: "lyrics" | "translation" | "both") => {
     setLyricsDisplayMode(mode);
-    localStorage.setItem("cantolex_lyrics_display_mode", mode);
+    userDataRepository.setPreference("cantolex_lyrics_display_mode", mode);
   };
 
   const handleToggleStarFilter = () => {
     setIsStarFilterActive((prev) => {
       const nextVal = !prev;
-      localStorage.setItem("cantolex_star_filter_active", String(nextVal));
+      userDataRepository.setBoolPreference("cantolex_star_filter_active", nextVal);
       return nextVal;
     });
   };
@@ -658,14 +658,14 @@ export default function App() {
   };
 
   const [isMuted, setIsMuted] = useState(
-    () => localStorage.getItem("lyrify_muted") === "true",
+    () => userDataRepository.getBoolPreference("lyrify_muted", false),
   );
   const [dynamicTracks, setDynamicTracks] = useState<Track[]>([]);
   const [isLoadingTracks, setIsLoadingTracks] = useState(true);
 
   // --- One-time Cleanup marker ---
   useEffect(() => {
-    localStorage.setItem("lyrify_wiped_v3", "true");
+    userDataRepository.setBoolPreference("lyrify_wiped_v3", true);
   }, []);
   // --------------------------------------
   const [popoverData, setPopoverData] = useState<{
@@ -676,7 +676,7 @@ export default function App() {
   } | null>(null);
 
   useEffect(() => {
-    localStorage.setItem("lyrify_muted", String(isMuted));
+    userDataRepository.setBoolPreference("lyrify_muted", isMuted);
   }, [isMuted]);
 
   const loadUserCards = async () => {
@@ -897,7 +897,7 @@ export default function App() {
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
-    localStorage.setItem("lyrify_theme", theme);
+    userDataRepository.setPreference("lyrify_theme", theme);
   }, [theme]);
 
   const [searchQuery, setSearchQuery] = useState("");
@@ -908,7 +908,7 @@ export default function App() {
   const [isSearchingDetails, setIsSearchingDetails] = useState(false);
   const [recentTracks, setRecentTracks] = useState<Track[]>([]);
   const [searchHistory, setSearchHistory] = useState<string[]>(
-    () => JSON.parse(localStorage.getItem("lyrify_search_history") || "[]")
+    () => JSON.parse(userDataRepository.getPreference("lyrify_search_history", "[]"))
   );
   const [isSearchInputFocused, setIsSearchInputFocused] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
@@ -940,13 +940,13 @@ export default function App() {
   );
 
   useEffect(() => {
-    localStorage.setItem("lyrify_target_lang", targetLanguage);
+    userDataRepository.setPreference("lyrify_target_lang", targetLanguage);
     playbackModeRef.current = playbackMode;
   }, [playbackMode, targetLanguage]);
   const [shadowingAttempts, setShadowingAttempts] = useState(0);
   const [isListeningForSpeech, setIsListeningForSpeech] = useState(false);
   const [skipKnownPhrases, setSkipKnownPhrases] = useState(
-    () => localStorage.getItem("skip_known") === "true",
+    () => userDataRepository.getBoolPreference("skip_known", false),
   );
   const [shadowingFeedback, setShadowingFeedback] = useState<
     "none" | "correct" | "incorrect"
@@ -1001,7 +1001,7 @@ export default function App() {
   };
 
   useEffect(() => {
-    localStorage.setItem("skip_known", String(skipKnownPhrases));
+    userDataRepository.setBoolPreference("skip_known", skipKnownPhrases);
   }, [skipKnownPhrases]);
 
   useEffect(() => {
@@ -1127,15 +1127,8 @@ export default function App() {
 
   const resetUserData = async () => {
     console.log("Resetting user data...");
-    localStorage.clear();
-    console.log("LocalStorage cleared");
-    try {
-      const idb = await import('idb-keyval');
-      await idb.del('lyrify_flashcards');
-      console.log("IndexedDB cleared");
-    } catch (err) {
-      console.error("Failed to clear IndexedDB:", err);
-    }
+    await userDataRepository.clearAllUserData();
+    console.log("All user data cleared in repository");
     console.log("Reloading...");
     window.location.reload();
   };
@@ -1956,7 +1949,7 @@ export default function App() {
     // Save to history
     const newHistory = [query, ...searchHistory.filter(h => h !== query)].slice(0, 10);
     setSearchHistory(newHistory);
-    localStorage.setItem("lyrify_search_history", JSON.stringify(newHistory));
+    userDataRepository.setPreference("lyrify_search_history", JSON.stringify(newHistory));
 
     if (searchContainerRef.current) {
       searchContainerRef.current.scrollTo({ top: 0, behavior: "smooth" });
@@ -2738,7 +2731,7 @@ export default function App() {
                             onClick={(e) => {
                               e.stopPropagation();
                               setSearchHistory([]);
-                              localStorage.removeItem("lyrify_search_history");
+                              userDataRepository.removePreference("lyrify_search_history");
                             }}
                             className="text-[10px] font-black uppercase tracking-widest text-red-500/50 hover:text-red-500 px-2 py-1"
                           >

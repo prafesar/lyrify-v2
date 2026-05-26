@@ -1,3 +1,5 @@
+import { userDataRepository } from "../application";
+
 const ONBOARDING_COMPLETED_KEY = "cantolex_onboarding_completed";
 
 export interface OnboardingState {
@@ -8,28 +10,21 @@ export interface OnboardingState {
  * Checks if the user has completed the onboarding flow.
  */
 export function isOnboardingCompleted(): boolean {
-  if (typeof window === "undefined" || !window.localStorage) {
-    return false;
-  }
-  return localStorage.getItem(ONBOARDING_COMPLETED_KEY) === "true";
+  return userDataRepository.getBoolPreference(ONBOARDING_COMPLETED_KEY, false);
 }
 
 /**
  * Marks the onboarding flow as completed.
  */
 export function completeOnboarding(): void {
-  if (typeof window !== "undefined" && window.localStorage) {
-    localStorage.setItem(ONBOARDING_COMPLETED_KEY, "true");
-  }
+  userDataRepository.setBoolPreference(ONBOARDING_COMPLETED_KEY, true);
 }
 
 /**
  * Resets the onboarding state (useful for testing or profile reset).
  */
 export function resetOnboarding(): void {
-  if (typeof window !== "undefined" && window.localStorage) {
-    localStorage.removeItem(ONBOARDING_COMPLETED_KEY);
-  }
+  userDataRepository.removePreference(ONBOARDING_COMPLETED_KEY);
 }
 
 /**

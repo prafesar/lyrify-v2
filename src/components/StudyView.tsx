@@ -29,7 +29,7 @@ export default function StudyView({ onBack, initialTrackId, onReviewCompleted }:
   const [isExplanationExpanded, setIsExplanationExpanded] = useState(false);
   const [selectedLanguage, setSelectedLanguage] = useState<string>(() => {
     if (initialTrackId) return 'all';
-    return localStorage.getItem('study_selected_language') || 'all';
+    return userDataRepository.getPreference('study_selected_language', 'all');
   });
   const [selectedTrack, setSelectedTrack] = useState<string>(initialTrackId || 'all');
   const [selectedType, setSelectedType] = useState<string>('all');
@@ -54,7 +54,7 @@ export default function StudyView({ onBack, initialTrackId, onReviewCompleted }:
   };
 
   useEffect(() => {
-    localStorage.setItem('study_selected_language', selectedLanguage);
+    userDataRepository.setPreference('study_selected_language', selectedLanguage);
   }, [selectedLanguage]);
 
   useEffect(() => {
@@ -76,7 +76,7 @@ export default function StudyView({ onBack, initialTrackId, onReviewCompleted }:
     
     setSelectedLanguage(prev => {
       if (initialTrackId) return 'all';
-      const persisted = localStorage.getItem('study_selected_language');
+      const persisted = userDataRepository.getPreference('study_selected_language', '');
       if (persisted && available.includes(persisted)) return persisted;
       if (available.length > 0) return available[0];
       return 'en';
