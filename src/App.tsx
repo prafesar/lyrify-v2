@@ -50,7 +50,7 @@ import {
 import ReactMarkdown from "react-markdown";
 import { Track, Artist, Album } from "./constants";
 import { SUPPORTED_LANGUAGES } from "./lib/languages";
-import { aiClient, type TrackMetadata, type TrackMeaningEntry } from "./application";
+import { aiClient, trackSessionFacade, type TrackMetadata, type TrackMeaningEntry } from "./application";
 import {
   ANALYSIS_PROMPT_VERSION,
   TRANSLATION_PROMPT_VERSION,
@@ -2085,9 +2085,6 @@ export default function App() {
   };
 
   const handleTrackSelect = async (track: any) => {
-    // Record track exploration to daily goals
-    setDailyActivity(recordTrackExplored());
-
     // 1. CLEAR previous states
     setLyricsFetchError(null);
     setManualLyrics("");
@@ -2096,145 +2093,19 @@ export default function App() {
     setActiveTab("preview");
     window.speechSynthesis.cancel();
 
-    // 2. Track IDs
-    const trackId = track.id || track.trackId;
-    const trackTitle = track.title || "";
-    const artist = track.artist || "";
-    const artistId = track.artistId || "";
-    const album = track.album || "";
-    const albumId = track.albumId || "";
-    const coverUrl = track.coverUrl || "";
-
-    // 3. Initial cache check
-    const cached = getCachedTrackData(trackId);
-    if (cached) {
-      const updatedCached = {
-        ...cached,
-        coverUrl: cached.coverUrl || coverUrl,
-        album: cached.album || album,
-        albumId: cached.albumId || albumId,
-        artist: cached.artist || artist,
-        artistId: cached.artistId || artistId,
-        title: cached.title || trackTitle,
-        audioUrl: cached.audioUrl || track.audioUrl,
-        appleMusicUrl: cached.appleMusicUrl || track.appleMusicUrl,
-      };
-      if ((!cached.coverUrl && coverUrl) || (!cached.title && trackTitle) || (!cached.audioUrl && track.audioUrl)) {
-        saveTrackData(trackId, updatedCached);
-      }
-      setCurrentTrack(updatedCached);
-      setView("lyrics");
-      
-      addRecentTrack({
-        ...track,
-        difficulty: updatedCached.difficulty || track.difficulty
-      });
-      setRecentTracks(getRecentTracks());
-      return;
-    }
-
-    // 4. Create placeholder track data
-    const initialTrack: TrackLyricsData = {
-      trackId: trackId,
-      artist: artist,
-      artistId: artistId,
-      title: trackTitle,
-      album: album,
-      albumId: albumId,
-      coverUrl: coverUrl,
-      audioUrl: track.audioUrl || "",
-      appleMusicUrl: track.appleMusicUrl || "",
-      rawLyrics: "",
-      source: null,
-      sourceLanguage: track.sourceLanguage || "English",
-      meaning: track.meaning,
-      meanings: track.meanings,
-      difficulty: track.difficulty,
-      promptVersion: track.promptVersion,
-      lines: [],
-      processingStatus: {
-        stage1_completed: false,
-        stage2_completed: !!track.meaning,
-        stage3_completed: false,
+    const initialTrack = await trackSessionFacade.selectTrack(track, targetLanguage, {
+      onMetadataUpdate: (updated) => {
+        setCurrentTrack((prev) => (prev && prev.trackId === updated.trackId ? updated : prev));
       },
-      lastUpdated: Date.now(),
-    };
+      onCacheUpdate: (updated) => {
+        setCurrentTrack((prev) => (prev && prev.trackId === updated.trackId ? updated : prev));
+      }
+    });
 
+    setDailyActivity(recordTrackExplored());
     setCurrentTrack(initialTrack);
     setView("lyrics");
-    addRecentTrack({
-      ...track,
-      difficulty: track.difficulty
-    });
     setRecentTracks(getRecentTracks());
-
-    // 5. ENHANCEMENT: If metadata is missing (common for community tracks), try to find it on iTunes
-    if (!initialTrack.audioUrl || !initialTrack.artistId || !initialTrack.albumId) {
-      console.log("[handleTrackSelect] Missing metadata, attempting iTunes lookup...");
-      searchITunes(`${artist} ${trackTitle}`, "musicTrack")
-        .then(results => {
-          const match = results.find(r => 
-            normalizeString(r.title) === normalizeString(trackTitle) && 
-            normalizeString(r.artist) === normalizeString(artist)
-          ) || results[0];
-
-          if (match) {
-            console.log("[handleTrackSelect] Metadata match found:", match.title);
-            setCurrentTrack(prev => {
-              if (!prev || prev.trackId !== trackId) return prev;
-              const updated = {
-                ...prev,
-                artistId: prev.artistId || match.artistId,
-                albumId: prev.albumId || match.albumId,
-                album: prev.album || match.album,
-                audioUrl: prev.audioUrl || match.audioUrl,
-                appleMusicUrl: prev.appleMusicUrl || match.appleMusicUrl,
-                coverUrl: prev.coverUrl || match.coverUrl
-              };
-              saveTrackData(trackId, updated);
-              return updated;
-            });
-          }
-        })
-        .catch(err => console.error("[handleTrackSelect] Metadata lookup failed:", err));
-    }
-
-    // 6. BACKGROUND Cache Check (Firestore)
-    getTrackMeaningFromCache(trackTitle, [artist], targetLanguage)
-      .then(cacheResult => {
-        if (cacheResult) {
-          const langKey = targetLanguage.toLowerCase().trim();
-          let meaning = cacheResult.meanings.en;
-          if (langKey === 'spanish') meaning = cacheResult.meanings.es;
-          if (langKey === 'russian') meaning = cacheResult.meanings.ru;
-          if (langKey === 'polish') meaning = cacheResult.meanings.pl;
-
-          setCurrentTrack(prev => {
-            if (!prev || prev.trackId !== trackId) return prev;
-            
-            const hasLyricsAndLinesCache = !!(cacheResult.rawLyrics && cacheResult.lines && cacheResult.lines.length > 0);
-            const updated = {
-              ...prev,
-              rawLyrics: hasLyricsAndLinesCache ? cacheResult.rawLyrics : prev.rawLyrics,
-              meaning,
-              meanings: cacheResult.meanings,
-              difficulty: cacheResult.difficulty,
-              promptVersion: cacheResult.promptVersion || prev.promptVersion,
-              sourceLanguage: cacheResult.originalLanguage || prev.sourceLanguage,
-              lines: hasLyricsAndLinesCache ? cacheResult.lines : prev.lines,
-              processingStatus: {
-                ...prev.processingStatus,
-                stage1_completed: hasLyricsAndLinesCache ? true : prev.processingStatus.stage1_completed,
-                stage2_completed: true,
-                stage3_completed: hasLyricsAndLinesCache ? cacheResult.lines.some((l: any) => l.phrases && l.phrases.length > 0) : prev.processingStatus.stage3_completed
-              }
-            };
-            saveTrackData(trackId, updated);
-            return updated;
-          });
-        }
-      })
-      .catch(err => console.error("Firestore cache check failed:", err));
   };
 
   const handleAnalyzeSong = async () => {
@@ -2245,115 +2116,18 @@ export default function App() {
     setLoadingStep("searching");
 
     try {
-      let trackData = { ...currentTrack };
-      let lyrics = trackData.rawLyrics;
+      const updatedTrack = await trackSessionFacade.analyzeSongMeaningAndTranslations(
+        currentTrack,
+        targetLanguage,
+        (step) => setLoadingStep(step)
+      );
 
-      // 1. Fetch lyrics if missing
-      if (!lyrics) {
-        const lyricsResponse = await fetchLyrics(trackData.artist, trackData.title);
-        if (!lyricsResponse.lyrics) {
-          setLyricsFetchError("Lyrics not found. Please try manual input.");
-          setIsLoadingLyrics(false);
-          setLoadingStep("idle");
-          return;
-        }
-        
-        lyrics = lyricsResponse.lyrics;
-        
-        trackData = {
-          ...trackData,
-          rawLyrics: lyrics,
-          source: (lyricsResponse.source as any) || "Unknown",
-          lines: splitLyricsIntoLines(trackData.trackId, lyrics),
-          processingStatus: { ...trackData.processingStatus, stage1_completed: true }
-        };
-      }
-
-      const trackKey = await computeTrackKey(trackData.title, [trackData.artist]);
-      const lyricsHash = await computeLyricsHash(lyrics || "");
-
-      // 2. Fetch/Update meaning and line translations in parallel
-      const isOutdated = !trackData.promptVersion || trackData.promptVersion < ANALYSIS_PROMPT_VERSION;
-      const isTranslationOutdated = !trackData.translationPromptVersion || trackData.translationPromptVersion < TRANSLATION_PROMPT_VERSION;
-
-      if (!trackData.meaning || !trackData.processingStatus.stage2_completed || isOutdated) {
-        setLoadingStep("meaning");
-        const metadata: TrackMetadata = {
-          title: trackData.title,
-          artists: [trackData.artist],
-          artistId: trackData.artistId,
-          albumName: trackData.album,
-          albumId: trackData.albumId,
-          coverUrl: trackData.coverUrl,
-          audioUrl: trackData.audioUrl,
-          appleMusicUrl: trackData.appleMusicUrl
-        };
-
-        const [result, translationsResult] = await Promise.all([
-          fetchTrackMeaning(lyrics || "", metadata),
-          getLineTranslations(lyrics || "", trackKey, lyricsHash, targetLanguage)
-        ]);
-        
-        const langKey = targetLanguage.toLowerCase().trim();
-        let meaning = result.meanings.en;
-        if (langKey === 'spanish') meaning = result.meanings.es;
-        if (langKey === 'russian') meaning = result.meanings.ru;
-        if (langKey === 'polish') meaning = result.meanings.pl;
-
-        const updatedLines = trackData.lines.map((line, idx) => {
-          const matched = translationsResult[idx] || translationsResult.find(t => t.originalText === line.original);
-          return {
-            ...line,
-            translation: matched ? matched.translation : (line.translation || ""),
-            language: matched ? matched.language : (line.language || "en")
-          };
-        });
-
-        trackData = {
-          ...trackData,
-          meaning,
-          meanings: result.meanings,
-          difficulty: result.difficulty,
-          promptVersion: ANALYSIS_PROMPT_VERSION,
-          translationPromptVersion: TRANSLATION_PROMPT_VERSION,
-          sourceLanguage: result.originalLanguage || trackData.sourceLanguage,
-          lines: updatedLines,
-          processingStatus: { ...trackData.processingStatus, stage2_completed: true }
-        };
-      } else {
-        // Meaning is already cached, but load/refresh line translations to get individual languages
-        const translationsResult = await getLineTranslations(lyrics || "", trackKey, lyricsHash, targetLanguage);
-        const updatedLines = trackData.lines.map((line, idx) => {
-          const matched = translationsResult[idx] || translationsResult.find(t => t.originalText === line.original);
-          return {
-            ...line,
-            translation: matched ? matched.translation : (line.translation || ""),
-            language: matched ? matched.language : (line.language || "en")
-          };
-        });
-        trackData = {
-          ...trackData,
-          translationPromptVersion: TRANSLATION_PROMPT_VERSION,
-          lines: updatedLines
-        };
-      }
-
-      saveTrackData(trackData.trackId, trackData);
-      saveTrackToSharedCache(trackData).catch(e => console.error("Firestore cache upload failed:", e));
-      setCurrentTrack(trackData);
-      addRecentTrack({
-        id: trackData.trackId,
-        title: trackData.title,
-        artist: trackData.artist,
-        coverUrl: trackData.coverUrl || "",
-        album: trackData.album || "",
-        difficulty: trackData.difficulty
-      } as Track);
+      setCurrentTrack(updatedTrack);
       setRecentTracks(getRecentTracks());
       loadCommunityTracks();
-    } catch (err) {
+    } catch (err: any) {
       console.error("Manual fetch/meaning failed:", err);
-      setLyricsFetchError("Failed to fetch song data.");
+      setLyricsFetchError(err.message || "Failed to fetch song data.");
     } finally {
       setIsLoadingLyrics(false);
       setLoadingStep("idle");
@@ -2365,34 +2139,7 @@ export default function App() {
     setIsTranslating(true);
     setLoadingStep("translating");
     try {
-      const trackKey = await computeTrackKey(currentTrack.title, [currentTrack.artist]);
-      const lyricsHash = await computeLyricsHash(currentTrack.rawLyrics);
-
-      const translationsResult = await getLineTranslations(
-        currentTrack.rawLyrics,
-        trackKey,
-        lyricsHash,
-        targetLanguage,
-        true
-      );
-
-      const updatedLines = currentTrack.lines.map((line, idx) => {
-        const matched = translationsResult[idx] || translationsResult.find(t => t.originalText === line.original);
-        return {
-          ...line,
-          translation: matched ? matched.translation : (line.translation || ""),
-          language: matched ? matched.language : (line.language || "en")
-        };
-      });
-
-      const updatedTrack: TrackLyricsData = {
-        ...currentTrack,
-        translationPromptVersion: TRANSLATION_PROMPT_VERSION,
-        lines: updatedLines
-      };
-
-      saveTrackData(updatedTrack.trackId, updatedTrack);
-      await saveTrackToSharedCache(updatedTrack);
+      const updatedTrack = await trackSessionFacade.regenerateTranslations(currentTrack, targetLanguage);
       setCurrentTrack(updatedTrack);
     } catch (err) {
       console.error("Failed to regenerate translations:", err);
@@ -2407,48 +2154,8 @@ export default function App() {
     if (!force && track.processingStatus.stage3_completed && hasPhrases) return;
     setIsTranslating(true);
     try {
-      const trackKey = await computeTrackKey(track.title, [track.artist]);
-      const lyricsHash = await computeLyricsHash(track.rawLyrics);
-
-      const phraseAnalysisResult = await getPhraseAnalysis(
-        track.rawLyrics,
-        targetLanguage,
-        trackKey,
-        lyricsHash,
-        force
-      );
-
-      setCurrentTrack((prev) => {
-        if (!prev || prev.trackId !== track.trackId) return prev;
-
-        const updatedLines = prev.lines.map(line => {
-          const linePhrases = phraseAnalysisResult
-            .filter((p: any) => p.lineIndex === line.index)
-            .map((p: any) => ({
-              id: `${track.trackId}:p:${p.text.replace(/\s+/g, '_')}`,
-              text: p.text,
-              translation: p.translation,
-              explanation: p.explanation,
-              language: p.language,
-              lemmas: [],
-              type: 'phrase' as const
-            }));
-
-          return {
-            ...line,
-            phrases: linePhrases
-          };
-        });
-
-        const updated = {
-          ...prev,
-          lines: updatedLines,
-          processingStatus: { ...prev.processingStatus, stage3_completed: true }
-        };
-        saveTrackData(track.trackId, updated);
-        saveTrackToSharedCache(updated).catch(e => console.error("Firestore cache upload failed:", e));
-        return updated;
-      });
+      const updatedTrack = await trackSessionFacade.runDeepPhraseAnalysis(track, targetLanguage, force);
+      setCurrentTrack(updatedTrack);
     } catch (err: any) {
       console.error("Stage 3 (Phrase Analysis) failed:", err);
       setAnalysisError(err?.message || "An unexpected error occurred during deep analysis. Please try again.");
@@ -2466,70 +2173,25 @@ export default function App() {
     setLyricsFetchError(null);
 
     try {
-      const metadataResult = await extractLyricsMetadata(
+      const initialTrack = await trackSessionFacade.submitManualLyrics(
+        currentTrack,
         manualLyrics,
-        currentTrack.artist,
-        currentTrack.title,
+        targetLanguage,
+        {
+          onBackgroundComplete: (updated) => {
+            setCurrentTrack((prev) => {
+              if (prev && prev.trackId === updated.trackId) {
+                setRecentTracks(getRecentTracks());
+                loadCommunityTracks();
+                return updated;
+              }
+              return prev;
+            });
+          }
+        }
       );
 
-      // Trigger fetchTrackMeaning in background to enrich cache and get source language
-      fetchTrackMeaning(manualLyrics, {
-        title: currentTrack.title,
-        artists: [currentTrack.artist],
-        albumName: currentTrack.album,
-        coverUrl: currentTrack.coverUrl
-      }).then(result => {
-        setCurrentTrack(prev => {
-          if (!prev || prev.trackId !== currentTrack.trackId) return prev;
-          
-          const langKey = targetLanguage.toLowerCase().trim();
-          let meaning = result.meanings.en;
-          if (langKey === 'spanish') meaning = result.meanings.es;
-          if (langKey === 'russian') meaning = result.meanings.ru;
-          if (langKey === 'polish') meaning = result.meanings.pl;
-
-          const updated = {
-            ...prev,
-            sourceLanguage: result.originalLanguage || prev.sourceLanguage,
-            meaning,
-            meanings: result.meanings,
-            difficulty: result.difficulty,
-            processingStatus: { ...prev.processingStatus, stage2_completed: true }
-          };
-          saveTrackData(prev.trackId, updated);
-          saveTrackToSharedCache(updated).catch(e => console.error("Firestore cache upload failed:", e));
-          addRecentTrack({
-            id: prev.trackId,
-            title: prev.title,
-            artist: prev.artist,
-            coverUrl: prev.coverUrl || "",
-            album: prev.album || "",
-            difficulty: result.difficulty
-          } as Track);
-          setRecentTracks(getRecentTracks());
-          loadCommunityTracks();
-          return updated;
-        });
-      }).catch(e => console.error("fetchTrackMeaning background failed:", e));
-
-      const initialTrack: TrackLyricsData = {
-        ...currentTrack,
-        rawLyrics: manualLyrics,
-        source: "Manual",
-        sourceLanguage: currentTrack.sourceLanguage, // Initially keep current, updated by background fetch
-        authors: metadataResult?.authors,
-        lyricSource: "Manual Entry",
-        lines: splitLyricsIntoLines(currentTrack.trackId, manualLyrics),
-        processingStatus: {
-          stage1_completed: true,
-          stage2_completed: false, // Updated by background fetch
-          stage3_completed: false,
-        },
-        lastUpdated: Date.now(),
-      };
-
       setCurrentTrack(initialTrack);
-      saveTrackData(currentTrack.trackId, initialTrack);
       setManualLyrics("");
     } catch (err) {
       setLyricsFetchError("Processing failed. Please check your text.");
@@ -2579,60 +2241,13 @@ export default function App() {
         };
       }
 
-      const trackKey = await computeTrackKey(trackData.title, [trackData.artist]);
-      const lyricsHash = await computeLyricsHash(lyrics || "");
-
       const isOutdated = !trackData.promptVersion || trackData.promptVersion < ANALYSIS_PROMPT_VERSION;
       const isTranslationOutdated = !trackData.translationPromptVersion || trackData.translationPromptVersion < TRANSLATION_PROMPT_VERSION;
 
       // 2. Fetch/Update meaning and line translations if missing, outdated, or forced
       if (force || !trackData.meaning || !trackData.processingStatus.stage2_completed || isOutdated || isTranslationOutdated) {
         setLoadingStep("meaning");
-        const metadata: TrackMetadata = {
-          title: trackData.title,
-          artists: [trackData.artist],
-          artistId: trackData.artistId,
-          albumName: trackData.album,
-          albumId: trackData.albumId,
-          coverUrl: trackData.coverUrl,
-          audioUrl: trackData.audioUrl,
-          appleMusicUrl: trackData.appleMusicUrl
-        };
-
-        const [meaningResult, translationsResult] = await Promise.all([
-          fetchTrackMeaning(lyrics || "", metadata, ANALYSIS_PROMPT_VERSION, force),
-          getLineTranslations(lyrics || "", trackKey, lyricsHash, targetLanguage, force)
-        ]);
-
-        const langKey = targetLanguage.toLowerCase().trim();
-        let meaning = meaningResult.meanings.en;
-        if (langKey === 'spanish') meaning = meaningResult.meanings.es;
-        if (langKey === 'russian') meaning = meaningResult.meanings.ru;
-        if (langKey === 'polish') meaning = meaningResult.meanings.pl;
-
-        const updatedLines = trackData.lines.map((line, idx) => {
-          const matched = translationsResult[idx] || translationsResult.find(t => t.originalText === line.original);
-          return {
-            ...line,
-            translation: matched ? matched.translation : (line.translation || ""),
-            language: matched ? matched.language : (line.language || "en")
-          };
-        });
-
-        trackData = {
-          ...trackData,
-          meaning,
-          meanings: meaningResult.meanings,
-          difficulty: meaningResult.difficulty,
-          promptVersion: ANALYSIS_PROMPT_VERSION,
-          translationPromptVersion: TRANSLATION_PROMPT_VERSION,
-          sourceLanguage: meaningResult.originalLanguage || trackData.sourceLanguage,
-          lines: updatedLines,
-          processingStatus: { ...trackData.processingStatus, stage2_completed: true }
-        };
-        
-        saveTrackData(trackData.trackId, trackData);
-        saveTrackToSharedCache(trackData).catch(e => console.error("Firestore cache upload failed:", e));
+        trackData = await trackSessionFacade.analyzeSongMeaningAndTranslations(trackData, targetLanguage);
         setCurrentTrack(trackData);
         loadCommunityTracks();
       }

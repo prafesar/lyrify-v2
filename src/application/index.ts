@@ -1,7 +1,8 @@
 import { aiClient } from "./adapters/geminiAIAdapter";
 import { userDataRepository } from "./adapters/browserUserDataRepository";
+import { trackSessionFacade } from "./trackSessionFacade";
 
-export { aiClient, userDataRepository };
+export { aiClient, userDataRepository, trackSessionFacade };
 
 // Ports
 export { type AiPort } from "./ports/aiPort";

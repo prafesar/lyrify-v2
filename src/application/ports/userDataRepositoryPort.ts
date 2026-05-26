@@ -1,6 +1,6 @@
 import { Flashcard, PhraseStatus } from "../../services/localCardService";
 import { DailyActivity, DailyProgressSummary } from "../../services/dailyTrackerService";
-import { Track } from "../../services/musicService";
+import { Track, TrackLyricsData } from "../../services/musicService";
 import { Rating } from "ts-fsrs";
 
 export interface UserDataRepositoryPort {
@@ -36,4 +36,8 @@ export interface UserDataRepositoryPort {
   // Recent Tracks
   getRecentTracks(): Track[];
   addRecentTrack(track: Track): void;
+
+  // Track Data Cache
+  getCachedTrack(trackId: string): TrackLyricsData | null;
+  saveTrackData(trackId: string, data: any): TrackLyricsData;
 }

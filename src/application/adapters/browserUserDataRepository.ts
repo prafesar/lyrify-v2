@@ -1,7 +1,7 @@
 import { UserDataRepositoryPort } from "../ports/userDataRepositoryPort";
 import { Flashcard, PhraseStatus } from "../../services/localCardService";
 import { DailyActivity, DailyProgressSummary } from "../../services/dailyTrackerService";
-import { Track } from "../../services/musicService";
+import { Track, TrackLyricsData } from "../../services/musicService";
 import { Rating } from "ts-fsrs";
 
 import * as originalCardService from "../../services/localCardService";
@@ -76,6 +76,15 @@ export class BrowserUserDataRepository implements UserDataRepositoryPort {
 
   addRecentTrack(track: Track): void {
     return originalMusicService.addRecentTrack(track);
+  }
+
+  // Track Data Cache
+  getCachedTrack(trackId: string): TrackLyricsData | null {
+    return originalMusicService.getCachedTrackData(trackId);
+  }
+
+  saveTrackData(trackId: string, data: any): TrackLyricsData {
+    return originalMusicService.saveTrackData(trackId, data);
   }
 }
 
