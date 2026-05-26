@@ -50,11 +50,7 @@ import {
 import ReactMarkdown from "react-markdown";
 import { Track, Artist, Album } from "./constants";
 import { SUPPORTED_LANGUAGES } from "./lib/languages";
-import { aiClient, trackSessionFacade, userDataRepository, type TrackMetadata, type TrackMeaningEntry } from "./application";
-import {
-  ANALYSIS_PROMPT_VERSION,
-  TRANSLATION_PROMPT_VERSION,
-} from "./services/geminiService";
+import { aiClient, trackSessionFacade, userDataRepository, type TrackMetadata, type TrackMeaningEntry, ANALYSIS_PROMPT_VERSION, TRANSLATION_PROMPT_VERSION } from "./application";
 
 const translateLyrics = (lyrics: string, targetLanguage: string) => aiClient.translateLyrics(lyrics, targetLanguage);
 const detectLanguage = (text: string) => aiClient.detectLanguage(text);

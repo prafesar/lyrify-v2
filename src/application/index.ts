@@ -11,4 +11,10 @@ export { type UserDataRepositoryPort } from "./ports/userDataRepositoryPort";
 // Re-export key domain types for UI independence
 export { type Flashcard, type PhraseStatus } from "../services/localCardService";
 export { type DailyActivity, type DailyProgressSummary } from "../services/dailyTrackerService";
-export { type TrackMetadata, type TrackMeaningResult, type TrackMeaningEntry } from "../services/geminiService";
+export { 
+  type TrackMetadata, 
+  type TrackMeaningResult, 
+  type TrackMeaningEntry,
+  ANALYSIS_PROMPT_VERSION,
+  TRANSLATION_PROMPT_VERSION
+} from "./ports/aiPort";

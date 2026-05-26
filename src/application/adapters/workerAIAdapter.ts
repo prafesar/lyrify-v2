@@ -1,19 +1,37 @@
 import { AiPort, TrackMetadata, TrackMeaningResult, TrackMeaningEntry } from "../ports/aiPort";
 import { TrackLyricsData } from "../../services/musicService";
-import * as originalGeminiService from "../../services/geminiService";
 
-export class GeminiAIAdapter implements AiPort {
+/**
+ * WorkerAIAdapter (Placeholder Migration Seam)
+ * 
+ * This class serves as the migration seam for Posteriormente integrating a 
+ * Cloudflare Worker AI backend (Lyrify-v2 / CantoLex AI transition).
+ * 
+ * To activate the Cloudflare Worker, implement the HTTP/REST fetches below
+ * to query your Cloudflare Worker REST endpoints and substitute this adapter
+ * as the `aiClient` in `/src/application/index.ts`.
+ */
+export class WorkerAIAdapter implements AiPort {
+  private workerBaseUrl = "/api/v2/worker"; // Placeholer Cloudflare Worker boundary
+
   async fetchTrackMeaning(
     lyrics: string,
     metadata: TrackMetadata,
     promptVersion?: number,
     forceRegenerate?: boolean
   ): Promise<TrackMeaningResult> {
-    return originalGeminiService.fetchTrackMeaning(lyrics, metadata, promptVersion, forceRegenerate);
+    // Future Implementation:
+    // const response = await fetch(`${this.workerBaseUrl}/track-meaning`, {
+    //   method: "POST",
+    //   headers: { "Content-Type": "application/json" },
+    //   body: JSON.stringify({ lyrics, metadata, promptVersion, forceRegenerate })
+    // });
+    // return await response.json();
+    throw new Error("WorkerAIAdapter is currently in placeholder state. Please use GeminiAIAdapter.");
   }
 
   async getOriginalLanguage(trackKey: string): Promise<string | null> {
-    return originalGeminiService.getOriginalLanguage(trackKey);
+    throw new Error("WorkerAIAdapter is currently in placeholder state.");
   }
 
   async getTrackMeaningFromCache(
@@ -22,7 +40,7 @@ export class GeminiAIAdapter implements AiPort {
     targetLanguage?: string,
     promptVersion?: number
   ): Promise<TrackMeaningResult | null> {
-    return originalGeminiService.getTrackMeaningFromCache(title, artists, targetLanguage, promptVersion);
+    throw new Error("WorkerAIAdapter is currently in placeholder state.");
   }
 
   async generateSongMeaning(
@@ -32,11 +50,11 @@ export class GeminiAIAdapter implements AiPort {
     targetLanguage: string,
     metadata?: Partial<TrackMetadata>
   ): Promise<string> {
-    return originalGeminiService.generateSongMeaning(lyrics, artist, title, targetLanguage, metadata);
+    throw new Error("WorkerAIAdapter is currently in placeholder state.");
   }
 
   async translateLyrics(lyrics: string, targetLanguage: string): Promise<string> {
-    return originalGeminiService.translateLyrics(lyrics, targetLanguage);
+    throw new Error("WorkerAIAdapter is currently in placeholder state.");
   }
 
   async extractLyricsMetadata(
@@ -44,7 +62,7 @@ export class GeminiAIAdapter implements AiPort {
     artist: string,
     title: string
   ): Promise<{ authors: string | null; source_confirmation: string | null }> {
-    return originalGeminiService.extractLyricsMetadata(lyrics, artist, title);
+    throw new Error("WorkerAIAdapter is currently in placeholder state.");
   }
 
   async generateTrackAnalysis(
@@ -53,18 +71,18 @@ export class GeminiAIAdapter implements AiPort {
     title: string,
     targetLanguage: string
   ): Promise<any> {
-    return originalGeminiService.generateTrackAnalysis(lyrics, artist, title, targetLanguage);
+    throw new Error("WorkerAIAdapter is currently in placeholder state.");
   }
 
   async detectLanguage(text: string): Promise<string> {
-    return originalGeminiService.detectLanguage(text);
+    throw new Error("WorkerAIAdapter is currently in placeholder state.");
   }
 
   async explainPhraseStructured(
     phrase: string,
     targetLanguage: string
   ): Promise<{ translation: string; explanation: string }> {
-    return originalGeminiService.explainPhraseStructured(phrase, targetLanguage);
+    throw new Error("WorkerAIAdapter is currently in placeholder state.");
   }
 
   async generatePhraseAnalysis(
@@ -74,7 +92,7 @@ export class GeminiAIAdapter implements AiPort {
     targetLanguage: string,
     skipMeaning?: boolean
   ): Promise<any> {
-    return originalGeminiService.generatePhraseAnalysis(lyrics, artist, title, targetLanguage, skipMeaning);
+    throw new Error("WorkerAIAdapter is currently in placeholder state.");
   }
 
   async completeLyricsAnalysis(
@@ -84,11 +102,11 @@ export class GeminiAIAdapter implements AiPort {
     targetLanguage: string,
     metadata?: Partial<TrackMetadata>
   ): Promise<TrackLyricsData> {
-    return originalGeminiService.completeLyricsAnalysis(lyrics, artist, title, targetLanguage, metadata);
+    throw new Error("WorkerAIAdapter is currently in placeholder state.");
   }
 
   async getLatestAnalyzedTracks(maxCount?: number): Promise<TrackMeaningEntry[]> {
-    return originalGeminiService.getLatestAnalyzedTracks(maxCount);
+    throw new Error("WorkerAIAdapter is currently in placeholder state.");
   }
 
   async getLineTranslations(
@@ -96,7 +114,7 @@ export class GeminiAIAdapter implements AiPort {
     trackKey: string,
     targetLanguage: string
   ): Promise<any[]> {
-    return originalGeminiService.getLineTranslations(lyrics, trackKey, targetLanguage);
+    throw new Error("WorkerAIAdapter is currently in placeholder state.");
   }
 
   async getPhraseAnalysis(
@@ -104,24 +122,22 @@ export class GeminiAIAdapter implements AiPort {
     trackKey: string,
     targetLanguage: string
   ): Promise<any[]> {
-    return originalGeminiService.getPhraseAnalysis(lyrics, trackKey, targetLanguage);
+    throw new Error("WorkerAIAdapter is currently in placeholder state.");
   }
 
   async saveTrackToSharedCache(track: TrackLyricsData): Promise<void> {
-    return originalGeminiService.saveTrackToSharedCache(track);
+    throw new Error("WorkerAIAdapter is currently in placeholder state.");
   }
 
   async computeTrackKey(title: string, artists: string[]): Promise<string> {
-    return originalGeminiService.computeTrackKey(title, artists);
+    throw new Error("WorkerAIAdapter is currently in placeholder state.");
   }
 
   async computeLyricsHash(lyrics: string): Promise<string> {
-    return originalGeminiService.computeLyricsHash(lyrics);
+    throw new Error("WorkerAIAdapter is currently in placeholder state.");
   }
 
   normalizeString(str: string): string {
-    return originalGeminiService.normalizeString(str);
+    return (str || "").trim().toLowerCase();
   }
 }
-
-export const aiClient: AiPort = new GeminiAIAdapter();

@@ -1,5 +1,50 @@
 import { TrackLyricsData } from "../../services/musicService";
-import { TrackMetadata, TrackMeaningResult, TrackMeaningEntry } from "../../services/geminiService";
+
+export interface TrackMetadata {
+  title: string;
+  artists: string[];
+  albumName?: string;
+  albumId?: string;
+  artistId?: string;
+  coverUrl?: string;
+  audioUrl?: string;
+  appleMusicUrl?: string;
+  itunesId?: number;
+}
+
+export interface TrackMeaningResult {
+  originalLanguage: string;
+  difficulty: 'beginner' | 'intermediate' | 'advanced';
+  meanings: {
+    en: string;
+    es: string;
+    ru: string;
+    pl: string;
+    [key: string]: string;
+  };
+  promptVersion?: number;
+  translationPromptVersion?: number;
+  rawLyrics?: string;
+  lines?: any[];
+}
+
+export interface TrackMeaningEntry extends TrackMeaningResult {
+  trackKey: string;
+  title: string;
+  artists: string[];
+  albumName?: string;
+  albumId?: string;
+  artistId?: string;
+  coverUrl?: string;
+  audioUrl?: string;
+  appleMusicUrl?: string;
+  itunesId?: number;
+  createdAt: any;
+  promptVersion: number;
+}
+
+export const ANALYSIS_PROMPT_VERSION = 3;
+export const TRANSLATION_PROMPT_VERSION = 4;
 
 export interface AiPort {
   fetchTrackMeaning(

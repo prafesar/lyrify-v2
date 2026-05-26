@@ -7,7 +7,7 @@ import {
   splitLyricsIntoLines, 
   searchITunes 
 } from "../services/musicService";
-import { ANALYSIS_PROMPT_VERSION, TRANSLATION_PROMPT_VERSION } from "../services/geminiService";
+import { ANALYSIS_PROMPT_VERSION, TRANSLATION_PROMPT_VERSION } from "./ports/aiPort";
 
 export class TrackSessionFacade {
   /**
