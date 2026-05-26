@@ -8,8 +8,8 @@ vi.mock("idb-keyval", () => {
     del: async (key: string) => {
       mockInMemoryStore.delete(key);
     },
-    get: async (key: string) => {},
-    set: async (key: string, val: any) => {
+    get: async (_key: string) => {},
+    set: async (key: string, _val: any) => {
       mockInMemoryStore.add(key);
     },
   };

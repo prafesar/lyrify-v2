@@ -74,7 +74,7 @@ describe('Track Progress Metro Line Stepper Service', () => {
   it('Case 3: Analysis complete but no saved phrases', () => {
     const track = createMockTrack({
       rawLyrics: 'Je me souviens',
-      lines: [{ text: 'Je me souviens', translation: 'I remember', phrases: [{ text: 'Je me souviens' }] }],
+      lines: [{ id: 'l1', index: 0, original: 'Je me souviens', translation: 'I remember', phrases: [{ id: 'p1', text: 'Je me souviens', lemmas: [], type: 'phrase' }] }],
       processingStatus: { stage1_completed: true, stage2_completed: true, stage3_completed: true }
     });
     const vm = buildTrackProgressViewModel(track, []);
@@ -89,7 +89,7 @@ describe('Track Progress Metro Line Stepper Service', () => {
   it('Case 4: Phrases saved but review not done yet (reps = 0)', () => {
     const track = createMockTrack({
       rawLyrics: 'Je me souviens',
-      lines: [{ text: 'Je me souviens', translation: 'I remember', phrases: [{ text: 'Je me souviens' }] }],
+      lines: [{ id: 'l1', index: 0, original: 'Je me souviens', translation: 'I remember', phrases: [{ id: 'p1', text: 'Je me souviens', lemmas: [], type: 'phrase' }] }],
       processingStatus: { stage1_completed: true, stage2_completed: true, stage3_completed: true }
     });
     const card = createMockCard({ reps: 0 }); // Saved but not reviewed yet
@@ -104,7 +104,7 @@ describe('Track Progress Metro Line Stepper Service', () => {
   it('Case 5: Fully completed core learning loop (reps > 0)', () => {
     const track = createMockTrack({
       rawLyrics: 'Je me souviens',
-      lines: [{ text: 'Je me souviens', translation: 'I remember', phrases: [{ text: 'Je me souviens' }] }],
+      lines: [{ id: 'l1', index: 0, original: 'Je me souviens', translation: 'I remember', phrases: [{ id: 'p1', text: 'Je me souviens', lemmas: [], type: 'phrase' }] }],
       processingStatus: { stage1_completed: true, stage2_completed: true, stage3_completed: true }
     });
     const card = createMockCard({ reps: 1 }); // Already reviewed!

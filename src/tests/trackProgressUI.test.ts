@@ -35,7 +35,7 @@ describe('Track Progress Metro Line UI Actions', () => {
       title: 'Title',
       artist: 'Artist',
       rawLyrics: 'Some raw lyrics loaded',
-      lines: [{ text: 'Some raw lyrics loaded', translation: 'translation', phrases: [{ text: 'Some raw lyrics loaded' }] }],
+      lines: [{ id: 'l1', index: 0, original: 'Some raw lyrics loaded', translation: 'translation', phrases: [{ id: 'p1', text: 'Some raw lyrics loaded', lemmas: [], type: 'phrase' }] }],
       processingStatus: { stage1_completed: true, stage2_completed: true, stage3_completed: true },
       lastUpdated: dummyDate.getTime(),
     };

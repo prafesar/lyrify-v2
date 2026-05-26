@@ -50,11 +50,17 @@ import {
 import ReactMarkdown from "react-markdown";
 import { Track, Artist, Album } from "./constants";
 import { SUPPORTED_LANGUAGES } from "./lib/languages";
-import { aiClient, trackSessionFacade, userDataRepository, type TrackMetadata, type TrackMeaningEntry } from "./application";
-import {
-  ANALYSIS_PROMPT_VERSION,
+import { 
+  aiClient, 
+  trackSessionFacade, 
+  userDataRepository, 
+  type TrackMetadata, 
+  type TrackMeaningEntry, 
+  ANALYSIS_PROMPT_VERSION, 
   TRANSLATION_PROMPT_VERSION,
-} from "./services/geminiService";
+  type Flashcard,
+  type PhraseStatus
+} from "./application";
 
 const translateLyrics = (lyrics: string, targetLanguage: string) => aiClient.translateLyrics(lyrics, targetLanguage);
 const detectLanguage = (text: string) => aiClient.detectLanguage(text);
@@ -75,7 +81,6 @@ const saveTrackToSharedCache = (track: any) => aiClient.saveTrackToSharedCache(t
 import { cn } from "./lib/utils";
 import { auth, db, signIn, logOut, testDbConnection } from "./lib/firebase";
 import { onAuthStateChanged, type User } from "firebase/auth";
-import { userDataRepository, type Flashcard, type PhraseStatus } from "./application";
 
 const addPhraseToStudy = (phraseData: any, status?: PhraseStatus) => userDataRepository.addPhraseToStudy(phraseData, status);
 const getCards = () => userDataRepository.getCards();
@@ -1047,10 +1052,6 @@ export default function App() {
       const recent = getRecentTracks();
       console.log("[useEffect] Recent tracks loaded:", recent.length);
       setRecentTracks(recent);
-      // Default to community if no recent tracks
-      if (recent.length === 0) {
-        setActiveLibraryTab('community');
-      }
     } catch (e) {
       console.error("[useEffect] Failed to get recent tracks:", e);
       setRecentTracks([]);
