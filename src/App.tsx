@@ -50,6 +50,10 @@ import {
 import ReactMarkdown from "react-markdown";
 import { Track, Artist, Album } from "./constants";
 import { SUPPORTED_LANGUAGES } from "./lib/languages";
+import { useUserCards } from "./hooks/useUserCards";
+import { usePlayback } from "./hooks/usePlayback";
+import { useLibrarySearch } from "./hooks/useLibrarySearch";
+import { useTrackSession } from "./hooks/useTrackSession";
 import { 
   aiClient, 
   trackSessionFacade, 
@@ -265,6 +269,7 @@ interface LyricLineProps {
   shadowingFeedback: "none" | "correct" | "incorrect";
   shadowingAttempts: number;
   handleToggleStarLine: (index: number) => void;
+  onOpenLineDrawer?: (i: number) => void;
 }
 
 const LyricLine = ({
@@ -285,6 +290,7 @@ const LyricLine = ({
   shadowingFeedback,
   shadowingAttempts,
   handleToggleStarLine,
+  onOpenLineDrawer,
 }: LyricLineProps) => {
   const trimmedLine = line.trim();
   if (!trimmedLine && isCompact) return null;
@@ -345,6 +351,18 @@ const LyricLine = ({
 
           {trimmedLine && (
             <div className="flex items-center gap-2 shrink-0">
+              {phrasesInLine && phrasesInLine.length > 0 && onOpenLineDrawer && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onOpenLineDrawer(i);
+                  }}
+                  className="p-1 px-1.5 rounded-lg border border-transparent transition-all hover:scale-110 hover:border-app-card-border hover:bg-app-card/80 text-[var(--accent)]"
+                  title="Line Vocabulary & Phrases Analysis"
+                >
+                  <Sparkles size={16} />
+                </button>
+              )}
               <button
                 onClick={(e) => {
                   e.stopPropagation();
@@ -562,28 +580,173 @@ export default function App() {
   const [studyTrackId, setStudyTrackId] = useState<string | undefined>(undefined);
 
   const [view, setView] = useState<"tracks" | "study" | "lyrics" | "settings">(
-    "tracks",
+    "tracks"
   );
   const [activeTab, setActiveTab] = useState<"preview" | "lyrics" | "analysis">(
-    "preview",
+    "preview"
   );
-  const [currentTrack, setCurrentTrack] = useState<TrackLyricsData | null>(null);
-  const [isPlaying, setIsPlaying] = useState(false);
   const [targetLanguage, setTargetLanguage] = useState(
-    () => userDataRepository.getPreference("lyrify_target_lang", "Russian"),
+    () => userDataRepository.getPreference("lyrify_target_lang", "Russian")
   );
   const [theme, setTheme] = useState(
-    () => userDataRepository.getPreference("lyrify_theme", "light"),
-  );
-  const [isTranslating, setIsTranslating] = useState(false);
-  const [isGeneratingAnalysis, setIsGeneratingAnalysis] = useState(false);
-  const [phraseMetadata, setPhraseMetadata] = useState<Map<string, Flashcard>>(
-    new Map(),
-  );
-  const [childCardsMap, setChildCardsMap] = useState<Map<string, Flashcard[]>>(
-    new Map(),
+    () => userDataRepository.getPreference("lyrify_theme", "light")
   );
 
+  // Custom UI Display settings
+  const [lyricsDisplayMode, setLyricsDisplayMode] = useState<"lyrics" | "translation" | "both">(
+    () => (userDataRepository.getPreference("cantolex_lyrics_display_mode", "both") as any)
+  );
+  const [isStarFilterActive, setIsStarFilterActive] = useState<boolean>(
+    () => userDataRepository.getBoolPreference("cantolex_star_filter_active", false)
+  );
+  const [previewLyricsMode, setPreviewLyricsMode] = useState<"original" | "translation">("original");
+
+  const [popoverData, setPopoverData] = useState<{
+    phrase: string;
+    translation: string;
+    explanation?: string;
+    position: { x: number; y: number };
+  } | null>(null);
+
+  // Modals and dialog states
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isLyricsSettingsOpen, setIsLyricsSettingsOpen] = useState(false);
+  const [resourceTab, setResourceTab] = useState<"links" | "lyrics">("links");
+  const [editingLine, setEditingLine] = useState<{
+    index: number;
+    original: string;
+    translation?: string;
+  } | null>(null);
+
+  const [isExplaining, setIsExplaining] = useState(false);
+  const [isEditingTranslation, setIsEditingTranslation] = useState(false);
+  const [dbConnectionError, setDbConnectionError] = useState(false);
+
+  // Initialize Custom Hooks
+  const {
+    searchQuery,
+    searchEntityType,
+    searchResults,
+    artistDetails,
+    albumDetails,
+    isSearchingDetails,
+    recentTracks,
+    searchHistory,
+    isSearchInputFocused,
+    isSearching,
+    dynamicTracks,
+    isLoadingTracks,
+    searchContainerRef,
+    setSearchQuery,
+    setSearchEntityType,
+    setIsSearchInputFocused,
+    setSearchResults,
+    setSearchHistory,
+    setRecentTracks,
+    setArtistDetails,
+    setAlbumDetails,
+    handleSearch,
+    handleArtistSelect,
+    handleAlbumSelect,
+    cancelSearchDetails,
+    loadCommunityTracks
+  } = useLibrarySearch(targetLanguage);
+
+  const {
+    currentTrack,
+    isLoadingLyrics,
+    loadingStep,
+    lyricsFetchError,
+    analysisError,
+    manualLyrics,
+    isTranslating,
+    isGeneratingAnalysis,
+    lyricOptions,
+    isSearchingOptions,
+    manualSearchQuery,
+    isResourcesOpen,
+    setCurrentTrack,
+    setIsLoadingLyrics,
+    setLoadingStep,
+    setLyricsFetchError,
+    setAnalysisError,
+    setManualLyrics,
+    setIsTranslating,
+    setIsGeneratingAnalysis,
+    setLyricOptions,
+    setIsSearchingOptions,
+    setManualSearchQuery,
+    setIsResourcesOpen,
+    handleTrackSelect: handleTrackSelectRaw,
+    handleAnalyzeSong: handleAnalyzeSongRaw,
+    handleRegenerateTranslations,
+    runStage3,
+    handleManualLyricsSubmit: handleManualLyricsSubmitRaw,
+    handleGenerateAnalysis: handleGenerateAnalysisRaw,
+    handleRegenerateAnalysis: handleRegenerateAnalysisRaw,
+    handleResetAnalysis: handleResetAnalysisRaw,
+    handleManualLyricsSearch,
+    handleSelectLyricOption: handleSelectLyricOptionRaw,
+    handleResetLyrics: handleResetLyricsRaw
+  } = useTrackSession();
+
+  const {
+    phraseMetadata,
+    setPhraseMetadata,
+    childCardsMap,
+    isSaving,
+    dailyActivity,
+    dueCardsCount,
+    dailyProgressSummary,
+    resumeViewModel,
+    loadUserCards,
+    getLineStatus,
+    handleUpdateStatusLocal,
+    handleAddLineWithComponents: handleAddLineWithComponentsRaw,
+    handleAddAnalysisPhrase: handleAddAnalysisPhraseRaw,
+    handleSetAnalysisPhraseStatus: handleSetAnalysisPhraseStatusRaw,
+    recordPhraseSavedAction,
+    recordReviewCompletedAction,
+    recordTrackExploredAction,
+    setDailyActivity
+  } = useUserCards(recentTracks);
+
+  const {
+    activeLineIndex,
+    isPlaying,
+    isPreviewPlaying,
+    hasStartedPreview,
+    previewProgress,
+    previewDuration,
+    isReadingAll,
+    isListeningForSpeech,
+    shadowingFeedback,
+    playbackMode,
+    shadowingAttempts,
+    isMuted,
+    skipKnownPhrases,
+    previewAudioRef,
+    scrollContainerRef,
+    lineRefs,
+    togglePreviewAudio,
+    seekPreview,
+    handlePreviewTimeUpdate,
+    handlePreviewLoadedMetadata,
+    handlePreviewEnded,
+    speak,
+    toggleReadLyrics,
+    changePlaybackMode,
+    setIsMuted,
+    setSkipKnownPhrases,
+    setActiveLineIndex,
+    setIsReadingAll,
+    setIsPreviewPlaying,
+    setHasStartedPreview,
+    setPreviewProgress,
+    handleLineClick
+  } = usePlayback(currentTrack, phraseMetadata, targetLanguage);
+
+  // Derived memoized progress View Models
   const nextStepState = useMemo(() => {
     if (!currentTrack) return null;
     const hasSavedCardsForTrack = Array.from(phraseMetadata.values()).some(
@@ -603,15 +766,7 @@ export default function App() {
     return buildTrackProgressViewModel(currentTrack, cards);
   }, [currentTrack, phraseMetadata]);
 
-  const [activeLineIndex, setActiveLineIndex] = useState<number | null>(null);
-  const [lyricsDisplayMode, setLyricsDisplayMode] = useState<"lyrics" | "translation" | "both">(
-    () => (userDataRepository.getPreference("cantolex_lyrics_display_mode", "both") as any)
-  );
-  const [isStarFilterActive, setIsStarFilterActive] = useState<boolean>(
-    () => userDataRepository.getBoolPreference("cantolex_star_filter_active", false)
-  );
-  const [previewLyricsMode, setPreviewLyricsMode] = useState<"original" | "translation">("original");
-
+  // UI display handlers
   const handleSetLyricsDisplayMode = (mode: "lyrics" | "translation" | "both") => {
     setLyricsDisplayMode(mode);
     userDataRepository.setPreference("cantolex_lyrics_display_mode", mode);
@@ -642,158 +797,76 @@ export default function App() {
     saveTrackData(currentTrack.trackId, updatedTrack);
   };
 
-  const handleSetAnalysisPhraseStatus = async (
-    phrase: string,
-    translation: string,
-    explanation: string,
-    status: PhraseStatus
-  ) => {
-    if (!currentTrack) return;
-    const existingCard = phraseMetadata.get(phrase);
-    if (existingCard) {
-      try {
-        await updatePhraseStatus(existingCard.id, status);
-        await loadUserCards();
-      } catch (err) {
-        console.error(err);
-      }
-    } else {
-      await handleAddAnalysisPhrase(phrase, translation, explanation, status);
-    }
+  // Synchronized callback action delegates
+  const handleTrackSelect = async (track: any) => {
+    await handleTrackSelectRaw(track, targetLanguage, {
+      recordTrackExploredAction,
+      updateRecentTracks: setRecentTracks,
+      onSelectClear: () => {
+        setActiveLineIndex(null);
+        setIsReadingAll(false);
+      },
+      setView,
+      setActiveTab
+    });
   };
 
-  const [isMuted, setIsMuted] = useState(
-    () => userDataRepository.getBoolPreference("lyrify_muted", false),
-  );
-  const [dynamicTracks, setDynamicTracks] = useState<Track[]>([]);
-  const [isLoadingTracks, setIsLoadingTracks] = useState(true);
-
-  // --- One-time Cleanup marker ---
-  useEffect(() => {
-    userDataRepository.setBoolPreference("lyrify_wiped_v3", true);
-  }, []);
-  // --------------------------------------
-  const [popoverData, setPopoverData] = useState<{
-    phrase: string;
-    translation: string;
-    explanation?: string;
-    position: { x: number; y: number };
-  } | null>(null);
-
-  useEffect(() => {
-    userDataRepository.setBoolPreference("lyrify_muted", isMuted);
-  }, [isMuted]);
-
-  const loadUserCards = async () => {
-    try {
-      const cards = await getCards();
-      const meta = new Map<string, Flashcard>();
-      const children = new Map<string, Flashcard[]>();
-
-      cards.forEach((card) => {
-        meta.set(card.text, card);
-        if (card.lineId) {
-          const list = children.get(card.lineId) || [];
-          list.push(card);
-          children.set(card.lineId, list);
-        }
-      });
-
-      setPhraseMetadata(meta);
-      setChildCardsMap(children);
-    } catch (err) {
-      console.error("Failed to load cards:", err);
-    }
+  const handleAnalyzeSong = async () => {
+    await handleAnalyzeSongRaw(targetLanguage, {
+      updateRecentTracks: setRecentTracks,
+      loadCommunityTracks
+    });
   };
 
-  useEffect(() => {
-    loadUserCards();
-  }, []);
-  const getLineStatus = (line: string) => {
-    const children = childCardsMap.get(line) || [];
+  const handleManualLyricsSubmit = async () => {
+    await handleManualLyricsSubmitRaw(targetLanguage, {
+      updateRecentTracks: () => setRecentTracks(userDataRepository.getRecentTracks()),
+      loadCommunityTracks
+    });
+  };
 
-    if (children.length === 0) return "new";
+  const handleGenerateAnalysis = async (force: boolean = false, customTrack?: TrackLyricsData) => {
+    await handleGenerateAnalysisRaw(targetLanguage, { loadCommunityTracks }, force, customTrack);
+  };
 
-    const statuses = children.map((c) => c.status);
+  const handleRegenerateAnalysis = async () => {
+    await handleRegenerateAnalysisRaw(targetLanguage, { loadCommunityTracks });
+  };
 
-    if (statuses.every((s) => s === "known")) return "known";
-    // If at least one is being studied or is known (but not all are known), it's learning
-    if (statuses.some((s) => s === "learning" || s === "known"))
-      return "learning";
-    return "new";
+  const handleResetAnalysis = () => {
+    handleResetAnalysisRaw(targetLanguage, { loadCommunityTracks });
+  };
+
+  const handleSelectLyricOption = async (option: LyricOption) => {
+    await handleSelectLyricOptionRaw(option, targetLanguage, { loadCommunityTracks });
+  };
+
+  const handleResetLyrics = () => {
+    handleResetLyricsRaw(targetLanguage, {
+      recordTrackExploredAction,
+      updateRecentTracks: setRecentTracks,
+      onSelectClear: () => {
+        setActiveLineIndex(null);
+        setIsReadingAll(false);
+      },
+      setView,
+      setActiveTab
+    });
+  };
+
+  const getPhrasesForLine = (lineIdx: number) => {
+    if (!currentTrack || !currentTrack.lines) return [];
+    const trackLine = currentTrack.lines.find((l) => l.index === lineIdx);
+    if (!trackLine) return [];
+    return trackLine.phrases || [];
   };
 
   const handleAddLineWithComponents = async (
     line: string,
     index: number,
-    status: PhraseStatus = "learning",
+    status: PhraseStatus = "learning"
   ) => {
-    if (!currentTrack) return;
-    const trimmedLine = line.trim();
-    if (!trimmedLine) return;
-
-    setIsSaving(true);
-    try {
-      let addedCount = 0;
-
-      // 1. Find and add components (phrases)
-    const phrasesInLine = getPhrasesForLine(index);
-
-    const allToProcess = [
-      ...phrasesInLine.map((c: Phrase) => ({
-        text: c.text,
-        trans: c.translation,
-        expl: c.explanation,
-      })),
-    ];
-
-    for (const item of allToProcess) {
-      const existing = phraseMetadata.get(item.text);
-      if (!existing || !existing.id) {
-        await addPhraseToStudy({
-          text: item.text,
-          translation: item.trans,
-          trackId: currentTrack.trackId,
-          trackTitle: currentTrack.title,
-          artist: currentTrack.artist,
-          sourceLanguage: currentTrack.sourceLanguage,
-          lineId: trimmedLine,
-          explanation: item.expl || '',
-          type: 'phrase'
-        }, status);
-        addedCount++;
-        setDailyActivity(recordPhraseSaved());
-      } else {
-        // Update existing component status if we're marking line as known/learn
-        if (existing.status !== status) {
-          await updatePhraseStatus(existing.id, status);
-        }
-      }
-    }
-
-      // 2. Refresh all cards
-      await loadUserCards();
-
-      if (addedCount > 0) {
-        console.log(`Added components (${addedCount} total)`);
-      }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const handleUpdateStatusLocal = async (
-    card: Flashcard,
-    status: PhraseStatus,
-  ) => {
-    try {
-      await updatePhraseStatus(card.id, status);
-      await loadUserCards();
-    } catch (err) {
-      console.error(err);
-    }
+    await handleAddLineWithComponentsRaw(line, index, status, currentTrack, getPhrasesForLine);
   };
 
   const handleAddAnalysisPhrase = async (
@@ -802,328 +875,109 @@ export default function App() {
     explanation: string,
     status: PhraseStatus = "learning"
   ) => {
+    await handleAddAnalysisPhraseRaw(phrase, translation, explanation, status, currentTrack);
+  };
+
+  const handleSetAnalysisPhraseStatus = async (
+    phrase: string,
+    translation: string,
+    explanation: string,
+    status: PhraseStatus
+  ) => {
+    await handleSetAnalysisPhraseStatusRaw(phrase, translation, explanation, status, currentTrack);
+  };
+
+  // Local visual component modal helpers
+  const handleOpenAddModal = async (line: string, currentIndex: number) => {
+    const trimmedLine = line.trim();
+    if (!user) {
+      alert("Please sign in to save phrases to your deck");
+      return;
+    }
+
+    const existingMetadata = phraseMetadata.get(trimmedLine);
+    const fullTransLines = currentTrack?.fullTranslation?.split("\n") || [];
+    const fullTrans = fullTransLines[currentIndex];
+
+    if (existingMetadata) {
+      setEditingLine({
+        index: currentIndex,
+        original: trimmedLine,
+        translation: existingMetadata.translatedPhrase || fullTrans || "",
+      });
+      setIsEditModalOpen(true);
+    } else {
+      handleAddLineWithComponents(trimmedLine, currentIndex, "learning");
+    }
+  };
+
+  const handleOpenAddAnalysisItem = (phrase: string, translation: string, explanation: string) => {
+    if (!user) {
+      alert("Please sign in to save analysis items to your deck");
+      return;
+    }
+    handleAddAnalysisPhrase(phrase, translation, explanation, "learning");
+  };
+
+  const handleUpdateStatus = async (card: Flashcard, status: PhraseStatus) => {
+    await handleUpdateStatusLocal(card, status);
+  };
+
+  const handleExplain = async (phrase: string) => {
     if (!currentTrack) return;
-
-    // Find parent line if any
-    let parentLine = "";
-    for (const line of currentTrack.lines) {
-      if (line.original.includes(phrase)) {
-        parentLine = line.original.trim();
-        break;
-      }
-    }
-
+    setIsExplaining(true);
     try {
-      await addPhraseToStudy({
-        text: phrase,
-        translation: translation,
-        trackId: currentTrack.trackId,
-        trackTitle: currentTrack.title,
-        artist: currentTrack.artist,
-        sourceLanguage: currentTrack.sourceLanguage,
-        lineId: parentLine || '',
-        explanation: explanation,
-        lemmas: [],
-        type: 'phrase'
-      }, status);
-      setDailyActivity(recordPhraseSaved());
-      await loadUserCards();
+      const result = await explainPhraseStructured(phrase, targetLanguage);
+      alert(`Phrase: ${phrase}
+
+Translation: ${result.translation}
+
+Explanation:
+${result.explanation}`);
     } catch (err) {
-      console.error(err);
+      console.error("Failed to explain phrase:", err);
+      alert("Failed to fetch explanations from Gemini.");
+    } finally {
+      setIsExplaining(false);
     }
   };
 
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [isLyricsSettingsOpen, setIsLyricsSettingsOpen] = useState(false);
-  const [isResourcesOpen, setIsResourcesOpen] = useState(false);
-  const [resourceTab, setResourceTab] = useState<"links" | "lyrics">("links");
-  const [editingLine, setEditingLine] = useState<{
-    original: string;
-    translation: string;
-    explanation?: string;
-    cardId?: string;
-    status: PhraseStatus;
-    index: number;
-    language?: string;
-  }>({
-    original: "",
-    translation: "",
-    status: "new",
-    index: -1,
-  });
-  const [isExplaining, setIsExplaining] = useState(false);
-  const [isReadingAll, setIsReadingAll] = useState(false);
-  const [isEditingTranslation, setIsEditingTranslation] = useState(false);
-  const isReadingAllRef = useRef(false);
-  const playbackModeRef = useRef<"listening" | "shadowing">("listening");
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const lineRefs = useRef<Map<number, HTMLDivElement>>(new Map());
-
-  const getPhrasesForLine = (lineIdx: number) => {
-    if (!currentTrack) return [];
-    return currentTrack.lines[lineIdx]?.phrases || [];
-  };
-
-  useEffect(() => {
-    let timeoutId: number | undefined;
-    if (
-      activeLineIndex !== null &&
-      lineRefs.current.has(activeLineIndex) &&
-      scrollContainerRef.current
-    ) {
-      const scroll = () => {
-        const activeEl = lineRefs.current.get(activeLineIndex!);
-        const container = scrollContainerRef.current;
-        if (activeEl && container) {
-          const containerRect = container.getBoundingClientRect();
-          const activeRect = activeEl.getBoundingClientRect();
-          
-          // Calculate relative position within the scrollable content
-          const relativeTop = activeRect.top - containerRect.top + container.scrollTop;
-          const elHeight = activeRect.height;
-          const containerHeight = containerRect.height;
-
-          container.scrollTo({
-            top: relativeTop - containerHeight / 2 + elHeight / 2,
-            behavior: "smooth",
-          });
-        }
-      };
-
-      // Try scrolling immediately
-      scroll();
-      // Also try after a short delay to account for layout shifts/expansions
-      timeoutId = window.setTimeout(scroll, 100);
-    }
-    return () => {
-      if (timeoutId) clearTimeout(timeoutId);
-    };
-  }, [activeLineIndex, activeTab]);
-
-  useEffect(() => {
-    document.documentElement.setAttribute("data-theme", theme);
-    userDataRepository.setPreference("lyrify_theme", theme);
-  }, [theme]);
-
-  const [searchQuery, setSearchQuery] = useState("");
-  const [searchEntityType, setSearchEntityType] = useState<"musicTrack" | "album" | "musicArtist">("musicTrack");
-  const [searchResults, setSearchResults] = useState<any[]>([]);
-  const [artistDetails, setArtistDetails] = useState<{ artist: Artist; albums: Album[]; topTracks: Track[] } | null>(null);
-  const [albumDetails, setAlbumDetails] = useState<{ album: Album; tracks: Track[] } | null>(null);
-  const [isSearchingDetails, setIsSearchingDetails] = useState(false);
-  const [recentTracks, setRecentTracks] = useState<Track[]>([]);
-  const [searchHistory, setSearchHistory] = useState<string[]>(
-    () => JSON.parse(userDataRepository.getPreference("lyrify_search_history", "[]"))
-  );
-  const [isSearchInputFocused, setIsSearchInputFocused] = useState(false);
-  const [isSearching, setIsSearching] = useState(false);
-  const [isLoadingLyrics, setIsLoadingLyrics] = useState(false);
-  const [loadingStep, setLoadingStep] = useState<
-    "idle" | "searching" | "meaning" | "analyzing" | "translating"
-  >("idle");
-  const [lyricsFetchError, setLyricsFetchError] = useState<string | null>(null);
-  const [analysisError, setAnalysisError] = useState<string | null>(null);
-  const [manualLyrics, setManualLyrics] = useState("");
-  const previewAudioRef = useRef<HTMLAudioElement | null>(null);
-  const [isPreviewPlaying, setIsPreviewPlaying] = useState(false);
-  const [hasStartedPreview, setHasStartedPreview] = useState(false);
-  const [previewProgress, setPreviewProgress] = useState(0);
-  const [previewDuration, setPreviewDuration] = useState(0);
-  const [dbConnectionError, setDbConnectionError] = useState(false);
-
-  const [lyricOptions, setLyricOptions] = useState<LyricOption[]>([]);
-  const [isSearchingOptions, setIsSearchingOptions] = useState(false);
-  const [manualSearchQuery, setManualSearchQuery] = useState("");
-
-  useEffect(() => {
-    isReadingAllRef.current = isReadingAll;
-  }, [isReadingAll]);
-
-  const [isSaving, setIsSaving] = useState(false);
-  const [playbackMode, setPlaybackMode] = useState<"listening" | "shadowing">(
-    "listening",
-  );
-
-  useEffect(() => {
-    userDataRepository.setPreference("lyrify_target_lang", targetLanguage);
-    playbackModeRef.current = playbackMode;
-  }, [playbackMode, targetLanguage]);
-  const [shadowingAttempts, setShadowingAttempts] = useState(0);
-  const [isListeningForSpeech, setIsListeningForSpeech] = useState(false);
-  const [skipKnownPhrases, setSkipKnownPhrases] = useState(
-    () => userDataRepository.getBoolPreference("skip_known", false),
-  );
-  const [shadowingFeedback, setShadowingFeedback] = useState<
-    "none" | "correct" | "incorrect"
-  >("none");
-
-  const [isPhraseDrawerOpen, setIsPhraseDrawerOpen] = useState(false);
   const [phraseDrawerData, setPhraseDrawerData] = useState<{
     phrase: string;
-    translation: string;
-    explanation: string;
-  }>({
-    phrase: "",
-    translation: "",
-    explanation: "",
-  });
-  const [structuredCache, setStructuredCache] = useState<Map<string, any>>(
-    new Map(),
-  );
+    card: Flashcard;
+    children: Flashcard[];
+    getLineStatus: (text: string) => PhraseStatus;
+  } | null>(null);
+  const [isPhraseDrawerOpen, setIsPhraseDrawerOpen] = useState(false);
+  const [selectedLineIndexForDrawer, setSelectedLineIndexForDrawer] = useState<number | null>(null);
 
-  const resumeViewModel = useMemo(() => {
-    const cards = Array.from(phraseMetadata.values());
-    return buildResumeViewModel(cards, recentTracks);
-  }, [phraseMetadata, recentTracks]);
-
-  const dueCardsCount = useMemo(() => {
-    const cards = Array.from(phraseMetadata.values());
-    const now = new Date();
-    return cards.filter(card => {
-      const dueTime = card.due instanceof Date ? card.due.getTime() : new Date(card.due || 0).getTime();
-      return dueTime <= now.getTime();
-    }).length;
-  }, [phraseMetadata]);
-
-  const [dailyActivity, setDailyActivity] = useState<DailyActivity>(() => getDailyActivity());
-
-  const dailyProgressSummary = useMemo(() => {
-    return getDailyProgressSummary(dailyActivity);
-  }, [dailyActivity]);
-
-  const recognitionRef = useRef<any>(null);
-  const correctAudioRef = useRef<HTMLAudioElement | null>(null);
-  const incorrectAudioRef = useRef<HTMLAudioElement | null>(null);
-  const abortControllerRef = useRef<AbortController | null>(null);
-
-  const cancelSearchDetails = () => {
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-      abortControllerRef.current = null;
-    }
-    setIsSearchingDetails(false);
-    setIsSearching(false);
+  const handleOpenStructuredAnalysis = (phraseText: string) => {
+    const card = phraseMetadata.get(phraseText);
+    if (!card) return;
+    const children = childCardsMap.get(phraseText) || [];
+    setPhraseDrawerData({
+      phrase: phraseText,
+      card,
+      children,
+      getLineStatus: (txt) => {
+        const c = phraseMetadata.get(txt);
+        return (c?.status || "new") as PhraseStatus;
+      }
+    });
+    setIsPhraseDrawerOpen(true);
   };
 
-  useEffect(() => {
-    userDataRepository.setBoolPreference("skip_known", skipKnownPhrases);
-  }, [skipKnownPhrases]);
-
-  useEffect(() => {
-    if (searchQuery.trim()) {
-      handleSearch();
-    }
-  }, [searchEntityType]);
-
-  useEffect(() => {
-    // Initialize audio feedback
-    correctAudioRef.current = new Audio(
-      "https://assets.mixkit.co/active_storage/sfx/2571/2571-preview.mp3",
-    );
-    incorrectAudioRef.current = new Audio(
-      "https://assets.mixkit.co/active_storage/sfx/2572/2572-preview.mp3",
-    );
-
-    // Initialize speech recognition if available
-    const SpeechRecognition =
-      (window as any).SpeechRecognition ||
-      (window as any).webkitSpeechRecognition;
-    if (SpeechRecognition) {
-      recognitionRef.current = new SpeechRecognition();
-      recognitionRef.current.continuous = false;
-      recognitionRef.current.interimResults = false;
-    }
-
-    return () => {
-      if (recognitionRef.current) recognitionRef.current.abort();
-    };
-  }, []);
-
-  useEffect(() => {
-    console.log("[useEffect] Initializing app...");
-    // Warm up TTS voices
-    window.speechSynthesis.getVoices();
-    if (window.speechSynthesis.onvoiceschanged !== undefined) {
-      window.speechSynthesis.onvoiceschanged = () =>
-        window.speechSynthesis.getVoices();
-    }
-
-    try {
-      const recent = getRecentTracks();
-      console.log("[useEffect] Recent tracks loaded:", recent.length);
-      setRecentTracks(recent);
-    } catch (e) {
-      console.error("[useEffect] Failed to get recent tracks:", e);
-      setRecentTracks([]);
-    }
-
-    const unsubscribe = onAuthStateChanged(auth, (u) => {
-      console.log("[useEffect] Auth state changed:", u?.uid || "Guest");
-      setUser((prev) => {
-        if (prev?.uid === u?.uid) return prev;
-        return u;
-      });
+  const getPlaybackLines = () => {
+    if (!currentTrack) return [];
+    const isStarred = isStarFilterActive;
+    return currentTrack.lines.filter((line) => {
+      if (isStarred && !line.isStarred) return false;
+      if (skipKnownPhrases) {
+        const lineStatus = getLineStatus(line.original);
+        if (lineStatus === "known") return false;
+      }
+      return true;
     });
-
-    // Check DB connection
-    testDbConnection().then((connected) => {
-      console.log("[useEffect] DB connected:", connected);
-      if (!connected) setDbConnectionError(true);
-    });
-
-    loadCommunityTracks();
-
-    return () => unsubscribe();
-  }, []);
-
-  const loadCommunityTracks = async () => {
-    console.log("[loadCommunityTracks] Starting fetch...");
-    setIsLoadingTracks(true);
-    try {
-      const dbTracks = await getLatestAnalyzedTracks(24);
-      console.log("[loadCommunityTracks] Fetched raw items from DB:", dbTracks.length);
-      const appTracks: Track[] = dbTracks.map((t: any) => {
-        // Robust artist extraction
-        let artistName = "Unknown Artist";
-        if (Array.isArray(t.artists) && t.artists.length > 0) {
-          artistName = t.artists[0];
-        } else if (typeof t.artists === 'string') {
-          artistName = t.artists;
-        } else if (t.artist) {
-          artistName = t.artist;
-        }
-
-        return {
-          id: t.trackKey || String(Math.random()),
-          title: t.title || "Unknown Title",
-          artist: artistName,
-          artistId: t.artistId || "",
-          album: t.albumName || "Unknown Album",
-          albumId: t.albumId || "",
-          coverUrl: t.coverUrl || "https://images.unsplash.com/photo-1470225620780-dba8ba36b745?q=80&w=1000&auto=format&fit=crop",
-          audioUrl: t.audioUrl || "",
-          appleMusicUrl: t.appleMusicUrl || "",
-          sourceLanguage: t.originalLanguage || "English",
-          difficulty: t.difficulty,
-          promptVersion: t.promptVersion,
-          meaning: (() => {
-            const langKey = targetLanguage.toLowerCase().trim();
-            if (langKey === 'spanish') return t.meanings?.es || t.meanings?.en;
-            if (langKey === 'russian') return t.meanings?.ru || t.meanings?.en;
-            if (langKey === 'polish') return t.meanings?.pl || t.meanings?.en;
-            return t.meanings?.en;
-          })(),
-          meanings: t.meanings,
-          documentId: t.trackKey
-        };
-      });
-      console.log("[loadCommunityTracks] Mapped tracks count:", appTracks.length);
-      setDynamicTracks(appTracks);
-    } catch (err) {
-      console.error("[loadCommunityTracks] Error during loading/mapping:", err);
-    } finally {
-      setIsLoadingTracks(false);
-    }
   };
 
   const resetUserData = async () => {
@@ -1133,6 +987,182 @@ export default function App() {
     console.log("Reloading...");
     window.location.reload();
   };
+
+  // Core application visual/status helpers
+  const renderDifficultyIndicator = (score?: number) => {
+    if (score === undefined) return null;
+    let label = "Normal";
+    let color = "text-sky-500 bg-sky-500/10";
+    if (score > 6) {
+      label = "Advanced";
+      color = "text-red-500 bg-red-500/10";
+    } else if (score > 3) {
+      label = "Intermediate";
+      color = "text-amber-500 bg-amber-500/10";
+    }
+
+    return (
+      <span className="px-2.5 py-1 rounded-full text-xs font-semibold backdrop-blur-md uppercase tracking-wider shadow-sm text-sky-500 bg-sky-500/10">
+        {label} ({score})
+      </span>
+    );
+  };
+
+  const handleOnboardingDismiss = () => {
+    userDataRepository.setPreference("cantolex_onboarding_dismissed", "true");
+    setOnboardingCompleted(true);
+  };
+
+  const handleOnboardingSelect = (language: string) => {
+    setTargetLanguage(language);
+    userDataRepository.setPreference("lyrify_target_lang", language);
+    userDataRepository.setPreference("cantolex_onboarding_dismissed", "true");
+    setOnboardingCompleted(true);
+  };
+
+  const handleNextStepClick = () => {
+    if (!nextStepState) return;
+    if (nextStepState.step === "preview") {
+      setActiveTab("preview");
+    } else if (nextStepState.step === "lyrics") {
+      setActiveTab("lyrics");
+    } else if (nextStepState.step === "analyze") {
+      setActiveTab("analysis");
+    } else if (nextStepState.step === "study") {
+      setView("study");
+    }
+  };
+
+  const getStatusStyles = (s: PhraseStatus) => {
+    switch (s) {
+      case "known":
+        return {
+          bg: "bg-transparent",
+          border: "border-transparent",
+          icon: <CheckCircle2 size={18} className="text-app-fg opacity-30 shrink-0" />,
+        };
+      case "learning":
+        return {
+          bg: "bg-orange-500/5",
+          border: "border-orange-500/20",
+          icon: <RefreshCw size={18} className="text-orange-500 shrink-0" />,
+        };
+      default:
+        return {
+          bg: "bg-sky-400/5",
+          border: "border-sky-400/20",
+          icon: <HelpCircle size={18} className="text-sky-400 shrink-0" />,
+        };
+    }
+  };
+
+  const renderHighlightedText = (text: string, phrases: Phrase[]) => {
+    if (!phrases || !phrases.length) return text;
+    const applicable = phrases.filter((p) =>
+      text.toLowerCase().includes(p.text.toLowerCase())
+    );
+    if (!applicable.length) return text;
+    const sorted = [...applicable].sort(
+      (a, b) => b.text.length - a.text.length
+    );
+    const pattern = sorted
+      .map((p) => p.text.replace(/[.*+?^$/|[\\\]]/g, "\\$&"))
+      .join("|");
+    const regex = new RegExp(`(${pattern})`, "gi");
+    return text.split(regex).map((part, idx) => {
+      const m = sorted.find((p) => p.text.toLowerCase() === part.toLowerCase());
+      if (part && m) {
+        return (
+          <span
+            key={part + "_" + idx}
+            onClick={(e) => {
+              e.stopPropagation();
+              const rect = e.currentTarget.getBoundingClientRect();
+              setPopoverData({
+                phrase: m.text,
+                translation: m.translation || "",
+                explanation: m.explanation,
+                position: {
+                  x: rect.left,
+                  y: rect.top + window.scrollY,
+                },
+              });
+            }}
+            className={cn(
+              "relative inline-flex items-center gap-1 transition-all px-0.5 -mx-0.5 rounded-sm hover:bg-app-accent/5 border-b-2 border-dotted",
+              "border-app-fg/20 text-app-fg hover:border-app-fg/40"
+            )}
+          >
+            {part}
+          </span>
+        );
+      }
+      return part;
+    });
+  };
+
+  const renderLyricLine = (
+    line: string,
+    i: number,
+    isCompact: boolean = false,
+    alwaysShowTranslation: boolean = false,
+    displayModeOverride?: "lyrics" | "translation" | "both"
+  ) => {
+    return (
+      <LyricLine
+        key={i}
+        line={line}
+        i={i}
+        isCompact={isCompact}
+        alwaysShowTranslation={alwaysShowTranslation}
+        displayMode={displayModeOverride || (activeTab === "lyrics" ? lyricsDisplayMode : "both")}
+        activeLineIndex={activeLineIndex}
+        phraseMetadata={phraseMetadata}
+        currentTrack={currentTrack}
+        getPhrasesForLine={getPhrasesForLine}
+        lineRefs={lineRefs}
+        renderHighlightedText={(line, phrases) => renderHighlightedText(line, phrases)}
+        handleLineClick={(line, i) => handleLineClick(line, i)}
+        isSaving={isSaving}
+        isListeningForSpeech={isListeningForSpeech}
+        shadowingFeedback={shadowingFeedback}
+        shadowingAttempts={shadowingAttempts}
+        handleToggleStarLine={handleToggleStarLine}
+        onOpenLineDrawer={(index) => {
+          setSelectedLineIndexForDrawer(index);
+          setIsPhraseDrawerOpen(true);
+        }}
+      />
+    );
+  };
+
+  // Setup/Synchronize Effects
+  useEffect(() => {
+    userDataRepository.setBoolPreference("lyrify_wiped_v3", true);
+  }, []);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (u) => {
+      console.log("[useEffect] Auth state changed:", u?.uid || "Guest");
+      setUser((prev) => {
+        if (prev?.uid === u?.uid) return prev;
+        return u;
+      });
+    });
+
+    testDbConnection().then((connected) => {
+      console.log("[useEffect] DB connected:", connected);
+      if (!connected) setDbConnectionError(true);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    if (recentTracks.length > 0) {
+      loadUserCards();
+    }
+  }, [recentTracks.length]);
 
   useEffect(() => {
     setActiveLineIndex(null);
@@ -1166,1344 +1196,36 @@ export default function App() {
   }, [currentTrack?.lines]);
 
   useEffect(() => {
-    if (view === "lyrics" && !currentTrack) {
-      setView("tracks");
-    }
-    if (view !== "lyrics") {
-      setIsReadingAll(false);
-      window.speechSynthesis.cancel();
-    }
-  }, [view, currentTrack]);
+    let timeoutId = undefined;
+    const activeIdx = activeLineIndex;
+    if (activeIdx !== null && (view === "lyrics" || view === "tracks")) {
+      const scroll = () => {
+        const container = scrollContainerRef.current;
+        const el = lineRefs.current.get(activeIdx);
+        if (container && el) {
+          const containerHeight = container.clientHeight;
+          const elHeight = el.clientHeight;
+          const relativeTop = el.offsetTop;
 
-  useEffect(() => {
-    if (previewAudioRef.current) {
-      previewAudioRef.current.pause();
-      setIsPreviewPlaying(false);
-      setHasStartedPreview(false);
-      setPreviewProgress(0);
-    }
-  }, [currentTrack?.audioUrl, activeTab]);
-
-  const togglePreviewAudio = () => {
-    if (!previewAudioRef.current) return;
-    if (isPreviewPlaying) {
-      previewAudioRef.current.pause();
-    } else {
-      previewAudioRef.current.play();
-      setHasStartedPreview(true);
-    }
-    setIsPreviewPlaying(!isPreviewPlaying);
-  };
-
-  const handlePreviewTimeUpdate = () => {
-    if (previewAudioRef.current) {
-      const dur = previewAudioRef.current.duration;
-      const p = dur && !isNaN(dur) ? (previewAudioRef.current.currentTime / dur) * 100 : 0;
-      setPreviewProgress(isNaN(p) ? 0 : p);
-    }
-  };
-
-  const handlePreviewLoadedMetadata = () => {
-    if (previewAudioRef.current) {
-      const dur = previewAudioRef.current.duration;
-      setPreviewDuration(isNaN(dur) ? 0 : dur);
-    }
-  };
-
-  const handlePreviewEnded = () => {
-    setIsPreviewPlaying(false);
-    setPreviewProgress(0);
-  };
-
-  const seekPreview = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!previewAudioRef.current) return;
-    const rect = e.currentTarget.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const clickedProgress = Math.max(0, Math.min(1, x / rect.width));
-    previewAudioRef.current.currentTime = clickedProgress * previewAudioRef.current.duration;
-  };
-
-  useEffect(() => {
-    if (view === "lyrics" && currentTrack?.rawLyrics && targetLanguage) {
-      if (!currentTrack.processingStatus.stage3_completed) {
-        runStage3(currentTrack).catch(e => console.error("Auto background stage 3 failed:", e));
-      }
-    }
-  }, [targetLanguage]);
-
-  useEffect(() => {
-    if (!currentTrack) return;
-    
-    // If we have meanings dictionary
-    if (currentTrack.meanings) {
-      const langKey = targetLanguage.toLowerCase().trim();
-      let meaning = currentTrack.meanings.en || "";
-      if (langKey === 'spanish') meaning = currentTrack.meanings.es || currentTrack.meanings.en || "";
-      else if (langKey === 'russian') meaning = currentTrack.meanings.ru || currentTrack.meanings.en || "";
-      else if (langKey === 'polish') meaning = currentTrack.meanings.pl || currentTrack.meanings.en || "";
-
-      if (meaning && currentTrack.meaning !== meaning) {
-        setCurrentTrack(prev => {
-          if (!prev || prev.trackId !== currentTrack.trackId) return prev;
-          const updated = { ...prev, meaning };
-          saveTrackData(prev.trackId, updated);
-          return updated;
-        });
-      }
-    } else {
-      // If meanings is missing, let's look it up from Firestore cache to find all translations
-      getTrackMeaningFromCache(currentTrack.title, [currentTrack.artist], targetLanguage)
-        .then(cacheResult => {
-          if (cacheResult && cacheResult.meanings) {
-            const langKey = targetLanguage.toLowerCase().trim();
-            let meaning = cacheResult.meanings.en || "";
-            if (langKey === 'spanish') meaning = cacheResult.meanings.es || cacheResult.meanings.en || "";
-            else if (langKey === 'russian') meaning = cacheResult.meanings.ru || cacheResult.meanings.en || "";
-            else if (langKey === 'polish') meaning = cacheResult.meanings.pl || cacheResult.meanings.en || "";
-
-            setCurrentTrack(prev => {
-              if (!prev || prev.trackId !== currentTrack.trackId) return prev;
-              const updated = { 
-                ...prev, 
-                meaning, 
-                meanings: cacheResult.meanings 
-              };
-              saveTrackData(prev.trackId, updated);
-              return updated;
-            });
-          }
-        })
-        .catch(err => console.error("Auto background meanings reload failed:", err));
-    }
-  }, [targetLanguage, currentTrack?.trackId]);
-
-  const currentUtteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
-
-  const speak = (text: string, onEnd?: () => void, lang?: string) => {
-    window.speechSynthesis.cancel();
-
-    if (isMuted) {
-      if (onEnd) onEnd();
-      return;
-    }
-
-    // Tiny timeout helps some mobile browsers reset TTS state
-    setTimeout(() => {
-      const utterance = new SpeechSynthesisUtterance(text);
-      currentUtteranceRef.current = utterance;
-
-      if (lang) {
-        const norm = lang.toLowerCase().trim();
-        const found = SUPPORTED_LANGUAGES.find(
-          l => l.code.toLowerCase() === norm || l.name.toLowerCase() === norm || l.locale.toLowerCase() === norm
-        );
-        utterance.lang = found ? found.locale : getLocaleByName(currentTrack?.sourceLanguage || "English");
-      } else {
-        const sourceLang = currentTrack?.sourceLanguage || "English";
-        utterance.lang = getLocaleByName(sourceLang);
-      }
-      utterance.rate = 0.95;
-
-      if (onEnd) {
-        utterance.onend = () => {
-          if (currentUtteranceRef.current === utterance) {
-            currentUtteranceRef.current = null;
-          }
-          onEnd();
-        };
-        utterance.onerror = (e) => {
-          if (currentUtteranceRef.current === utterance) {
-            currentUtteranceRef.current = null;
-          }
-          if (e.error !== "interrupted" && e.error !== "canceled") {
-            onEnd();
-          }
-        };
-      } else {
-        utterance.onend = () => {
-          if (currentUtteranceRef.current === utterance) {
-            currentUtteranceRef.current = null;
-          }
-        };
-      }
-
-      window.speechSynthesis.speak(utterance);
-    }, 50);
-  };
-
-  const [selectedLineIndexForDrawer, setSelectedLineIndexForDrawer] =
-    useState<number | null>(null);
-
-  const openPhraseDrawer = (lineIndex: number) => {
-    setSelectedLineIndexForDrawer(lineIndex);
-    setIsPhraseDrawerOpen(true);
-  };
-
-  const getLineProgress = (i: number) => {
-    const lineDetails = currentTrack?.lines?.[i];
-    if (
-      !lineDetails ||
-      !lineDetails.phrases ||
-      lineDetails.phrases.length === 0
-    )
-      return null;
-
-    const total = lineDetails.phrases.length;
-    const known = lineDetails.phrases.filter(
-      (p: Phrase) => phraseMetadata.get(p.text)?.status === "known",
-    ).length;
-
-    return {
-      percentage: (known / total) * 100,
-      known,
-      total,
-    };
-  };
-
-  const handleLineClick = (
-    line: string,
-    index: number,
-    extraToRead?: string,
-  ) => {
-    const trimmedLine = line.trim();
-    if (!trimmedLine) return;
-
-    // Stop auto-reading if it's active
-    if (isReadingAll) {
-      setIsReadingAll(false);
-      isReadingAllRef.current = false;
-    }
-
-    // Cancel any ongoing speech and recognition
-    window.speechSynthesis.cancel();
-    if (recognitionRef.current) {
-      try {
-        recognitionRef.current.abort();
-      } catch (e) {}
-    }
-    setIsListeningForSpeech(false);
-    setShadowingFeedback("none");
-
-    setActiveLineIndex(index);
-
-    const textToSpeak = extraToRead
-      ? `${trimmedLine}. ${extraToRead}`
-      : trimmedLine;
-
-    speak(textToSpeak, () => {
-      // If manually clicked in shadowing mode, trigger the recognition for the main line
-      if (playbackModeRef.current === "shadowing") {
-        // Clear previous state for this line
-        setShadowingFeedback("none");
-
-        // Small delay to ensure TTS is fully finished and mic can open
-        setTimeout(() => {
-          startSpeechToText(trimmedLine, (isMatch) => {
-            if (isMatch) {
-              setShadowingFeedback("correct");
-              correctAudioRef.current?.play().catch(() => {});
-            } else {
-              setShadowingFeedback("incorrect");
-              incorrectAudioRef.current?.play().catch(() => {});
-            }
-            setTimeout(() => setShadowingFeedback("none"), 1500);
+          container.scrollTo({
+            top: relativeTop - containerHeight / 2 + elHeight / 2,
+            behavior: "smooth"
           });
-        }, 300);
-      }
-    });
-  };
-
-  const handleOpenAddModal = async (line: string, currentIndex: number) => {
-    const trimmedLine = line.trim();
-    if (!user) {
-      alert("Please sign in to save phrases to your deck");
-      return;
-    }
-
-    const existingMetadata = phraseMetadata.get(trimmedLine);
-    const fullTransLines = currentTrack?.fullTranslation?.split("\n") || [];
-    const fullTrans = fullTransLines[currentIndex];
-
-    const matchedLineItem = currentTrack?.lines.find(l => l.index === currentIndex);
-
-    setEditingLine({
-      original: trimmedLine,
-      translation:
-        existingMetadata?.translatedPhrase || fullTrans || "Translating...",
-      explanation: existingMetadata?.explanation,
-      cardId: existingMetadata?.id,
-      status: existingMetadata?.status || "learning",
-      index: currentIndex,
-      language: matchedLineItem?.language,
-    });
-    setIsEditModalOpen(true);
-
-    if (!existingMetadata?.translatedPhrase && !fullTrans) {
-      try {
-        const translation = await translateLyrics(trimmedLine, targetLanguage);
-        setEditingLine((prev) => ({ ...prev, translation: translation || "" }));
-      } catch (error) {
-        setEditingLine((prev) => ({
-          ...prev,
-          translation: "Translation failed",
-        }));
-      }
-    }
-  };
-
-  const handleOpenAddAnalysisItem = (
-    original: string,
-    translation: string,
-    explanation: string,
-  ) => {
-    if (!user) {
-      alert("Please sign in to save phrases to your deck");
-      return;
-    }
-
-    const existingMetadata = phraseMetadata.get(original);
-
-    setEditingLine({
-      original,
-      translation: existingMetadata?.translation || translation || "",
-      explanation: existingMetadata?.explanation || explanation,
-      cardId: existingMetadata?.id,
-      status: existingMetadata?.status || "learning",
-      index: -1,
-    });
-    setIsEditModalOpen(true);
-  };
-
-  const handleUpdateStatus = async (status: PhraseStatus) => {
-    if (!user || !currentTrack || !editingLine.original) return;
-
-    setIsSaving(true);
-    try {
-      if (editingLine.index >= 0) {
-        // Use cascade logic for full lines
-        await handleAddLineWithComponents(
-          editingLine.original,
-          editingLine.index,
-          status,
-        );
-      } else {
-        if (editingLine.cardId) {
-          await updatePhraseStatus(
-            editingLine.cardId,
-            status,
-          );
-          await loadUserCards();
-        } else {
-          // Find parent line for new card
-          const lines = currentTrack.rawLyrics?.split("\n") || [];
-          const parentLine = lines.find((l) =>
-            l.includes(editingLine.original),
-          );
-
-          await addPhraseToStudy({
-            text: editingLine.original,
-            translation: editingLine.translation,
-            trackId: currentTrack.trackId,
-            lineId: parentLine?.trim() || '',
-            explanation: editingLine.explanation || '',
-            lemmas: [],
-            type: 'phrase'
-          }, status);
-          setDailyActivity(recordPhraseSaved());
-          await loadUserCards();
         }
-      }
-      setIsEditModalOpen(false);
-    } catch (error) {
-      console.error(error);
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const handleExplain = async () => {
-    if (!editingLine.original) return;
-    setIsExplaining(true);
-    try {
-      const result = await explainPhraseStructured(
-        editingLine.original,
-        targetLanguage,
-      );
-      const explanation = result.explanation;
-      setEditingLine((prev) => ({ ...prev, explanation }));
-
-      // Persist immediately if possible
-      if (user && currentTrack) {
-        if (editingLine.cardId) {
-          await updatePhraseStatus(
-            editingLine.cardId,
-            editingLine.status as PhraseStatus,
-          );
-          setPhraseMetadata((prev) => {
-            const next = new Map(prev);
-            const card = next.get(editingLine.original);
-            if (card) {
-              next.set(editingLine.original, { ...(card as any), explanation });
-            }
-            return next;
-          });
-        } else {
-          const cardId = await addPhraseToStudy({
-            text: editingLine.original,
-            translation: editingLine.translation,
-            trackId: currentTrack.trackId,
-            lineId: '', // Standalone explanation usually doesn't have parent line easily available or we could search for it
-            explanation: explanation,
-            lemmas: [],
-            type: 'phrase'
-          }, "learning");
-          if (cardId) {
-            setDailyActivity(recordPhraseSaved());
-            setEditingLine((prev) => ({ ...prev, cardId, status: "learning" }));
-            setPhraseMetadata((prev) => {
-              const next = new Map(prev);
-              const newCard: Flashcard = {
-                id: cardId,
-                phraseId: cardId,
-                text: editingLine.original,
-                translation: editingLine.translation,
-                explanation: explanation,
-                status: "learning",
-                trackId: currentTrack.trackId,
-                due: new Date(),
-                state: 0,
-                elapsed_days: 0,
-                scheduled_days: 0,
-                stability: 0,
-                difficulty: 0,
-                reps: 0,
-                lapses: 0,
-                createdAt: new Date(),
-                updatedAt: new Date(),
-              };
-              next.set(editingLine.original, newCard);
-              return next;
-            });
-          }
-        }
-      }
-    } catch (error) {
-      console.error(error);
-    } finally {
-      setIsExplaining(false);
-    }
-  };
-
-  const handleOpenStructuredAnalysis = async (
-    line: string,
-    index: number,
-    forceAI: boolean = false,
-  ) => {
-    const trimmed = line.trim();
-    if (!trimmed) return;
-
-    setActiveLineIndex(index);
-
-    if (structuredCache.has(trimmed)) {
-      setPhraseDrawerData(structuredCache.get(trimmed));
-      setIsPhraseDrawerOpen(true);
-      return;
-    }
-
-    // Check if we already have some context (like auto-translation and existing components)
-    const phrases = getPhrasesForLine(index);
-    if ((phrases.length > 0 || index >= 0) && !forceAI) {
-      const fullTransLines = currentTrack?.fullTranslation?.split("\n") || [];
-      const data = {
-        phrase: trimmed,
-        translation: fullTransLines[index] || "",
-        explanation: "", // Will be empty until explained, but we show components
       };
-      setPhraseDrawerData(data);
-      setIsPhraseDrawerOpen(true);
-      return;
+
+      scroll();
+      timeoutId = window.setTimeout(scroll, 100);
     }
-
-    // Otherwise use async structured explanation for the whole line
-    setIsExplaining(true);
-    try {
-      const result = await explainPhraseStructured(trimmed, targetLanguage);
-      const data = {
-        phrase: trimmed,
-        translation: result.translation,
-        explanation: result.explanation,
-      };
-      setStructuredCache((prev) => new Map(prev).set(trimmed, data));
-      setPhraseDrawerData(data);
-      setIsPhraseDrawerOpen(true);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setIsExplaining(false);
-    }
-  };
-
-  const getPlaybackLines = () => {
-    if (!currentTrack || !currentTrack.lines) return [];
-    if (isStarFilterActive) {
-      // Filter by starred
-      let starred = currentTrack.lines.filter((l: any) => l.isStarred);
-      // De-duplicate repeats of identical lines
-      const seen = new Set<string>();
-      starred = starred.filter((l: any) => {
-        const trimmed = l.original.trim();
-        if (!trimmed || seen.has(trimmed)) return false;
-        seen.add(trimmed);
-        return true;
-      });
-      return starred;
-    }
-    return currentTrack.lines;
-  };
-
-  const toggleReadLyrics = () => {
-    if (isReadingAll) {
-      setIsReadingAll(false);
-      isReadingAllRef.current = false;
-      window.speechSynthesis.cancel();
-      if (recognitionRef.current) recognitionRef.current.stop();
-      setIsListeningForSpeech(false);
-    } else {
-      if (!currentTrack?.rawLyrics) return;
-      setIsReadingAll(true);
-      isReadingAllRef.current = true;
-
-      const playbackLines = getPlaybackLines();
-      if (playbackLines.length === 0) {
-        setIsReadingAll(false);
-        isReadingAllRef.current = false;
-        return;
-      }
-
-      let startIndex = 0;
-      if (activeLineIndex !== null) {
-        // Find index of the next playable line after activeLineIndex
-        const nextIdx = playbackLines.findIndex((l: any) => l.index > activeLineIndex);
-        if (nextIdx !== -1) {
-          startIndex = nextIdx;
-        } else {
-          startIndex = 0;
-        }
-      }
-
-      setShadowingAttempts(0);
-      readNextLine(playbackLines, startIndex);
-    }
-  };
-
-  const startSpeechToText = (
-    expectedText: string,
-    onResult: (match: boolean) => void,
-  ) => {
-    if (!recognitionRef.current) {
-      alert("Speech recognition is not supported in this browser.");
-      onResult(true);
-      return;
-    }
-
-    // Stop synthesis before starting recognition to avoid mic picking up its own voice
-    window.speechSynthesis.cancel();
-
-    let isFinished = false;
-    const finish = (result: boolean) => {
-      if (isFinished) return;
-      isFinished = true;
-      setIsListeningForSpeech(false);
-
-      // Stop recognition session properly
-      try {
-        recognitionRef.current.onresult = null;
-        recognitionRef.current.onerror = null;
-        recognitionRef.current.onend = null;
-        recognitionRef.current.stop();
-      } catch (e) {}
-
-      onResult(result);
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
     };
-
-    // Failsafe timeout
-    const timeoutId = setTimeout(() => {
-      if (!isFinished) {
-        console.warn("Speech recognition timed out");
-        finish(false);
-      }
-    }, 8000);
-
-    setIsListeningForSpeech(true);
-    recognitionRef.current.lang = getLocaleByName(
-      currentTrack?.sourceLanguage || "English",
-    );
-
-    recognitionRef.current.onresult = (event: any) => {
-      clearTimeout(timeoutId);
-      const transcript =
-        event.results[event.results.length - 1][0].transcript.toLowerCase();
-      const cleanExpected = expectedText
-        .toLowerCase()
-        .replace(/[.,/#!$%^&*;:{}=\-_`~()]/g, "")
-        .trim();
-      const cleanActual = transcript
-        .replace(/[.,/#!$%^&*;:{}=\-_`~()]/g, "")
-        .trim();
-
-      const expectedWords = cleanExpected
-        .split(/\s+/)
-        .filter((w) => w.length > 0);
-      const actualWords = cleanActual.split(/\s+/).filter((w) => w.length > 0);
-
-      if (expectedWords.length === 0) {
-        finish(true);
-        return;
-      }
-
-      const matches = expectedWords.filter((w) =>
-        actualWords.includes(w),
-      ).length;
-      const matchRatio = matches / expectedWords.length;
-
-      finish(matchRatio > 0.4);
-    };
-
-    recognitionRef.current.onerror = (event: any) => {
-      console.error("Speech recognition error:", event.error);
-      clearTimeout(timeoutId);
-      // Aborted by us or browser? Just fail this attempt
-      finish(false);
-    };
-
-    recognitionRef.current.onend = () => {
-      clearTimeout(timeoutId);
-      if (!isFinished) finish(false);
-    };
-
-    try {
-      recognitionRef.current.abort();
-    } catch (e) {}
-
-    setTimeout(() => {
-      try {
-        recognitionRef.current.start();
-      } catch (e) {
-        console.error("SR start error:", e);
-        finish(false);
-      }
-    }, 300);
-  };
-
-  const readNextLine = (playbackLines: any[], index: number) => {
-    if (index >= playbackLines.length || !isReadingAllRef.current) {
-      setIsReadingAll(false);
-      isReadingAllRef.current = false;
-      return;
-    }
-
-    const lineObj = playbackLines[index];
-    const currentLine = lineObj.original.trim();
-    if (!currentLine) {
-      readNextLine(playbackLines, index + 1);
-      return;
-    }
-
-    // Skip known phrases if setting is enabled
-    const metadata = phraseMetadata.get(currentLine);
-    if (skipKnownPhrases && metadata?.status === "known") {
-      readNextLine(playbackLines, index + 1);
-      return;
-    }
-
-    setActiveLineIndex(lineObj.index);
-    speak(currentLine, () => {
-      // Use ref to check the LATEST mode, ensuring the behavior updates if user toggles mid-speech
-      const currentMode = playbackModeRef.current;
-
-      if (currentMode === "shadowing" && isReadingAllRef.current) {
-        // Wait for user to repeat
-        startSpeechToText(currentLine, (isMatch) => {
-          if (isMatch) {
-            setShadowingFeedback("correct");
-            correctAudioRef.current?.play().catch((e) => {});
-            setShadowingAttempts(0);
-            setTimeout(() => {
-              setShadowingFeedback("none");
-              if (isReadingAllRef.current) readNextLine(playbackLines, index + 1);
-            }, 1200);
-          } else {
-            setShadowingFeedback("incorrect");
-            incorrectAudioRef.current?.play().catch((e) => {});
-            setShadowingAttempts((prev) => {
-              const newAttempts = prev + 1;
-              if (newAttempts >= 3) {
-                // Skip to next after 3 attempts
-                setTimeout(() => {
-                  setShadowingFeedback("none");
-                  if (isReadingAllRef.current)
-                    readNextLine(playbackLines, index + 1);
-                }, 1500);
-                return 0;
-              } else {
-                // Repeat current line
-                setTimeout(() => {
-                  setShadowingFeedback("none");
-                  if (isReadingAllRef.current) readNextLine(playbackLines, index);
-                }, 1200);
-                return newAttempts;
-              }
-            });
-          }
-        });
-      } else if (currentMode === "listening" && isReadingAllRef.current) {
-        // Listening mode
-        setTimeout(() => {
-          if (isReadingAllRef.current) {
-            readNextLine(playbackLines, index + 1);
-          }
-        }, 700);
-      }
-    }, lineObj.language);
-  };
-
-  const changePlaybackMode = (mode: "listening" | "shadowing") => {
-    if (mode === playbackMode) return;
-    setPlaybackMode(mode);
-
-    // If switching modes, we should cancel any waiting shadowing input
-    // so the reading logic can either stop or move to next step immediately
-    if (recognitionRef.current) {
-      try {
-        recognitionRef.current.abort();
-      } catch (e) {}
-    }
-    setIsListeningForSpeech(false);
-    setShadowingFeedback("none");
-  };
-
-  const searchContainerRef = useRef<HTMLDivElement>(null);
-
-  const renderDifficultyIndicator = (difficulty?: string, hideLabel: boolean = false) => {
-    if (!difficulty) return null;
-    
-    let bars = [];
-    const diff = difficulty.toLowerCase();
-    
-    if (diff === 'beginner') {
-      bars = [{ color: 'bg-green-500', active: true }, { color: 'bg-zinc-700', active: false }, { color: 'bg-zinc-700', active: false }];
-    } else if (diff === 'intermediate') {
-      bars = [{ color: 'bg-yellow-500', active: true }, { color: 'bg-yellow-500', active: true }, { color: 'bg-zinc-700', active: false }];
-    } else if (diff === 'advanced') {
-      bars = [{ color: 'bg-red-500', active: true }, { color: 'bg-red-500', active: true }, { color: 'bg-red-500', active: true }];
-    } else {
-      return null;
-    }
-    
-    return (
-      <div className="flex gap-1 items-center" title={`Difficulty: ${difficulty}`}>
-        {bars.map((bar, idx) => (
-          <div 
-            key={idx} 
-            className={`w-3 h-1 rounded-full ${bar.color} ${bar.active ? 'opacity-100' : 'opacity-20 shadow-sm'}`}
-          />
-        ))}
-        {!hideLabel && (
-          <span className="text-[10px] font-bold text-app-muted ml-1 opacity-60 capitalize">
-            {difficulty}
-          </span>
-        )}
-      </div>
-    );
-  };
-
-  const handleSearch = async (e?: React.FormEvent, overrideQuery?: string) => {
-    if (e) e.preventDefault();
-    const query = overrideQuery !== undefined ? overrideQuery : searchQuery;
-    if (!query.trim()) return;
-    
-    setSearchQuery(query);
-
-    // Abort previous request
-    if (abortControllerRef.current) abortControllerRef.current.abort();
-    const controller = new AbortController();
-    abortControllerRef.current = controller;
-
-    setIsSearching(true);
-    setArtistDetails(null);
-    setAlbumDetails(null);
-    
-    try {
-      const results = await searchITunes(query, searchEntityType, controller.signal);
-      setSearchResults(results);
-    } catch (err: any) {
-      if (err.name !== 'AbortError') {
-        console.error("Search error:", err);
-      }
-    } finally {
-      if (abortControllerRef.current === controller) {
-        setIsSearching(false);
-        abortControllerRef.current = null;
-      }
-    }
-
-    // Save to history
-    const newHistory = [query, ...searchHistory.filter(h => h !== query)].slice(0, 10);
-    setSearchHistory(newHistory);
-    userDataRepository.setPreference("lyrify_search_history", JSON.stringify(newHistory));
-
-    if (searchContainerRef.current) {
-      searchContainerRef.current.scrollTo({ top: 0, behavior: "smooth" });
-    }
-  };
-
-  const handleArtistSelect = async (artistId: string) => {
-    if (!artistId || artistId === "undefined") return;
-    
-    // Abort previous request
-    if (abortControllerRef.current) abortControllerRef.current.abort();
-    const controller = new AbortController();
-    abortControllerRef.current = controller;
-
-    setIsSearchingDetails(true);
-    
-    // Set a timeout
-    const timeoutId = setTimeout(() => {
-      controller.abort();
-      setIsSearchingDetails(false);
-    }, 15000);
-
-    try {
-      const details = await getArtistDetails(artistId, controller.signal);
-      if (details && details.artist) {
-        setArtistDetails(details);
-        setAlbumDetails(null);
-        if (searchContainerRef.current) {
-          searchContainerRef.current.scrollTo({ top: 0, behavior: "smooth" });
-        }
-      }
-      clearTimeout(timeoutId);
-    } catch (err: any) {
-      clearTimeout(timeoutId);
-      if (err.name !== 'AbortError') {
-        console.error("Failed to load artist details:", err);
-      }
-    } finally {
-      if (abortControllerRef.current === controller) {
-        setIsSearchingDetails(false);
-        abortControllerRef.current = null;
-      }
-    }
-  };
-
-  const handleAlbumSelect = async (albumId: string) => {
-    if (!albumId || albumId === "undefined") return;
-
-    // Abort previous request
-    if (abortControllerRef.current) abortControllerRef.current.abort();
-    const controller = new AbortController();
-    abortControllerRef.current = controller;
-
-    setIsSearchingDetails(true);
-
-    // Set a timeout
-    const timeoutId = setTimeout(() => {
-      controller.abort();
-      setIsSearchingDetails(false);
-    }, 15000);
-
-    try {
-      const details = await getAlbumDetails(albumId, controller.signal);
-      if (details && details.album) {
-        setAlbumDetails(details);
-        setArtistDetails(null);
-        if (searchContainerRef.current) {
-          searchContainerRef.current.scrollTo({ top: 0, behavior: "smooth" });
-        }
-      }
-      clearTimeout(timeoutId);
-    } catch (err: any) {
-      clearTimeout(timeoutId);
-      if (err.name !== 'AbortError') {
-        console.error("Failed to load album details:", err);
-      }
-    } finally {
-      if (abortControllerRef.current === controller) {
-        setIsSearchingDetails(false);
-        abortControllerRef.current = null;
-      }
-    }
-  };
+  }, [activeLineIndex, activeTab, view]);
 
   useEffect(() => {
-    if (searchQuery.trim() && !artistDetails && !albumDetails && searchResults.length > 0) {
-      handleSearch();
-    }
-  }, [searchEntityType]);
-
-
-  const handleOnboardingDismiss = () => {
-    completeOnboarding();
-    setOnboardingCompleted(true);
-  };
-
-  const handleOnboardingSelect = (demoTrack: any) => {
-    completeOnboarding();
-    setOnboardingCompleted(true);
-    handleTrackSelect({
-      id: demoTrack.id,
-      title: demoTrack.title,
-      artist: demoTrack.artist,
-      coverUrl: demoTrack.coverUrl,
-      audioUrl: demoTrack.audioUrl,
-      difficulty: demoTrack.difficulty,
-      sourceLanguage: demoTrack.sourceLanguage
-    });
-  };
-
-  const handleNextStepClick = () => {
-    if (!nextStepState || !currentTrack) return;
-    
-    if (nextStepState.type === "FIND_LYRICS") {
-      handleAnalyzeSong();
-    } else if (nextStepState.type === "GENERATE_ANALYSIS") {
-      setActiveTab("analysis");
-      handleGenerateAnalysis();
-    } else if (nextStepState.type === "SAVE_FIRST_PHRASE") {
-      const hasPhrasesInAnalysis = currentTrack.lines.some(l => l.phrases && l.phrases.length > 0);
-      setActiveTab(hasPhrasesInAnalysis ? "analysis" : "lyrics");
-    } else if (nextStepState.type === "GO_TO_STUDY") {
-      setStudyTrackId(currentTrack.trackId);
-      setView("study");
-    }
-  };
-
-  const handleTrackSelect = async (track: any) => {
-    // 1. CLEAR previous states
-    setLyricsFetchError(null);
-    setManualLyrics("");
-    setActiveLineIndex(null);
-    setIsReadingAll(false);
-    setActiveTab("preview");
-    window.speechSynthesis.cancel();
-
-    const initialTrack = await trackSessionFacade.selectTrack(track, targetLanguage, {
-      onMetadataUpdate: (updated) => {
-        setCurrentTrack((prev) => (prev && prev.trackId === updated.trackId ? updated : prev));
-      },
-      onCacheUpdate: (updated) => {
-        setCurrentTrack((prev) => (prev && prev.trackId === updated.trackId ? updated : prev));
-      }
-    });
-
-    setDailyActivity(recordTrackExplored());
-    setCurrentTrack(initialTrack);
-    setView("lyrics");
-    setRecentTracks(getRecentTracks());
-  };
-
-  const handleAnalyzeSong = async () => {
-    if (!currentTrack || isLoadingLyrics) return;
-    
-    setLyricsFetchError(null);
-    setIsLoadingLyrics(true);
-    setLoadingStep("searching");
-
-    try {
-      const updatedTrack = await trackSessionFacade.analyzeSongMeaningAndTranslations(
-        currentTrack,
-        targetLanguage,
-        (step) => setLoadingStep(step)
-      );
-
-      setCurrentTrack(updatedTrack);
-      setRecentTracks(getRecentTracks());
-      loadCommunityTracks();
-    } catch (err: any) {
-      console.error("Manual fetch/meaning failed:", err);
-      setLyricsFetchError(err.message || "Failed to fetch song data.");
-    } finally {
-      setIsLoadingLyrics(false);
-      setLoadingStep("idle");
-    }
-  };
-
-  const handleRegenerateTranslations = async () => {
-    if (!currentTrack || isTranslating) return;
-    setIsTranslating(true);
-    setLoadingStep("translating");
-    try {
-      const updatedTrack = await trackSessionFacade.regenerateTranslations(currentTrack, targetLanguage);
-      setCurrentTrack(updatedTrack);
-    } catch (err) {
-      console.error("Failed to regenerate translations:", err);
-    } finally {
-      setIsTranslating(false);
-      setLoadingStep("idle");
-    }
-  };
-
-  const runStage3 = async (track: TrackLyricsData, force: boolean = false) => {
-    const hasPhrases = track.lines.some(l => l.phrases && l.phrases.length > 0);
-    if (!force && track.processingStatus.stage3_completed && hasPhrases) return;
-    setIsTranslating(true);
-    try {
-      const updatedTrack = await trackSessionFacade.runDeepPhraseAnalysis(track, targetLanguage, force);
-      setCurrentTrack(updatedTrack);
-    } catch (err: any) {
-      console.error("Stage 3 (Phrase Analysis) failed:", err);
-      setAnalysisError(err?.message || "An unexpected error occurred during deep analysis. Please try again.");
-      throw err;
-    } finally {
-      setIsTranslating(false);
-    }
-  };
-
-  const handleManualLyricsSubmit = async () => {
-    if (!currentTrack || !manualLyrics.trim()) return;
-
-    setIsLoadingLyrics(true);
-    setLoadingStep("analyzing");
-    setLyricsFetchError(null);
-
-    try {
-      const initialTrack = await trackSessionFacade.submitManualLyrics(
-        currentTrack,
-        manualLyrics,
-        targetLanguage,
-        {
-          onBackgroundComplete: (updated) => {
-            setCurrentTrack((prev) => {
-              if (prev && prev.trackId === updated.trackId) {
-                setRecentTracks(getRecentTracks());
-                loadCommunityTracks();
-                return updated;
-              }
-              return prev;
-            });
-          }
-        }
-      );
-
-      setCurrentTrack(initialTrack);
-      setManualLyrics("");
-    } catch (err) {
-      setLyricsFetchError("Processing failed. Please check your text.");
-    } finally {
-      setIsLoadingLyrics(false);
-      setLoadingStep("idle");
-    }
-  };
-
-  const handleGenerateAnalysis = async (force: boolean = false, customTrack?: TrackLyricsData) => {
-    const targetTrack = customTrack || currentTrack;
-    if (!targetTrack || isGeneratingAnalysis) return;
-
-    const hasPhrases = targetTrack.lines.some(l => l.phrases && l.phrases.length > 0);
-    const completed = targetTrack.processingStatus.stage3_completed && hasPhrases;
-
-    if (!force && completed) return;
-
-    setIsGeneratingAnalysis(true);
-    setAnalysisError(null);
-    try {
-      let trackData = { ...targetTrack };
-      let lyrics = trackData.rawLyrics;
-      
-      // 1. Fetch lyrics if missing
-      if (!lyrics) {
-        setLoadingStep("searching");
-        const lyricsResponse = await fetchLyrics(trackData.artist, trackData.title);
-        if (!lyricsResponse.lyrics) {
-          const errMsg = "Lyrics not found. Cannot proceed with deep analysis.";
-          setLyricsFetchError(errMsg);
-          setAnalysisError(errMsg);
-          setIsGeneratingAnalysis(false);
-          setLoadingStep("idle");
-          return;
-        }
-        
-        lyrics = lyricsResponse.lyrics;
-        
-        // Enrich trackData with lyrics first
-        trackData = {
-          ...trackData,
-          rawLyrics: lyrics,
-          source: (lyricsResponse.source as any) || "Unknown",
-          lines: splitLyricsIntoLines(trackData.trackId, lyrics),
-          processingStatus: { ...trackData.processingStatus, stage1_completed: true }
-        };
-      }
-
-      const isOutdated = !trackData.promptVersion || trackData.promptVersion < ANALYSIS_PROMPT_VERSION;
-      const isTranslationOutdated = !trackData.translationPromptVersion || trackData.translationPromptVersion < TRANSLATION_PROMPT_VERSION;
-
-      // 2. Fetch/Update meaning and line translations if missing, outdated, or forced
-      if (force || !trackData.meaning || !trackData.processingStatus.stage2_completed || isOutdated || isTranslationOutdated) {
-        setLoadingStep("meaning");
-        trackData = await trackSessionFacade.analyzeSongMeaningAndTranslations(trackData, targetLanguage);
-        setCurrentTrack(trackData);
-        loadCommunityTracks();
-      }
-
-      setLoadingStep("analyzing");
-      await runStage3(trackData, force);
-    } catch (err: any) {
-      console.error("Analysis generation failed:", err);
-      setAnalysisError(err?.message || "An unexpected error occurred during deep analysis. Please try again.");
-    } finally {
-      setIsGeneratingAnalysis(false);
-      setLoadingStep("idle");
-    }
-  };
-
-  const handleRegenerateAnalysis = async () => {
-    if (!currentTrack || isGeneratingAnalysis) return;
-
-    if (!confirm("Are you sure you want to reset and regenerate the analysis? This will clear current phrases and meaning.")) {
-      return;
-    }
-
-    // Reset current track data relative to analysis
-    const resetTrack: TrackLyricsData = {
-      ...currentTrack,
-      meaning: undefined,
-      promptVersion: undefined,
-      translationPromptVersion: undefined,
-      lines: currentTrack.lines.map(line => ({
-        ...line,
-        translation: undefined,
-        phrases: []
-      })),
-      processingStatus: {
-        ...currentTrack.processingStatus,
-        stage2_completed: false,
-        stage3_completed: false
-      }
-    };
-
-    setCurrentTrack(resetTrack);
-    saveTrackData(currentTrack.trackId, resetTrack);
-
-    // Call handleGenerateAnalysis with force=true and passing resetTrack immediately to bypass async state update lag
-    handleGenerateAnalysis(true, resetTrack);
-  };
-
-  const getStatusStyles = (s: PhraseStatus) => {
-    switch (s) {
-      case "known":
-        return {
-          bg: "bg-transparent",
-          border: "border-transparent",
-          icon: (
-            <CheckCircle2
-              size={18}
-              className="text-app-fg opacity-30 shrink-0"
-            />
-          ),
-        };
-      case "learning":
-        return {
-          bg: "bg-orange-500/5",
-          border: "border-orange-500/20",
-          icon: (
-            <RefreshCw size={18} className="text-orange-500 shrink-0" />
-          ),
-        };
-      default:
-        return {
-          bg: "bg-sky-400/5",
-          border: "border-sky-400/20",
-          icon: (
-            <HelpCircle size={18} className="text-sky-400 shrink-0" />
-          ),
-        };
-    }
-  };
-
-  const renderHighlightedText = (text: string, phrases: Phrase[]) => {
-    if (!phrases || !phrases.length) return text;
-    const applicable = phrases.filter((p) =>
-      text.toLowerCase().includes(p.text.toLowerCase()),
-    );
-    if (!applicable.length) return text;
-    const sorted = [...applicable].sort(
-      (a, b) => b.text.length - a.text.length,
-    );
-    const pattern = sorted
-      .map((p) => p.text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
-      .join("|");
-    const regex = new RegExp(`(${pattern})`, "gi");
-    return text.split(regex).map((part, idx) => {
-      const m = sorted.find((p) => p.text.toLowerCase() === part.toLowerCase());
-      if (m) {
-        return (
-          <span
-            key={idx}
-            onClick={(e) => {
-              e.stopPropagation();
-              const rect = e.currentTarget.getBoundingClientRect();
-              setPopoverData({
-                phrase: m.text,
-                translation: m.translation || "",
-                explanation: m.explanation,
-                position: {
-                  x: rect.left,
-                  y: rect.top + window.scrollY,
-                },
-              });
-            }}
-            className={cn(
-              "relative inline-flex items-center gap-1 transition-all px-0.5 -mx-0.5 rounded-sm hover:bg-app-accent/5 border-b-2 border-dotted",
-              "border-app-fg/20 text-app-fg hover:border-app-fg/40",
-            )}
-          >
-            {part}
-          </span>
-        );
-      }
-      return part;
-    });
-  };
-
-  const renderLyricLine = (
-    line: string,
-    i: number,
-    isCompact: boolean = false,
-    alwaysShowTranslation: boolean = false,
-    displayModeOverride?: "lyrics" | "translation" | "both",
-  ) => {
-    return (
-      <LyricLine
-        key={i}
-        line={line}
-        i={i}
-        isCompact={isCompact}
-        alwaysShowTranslation={alwaysShowTranslation}
-        displayMode={displayModeOverride || (activeTab === "lyrics" ? lyricsDisplayMode : "both")}
-        activeLineIndex={activeLineIndex}
-        phraseMetadata={phraseMetadata}
-        currentTrack={currentTrack}
-        getPhrasesForLine={getPhrasesForLine}
-        lineRefs={lineRefs}
-        renderHighlightedText={(line, phrases) => renderHighlightedText(line, phrases)}
-        handleLineClick={(line, i) => handleLineClick(line, i)}
-        isSaving={isSaving}
-        isListeningForSpeech={isListeningForSpeech}
-        shadowingFeedback={shadowingFeedback}
-        shadowingAttempts={shadowingAttempts}
-        handleToggleStarLine={handleToggleStarLine}
-      />
-    );
-  };
-
-  const handleResetAnalysis = () => {
-    handleGenerateAnalysis(true);
-  };
-
-  // Analysis tab logic: No auto-trigger. User must click "Generate" or "Reset".
-
-  const handleManualLyricsSearch = async () => {
-    if (!currentTrack) return;
-    setIsSearchingOptions(true);
-    setLyricOptions([]);
-    try {
-      const results = await searchLyricsOptions(currentTrack.artist, currentTrack.title);
-      setLyricOptions(results);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setIsSearchingOptions(false);
-    }
-  };
-
-  const handleSelectLyricOption = async (option: LyricOption) => {
-    if (!currentTrack) return;
-    setIsLoadingLyrics(true);
-    setLoadingStep("searching");
-    setLyricsFetchError(null);
-    try {
-      const lyricsData = await fetchLyricsFromOption(option);
-      if (lyricsData.lyrics) {
-        setLoadingStep("analyzing");
-        // Perform same enrichment as manual submit to ensure consistency
-        const metadataResult = await extractLyricsMetadata(lyricsData.lyrics, option.artist, option.title);
-
-        // Background cache enrichment
-        fetchTrackMeaning(lyricsData.lyrics, {
-          title: option.title,
-          artists: [option.artist],
-          albumName: currentTrack.album,
-          coverUrl: currentTrack.coverUrl
-        }).then(result => {
-          setCurrentTrack(prev => {
-            if (!prev || prev.trackId !== currentTrack.trackId) return prev;
-            
-            const langKey = targetLanguage.toLowerCase().trim();
-            let meaning = result.meanings.en;
-            if (langKey === 'spanish') meaning = result.meanings.es;
-            if (langKey === 'russian') meaning = result.meanings.ru;
-            if (langKey === 'polish') meaning = result.meanings.pl;
-
-            const updated = {
-              ...prev,
-              sourceLanguage: result.originalLanguage || prev.sourceLanguage,
-              meaning,
-              meanings: result.meanings,
-              processingStatus: { ...prev.processingStatus, stage2_completed: true }
-            };
-            saveTrackData(prev.trackId, updated);
-            saveTrackToSharedCache(updated).catch(e => console.error("Firestore cache upload failed:", e));
-            return updated;
-          });
-        }).catch(e => console.error("fetchTrackMeaning background failed:", e));
-
-        const updatedTrack: TrackLyricsData = {
-          ...currentTrack,
-          rawLyrics: lyricsData.lyrics,
-          source: (lyricsData.source as any) || "Manual",
-          sourceLanguage: currentTrack.sourceLanguage,
-          authors: metadataResult?.authors,
-          lines: splitLyricsIntoLines(currentTrack.trackId, lyricsData.lyrics),
-          processingStatus: {
-            stage1_completed: true,
-            stage2_completed: false,
-            stage3_completed: false,
-          },
-          lastUpdated: Date.now(),
-        };
-
-        setCurrentTrack(updatedTrack);
-        saveTrackData(currentTrack.trackId, updatedTrack);
-        setIsResourcesOpen(false); // Close modal on success
-      } else {
-        setLyricsFetchError(`No lyrics found for the selected version from ${option.source}.`);
-      }
-    } catch (err) {
-      console.error("Selection failed:", err);
-      setLyricsFetchError("Failed to fetch or process the selected lyrics.");
-    } finally {
-      setIsLoadingLyrics(false);
-      setLoadingStep("idle");
-    }
-  };
-
-  const handleResetLyrics = () => {
-    if (!currentTrack) return;
-
-    // Clear cache
-    clearCachedLyrics(currentTrack.trackId);
-
-    // Reset local state first to show immediate feedback if needed
-    handleTrackSelect({
-      id: currentTrack.trackId,
-      artist: currentTrack.artist,
-      title: currentTrack.title,
-      album: currentTrack.album || "",
-      coverUrl: currentTrack.coverUrl || "",
-    });
-  };
-
+    document.documentElement.setAttribute("data-theme", theme);
+    userDataRepository.setPreference("lyrify_theme", theme);
+  }, [theme]);
 
   const handlePopoverAction = async (
     phrase: string,
@@ -2534,7 +1256,6 @@ export default function App() {
       console.error("Popover action failed:", err);
     }
   };
-
   return (
     <div className="relative h-screen w-full bg-app-bg text-app-fg font-sans overflow-hidden flex flex-col transition-colors duration-300">
       {/* Hidden Audio for Preview */}
