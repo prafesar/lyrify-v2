@@ -1,19 +1,13 @@
-import React, { useState, useRef, useEffect, useMemo } from "react";
-import { motion, AnimatePresence, useMotionValue, useTransform } from "motion/react";
+import React, { useState, useEffect, useMemo } from "react";
+import { motion, AnimatePresence, useMotionValue } from "motion/react";
 import {
   Play,
   Pause,
-  SkipBack,
-  SkipForward,
-  Languages,
   FileText,
   Music,
-  List,
   Search,
   Plus,
   Brain,
-  LogIn,
-  LogOut,
   Check,
   ChevronLeft,
   ChevronRight,
@@ -24,7 +18,6 @@ import {
   Pencil,
   CheckCircle2,
   RefreshCw,
-  HelpCircle,
   Youtube,
   ListMusic,
   ExternalLink,
@@ -32,7 +25,6 @@ import {
   Quote,
   Mic2,
   Activity,
-  Globe,
   Disc,
   WifiOff,
   AlertTriangle,
@@ -43,103 +35,42 @@ import {
   BookOpen,
   Volume2,
   VolumeX,
-  BookmarkPlus,
   Loader2,
-  History,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
-import { Track, Artist, Album } from "./constants";
+import { Track } from "./constants";
 import { SUPPORTED_LANGUAGES } from "./lib/languages";
 import { useUserCards } from "./hooks/useUserCards";
 import { usePlayback } from "./hooks/usePlayback";
 import { useLibrarySearch } from "./hooks/useLibrarySearch";
 import { useTrackSession } from "./hooks/useTrackSession";
+import { useAppUiState } from "./hooks/useAppUiState";
 import { 
-  aiClient, 
-  trackSessionFacade, 
   userDataRepository, 
-  type TrackMetadata, 
-  type TrackMeaningEntry, 
   ANALYSIS_PROMPT_VERSION, 
-  TRANSLATION_PROMPT_VERSION,
   type Flashcard,
   type PhraseStatus
 } from "./application";
 
-const translateLyrics = (lyrics: string, targetLanguage: string) => aiClient.translateLyrics(lyrics, targetLanguage);
-const detectLanguage = (text: string) => aiClient.detectLanguage(text);
-const explainPhraseStructured = (phrase: string, targetLanguage: string) => aiClient.explainPhraseStructured(phrase, targetLanguage);
-const extractLyricsMetadata = (lyrics: string, artist: string, title: string) => aiClient.extractLyricsMetadata(lyrics, artist, title);
-const generateSongMeaning = (lyrics: string, artist: string, title: string, targetLanguage: string, metadata?: any) => aiClient.generateSongMeaning(lyrics, artist, title, targetLanguage, metadata);
-const fetchTrackMeaning = (lyrics: string, metadata: any, version?: any, force?: boolean) => aiClient.fetchTrackMeaning(lyrics, metadata, version, force);
-const getTrackMeaningFromCache = (title: string, artists: string[], targetLanguage?: string, version?: any) => aiClient.getTrackMeaningFromCache(title, artists, targetLanguage, version);
-const getOriginalLanguage = (trackKey: string) => aiClient.getOriginalLanguage(trackKey);
-const computeTrackKey = (title: string, artists: string[]) => aiClient.computeTrackKey(title, artists);
-const computeLyricsHash = (lyrics: string) => aiClient.computeLyricsHash(lyrics);
-const getLineTranslations = (lyrics: string, trackKey: string, targetLanguage: string) => aiClient.getLineTranslations(lyrics, trackKey, targetLanguage);
-const getPhraseAnalysis = (lyrics: string, trackKey: string, targetLanguage: string) => aiClient.getPhraseAnalysis(lyrics, trackKey, targetLanguage);
-const completeLyricsAnalysis = (lyrics: string, artist: string, title: string, targetLanguage: string, metadata?: any) => aiClient.completeLyricsAnalysis(lyrics, artist, title, targetLanguage, metadata);
-const getLatestAnalyzedTracks = (maxCount?: number) => aiClient.getLatestAnalyzedTracks(maxCount);
-const normalizeString = (str: string) => aiClient.normalizeString(str);
-const saveTrackToSharedCache = (track: any) => aiClient.saveTrackToSharedCache(track);
 import { cn } from "./lib/utils";
-import { auth, db, signIn, logOut, testDbConnection } from "./lib/firebase";
+import { auth, testDbConnection } from "./lib/firebase";
 import { onAuthStateChanged, type User } from "firebase/auth";
 
-const addPhraseToStudy = (phraseData: any, status?: PhraseStatus) => userDataRepository.addPhraseToStudy(phraseData, status);
-const getCards = () => userDataRepository.getCards();
-const updatePhraseStatus = (cardId: string, status: PhraseStatus) => userDataRepository.updatePhraseStatus(cardId, status);
-const deleteFlashcard = (cardId: string) => userDataRepository.deleteFlashcard(cardId);
-import {
-  collection,
-  query,
-  where,
-  getDocs,
-  deleteDoc,
-  doc,
-} from "firebase/firestore";
 import StudyView from "./components/StudyView";
 import SettingsView from "./components/SettingsView";
 import PhraseDrawer from "./components/PhraseDrawer";
-import { getLocaleByName } from "./lib/languages";
 import LanguageSelector from "./components/LanguageSelector";
 import {
-  searchITunes,
-  getArtistDetails,
-  getAlbumDetails,
-  fetchLyrics,
-  getCachedTrackData,
-  saveTrackData,
-  clearCachedLyrics,
-  splitLyricsIntoLines,
-  searchLyricsOptions,
-  fetchLyricsFromOption,
   type TrackLyricsData,
   type LyricOption,
-  type LyricsLine,
   type Phrase,
 } from "./services/musicService";
 
-const getRecentTracks = () => userDataRepository.getRecentTracks();
-const addRecentTrack = (track: any) => userDataRepository.addRecentTrack(track);
-
-import {
-  isOnboardingCompleted,
-  completeOnboarding,
-  shouldShowOnboarding,
-} from "./services/onboardingService";
 import { determineNextStep } from "./services/nextStepService";
-import { NextStepCTA } from "./components/NextStepCTA";
 import { getTrackStudySummary } from "./services/trackSummaryService";
 import { TrackStudyBridge } from "./components/TrackStudyBridge";
-import { buildResumeViewModel } from "./services/resumeService";
-import { type DailyActivity } from "./application";
-
-const getDailyActivity = (date?: Date) => userDataRepository.getDailyActivity(date);
-const recordTrackExplored = (date?: Date) => userDataRepository.recordTrackExplored(date);
 const recordPhraseSaved = (date?: Date) => userDataRepository.recordPhraseSaved(date);
 const recordReviewCompleted = (date?: Date) => userDataRepository.recordReviewCompleted(date);
-const getDailyProgressSummary = (activity: any) => userDataRepository.getDailyProgressSummary(activity);
 import { buildTrackProgressViewModel } from "./services/trackProgressService";
 import { TrackProgressTracker } from "./components/TrackProgressTracker";
 import { TracksHomeShell } from "./components/TracksHomeShell";
@@ -285,7 +216,7 @@ const LyricLine = ({
   lineRefs,
   renderHighlightedText,
   handleLineClick,
-  isSaving,
+  isSaving: _isSaving,
   isListeningForSpeech,
   shadowingFeedback,
   shadowingAttempts,
@@ -470,13 +401,11 @@ const AnalysisPhraseCard = ({
   item,
   idx,
   card,
-  handleAddAnalysisPhrase,
   handleSetAnalysisPhraseStatus,
 }: {
   item: any;
   idx: number;
   card: any;
-  handleAddAnalysisPhrase: any;
   handleSetAnalysisPhraseStatus: any;
 }) => {
   const x = useMotionValue(0);
@@ -576,53 +505,48 @@ const AnalysisPhraseCard = ({
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
-  const [onboardingCompleted, setOnboardingCompleted] = useState(() => isOnboardingCompleted());
   const [studyTrackId, setStudyTrackId] = useState<string | undefined>(undefined);
-
-  const [view, setView] = useState<"tracks" | "study" | "lyrics" | "settings">(
-    "tracks"
-  );
-  const [activeTab, setActiveTab] = useState<"preview" | "lyrics" | "analysis">(
-    "preview"
-  );
-  const [targetLanguage, setTargetLanguage] = useState(
-    () => userDataRepository.getPreference("lyrify_target_lang", "Russian")
-  );
-  const [theme, setTheme] = useState(
-    () => userDataRepository.getPreference("lyrify_theme", "light")
-  );
-
-  // Custom UI Display settings
-  const [lyricsDisplayMode, setLyricsDisplayMode] = useState<"lyrics" | "translation" | "both">(
-    () => (userDataRepository.getPreference("cantolex_lyrics_display_mode", "both") as any)
-  );
-  const [isStarFilterActive, setIsStarFilterActive] = useState<boolean>(
-    () => userDataRepository.getBoolPreference("cantolex_star_filter_active", false)
-  );
-  const [previewLyricsMode, setPreviewLyricsMode] = useState<"original" | "translation">("original");
-
-  const [popoverData, setPopoverData] = useState<{
-    phrase: string;
-    translation: string;
-    explanation?: string;
-    position: { x: number; y: number };
-  } | null>(null);
-
-  // Modals and dialog states
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [isLyricsSettingsOpen, setIsLyricsSettingsOpen] = useState(false);
-  const [resourceTab, setResourceTab] = useState<"links" | "lyrics">("links");
-  const [editingLine, setEditingLine] = useState<{
-    index: number;
-    original: string;
-    translation?: string;
-    language?: string;
-    explanation?: string;
-  } | null>(null);
-
-  const [isExplaining, setIsExplaining] = useState(false);
-  const [isEditingTranslation, setIsEditingTranslation] = useState(false);
   const [dbConnectionError, setDbConnectionError] = useState(false);
+
+  const {
+    onboardingCompleted,
+    view,
+    setView,
+    activeTab,
+    setActiveTab,
+    targetLanguage,
+    setTargetLanguage,
+    theme,
+    setTheme,
+    lyricsDisplayMode,
+    isStarFilterActive,
+    previewLyricsMode,
+    setPreviewLyricsMode,
+    popoverData,
+    setPopoverData,
+    isEditModalOpen,
+    setIsEditModalOpen,
+    isLyricsSettingsOpen,
+    setIsLyricsSettingsOpen,
+    resourceTab,
+    setResourceTab,
+    editingLine,
+    setEditingLine,
+    isExplaining,
+    isEditingTranslation,
+    setIsEditingTranslation,
+    isPhraseDrawerOpen,
+    setIsPhraseDrawerOpen,
+    selectedLineIndexForDrawer,
+    setSelectedLineIndexForDrawer,
+    
+    handleSetLyricsDisplayMode,
+    handleToggleStarFilter,
+    handleOnboardingDismiss,
+    handleOnboardingSelect,
+    handleNextStepClick,
+    handleExplain,
+  } = useAppUiState();
 
   // Initialize Custom Hooks
   const {
@@ -665,61 +589,41 @@ export default function App() {
     isGeneratingAnalysis,
     lyricOptions,
     isSearchingOptions,
-    manualSearchQuery,
     isResourcesOpen,
     setCurrentTrack,
-    setIsLoadingLyrics,
-    setLoadingStep,
     setLyricsFetchError,
-    setAnalysisError,
     setManualLyrics,
-    setIsTranslating,
-    setIsGeneratingAnalysis,
-    setLyricOptions,
-    setIsSearchingOptions,
-    setManualSearchQuery,
     setIsResourcesOpen,
     handleTrackSelect: handleTrackSelectRaw,
     handleAnalyzeSong: handleAnalyzeSongRaw,
     handleRegenerateTranslations,
-    runStage3,
     handleManualLyricsSubmit: handleManualLyricsSubmitRaw,
     handleGenerateAnalysis: handleGenerateAnalysisRaw,
     handleRegenerateAnalysis: handleRegenerateAnalysisRaw,
-    handleResetAnalysis: handleResetAnalysisRaw,
     handleManualLyricsSearch,
-    handleSelectLyricOption: handleSelectLyricOptionRaw,
-    handleResetLyrics: handleResetLyricsRaw
+    handleSelectLyricOption: handleSelectLyricOptionRaw
   } = useTrackSession();
 
   const {
     phraseMetadata,
     setPhraseMetadata,
-    childCardsMap,
     isSaving,
-    dailyActivity,
     dueCardsCount,
     dailyProgressSummary,
     resumeViewModel,
     loadUserCards,
     getLineStatus,
     handleUpdateStatusLocal,
-    handleAddLineWithComponents: handleAddLineWithComponentsRaw,
-    handleAddAnalysisPhrase: handleAddAnalysisPhraseRaw,
     handleSetAnalysisPhraseStatus: handleSetAnalysisPhraseStatusRaw,
-    recordPhraseSavedAction,
-    recordReviewCompletedAction,
     recordTrackExploredAction,
     setDailyActivity
   } = useUserCards(recentTracks);
 
   const {
     activeLineIndex,
-    isPlaying,
     isPreviewPlaying,
     hasStartedPreview,
     previewProgress,
-    previewDuration,
     isReadingAll,
     isListeningForSpeech,
     shadowingFeedback,
@@ -742,9 +646,6 @@ export default function App() {
     setSkipKnownPhrases,
     setActiveLineIndex,
     setIsReadingAll,
-    setIsPreviewPlaying,
-    setHasStartedPreview,
-    setPreviewProgress,
     handleLineClick
   } = usePlayback(currentTrack, phraseMetadata, targetLanguage);
 
@@ -769,18 +670,6 @@ export default function App() {
   }, [currentTrack, phraseMetadata]);
 
   // UI display handlers
-  const handleSetLyricsDisplayMode = (mode: "lyrics" | "translation" | "both") => {
-    setLyricsDisplayMode(mode);
-    userDataRepository.setPreference("cantolex_lyrics_display_mode", mode);
-  };
-
-  const handleToggleStarFilter = () => {
-    setIsStarFilterActive((prev) => {
-      const nextVal = !prev;
-      userDataRepository.setBoolPreference("cantolex_star_filter_active", nextVal);
-      return nextVal;
-    });
-  };
 
   const handleToggleStarLine = (index: number) => {
     if (!currentTrack) return;
@@ -835,25 +724,8 @@ export default function App() {
     await handleRegenerateAnalysisRaw(targetLanguage, { loadCommunityTracks });
   };
 
-  const handleResetAnalysis = () => {
-    handleResetAnalysisRaw(targetLanguage, { loadCommunityTracks });
-  };
-
   const handleSelectLyricOption = async (option: LyricOption) => {
     await handleSelectLyricOptionRaw(option, targetLanguage, { loadCommunityTracks });
-  };
-
-  const handleResetLyrics = () => {
-    handleResetLyricsRaw(targetLanguage, {
-      recordTrackExploredAction,
-      updateRecentTracks: setRecentTracks,
-      onSelectClear: () => {
-        setActiveLineIndex(null);
-        setIsReadingAll(false);
-      },
-      setView,
-      setActiveTab
-    });
   };
 
   const getPhrasesForLine = (lineIdx: number) => {
@@ -861,23 +733,6 @@ export default function App() {
     const trackLine = currentTrack.lines.find((l) => l.index === lineIdx);
     if (!trackLine) return [];
     return trackLine.phrases || [];
-  };
-
-  const handleAddLineWithComponents = async (
-    line: string,
-    index: number,
-    status: PhraseStatus = "learning"
-  ) => {
-    await handleAddLineWithComponentsRaw(line, index, status, currentTrack, getPhrasesForLine);
-  };
-
-  const handleAddAnalysisPhrase = async (
-    phrase: string,
-    translation: string,
-    explanation: string,
-    status: PhraseStatus = "learning"
-  ) => {
-    await handleAddAnalysisPhraseRaw(phrase, translation, explanation, status, currentTrack);
   };
 
   const handleSetAnalysisPhraseStatus = async (
@@ -889,91 +744,12 @@ export default function App() {
     await handleSetAnalysisPhraseStatusRaw(phrase, translation, explanation, status, currentTrack);
   };
 
-  // Local visual component modal helpers
-  const handleOpenAddModal = async (line: string, currentIndex: number) => {
-    const trimmedLine = line.trim();
-    if (!user) {
-      alert("Please sign in to save phrases to your deck");
-      return;
-    }
-
-    const existingMetadata = phraseMetadata.get(trimmedLine);
-    const fullTransLines = currentTrack?.fullTranslation?.split("\n") || [];
-    const fullTrans = fullTransLines[currentIndex];
-
-    if (existingMetadata) {
-      setEditingLine({
-        index: currentIndex,
-        original: trimmedLine,
-        translation: existingMetadata.translatedPhrase || fullTrans || "",
-      });
-      setIsEditModalOpen(true);
-    } else {
-      handleAddLineWithComponents(trimmedLine, currentIndex, "learning");
-    }
-  };
-
-  const handleOpenAddAnalysisItem = (phrase: string, translation: string, explanation: string) => {
-    if (!user) {
-      alert("Please sign in to save analysis items to your deck");
-      return;
-    }
-    handleAddAnalysisPhrase(phrase, translation, explanation, "learning");
-  };
-
   const handleUpdateStatus = async (card: Flashcard, status: PhraseStatus) => {
     await handleUpdateStatusLocal(card, status);
   };
 
-  const handleExplain = async (phrase: string) => {
-    if (!currentTrack) return;
-    setIsExplaining(true);
-    try {
-      const result = await explainPhraseStructured(phrase, targetLanguage);
-      if (editingLine && editingLine.original === phrase) {
-        setEditingLine(prev => prev ? {
-          ...prev,
-          translation: result.translation || prev.translation,
-          explanation: result.explanation || prev.explanation,
-        } : null);
-      }
-      alert(`Phrase: ${phrase}
-
-Translation: ${result.translation}
-
-Explanation:
-${result.explanation}`);
-    } catch (err) {
-      console.error("Failed to explain phrase:", err);
-      alert("Failed to fetch explanations from Gemini.");
-    } finally {
-      setIsExplaining(false);
-    }
-  };
-
-  const [phraseDrawerData, setPhraseDrawerData] = useState<{
-    phrase: string;
-    card: Flashcard;
-    children: Flashcard[];
-    getLineStatus: (text: string) => PhraseStatus;
-  } | null>(null);
-  const [isPhraseDrawerOpen, setIsPhraseDrawerOpen] = useState(false);
-  const [selectedLineIndexForDrawer, setSelectedLineIndexForDrawer] = useState<number | null>(null);
-
-  const handleOpenStructuredAnalysis = (phraseText: string) => {
-    const card = phraseMetadata.get(phraseText);
-    if (!card) return;
-    const children = childCardsMap.get(phraseText) || [];
-    setPhraseDrawerData({
-      phrase: phraseText,
-      card,
-      children,
-      getLineStatus: (txt) => {
-        const c = phraseMetadata.get(txt);
-        return (c?.status || "new") as PhraseStatus;
-      }
-    });
-    setIsPhraseDrawerOpen(true);
+  const handleExplainDirect = (phrase: string) => {
+    handleExplain(phrase, currentTrack);
   };
 
   const getPlaybackLines = () => {
@@ -1001,8 +777,8 @@ ${result.explanation}`);
   const renderDifficultyIndicator = (difficulty?: 'beginner' | 'intermediate' | 'advanced' | number | string, hideLabel: boolean = false) => {
     if (difficulty === undefined) return null;
     
-    let label = "Normal";
-    let color = "text-sky-500 bg-sky-500/10 border-sky-500/20";
+    let label: string;
+    let color: string;
     
     if (typeof difficulty === 'number') {
       const score = difficulty;
@@ -1044,56 +820,16 @@ ${result.explanation}`);
     }
   };
 
-  const handleOnboardingDismiss = () => {
-    userDataRepository.setPreference("cantolex_onboarding_dismissed", "true");
-    setOnboardingCompleted(true);
+  const handleOnboardingDismissDirect = () => {
+    handleOnboardingDismiss();
   };
 
-  const handleOnboardingSelect = async (track: any) => {
-    const lang = track.language || track.sourceLanguage;
-    if (lang) {
-      setTargetLanguage(lang);
-      userDataRepository.setPreference("lyrify_target_lang", lang);
-    }
-    userDataRepository.setPreference("cantolex_onboarding_dismissed", "true");
-    setOnboardingCompleted(true);
-    await handleTrackSelect(track);
+  const handleOnboardingSelectDirect = (track: any) => {
+    handleOnboardingSelect(track, handleTrackSelect);
   };
 
-  const handleNextStepClick = () => {
-    if (!nextStepState) return;
-    if (nextStepState.type === "FIND_LYRICS") {
-      setActiveTab("lyrics");
-    } else if (nextStepState.type === "GENERATE_ANALYSIS") {
-      setActiveTab("lyrics");
-    } else if (nextStepState.type === "SAVE_FIRST_PHRASE") {
-      setActiveTab("lyrics");
-    } else if (nextStepState.type === "GO_TO_STUDY") {
-      setView("study");
-    }
-  };
-
-  const getStatusStyles = (s: PhraseStatus) => {
-    switch (s) {
-      case "known":
-        return {
-          bg: "bg-transparent",
-          border: "border-transparent",
-          icon: <CheckCircle2 size={18} className="text-app-fg opacity-30 shrink-0" />,
-        };
-      case "learning":
-        return {
-          bg: "bg-orange-500/5",
-          border: "border-orange-500/20",
-          icon: <RefreshCw size={18} className="text-orange-500 shrink-0" />,
-        };
-      default:
-        return {
-          bg: "bg-sky-400/5",
-          border: "border-sky-400/20",
-          icon: <HelpCircle size={18} className="text-sky-400 shrink-0" />,
-        };
-    }
+  const handleNextStepClickDirect = () => {
+    handleNextStepClick(nextStepState);
   };
 
   const renderHighlightedText = (text: string, phrases: Phrase[]) => {
@@ -1744,8 +1480,8 @@ ${result.explanation}`);
                       <TracksHomeShell
                         onboardingCompleted={onboardingCompleted}
                         recentTracks={recentTracks}
-                        onSelectOnboardingTrack={handleOnboardingSelect}
-                        onDismissOnboarding={handleOnboardingDismiss}
+                        onSelectOnboardingTrack={handleOnboardingSelectDirect}
+                        onDismissOnboarding={handleOnboardingDismissDirect}
                         resumeViewModel={resumeViewModel}
                         onTrackSelect={handleTrackSelect}
                         onNavigateToStudy={() => setView("study")}
@@ -1937,9 +1673,9 @@ ${result.explanation}`);
                       activeTab={activeTab}
                       onAction={(actionType) => {
                         if (actionType === 'find_lyrics') {
-                          handleNextStepClick();
+                          handleNextStepClickDirect();
                         } else if (actionType === 'generate_analysis') {
-                          handleNextStepClick();
+                          handleNextStepClickDirect();
                         } else if (actionType === 'save_phrase') {
                           setActiveTab('analysis');
                         } else if (actionType === 'go_to_study' || actionType === 'review_again') {
@@ -2538,14 +2274,13 @@ ${result.explanation}`);
                             {currentTrack.lines.flatMap(l => l.phrases).filter((p, i, self) => self.findIndex(t => t.text === p.text) === i).map((item, idx) => {
                               const card = phraseMetadata.get(item.text);
                               return (
-                                <AnalysisPhraseCard
-                                  key={idx}
-                                  item={item}
-                                  idx={idx}
-                                  card={card}
-                                  handleAddAnalysisPhrase={handleAddAnalysisPhrase}
-                                  handleSetAnalysisPhraseStatus={handleSetAnalysisPhraseStatus}
-                                />
+                                  <AnalysisPhraseCard
+                                    key={idx}
+                                    item={item}
+                                    idx={idx}
+                                    card={card}
+                                    handleSetAnalysisPhraseStatus={handleSetAnalysisPhraseStatus}
+                                  />
                               );
                             })}
                           </div>
@@ -3330,7 +3065,7 @@ ${result.explanation}`);
                   <button
                     onClick={() => {
                       if (editingLine) {
-                        handleExplain(editingLine.original);
+                        handleExplainDirect(editingLine.original);
                       }
                     }}
                     disabled={isExplaining || isSaving}
@@ -3468,9 +3203,4 @@ ${result.explanation}`);
   );
 }
 
-function formatTime(seconds: number) {
-  if (isNaN(seconds)) return "0:00";
-  const m = Math.floor(seconds / 60);
-  const s = Math.floor(seconds % 60);
-  return `${m}:${s.toString().padStart(2, "0")}`;
-}
+
