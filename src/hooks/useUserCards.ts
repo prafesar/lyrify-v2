@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { 
-  userDataRepository, 
+  studyCardsRepository,
+  dailyTrackerRepository,
   type Flashcard, 
   type PhraseStatus, 
   type DailyActivity 
@@ -33,7 +34,7 @@ export function useUserCards(recentTracks: any[]): UseUserCardsResult {
   const [phraseMetadata, setPhraseMetadata] = useState<Map<string, Flashcard>>(new Map());
   const [childCardsMap, setChildCardsMap] = useState<Map<string, Flashcard[]>>(new Map());
   const [isSaving, setIsSaving] = useState(false);
-  const [dailyActivity, setDailyActivity] = useState<DailyActivity>(() => userDataRepository.getDailyActivity());
+  const [dailyActivity, setDailyActivity] = useState<DailyActivity>(() => dailyTrackerRepository.getDailyActivity());
 
   const dueCardsCount = useMemo(() => {
     const cards = Array.from(phraseMetadata.values());
@@ -45,7 +46,7 @@ export function useUserCards(recentTracks: any[]): UseUserCardsResult {
   }, [phraseMetadata]);
 
   const dailyProgressSummary = useMemo(() => {
-    return userDataRepository.getDailyProgressSummary(dailyActivity);
+    return dailyTrackerRepository.getDailyProgressSummary(dailyActivity);
   }, [dailyActivity]);
 
   const resumeViewModel = useMemo(() => {
@@ -55,7 +56,7 @@ export function useUserCards(recentTracks: any[]): UseUserCardsResult {
 
   const loadUserCards = useCallback(async () => {
     try {
-      const cards = await userDataRepository.getCards();
+      const cards = await studyCardsRepository.getCards();
       const meta = new Map<string, Flashcard>();
       const children = new Map<string, Flashcard[]>();
 
@@ -93,7 +94,7 @@ export function useUserCards(recentTracks: any[]): UseUserCardsResult {
 
   const handleUpdateStatusLocal = useCallback(async (card: Flashcard, status: PhraseStatus) => {
     try {
-      await userDataRepository.updatePhraseStatus(card.id, status);
+      await studyCardsRepository.updatePhraseStatus(card.id, status);
       await loadUserCards();
     } catch (err) {
       console.error(err);
@@ -125,7 +126,7 @@ export function useUserCards(recentTracks: any[]): UseUserCardsResult {
       for (const item of allToProcess) {
         const existing = phraseMetadata.get(item.text);
         if (!existing || !existing.id) {
-          await userDataRepository.addPhraseToStudy({
+          await studyCardsRepository.addPhraseToStudy({
             text: item.text,
             translation: item.trans,
             trackId: currentTrack.trackId,
@@ -137,10 +138,10 @@ export function useUserCards(recentTracks: any[]): UseUserCardsResult {
             type: "phrase"
           }, status);
           addedCount++;
-          setDailyActivity(userDataRepository.recordPhraseSaved());
+          setDailyActivity(dailyTrackerRepository.recordPhraseSaved());
         } else {
           if (existing.status !== status) {
-            await userDataRepository.updatePhraseStatus(existing.id, status);
+            await studyCardsRepository.updatePhraseStatus(existing.id, status);
           }
         }
       }
@@ -174,7 +175,7 @@ export function useUserCards(recentTracks: any[]): UseUserCardsResult {
     }
 
     try {
-      await userDataRepository.addPhraseToStudy({
+      await studyCardsRepository.addPhraseToStudy({
         text: phrase,
         translation: translation,
         trackId: currentTrack.trackId,
@@ -186,7 +187,7 @@ export function useUserCards(recentTracks: any[]): UseUserCardsResult {
         lemmas: [],
         type: "phrase"
       }, status);
-      setDailyActivity(userDataRepository.recordPhraseSaved());
+      setDailyActivity(dailyTrackerRepository.recordPhraseSaved());
       await loadUserCards();
     } catch (err) {
       console.error(err);
@@ -204,7 +205,7 @@ export function useUserCards(recentTracks: any[]): UseUserCardsResult {
     const existingCard = phraseMetadata.get(phrase);
     if (existingCard) {
       try {
-        await userDataRepository.updatePhraseStatus(existingCard.id, status);
+        await studyCardsRepository.updatePhraseStatus(existingCard.id, status);
         await loadUserCards();
       } catch (err) {
         console.error(err);
@@ -215,15 +216,15 @@ export function useUserCards(recentTracks: any[]): UseUserCardsResult {
   }, [phraseMetadata, handleAddAnalysisPhrase, loadUserCards]);
 
   const recordPhraseSavedAction = useCallback(() => {
-    setDailyActivity(userDataRepository.recordPhraseSaved());
+    setDailyActivity(dailyTrackerRepository.recordPhraseSaved());
   }, []);
 
   const recordReviewCompletedAction = useCallback(() => {
-    setDailyActivity(userDataRepository.recordReviewCompleted());
+    setDailyActivity(dailyTrackerRepository.recordReviewCompleted());
   }, []);
 
   const recordTrackExploredAction = useCallback(() => {
-    setDailyActivity(userDataRepository.recordTrackExplored());
+    setDailyActivity(dailyTrackerRepository.recordTrackExplored());
   }, []);
 
   return {

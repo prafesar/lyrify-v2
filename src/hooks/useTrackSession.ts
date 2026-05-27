@@ -1,7 +1,7 @@
 import { useState, useCallback } from "react";
 import { 
   trackSessionFacade, 
-  userDataRepository, 
+  recentHistoryRepository, 
   aiClient, 
   ANALYSIS_PROMPT_VERSION, 
   TRANSLATION_PROMPT_VERSION 
@@ -161,7 +161,7 @@ export function useTrackSession(): UseTrackSessionResult {
     setCurrentTrack(initialTrack);
     callbacks.setView("lyrics");
     try {
-      callbacks.updateRecentTracks(userDataRepository.getRecentTracks());
+      callbacks.updateRecentTracks(recentHistoryRepository.getRecentTracks());
     } catch (e) {
       console.error(e);
     }
@@ -188,7 +188,7 @@ export function useTrackSession(): UseTrackSessionResult {
       );
 
       setCurrentTrack(updatedTrack);
-      callbacks.updateRecentTracks(userDataRepository.getRecentTracks());
+      callbacks.updateRecentTracks(recentHistoryRepository.getRecentTracks());
       callbacks.loadCommunityTracks();
     } catch (err: any) {
       console.error("Manual fetch/meaning failed:", err);

@@ -1,5 +1,14 @@
 import { GeminiAIAdapter, aiClient } from "./adapters/geminiAIAdapter";
-import { BrowserUserDataRepository, userDataRepository } from "./adapters/browserUserDataRepository";
+import { 
+  BrowserUserDataRepository, 
+  userDataRepository,
+  studyCardsRepository, 
+  dailyTrackerRepository, 
+  trackCacheRepository, 
+  recentHistoryRepository, 
+  userPreferencesRepository, 
+  libraryRepository 
+} from "./adapters/browserUserDataRepository";
 import { BrowserLyricsProvider } from "./adapters/browserLyricsProvider";
 import { BrowserMusicMetadata } from "./adapters/browserMusicMetadata";
 import { TrackSessionFacade } from "./trackSessionFacade";
@@ -16,11 +25,26 @@ export const trackSessionFacade = new TrackSessionFacade(
   musicMetadataProvider
 );
 
-export { aiClient, userDataRepository };
+export { 
+  aiClient, 
+  userDataRepository,
+  studyCardsRepository,
+  dailyTrackerRepository,
+  trackCacheRepository,
+  recentHistoryRepository,
+  userPreferencesRepository,
+  libraryRepository
+};
 
 // Ports
 export { type AiPort } from "./ports/aiPort";
 export { type UserDataRepositoryPort } from "./ports/userDataRepositoryPort";
+export { type StudyCardsRepositoryPort } from "./ports/studyCardsRepositoryPort";
+export { type DailyTrackerRepositoryPort } from "./ports/dailyTrackerRepositoryPort";
+export { type TrackCacheRepositoryPort } from "./ports/trackCacheRepositoryPort";
+export { type RecentHistoryRepositoryPort } from "./ports/recentHistoryRepositoryPort";
+export { type UserPreferencesRepositoryPort } from "./ports/userPreferencesRepositoryPort";
+export { type LibraryRepositoryPort } from "./ports/libraryRepositoryPort";
 export { type LyricsProviderPort } from "./ports/lyricsProviderPort";
 export { type MusicMetadataPort } from "./ports/musicMetadataPort";
 

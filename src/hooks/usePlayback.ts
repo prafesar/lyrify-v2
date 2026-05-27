@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { type TrackLyricsData } from "../services/musicService";
-import { type Flashcard, userDataRepository } from "../application";
+import { type Flashcard, userPreferencesRepository } from "../application";
 import { SUPPORTED_LANGUAGES, getLocaleByName } from "../lib/languages";
 
 export interface UsePlaybackResult {
@@ -59,8 +59,8 @@ export function usePlayback(
   const [shadowingFeedback, setShadowingFeedback] = useState<"none" | "correct" | "incorrect">("none");
   const [playbackMode, setPlaybackMode] = useState<"listening" | "shadowing">("listening");
   const [shadowingAttempts, setShadowingAttempts] = useState(0);
-  const [isMuted, setIsMuted] = useState(() => userDataRepository.getBoolPreference("lyrify_muted", false));
-  const [skipKnownPhrases, setSkipKnownPhrases] = useState(() => userDataRepository.getBoolPreference("skip_known", false));
+  const [isMuted, setIsMuted] = useState(() => userPreferencesRepository.getBoolPreference("lyrify_muted", false));
+  const [skipKnownPhrases, setSkipKnownPhrases] = useState(() => userPreferencesRepository.getBoolPreference("skip_known", false));
 
   const previewAudioRef = useRef<HTMLAudioElement | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
@@ -76,12 +76,12 @@ export function usePlayback(
 
   // Sync isMuted preferences
   useEffect(() => {
-    userDataRepository.setBoolPreference("lyrify_muted", isMuted);
+    userPreferencesRepository.setBoolPreference("lyrify_muted", isMuted);
   }, [isMuted]);
 
   // Sync skipKnownPhrases preferences
   useEffect(() => {
-    userDataRepository.setBoolPreference("skip_known", skipKnownPhrases);
+    userPreferencesRepository.setBoolPreference("skip_known", skipKnownPhrases);
   }, [skipKnownPhrases]);
 
   // Sync playbackMode and targetLanguage references

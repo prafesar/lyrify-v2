@@ -4,14 +4,23 @@ import { DailyActivity, DailyProgressSummary } from "../../services/dailyTracker
 import { Track, TrackLyricsData } from "../../services/musicService";
 import { Rating } from "ts-fsrs";
 
-import * as originalCardService from "../../services/localCardService";
-import * as originalDailyTrackerService from "../../services/dailyTrackerService";
-import * as originalMusicService from "../../services/musicService";
+import { BrowserStudyCardsRepository } from "./browserStudyCardsRepository";
+import { BrowserDailyTrackerRepository } from "./browserDailyTrackerRepository";
+import { BrowserTrackCacheRepository } from "./browserTrackCacheRepository";
+import { BrowserRecentHistoryRepository } from "./browserRecentHistoryRepository";
+import { BrowserUserPreferencesRepository } from "./browserUserPreferencesRepository";
+import { BrowserLibraryRepository } from "./browserLibraryRepository";
 
 export class BrowserUserDataRepository implements UserDataRepositoryPort {
+  private studyCards = new BrowserStudyCardsRepository();
+  private dailyTracker = new BrowserDailyTrackerRepository();
+  private trackCache = new BrowserTrackCacheRepository();
+  private recentHistory = new BrowserRecentHistoryRepository();
+  private userPreferences = new BrowserUserPreferencesRepository();
+
   // Flashcards
   async getCards(): Promise<Flashcard[]> {
-    return originalCardService.getCards();
+    return this.studyCards.getCards();
   }
 
   async addPhraseToStudy(
@@ -29,112 +38,95 @@ export class BrowserUserDataRepository implements UserDataRepositoryPort {
     },
     status?: PhraseStatus
   ): Promise<string> {
-    return originalCardService.addPhraseToStudy(phraseData, status);
+    return this.studyCards.addPhraseToStudy(phraseData, status);
   }
 
   async updatePhraseStatus(cardId: string, status: PhraseStatus): Promise<void> {
-    return originalCardService.updatePhraseStatus(cardId, status);
+    return this.studyCards.updatePhraseStatus(cardId, status);
   }
 
   async deleteFlashcard(cardId: string): Promise<void> {
-    return originalCardService.deleteFlashcard(cardId);
+    return this.studyCards.deleteFlashcard(cardId);
   }
 
   async reviewCard(cardId: string, rating: Rating): Promise<void> {
-    return originalCardService.reviewCard(cardId, rating);
+    return this.studyCards.reviewCard(cardId, rating);
   }
 
   // Daily Activity
   getDailyActivity(date?: Date): DailyActivity {
-    return originalDailyTrackerService.getDailyActivity(date);
+    return this.dailyTracker.getDailyActivity(date);
   }
 
   saveDailyActivity(activity: DailyActivity): void {
-    return originalDailyTrackerService.saveDailyActivity(activity);
+    return this.dailyTracker.saveDailyActivity(activity);
   }
 
   recordTrackExplored(date?: Date): DailyActivity {
-    return originalDailyTrackerService.recordTrackExplored(date);
+    return this.dailyTracker.recordTrackExplored(date);
   }
 
   recordPhraseSaved(date?: Date): DailyActivity {
-    return originalDailyTrackerService.recordPhraseSaved(date);
+    return this.dailyTracker.recordPhraseSaved(date);
   }
 
   recordReviewCompleted(date?: Date): DailyActivity {
-    return originalDailyTrackerService.recordReviewCompleted(date);
+    return this.dailyTracker.recordReviewCompleted(date);
   }
 
   getDailyProgressSummary(activity: DailyActivity): DailyProgressSummary {
-    return originalDailyTrackerService.getDailyProgressSummary(activity);
+    return this.dailyTracker.getDailyProgressSummary(activity);
   }
 
   // Recent Tracks
   getRecentTracks(): Track[] {
-    return originalMusicService.getRecentTracks();
+    return this.recentHistory.getRecentTracks();
   }
 
   addRecentTrack(track: Track): void {
-    return originalMusicService.addRecentTrack(track);
+    return this.recentHistory.addRecentTrack(track);
   }
 
   // Track Data Cache
   getCachedTrack(trackId: string): TrackLyricsData | null {
-    return originalMusicService.getCachedTrackData(trackId);
+    return this.trackCache.getCachedTrack(trackId);
   }
 
   saveTrackData(trackId: string, data: any): TrackLyricsData {
-    return originalMusicService.saveTrackData(trackId, data);
+    return this.trackCache.saveTrackData(trackId, data);
   }
 
   // Preferences
   getPreference(key: string, defaultValue: string): string {
-    if (typeof window === "undefined" || !window.localStorage) {
-      return defaultValue;
-    }
-    return localStorage.getItem(key) || defaultValue;
+    return this.userPreferences.getPreference(key, defaultValue);
   }
 
   setPreference(key: string, value: string): void {
-    if (typeof window !== "undefined" && window.localStorage) {
-      localStorage.setItem(key, value);
-    }
+    return this.userPreferences.setPreference(key, value);
   }
 
   getBoolPreference(key: string, defaultValue: boolean): boolean {
-    if (typeof window === "undefined" || !window.localStorage) {
-      return defaultValue;
-    }
-    const val = localStorage.getItem(key);
-    if (val === null) return defaultValue;
-    return val === "true";
+    return this.userPreferences.getBoolPreference(key, defaultValue);
   }
 
   setBoolPreference(key: string, value: boolean): void {
-    if (typeof window !== "undefined" && window.localStorage) {
-      localStorage.setItem(key, String(value));
-    }
+    return this.userPreferences.setBoolPreference(key, value);
   }
 
   removePreference(key: string): void {
-    if (typeof window !== "undefined" && window.localStorage) {
-      localStorage.removeItem(key);
-    }
+    return this.userPreferences.removePreference(key);
   }
 
   async clearAllUserData(): Promise<void> {
-    if (typeof window !== "undefined") {
-      if (window.localStorage) {
-        localStorage.clear();
-      }
-      try {
-        const idb = await import('idb-keyval');
-        await idb.del('lyrify_flashcards');
-      } catch (err) {
-        console.error("Failed to clear idb-keyval in repository:", err);
-      }
-    }
+    await this.userPreferences.clearAllUserData();
   }
 }
 
 export const userDataRepository: UserDataRepositoryPort = new BrowserUserDataRepository();
+
+export const studyCardsRepository = new BrowserStudyCardsRepository();
+export const dailyTrackerRepository = new BrowserDailyTrackerRepository();
+export const trackCacheRepository = new BrowserTrackCacheRepository();
+export const recentHistoryRepository = new BrowserRecentHistoryRepository();
+export const userPreferencesRepository = new BrowserUserPreferencesRepository();
+export const libraryRepository = new BrowserLibraryRepository();

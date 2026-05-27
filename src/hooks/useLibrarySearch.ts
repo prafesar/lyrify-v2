@@ -2,7 +2,8 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { type Track } from "../constants";
 import { type Artist, type Album } from "../constants";
 import { 
-  userDataRepository, 
+  userPreferencesRepository,
+  recentHistoryRepository, 
   aiClient 
 } from "../application";
 import { 
@@ -52,7 +53,7 @@ export function useLibrarySearch(targetLanguage: string): UseLibrarySearchResult
   const [recentTracks, setRecentTracks] = useState<Track[]>([]);
   const [searchHistory, setSearchHistory] = useState<string[]>(() => {
     try {
-      const saved = userDataRepository.getPreference("lyrify_search_history", "[]");
+      const saved = userPreferencesRepository.getPreference("lyrify_search_history", "[]");
       return JSON.parse(saved);
     } catch (e) {
       return [];
@@ -69,7 +70,7 @@ export function useLibrarySearch(targetLanguage: string): UseLibrarySearchResult
   // Load recent tracks on mount
   useEffect(() => {
     try {
-      const recent = userDataRepository.getRecentTracks();
+      const recent = recentHistoryRepository.getRecentTracks();
       setRecentTracks(recent);
     } catch (e) {
       console.error("[useLibrarySearch] Failed to get recent tracks:", e);
@@ -167,7 +168,7 @@ export function useLibrarySearch(targetLanguage: string): UseLibrarySearchResult
 
     const newHistory = [query, ...searchHistory.filter((h) => h !== query)].slice(0, 10);
     setSearchHistory(newHistory);
-    userDataRepository.setPreference("lyrify_search_history", JSON.stringify(newHistory));
+    userPreferencesRepository.setPreference("lyrify_search_history", JSON.stringify(newHistory));
 
     if (searchContainerRef.current) {
       searchContainerRef.current.scrollTo({ top: 0, behavior: "smooth" });

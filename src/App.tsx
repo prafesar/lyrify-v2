@@ -46,7 +46,10 @@ import { useLibrarySearch } from "./hooks/useLibrarySearch";
 import { useTrackSession } from "./hooks/useTrackSession";
 import { useAppUiState } from "./hooks/useAppUiState";
 import { 
-  userDataRepository, 
+  studyCardsRepository,
+  dailyTrackerRepository,
+  recentHistoryRepository,
+  userPreferencesRepository,
   ANALYSIS_PROMPT_VERSION, 
   type Flashcard,
   type PhraseStatus
@@ -64,13 +67,14 @@ import {
   type TrackLyricsData,
   type LyricOption,
   type Phrase,
+  saveTrackData,
 } from "./services/musicService";
 
 import { determineNextStep } from "./services/nextStepService";
 import { getTrackStudySummary } from "./services/trackSummaryService";
 import { TrackStudyBridge } from "./components/TrackStudyBridge";
-const recordPhraseSaved = (date?: Date) => userDataRepository.recordPhraseSaved(date);
-const recordReviewCompleted = (date?: Date) => userDataRepository.recordReviewCompleted(date);
+const recordPhraseSaved = (date?: Date) => dailyTrackerRepository.recordPhraseSaved(date);
+const recordReviewCompleted = (date?: Date) => dailyTrackerRepository.recordReviewCompleted(date);
 import { buildTrackProgressViewModel } from "./services/trackProgressService";
 import { TrackProgressTracker } from "./components/TrackProgressTracker";
 import { TracksHomeShell } from "./components/TracksHomeShell";
@@ -711,7 +715,7 @@ export default function App() {
 
   const handleManualLyricsSubmit = async () => {
     await handleManualLyricsSubmitRaw(targetLanguage, {
-      updateRecentTracks: () => setRecentTracks(userDataRepository.getRecentTracks()),
+      updateRecentTracks: () => setRecentTracks(recentHistoryRepository.getRecentTracks()),
       loadCommunityTracks
     });
   };
@@ -767,7 +771,7 @@ export default function App() {
 
   const resetUserData = async () => {
     console.log("Resetting user data...");
-    await userDataRepository.clearAllUserData();
+    await userPreferencesRepository.clearAllUserData();
     console.log("All user data cleared in repository");
     console.log("Reloading...");
     window.location.reload();
@@ -914,7 +918,7 @@ export default function App() {
 
   // Setup/Synchronize Effects
   useEffect(() => {
-    userDataRepository.setBoolPreference("lyrify_wiped_v3", true);
+    userPreferencesRepository.setBoolPreference("lyrify_wiped_v3", true);
   }, []);
 
   useEffect(() => {
@@ -1000,7 +1004,7 @@ export default function App() {
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
-    userDataRepository.setPreference("lyrify_theme", theme);
+    userPreferencesRepository.setPreference("lyrify_theme", theme);
   }, [theme]);
 
   const handlePopoverAction = async (
@@ -1014,9 +1018,9 @@ export default function App() {
     try {
       const existing = phraseMetadata.get(phrase);
       if (existing && existing.id) {
-        await updatePhraseStatus(existing.id, status);
+        await studyCardsRepository.updatePhraseStatus(existing.id, status);
       } else {
-        await addPhraseToStudy({
+        await studyCardsRepository.addPhraseToStudy({
           text: phrase,
           translation: translation || "...",
           trackId: currentTrack.trackId,
@@ -1229,7 +1233,7 @@ export default function App() {
                             onClick={(e) => {
                               e.stopPropagation();
                               setSearchHistory([]);
-                              userDataRepository.removePreference("lyrify_search_history");
+                              userPreferencesRepository.removePreference("lyrify_search_history");
                             }}
                             className="text-[10px] font-black uppercase tracking-widest text-red-500/50 hover:text-red-500 px-2 py-1"
                           >

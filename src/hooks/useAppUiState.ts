@@ -1,8 +1,7 @@
 import { useState, useCallback } from "react";
 import { type User } from "firebase/auth";
-import { type Track } from "../constants";
 import { type Flashcard, type PhraseStatus } from "../application";
-import { userDataRepository, aiClient } from "../application";
+import { userPreferencesRepository, aiClient } from "../application";
 import { isOnboardingCompleted } from "../services/onboardingService";
 
 export interface EditingLineInfo {
@@ -35,16 +34,16 @@ export function useAppUiState() {
   const [view, setView] = useState<"tracks" | "study" | "lyrics" | "settings">("tracks");
   const [activeTab, setActiveTab] = useState<"preview" | "lyrics" | "analysis">("preview");
   const [targetLanguage, setTargetLanguage] = useState(
-    () => userDataRepository.getPreference("lyrify_target_lang", "Russian")
+    () => userPreferencesRepository.getPreference("lyrify_target_lang", "Russian")
   );
   const [theme, setTheme] = useState(
-    () => userDataRepository.getPreference("lyrify_theme", "light")
+    () => userPreferencesRepository.getPreference("lyrify_theme", "light")
   );
   const [lyricsDisplayMode, setLyricsDisplayMode] = useState<"lyrics" | "translation" | "both">(
-    () => (userDataRepository.getPreference("cantolex_lyrics_display_mode", "both") as any)
+    () => (userPreferencesRepository.getPreference("cantolex_lyrics_display_mode", "both") as any)
   );
   const [isStarFilterActive, setIsStarFilterActive] = useState<boolean>(
-    () => userDataRepository.getBoolPreference("cantolex_star_filter_active", false)
+    () => userPreferencesRepository.getBoolPreference("cantolex_star_filter_active", false)
   );
   const [previewLyricsMode, setPreviewLyricsMode] = useState<"original" | "translation">("original");
 
@@ -63,19 +62,19 @@ export function useAppUiState() {
 
   const handleSetLyricsDisplayMode = useCallback((mode: "lyrics" | "translation" | "both") => {
     setLyricsDisplayMode(mode);
-    userDataRepository.setPreference("cantolex_lyrics_display_mode", mode);
+    userPreferencesRepository.setPreference("cantolex_lyrics_display_mode", mode);
   }, []);
 
   const handleToggleStarFilter = useCallback(() => {
     setIsStarFilterActive((prev) => {
       const nextVal = !prev;
-      userDataRepository.setBoolPreference("cantolex_star_filter_active", nextVal);
+      userPreferencesRepository.setBoolPreference("cantolex_star_filter_active", nextVal);
       return nextVal;
     });
   }, []);
 
   const handleOnboardingDismiss = useCallback(() => {
-    userDataRepository.setPreference("cantolex_onboarding_dismissed", "true");
+    userPreferencesRepository.setPreference("cantolex_onboarding_dismissed", "true");
     setOnboardingCompleted(true);
   }, []);
 
@@ -83,9 +82,9 @@ export function useAppUiState() {
     const lang = track.language || track.sourceLanguage;
     if (lang) {
       setTargetLanguage(lang);
-      userDataRepository.setPreference("lyrify_target_lang", lang);
+      userPreferencesRepository.setPreference("lyrify_target_lang", lang);
     }
-    userDataRepository.setPreference("cantolex_onboarding_dismissed", "true");
+    userPreferencesRepository.setPreference("cantolex_onboarding_dismissed", "true");
     setOnboardingCompleted(true);
     await handleTrackSelect(track);
   }, []);
@@ -143,7 +142,7 @@ export function useAppUiState() {
     handleAddAnalysisPhrase(phrase, translation, explanation, "learning");
   }, []);
 
-  const handleExplain = useCallback(async (phrase: string, currentTrack: Track | null) => {
+  const handleExplain = useCallback(async (phrase: string, currentTrack: any) => {
     if (!currentTrack) return;
     setIsExplaining(true);
     try {
