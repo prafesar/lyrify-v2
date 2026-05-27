@@ -616,6 +616,8 @@ export default function App() {
     index: number;
     original: string;
     translation?: string;
+    language?: string;
+    explanation?: string;
   } | null>(null);
 
   const [isExplaining, setIsExplaining] = useState(false);
@@ -928,6 +930,13 @@ export default function App() {
     setIsExplaining(true);
     try {
       const result = await explainPhraseStructured(phrase, targetLanguage);
+      if (editingLine && editingLine.original === phrase) {
+        setEditingLine(prev => prev ? {
+          ...prev,
+          translation: result.translation || prev.translation,
+          explanation: result.explanation || prev.explanation,
+        } : null);
+      }
       alert(`Phrase: ${phrase}
 
 Translation: ${result.translation}
@@ -989,23 +998,50 @@ ${result.explanation}`);
   };
 
   // Core application visual/status helpers
-  const renderDifficultyIndicator = (score?: number) => {
-    if (score === undefined) return null;
+  const renderDifficultyIndicator = (difficulty?: 'beginner' | 'intermediate' | 'advanced' | number | string, hideLabel: boolean = false) => {
+    if (difficulty === undefined) return null;
+    
     let label = "Normal";
-    let color = "text-sky-500 bg-sky-500/10";
-    if (score > 6) {
-      label = "Advanced";
-      color = "text-red-500 bg-red-500/10";
-    } else if (score > 3) {
-      label = "Intermediate";
-      color = "text-amber-500 bg-amber-500/10";
+    let color = "text-sky-500 bg-sky-500/10 border-sky-500/20";
+    
+    if (typeof difficulty === 'number') {
+      const score = difficulty;
+      if (score > 6) {
+        label = "Advanced";
+        color = "text-red-500 bg-red-500/10 border-red-500/20";
+      } else if (score > 3) {
+        label = "Intermediate";
+        color = "text-amber-500 bg-amber-500/10 border-amber-500/20";
+      } else {
+        label = "Beginner";
+        color = "text-green-500 bg-green-500/10 border-green-500/20";
+      }
+      return (
+        <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold border capitalize backdrop-blur-md tracking-wider leading-none shadow-sm ${color}`}>
+          {hideLabel ? "" : `${label} `}({score}/10)
+        </span>
+      );
+    } else {
+      const diffStr = String(difficulty).toLowerCase();
+      if (diffStr === 'advanced') {
+        label = "Advanced";
+        color = "text-red-500 bg-red-500/10 border-red-500/20";
+      } else if (diffStr === 'intermediate') {
+        label = "Intermediate";
+        color = "text-amber-500 bg-amber-500/10 border-amber-500/20";
+      } else if (diffStr === 'beginner') {
+        label = "Beginner";
+        color = "text-green-500 bg-green-500/10 border-green-500/20";
+      } else {
+        label = String(difficulty);
+        color = "text-sky-500 bg-sky-500/10 border-sky-500/20";
+      }
+      return (
+        <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold border capitalize backdrop-blur-md tracking-wider leading-none shadow-sm ${color}`}>
+          {label}
+        </span>
+      );
     }
-
-    return (
-      <span className="px-2.5 py-1 rounded-full text-xs font-semibold backdrop-blur-md uppercase tracking-wider shadow-sm text-sky-500 bg-sky-500/10">
-        {label} ({score})
-      </span>
-    );
   };
 
   const handleOnboardingDismiss = () => {
@@ -1013,22 +1049,26 @@ ${result.explanation}`);
     setOnboardingCompleted(true);
   };
 
-  const handleOnboardingSelect = (language: string) => {
-    setTargetLanguage(language);
-    userDataRepository.setPreference("lyrify_target_lang", language);
+  const handleOnboardingSelect = async (track: any) => {
+    const lang = track.language || track.sourceLanguage;
+    if (lang) {
+      setTargetLanguage(lang);
+      userDataRepository.setPreference("lyrify_target_lang", lang);
+    }
     userDataRepository.setPreference("cantolex_onboarding_dismissed", "true");
     setOnboardingCompleted(true);
+    await handleTrackSelect(track);
   };
 
   const handleNextStepClick = () => {
     if (!nextStepState) return;
-    if (nextStepState.step === "preview") {
-      setActiveTab("preview");
-    } else if (nextStepState.step === "lyrics") {
+    if (nextStepState.type === "FIND_LYRICS") {
       setActiveTab("lyrics");
-    } else if (nextStepState.step === "analyze") {
-      setActiveTab("analysis");
-    } else if (nextStepState.step === "study") {
+    } else if (nextStepState.type === "GENERATE_ANALYSIS") {
+      setActiveTab("lyrics");
+    } else if (nextStepState.type === "SAVE_FIRST_PHRASE") {
+      setActiveTab("lyrics");
+    } else if (nextStepState.type === "GO_TO_STUDY") {
       setView("study");
     }
   };
@@ -2218,7 +2258,7 @@ ${result.explanation}`);
                                       <span>{targetLangCode}</span>
                                     </button>
                                     <button
-                                      onClick={handleRegenerateTranslations}
+                                      onClick={() => handleRegenerateTranslations(targetLanguage)}
                                       disabled={isTranslating}
                                       title="Regenerate Translation"
                                       className={cn(
@@ -2716,7 +2756,7 @@ ${result.explanation}`);
                   {/* Center: Play Control */}
                   <div className="flex-shrink-0 mx-2 relative group">
                     <motion.button
-                      onClick={activeTab === "preview" ? togglePreviewAudio : toggleReadLyrics}
+                      onClick={activeTab === "preview" ? togglePreviewAudio : () => toggleReadLyrics(getPlaybackLines)}
                       whileHover={{ scale: 1.08 }}
                       whileTap={{ scale: 0.92 }}
                       className="w-14 h-14 rounded-full flex items-center justify-center transition-all shadow-2xl relative z-10"
@@ -3254,14 +3294,28 @@ ${result.explanation}`);
                 <div className="grid grid-cols-1 gap-3 pt-4 border-t border-app-card-border">
                   <div className="grid grid-cols-2 gap-3">
                     <button
-                      onClick={() => handleUpdateStatus("known")}
+                      onClick={() => {
+                        if (editingLine) {
+                          const card = phraseMetadata.get(editingLine.original);
+                          if (card) {
+                            handleUpdateStatus(card, "known");
+                          }
+                        }
+                      }}
                       disabled={isSaving}
                       className="py-4 rounded-2xl font-bold uppercase text-[10px] tracking-widest transition-all bg-app-card border border-app-card-border text-app-fg hover:bg-opacity-80"
                     >
                       I know it
                     </button>
                     <button
-                      onClick={() => handleUpdateStatus("learning")}
+                      onClick={() => {
+                        if (editingLine) {
+                          const card = phraseMetadata.get(editingLine.original);
+                          if (card) {
+                            handleUpdateStatus(card, "learning");
+                          }
+                        }
+                      }}
                       disabled={isSaving}
                       className="py-4 rounded-2xl font-bold uppercase text-[10px] tracking-widest transition-all text-white"
                       style={{
@@ -3274,7 +3328,11 @@ ${result.explanation}`);
                   </div>
 
                   <button
-                    onClick={handleExplain}
+                    onClick={() => {
+                      if (editingLine) {
+                        handleExplain(editingLine.original);
+                      }
+                    }}
                     disabled={isExplaining || isSaving}
                     className="w-full py-4 rounded-2xl font-bold uppercase text-[10px] tracking-widest transition-all border border-[var(--accent)] text-[var(--accent)] hover:bg-[var(--accent)] hover:text-white"
                   >
@@ -3403,7 +3461,7 @@ ${result.explanation}`);
         trackId={currentTrack?.trackId || ""}
         sourceLanguage={currentTrack?.sourceLanguage || "English"}
         user={user}
-        onCardUpdated={loadUserCards}
+        onCardUpdated={() => { loadUserCards(); }}
         phraseMetadata={phraseMetadata}
       />
     </div>
