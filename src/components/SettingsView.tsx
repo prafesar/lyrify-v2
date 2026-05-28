@@ -23,7 +23,7 @@ export default function SettingsView({ user, targetLanguage, setTargetLanguage, 
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: 10 }}
-      className="flex-1 overflow-y-auto px-6 py-8"
+      className="flex-1 overflow-y-auto px-6 py-8 max-w-5xl mx-auto w-full scrollbar-hide"
     >
       <div className="flex items-center justify-between mb-8">
         <h2 className="text-xs font-black uppercase tracking-[0.3em] px-2" style={{ color: 'var(--accent)' }}>Settings</h2>

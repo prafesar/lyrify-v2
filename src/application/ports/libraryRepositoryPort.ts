@@ -6,4 +6,7 @@ export interface LibraryRepositoryPort {
   isFavorite(trackId: string): Promise<boolean>;
   getPlaylists(): Promise<any[]>;
   createPlaylist(name: string): Promise<string>;
+  addTrackToPlaylist(playlistId: string, track: Track): Promise<void>;
+  removeTrackFromPlaylist(playlistId: string, trackId: string): Promise<void>;
+  deletePlaylist(playlistId: string): Promise<void>;
 }

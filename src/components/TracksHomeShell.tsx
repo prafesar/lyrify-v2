@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
-import { History, ChevronRight, Search, Globe, Music, ChevronDown, Check, X } from 'lucide-react';
+import { History, ChevronRight, Search, Globe, Music, ChevronDown, Check, X, MoreVertical } from 'lucide-react';
 import { Track, TrackLyricsData } from '../services/musicService';
 import { ResumeViewModel } from '../services/resumeService';
 import { DailyProgressSummary } from '../application';
@@ -24,6 +24,7 @@ interface TracksHomeShellProps {
 
   dynamicTracks: Track[];
   isLoadingTracks: boolean;
+  onTrackMenuOpen?: (track: Track) => void;
 }
 
 const renderDifficultyIndicator = (difficulty?: string, hideLabel: boolean = false) => {
@@ -75,6 +76,7 @@ export const TracksHomeShell: React.FC<TracksHomeShellProps> = ({
 
   dynamicTracks,
   isLoadingTracks,
+  onTrackMenuOpen,
 }) => {
   const [activeLibraryTab, setActiveLibraryTab] = useState<'recent' | 'community'>('recent');
   const [selectedLanguages, setSelectedLanguages] = useState<string[]>([]);
@@ -227,26 +229,23 @@ export const TracksHomeShell: React.FC<TracksHomeShellProps> = ({
       {activeLibraryTab === 'recent' ? (
         <div className="space-y-4">
           {recentTracks.length > 0 ? recentTracks.map((track) => (
-            <button
+            <div
               key={`recent-${track.id}`}
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onTrackSelect(track);
-              }}
-              className="w-full flex items-center justify-between p-4 rounded-3xl bg-app-card border border-app-card-border shadow-app-card active:scale-[0.98] transition-all hover:bg-opacity-80"
+              onClick={() => onTrackSelect(track)}
+              className="w-full flex items-center justify-between p-4 rounded-3xl bg-app-card border border-app-card-border shadow-app-card active:scale-[0.98] transition-all hover:bg-opacity-80 group cursor-pointer"
             >
-              <div className="flex items-center gap-4">
+              <div className="flex items-center gap-4 flex-1 min-w-0">
                 <img
                   src={track.coverUrl}
-                  className="w-16 h-16 rounded-2xl object-cover shadow-lg"
+                  className="w-16 h-16 rounded-2xl object-cover shadow-lg shrink-0"
+                  referrerPolicy="no-referrer"
                 />
-                <div className="text-left">
-                  <p className="font-bold text-app-fg leading-tight mb-0.5">
+                <div className="text-left min-w-0 flex-1">
+                  <p className="font-bold text-app-fg leading-tight mb-0.5 truncate">
                     {track.title}
                   </p>
                   <div className="flex flex-col gap-1">
-                    <p className="text-sm text-app-muted">
+                    <p className="text-sm text-app-muted truncate">
                       {track.artist}
                     </p>
                     {track.difficulty && (
@@ -257,11 +256,20 @@ export const TracksHomeShell: React.FC<TracksHomeShellProps> = ({
                   </div>
                 </div>
               </div>
-              <ChevronRight
-                size={20}
-                className="text-app-fg opacity-20 mr-2"
-              />
-            </button>
+              <div className="flex items-center gap-1 shrink-0" onClick={e => e.stopPropagation()}>
+                <button
+                  type="button"
+                  onClick={() => onTrackMenuOpen?.(track)}
+                  className="p-2 text-app-muted hover:text-app-fg hover:bg-app-fg/5 rounded-full transition-all"
+                >
+                  <MoreVertical size={18} />
+                </button>
+                <ChevronRight
+                  size={20}
+                  className="text-app-fg opacity-20 mr-2 group-hover:opacity-40 transition-opacity"
+                />
+              </div>
+            </div>
           )) : (
             <div className="text-center py-16 px-6 rounded-3xl border border-dashed border-app-card-border opacity-40 italic bg-app-card/30">
               <Search size={40} className="mx-auto mb-4 opacity-20" />
@@ -298,23 +306,20 @@ export const TracksHomeShell: React.FC<TracksHomeShellProps> = ({
                   return langMatch && diffMatch;
                 })
                 .map((track) => (
-                  <button
+                  <div
                     key={`comm-${track.id}`}
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onTrackSelect(track);
-                    }}
-                    className="w-full flex items-center justify-between p-4 rounded-3xl bg-app-card border border-app-card-border shadow-app-card active:scale-[0.98] transition-all hover:bg-opacity-80"
+                    onClick={() => onTrackSelect(track)}
+                    className="w-full flex items-center justify-between p-4 rounded-3xl bg-app-card border border-app-card-border shadow-app-card active:scale-[0.98] transition-all hover:bg-opacity-80 group cursor-pointer"
                   >
-                    <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-4 flex-1 min-w-0">
                       <img
                         src={track.coverUrl}
-                        className="w-16 h-16 rounded-2xl object-cover shadow-lg"
+                        className="w-16 h-16 rounded-2xl object-cover shadow-lg shrink-0"
+                        referrerPolicy="no-referrer"
                       />
-                      <div className="text-left">
+                      <div className="text-left min-w-0 flex-1">
                         <div className="flex items-center gap-2 mb-0.5">
-                          <p className="font-bold text-app-fg leading-tight">
+                          <p className="font-bold text-app-fg leading-tight truncate">
                             {track.title}
                           </p>
                           <span className="text-[8px] font-black uppercase px-1.5 py-0.5 rounded bg-app-fg/10 text-app-fg opacity-50 tracking-tighter shrink-0">
@@ -322,7 +327,7 @@ export const TracksHomeShell: React.FC<TracksHomeShellProps> = ({
                           </span>
                         </div>
                         <div className="flex flex-col gap-1">
-                          <p className="text-sm text-app-muted">
+                          <p className="text-sm text-app-muted truncate">
                             {track.artist}
                           </p>
                           {track.difficulty && (
@@ -333,11 +338,20 @@ export const TracksHomeShell: React.FC<TracksHomeShellProps> = ({
                         </div>
                       </div>
                     </div>
-                    <ChevronRight
-                      size={20}
-                      className="text-app-fg opacity-20 mr-2"
-                    />
-                  </button>
+                    <div className="flex items-center gap-1 shrink-0" onClick={e => e.stopPropagation()}>
+                      <button
+                        type="button"
+                        onClick={() => onTrackMenuOpen?.(track)}
+                        className="p-2 text-app-muted hover:text-app-fg hover:bg-app-fg/5 rounded-full transition-all"
+                      >
+                        <MoreVertical size={18} />
+                      </button>
+                      <ChevronRight
+                        size={20}
+                        className="text-app-fg opacity-20 mr-2 group-hover:opacity-40 transition-opacity"
+                      />
+                    </div>
+                  </div>
                 )) : (
                 <div className="text-center py-12 px-6 rounded-3xl border border-dashed border-app-card-border opacity-40 italic bg-app-card/30">
                   <Music size={40} className="mx-auto mb-4 opacity-20" />

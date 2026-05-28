@@ -36,6 +36,9 @@ import {
   Volume2,
   VolumeX,
   Loader2,
+  Heart,
+  MoreVertical,
+  FolderHeart,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { Track } from "./constants";
@@ -51,6 +54,7 @@ import {
   recentHistoryRepository,
   userPreferencesRepository,
   userDataMaintenanceService,
+  libraryRepository,
   ANALYSIS_PROMPT_VERSION, 
   type Flashcard,
   type PhraseStatus
@@ -63,6 +67,7 @@ import { onAuthStateChanged, type User } from "firebase/auth";
 import StudyView from "./components/StudyView";
 import SettingsView from "./components/SettingsView";
 import PhraseDrawer from "./components/PhraseDrawer";
+import { LibraryView } from "./components/LibraryView";
 import LanguageSelector from "./components/LanguageSelector";
 import {
   type TrackLyricsData,
@@ -512,6 +517,56 @@ export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [studyTrackId, setStudyTrackId] = useState<string | undefined>(undefined);
   const [dbConnectionError, setDbConnectionError] = useState(false);
+
+  // Global track overflow menu and database integration states
+  const [activeMenuTrack, setActiveMenuTrack] = useState<Track | null>(null);
+  const [isAddToPlaylistOpenInApp, setIsAddToPlaylistOpenInApp] = useState(false);
+  const [playlistsInApp, setPlaylistsInApp] = useState<any[]>([]);
+  const [favoritesInApp, setFavoritesInApp] = useState<Track[]>([]);
+
+  const loadAppLibraryData = async () => {
+    try {
+      const favs = await libraryRepository.getFavorites();
+      const lists = await libraryRepository.getPlaylists();
+      setFavoritesInApp(favs || []);
+      setPlaylistsInApp(lists || []);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  useEffect(() => {
+    if (activeMenuTrack) {
+      loadAppLibraryData();
+    }
+  }, [activeMenuTrack]);
+
+  const handleToggleFavoriteInApp = async (track: Track) => {
+    try {
+      await libraryRepository.toggleFavorite(track);
+      await loadAppLibraryData();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const isTrackFavoriteInApp = (trackId: string) => {
+    return favoritesInApp.some(t => {
+      const tid = t.id || t.trackId;
+      return tid === trackId;
+    });
+  };
+
+  const handleAddTrackToPlaylistInApp = async (playlistId: string, track: Track) => {
+    try {
+      await libraryRepository.addTrackToPlaylist(playlistId, track);
+      await loadAppLibraryData();
+      setIsAddToPlaylistOpenInApp(false);
+      setActiveMenuTrack(null);
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   const {
     onboardingCompleted,
@@ -1125,7 +1180,7 @@ export default function App() {
               initial={{ opacity: 0, scale: 0.98 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.98 }}
-              className="flex-1 overflow-y-auto px-6 pt-8 pb-32"
+              className="flex-1 overflow-y-auto px-6 pt-8 pb-32 max-w-5xl mx-auto w-full scrollbar-hide"
             >
               {/* 🎯 Daily Goal Details (Daily Milestones) */}
               {!searchResults.length && !artistDetails && !albumDetails && (
@@ -1495,6 +1550,7 @@ export default function App() {
                         onNavigateToLyrics={() => setView("lyrics")}
                         dynamicTracks={dynamicTracks}
                         isLoadingTracks={isLoadingTracks}
+                        onTrackMenuOpen={setActiveMenuTrack}
                       />
                     )}
 
@@ -1508,29 +1564,27 @@ export default function App() {
                         </h2>
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                           {searchResults.map((item) => (
-                            <button
+                            <div
                               key={item.id}
-                              type="button"
-                              disabled={isLoadingLyrics}
                               onClick={(e) => {
-                                e.stopPropagation();
                                 if (searchEntityType === "musicTrack") handleTrackSelect(item);
                                 else if (searchEntityType === "album") handleAlbumSelect(item.id);
                                 else if (searchEntityType === "musicArtist") handleArtistSelect(item.id);
                               }}
-                              className="flex items-center gap-4 p-3 rounded-2xl bg-app-card border border-app-card-border shadow-app-card active:scale-[0.98] transition-all hover:bg-opacity-80 group text-left"
+                              className="flex items-center gap-4 p-3 rounded-2xl bg-app-card border border-app-card-border shadow-app-card active:scale-[0.98] transition-all hover:bg-opacity-80 group text-left cursor-pointer"
                             >
                               {item.coverUrl ? (
                                 <img
                                   src={item.coverUrl}
                                   className="w-12 h-12 rounded-xl object-cover shadow-sm group-hover:scale-105 transition-transform"
+                                  referrerPolicy="no-referrer"
                                 />
                               ) : (
                                 <div className="w-12 h-12 rounded-xl bg-app-fg/5 flex items-center justify-center text-app-fg/20">
                                   {searchEntityType === "musicArtist" ? <UserIcon size={24} /> : <Disc size={24} />}
                                 </div>
                               )}
-                              <div className="text-left overflow-hidden flex-1">
+                              <div className="text-left overflow-hidden flex-1 min-w-0">
                                 <p className="font-bold text-app-fg leading-tight truncate">
                                   {item.title || item.name}
                                 </p>
@@ -1538,8 +1592,19 @@ export default function App() {
                                   {item.artist || item.genre || "Artist"}
                                 </p>
                               </div>
-                              <ChevronRight size={16} className="text-app-fg opacity-0 group-hover:opacity-20 transition-opacity" />
-                            </button>
+                              <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                                {searchEntityType === "musicTrack" && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setActiveMenuTrack(item)}
+                                    className="p-2 text-app-muted hover:text-app-fg hover:bg-app-fg/5 rounded-full transition-all"
+                                  >
+                                    <MoreVertical size={16} />
+                                  </button>
+                                )}
+                                <ChevronRight size={16} className="text-app-fg opacity-0 group-hover:opacity-20 transition-opacity" />
+                              </div>
+                            </div>
                           ))}
                         </div>
                       </div>
@@ -1558,41 +1623,43 @@ export default function App() {
               exit={{ opacity: 0, x: -50 }}
               className="flex-1 flex flex-col overflow-hidden"
             >
-              <div className="px-6 py-4 flex items-center justify-between bg-app-card/50 border-b border-app-card-border backdrop-blur-xl">
-                <button
-                  onClick={() => setView("tracks")}
-                  className="flex items-center gap-1 text-app-fg opacity-40 text-xs font-bold uppercase py-2 px-1"
-                >
-                  <ChevronLeft size={18} /> Library
-                </button>
-                <div className="flex items-center gap-4">
-                  {isLoadingLyrics && (
-                    <div className={cn(
-                      "flex items-center gap-2 px-3 py-1 rounded-full border animate-pulse",
-                      loadingStep === "searching" ? "bg-amber-500/10 border-amber-500/20" : "bg-[var(--accent)]/10 border-[var(--accent)]/20"
-                    )}>
-                      <RefreshCw
-                        size={12}
-                        className={cn(
-                          "animate-spin",
-                          loadingStep === "searching" ? "text-amber-500 duration-[2s]" : "text-[var(--accent)] duration-700"
-                        )}
-                      />
-                      <span className={cn(
-                        "text-[10px] font-black uppercase tracking-widest",
-                        loadingStep === "searching" ? "text-amber-500" : "text-[var(--accent)]"
+              <div className="bg-app-card/50 border-b border-app-card-border backdrop-blur-xl">
+                <div className="max-w-5xl mx-auto w-full px-6 py-4 flex items-center justify-between animate-in fade-in duration-300">
+                  <button
+                    onClick={() => setView("tracks")}
+                    className="flex items-center gap-1 text-app-fg opacity-40 text-xs font-bold uppercase py-2 px-1 hover:opacity-100 transition-opacity"
+                  >
+                    <ChevronLeft size={18} /> Library
+                  </button>
+                  <div className="flex items-center gap-4">
+                    {isLoadingLyrics && (
+                      <div className={cn(
+                        "flex items-center gap-2 px-3 py-1 rounded-full border animate-pulse",
+                        loadingStep === "searching" ? "bg-amber-500/10 border-amber-500/20" : "bg-[var(--accent)]/10 border-[var(--accent)]/20"
                       )}>
-                        {loadingStep === "searching" ? "Searching Lyrics" : 
-                         loadingStep === "meaning" ? "Generating Preview" : "Analyzing Track"}
-                      </span>
-                    </div>
-                  )}
+                        <RefreshCw
+                          size={12}
+                          className={cn(
+                            "animate-spin",
+                            loadingStep === "searching" ? "text-amber-500 duration-[2s]" : "text-[var(--accent)] duration-700"
+                          )}
+                        />
+                        <span className={cn(
+                          "text-[10px] font-black uppercase tracking-widest",
+                          loadingStep === "searching" ? "text-amber-500" : "text-[var(--accent)]"
+                        )}>
+                          {loadingStep === "searching" ? "Searching Lyrics" : 
+                           loadingStep === "meaning" ? "Generating Preview" : "Analyzing Track"}
+                        </span>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
 
               <div
                 ref={scrollContainerRef}
-                className="flex-1 overflow-y-auto px-8 pt-4 pb-12 scrollbar-hide relative"
+                className="flex-1 overflow-y-auto px-8 pt-4 pb-12 scrollbar-hide relative w-full max-w-5xl mx-auto"
               >
                 <div className="mb-4">
                   <span
@@ -2356,6 +2423,24 @@ export default function App() {
               onClose={() => setView("tracks")}
             />
           )}
+
+          {view === "library" && (
+            <motion.div
+              key="library"
+              initial={{ opacity: 0, scale: 0.98 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.98 }}
+              className="flex-1 flex flex-col min-h-0 overflow-hidden relative"
+            >
+              <LibraryView
+                onTrackSelect={handleTrackSelect}
+                onArtistSelect={handleArtistSelect}
+                onAlbumSelect={handleAlbumSelect}
+                onNavigateToStudy={() => setView("study")}
+                recentTracks={recentTracks}
+              />
+            </motion.div>
+          )}
         </AnimatePresence>
       </main>
 
@@ -2578,6 +2663,17 @@ export default function App() {
             </button>
 
             <button
+              id="navigation-tab-library-btn"
+              onClick={() => setView("library")}
+              className="p-2 transition-all hover:scale-105 active:scale-95"
+              style={{
+                color: view === "library" ? "var(--accent)" : "var(--app-fg)",
+              }}
+            >
+              <FolderHeart size={24} className={cn("transition-opacity duration-200", view === "library" ? "opacity-100" : "opacity-40 hover:opacity-100")} />
+            </button>
+
+            <button
               id="navigation-tab-study-btn"
               onClick={() => setView("study")}
               className="p-2 transition-all hover:scale-105 active:scale-95 relative"
@@ -2596,6 +2692,161 @@ export default function App() {
               )}
             </button>
           </motion.footer>
+        )}
+      </AnimatePresence>
+
+      {/* Global Track Action Context Menu Drawer */}
+      <AnimatePresence>
+        {activeMenuTrack && (
+          <div className="fixed inset-0 z-[110] flex items-end justify-center p-0">
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => {
+                setActiveMenuTrack(null);
+                setIsAddToPlaylistOpenInApp(false);
+              }}
+              className="absolute inset-0 bg-app-bg/60 backdrop-blur-md"
+            />
+
+            {/* Content Drawer */}
+            <motion.div
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              transition={{ type: "spring", damping: 30, stiffness: 300 }}
+              className="relative w-full max-w-lg bg-app-card/90 backdrop-blur-3xl border-t border-app-card-border rounded-t-[2.5rem] p-8 space-y-6 shadow-2xl z-10 select-none pb-12"
+            >
+              {/* Drag bar indicator */}
+              <div className="w-12 h-1.5 bg-app-fg/10 rounded-full mx-auto" />
+
+              {!isAddToPlaylistOpenInApp ? (
+                <>
+                  {/* Track Meta */}
+                  <div className="flex items-center gap-4 border-b border-app-card-border pb-4">
+                    {activeMenuTrack.coverUrl ? (
+                      <img
+                        src={activeMenuTrack.coverUrl}
+                        className="w-16 h-16 rounded-2xl object-cover shadow-md"
+                        referrerPolicy="no-referrer"
+                      />
+                    ) : (
+                      <div className="w-16 h-16 rounded-2xl bg-app-fg/5 flex items-center justify-center text-app-fg/20">
+                        <Disc size={28} />
+                      </div>
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <p className="font-bold text-lg text-app-fg truncate mb-0.5">
+                        {activeMenuTrack.title}
+                      </p>
+                      <p className="text-sm text-app-muted truncate">
+                        {activeMenuTrack.artist}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Options List */}
+                  <div className="space-y-2">
+                    {/* Toggle Favorite */}
+                    <button
+                      type="button"
+                      onClick={() => handleToggleFavoriteInApp(activeMenuTrack)}
+                      className="w-full flex items-center justify-between p-4 rounded-2xl hover:bg-app-fg/5 active:scale-[0.99] transition-all text-left"
+                    >
+                      <div className="flex items-center gap-4">
+                        <Heart
+                          size={20}
+                          className={cn(
+                            "transition-colors",
+                            isTrackFavoriteInApp(activeMenuTrack.id)
+                              ? "fill-red-500 text-red-500"
+                              : "text-app-muted"
+                          )}
+                        />
+                        <span className="font-medium text-app-fg">
+                          {isTrackFavoriteInApp(activeMenuTrack.id)
+                            ? "Удалить из избранного"
+                            : "Добавить в избранное"}
+                        </span>
+                      </div>
+                      {isTrackFavoriteInApp(activeMenuTrack.id) && (
+                        <Check size={18} className="text-red-500" />
+                      )}
+                    </button>
+
+                    {/* Add to Playlist button */}
+                    <button
+                      type="button"
+                      onClick={() => setIsAddToPlaylistOpenInApp(true)}
+                      className="w-full flex items-center gap-4 p-4 rounded-2xl hover:bg-app-fg/5 active:scale-[0.99] transition-all text-left"
+                    >
+                      <ListMusic size={20} className="text-app-muted" />
+                      <span className="font-medium text-app-fg">Добавить в плейлист</span>
+                    </button>
+                  </div>
+
+                  {/* Close button */}
+                  <button
+                    type="button"
+                    onClick={() => setActiveMenuTrack(null)}
+                    className="w-full py-4 bg-app-fg/5 hover:bg-app-fg/10 active:scale-[0.99] rounded-2xl text-center font-semibold text-app-fg transition-all"
+                  >
+                    Закрыть
+                  </button>
+                </>
+              ) : (
+                <>
+                  <div className="flex items-center gap-4 mb-4">
+                    <button
+                      type="button"
+                      onClick={() => setIsAddToPlaylistOpenInApp(false)}
+                      className="p-2 hover:bg-app-fg/5 rounded-full transition-colors text-app-muted hover:text-app-fg"
+                    >
+                      <ChevronLeft size={20} />
+                    </button>
+                    <h3 className="font-bold text-lg text-app-fg">Добавить в плейлист</h3>
+                  </div>
+
+                  {playlistsInApp.length > 0 ? (
+                    <div className="max-h-60 overflow-y-auto space-y-2 pr-1 scrollbar-hide">
+                      {playlistsInApp.map((playlist) => {
+                        const hasTrack = playlist.tracks?.some((t: any) => (t.id || t.trackId) === activeMenuTrack.id);
+                        return (
+                          <button
+                            key={playlist.id}
+                            type="button"
+                            onClick={() => handleAddTrackToPlaylistInApp(playlist.id, activeMenuTrack)}
+                            className="w-full flex items-center justify-between p-4 rounded-2xl hover:bg-app-fg/5 active:scale-[0.99] transition-all text-left"
+                          >
+                            <span className="font-medium text-app-fg">{playlist.name}</span>
+                            {hasTrack ? (
+                              <Check size={18} className="text-green-500" />
+                            ) : (
+                              <span className="text-xs text-app-muted">Добавить</span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="text-center py-8 text-app-muted italic">
+                      У вас пока нет плейлистов. Создайте их во вкладке Библиотека!
+                    </div>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => setIsAddToPlaylistOpenInApp(false)}
+                    className="w-full py-4 bg-app-fg/5 hover:bg-app-fg/10 active:scale-[0.99] rounded-2xl text-center font-semibold text-app-fg transition-all"
+                  >
+                    Назад
+                  </button>
+                </>
+              )}
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
 

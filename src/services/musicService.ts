@@ -26,7 +26,8 @@ export async function searchITunes(query: string, entity: 'musicTrack' | 'album'
             artworksMap.set(String(item.artistId), item.artworkUrl100.replace('100x100', '600x600'));
           }
         });
-      } catch (e) {
+      } catch (e: any) {
+        if (e.name === 'AbortError') throw e;
         console.warn("Failed to fetch auxiliary artworks:", e);
       }
     }
@@ -66,7 +67,10 @@ export async function searchITunes(query: string, entity: 'musicTrack' | 'album'
         } as any;
       }
     });
-  } catch (error) {
+  } catch (error: any) {
+    if (error.name === 'AbortError') {
+      throw error;
+    }
     console.error("iTunes search error:", error);
     return [];
   }
@@ -237,7 +241,8 @@ export async function getAlbumDetails(albumId: string, signal?: AbortSignal): Pr
             tracks = fallbackTracks;
           }
         }
-      } catch (err) {
+      } catch (err: any) {
+        if (err.name === 'AbortError') throw err;
         console.error("Fallback search failed:", err);
       }
     }
@@ -253,7 +258,10 @@ export async function getAlbumDetails(albumId: string, signal?: AbortSignal): Pr
     });
 
     return { album, tracks };
-  } catch (error) {
+  } catch (error: any) {
+    if (error.name === 'AbortError') {
+      throw error;
+    }
     console.error("iTunes album lookup error:", error);
     return { 
       album: { id: albumId, title: "Error Loading", artist: "", artistId: "", coverUrl: "", trackCount: 0, releaseDate: "" }, 

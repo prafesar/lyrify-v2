@@ -42,9 +42,41 @@ export class BrowserLibraryRepository implements LibraryRepositoryPort {
   async createPlaylist(name: string): Promise<string> {
     const lists = await this.getPlaylists();
     const newId = `playlist-${Date.now()}`;
-    const newPlaylist = { id: newId, name, trackIds: [] };
+    const newPlaylist = { id: newId, name, trackIds: [], tracks: [] };
     lists.push(newPlaylist);
     localStorage.setItem("cantolex_playlists", JSON.stringify(lists));
     return newId;
+  }
+
+  async addTrackToPlaylist(playlistId: string, track: Track): Promise<void> {
+    const playlists = await this.getPlaylists();
+    const playlist = playlists.find(p => p.id === playlistId);
+    if (playlist) {
+      if (!playlist.trackIds) playlist.trackIds = [];
+      if (!playlist.tracks) playlist.tracks = [];
+
+      const trackId = track.id || track.trackId;
+      if (!playlist.trackIds.includes(trackId)) {
+        playlist.trackIds.push(trackId);
+        playlist.tracks.push(track);
+        localStorage.setItem("cantolex_playlists", JSON.stringify(playlists));
+      }
+    }
+  }
+
+  async removeTrackFromPlaylist(playlistId: string, trackId: string): Promise<void> {
+    const playlists = await this.getPlaylists();
+    const playlist = playlists.find(p => p.id === playlistId);
+    if (playlist) {
+      playlist.trackIds = (playlist.trackIds || []).filter((id: string) => id !== trackId);
+      playlist.tracks = (playlist.tracks || []).filter((t: any) => (t.id || t.trackId) !== trackId);
+      localStorage.setItem("cantolex_playlists", JSON.stringify(playlists));
+    }
+  }
+
+  async deletePlaylist(playlistId: string): Promise<void> {
+    const playlists = await this.getPlaylists();
+    const updated = playlists.filter(p => p.id !== playlistId);
+    localStorage.setItem("cantolex_playlists", JSON.stringify(updated));
   }
 }
