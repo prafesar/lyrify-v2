@@ -2769,8 +2769,8 @@ export default function App() {
                         />
                         <span className="font-medium text-app-fg">
                           {isTrackFavoriteInApp(activeMenuTrack.id)
-                            ? "Удалить из избранного"
-                            : "Добавить в избранное"}
+                            ? "Remove from favorites"
+                            : "Add to favorites"}
                         </span>
                       </div>
                       {isTrackFavoriteInApp(activeMenuTrack.id) && (
@@ -2785,7 +2785,7 @@ export default function App() {
                       className="w-full flex items-center gap-4 p-4 rounded-2xl hover:bg-app-fg/5 active:scale-[0.99] transition-all text-left"
                     >
                       <ListMusic size={20} className="text-app-muted" />
-                      <span className="font-medium text-app-fg">Добавить в плейлист</span>
+                      <span className="font-medium text-app-fg">Add to playlist</span>
                     </button>
                   </div>
 
@@ -2795,7 +2795,7 @@ export default function App() {
                     onClick={() => setActiveMenuTrack(null)}
                     className="w-full py-4 bg-app-fg/5 hover:bg-app-fg/10 active:scale-[0.99] rounded-2xl text-center font-semibold text-app-fg transition-all"
                   >
-                    Закрыть
+                    Close
                   </button>
                 </>
               ) : (
@@ -2808,7 +2808,7 @@ export default function App() {
                     >
                       <ChevronLeft size={20} />
                     </button>
-                    <h3 className="font-bold text-lg text-app-fg">Добавить в плейлист</h3>
+                    <h3 className="font-bold text-lg text-app-fg">Add to playlist</h3>
                   </div>
 
                   {playlistsInApp.length > 0 ? (
@@ -2826,7 +2826,7 @@ export default function App() {
                             {hasTrack ? (
                               <Check size={18} className="text-green-500" />
                             ) : (
-                              <span className="text-xs text-app-muted">Добавить</span>
+                              <span className="text-xs text-app-muted">Add</span>
                             )}
                           </button>
                         );
@@ -2834,7 +2834,7 @@ export default function App() {
                     </div>
                   ) : (
                     <div className="text-center py-8 text-app-muted italic">
-                      У вас пока нет плейлистов. Создайте их во вкладке Библиотека!
+                      You don't have any playlists yet. Create them in the Library tab!
                     </div>
                   )}
 
@@ -2843,7 +2843,7 @@ export default function App() {
                     onClick={() => setIsAddToPlaylistOpenInApp(false)}
                     className="w-full py-4 bg-app-fg/5 hover:bg-app-fg/10 active:scale-[0.99] rounded-2xl text-center font-semibold text-app-fg transition-all"
                   >
-                    Назад
+                    Back
                   </button>
                 </>
               )}

@@ -15,7 +15,28 @@ class SqliteService {
   private messageIdCounter = 0;
 
   constructor() {
+    // Attempt to hydrate preferences synchronously from localStorage for instant page-load recovery
+    try {
+      if (typeof window !== "undefined" && window.localStorage) {
+        const localPrefs = localStorage.getItem("cantolex_sqlite_prefs_sync");
+        if (localPrefs) {
+          this.preferences = JSON.parse(localPrefs);
+        }
+      }
+    } catch (e) {
+      console.warn("[SqliteService] Failed to read sync preferences from localStorage:", e);
+    }
     this.init();
+  }
+
+  private savePrefsToLocal() {
+    try {
+      if (typeof window !== "undefined" && window.localStorage) {
+        localStorage.setItem("cantolex_sqlite_prefs_sync", JSON.stringify(this.preferences));
+      }
+    } catch (e) {
+      console.warn("[SqliteService] Failed to write sync preferences to localStorage:", e);
+    }
   }
 
   public init(): Promise<void> {
@@ -34,7 +55,14 @@ class SqliteService {
 
           if (type === "INIT_OK") {
             const { preferences, recentHistory, trackCache } = payload;
-            this.preferences = preferences || {};
+            // Merge SQLite database preferences with our current in-memory cache,
+            // giving precedence to whatever was already loaded synchronously or written.
+            this.preferences = {
+              ...(preferences || {}),
+              ...this.preferences,
+            };
+            this.savePrefsToLocal();
+
             this.recentTracks = recentHistory || [];
             this.trackCache = trackCache || {};
             this.isInitialized = true;
@@ -72,8 +100,10 @@ class SqliteService {
     return this.initPromise;
   }
 
-  private sendWorkerMsg(type: string, payload: any): Promise<void> {
-    if (!this.worker) return Promise.resolve();
+  private async sendWorkerMsg(type: string, payload: any): Promise<void> {
+    if (!this.worker) return;
+
+    await this.init();
 
     return new Promise((resolve, reject) => {
       const messageId = String(++this.messageIdCounter);
@@ -90,6 +120,7 @@ class SqliteService {
 
   public setPreference(key: string, value: string): void {
     this.preferences[key] = value;
+    this.savePrefsToLocal();
     this.sendWorkerMsg("SET_PREFERENCE", { key, value }).catch((err) =>
       console.warn("[SqliteService] Failed to backup preferences in database:", err)
     );
@@ -104,6 +135,7 @@ class SqliteService {
   public setBoolPreference(key: string, value: boolean): void {
     const strVal = String(value);
     this.preferences[key] = strVal;
+    this.savePrefsToLocal();
     this.sendWorkerMsg("SET_PREFERENCE", { key, value: strVal }).catch((err) =>
       console.warn("[SqliteService] Failed to backup preferences in database:", err)
     );
@@ -111,6 +143,7 @@ class SqliteService {
 
   public removePreference(key: string): void {
     delete this.preferences[key];
+    this.savePrefsToLocal();
     this.sendWorkerMsg("REMOVE_PREFERENCE", { key }).catch((err) =>
       console.warn("[SqliteService] Failed to remove preference in database:", err)
     );
@@ -162,6 +195,13 @@ class SqliteService {
     this.preferences = {};
     this.recentTracks = [];
     this.trackCache = {};
+    try {
+      if (typeof window !== "undefined" && window.localStorage) {
+        localStorage.removeItem("cantolex_sqlite_prefs_sync");
+      }
+    } catch (e) {
+      console.warn("[SqliteService] Failed to clear local sync cache:", e);
+    }
     await this.sendWorkerMsg("CLEAR_ALL", {});
   }
 }

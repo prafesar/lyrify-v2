@@ -244,8 +244,8 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
             {/* Header Title & Minimal Settings Indicator */}
             <div className="flex items-center justify-between">
               <div>
-                <h1 className="text-2xl font-black text-app-fg tracking-tight">Моя Медиатека</h1>
-                <p className="text-xs text-app-muted">Ваш персональный языковой архив песен</p>
+                <h1 className="text-2xl font-black text-app-fg tracking-tight">My Library</h1>
+                <p className="text-xs text-app-muted">Your personal language learning library of songs</p>
               </div>
               <button 
                 onClick={() => setIsCreatingPlaylist(true)} 
@@ -266,7 +266,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Поиск в избранном, плейлистах, артистах…"
+                placeholder="Search favorites, playlists, artists..."
                 className="w-full pl-11 pr-10 py-3 rounded-2xl bg-app-card border border-app-card-border text-sm outline-none focus:border-app-accent focus:ring-1 focus:ring-app-accent/30 transition-all text-app-fg shadow-sm"
               />
               {searchQuery && (
@@ -292,11 +292,11 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                       : "bg-app-card border-app-card-border text-app-muted hover:text-app-fg"
                   )}
                 >
-                  {filter === 'all' && 'Все'}
-                  {filter === 'tracks' && 'Песни'}
-                  {filter === 'playlists' && 'Плейлисты'}
-                  {filter === 'artists' && 'Артисты'}
-                  {filter === 'albums' && 'Альбомы'}
+                  {filter === 'all' && 'All'}
+                  {filter === 'tracks' && 'Songs'}
+                  {filter === 'playlists' && 'Playlists'}
+                  {filter === 'artists' && 'Artists'}
+                  {filter === 'albums' && 'Albums'}
                 </button>
               ))}
             </div>
@@ -312,7 +312,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                 >
                   <form onSubmit={handleCreatePlaylist} className="flex flex-col gap-3">
                     <div className="flex justify-between items-center">
-                      <span className="text-[10px] font-black uppercase tracking-widest text-app-muted">Новый плейлист</span>
+                      <span className="text-[10px] font-black uppercase tracking-widest text-app-muted">New Playlist</span>
                       <button 
                         type="button" 
                         onClick={() => setIsCreatingPlaylist(false)}
@@ -326,7 +326,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                         type="text" 
                         value={newPlaylistName}
                         onChange={(e) => setNewPlaylistName(e.target.value)}
-                        placeholder="Название плейлиста..."
+                        placeholder="Playlist name..."
                         autoFocus
                         className="flex-1 px-4 py-2.5 rounded-xl bg-app-bg border border-app-card-border text-sm outline-none focus:border-app-accent/50 text-app-fg"
                       />
@@ -334,7 +334,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                         type="submit" 
                         className="px-5 rounded-xl bg-app-accent text-white text-xs font-bold uppercase hover:bg-opacity-90 active:scale-95 transition-all"
                       >
-                        Создать
+                        Create
                       </button>
                     </div>
                   </form>
@@ -342,216 +342,219 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
               )}
             </AnimatePresence>
 
-            {/* SECTION 1: SELECTED TRACKS (Favorites) */}
-            {(activeFilter === 'all' || activeFilter === 'tracks') && (
-              <div className="space-y-3">
-                <div className="flex items-center justify-between px-1">
-                  <div className="flex items-center gap-1.5 text-app-accent">
-                    <Star size={16} fill="currentColor" />
-                    <h2 className="text-sm font-black uppercase tracking-[0.15em] text-app-fg leading-none">Избранные треки</h2>
+            {/* Main Sections Wrapper with larger gap heights */}
+            <div className="space-y-10 pt-4">
+              {/* SECTION 1: SELECTED TRACKS (Favorites) */}
+              {(activeFilter === 'all' || activeFilter === 'tracks') && (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between px-1">
+                    <div className="flex items-center gap-1.5 text-app-accent">
+                      <Star size={16} fill="currentColor" />
+                      <h2 className="text-sm font-black uppercase tracking-[0.15em] text-app-fg leading-none">Favorite Tracks</h2>
+                    </div>
+                    <span className="text-[10px] font-black text-app-muted uppercase bg-app-fg/5 px-2 py-1 rounded-lg">
+                      {filteredFavorites.length}
+                    </span>
                   </div>
-                  <span className="text-[10px] font-black text-app-muted uppercase bg-app-fg/5 px-2 py-1 rounded-lg">
-                    {filteredFavorites.length}
-                  </span>
-                </div>
 
-                {filteredFavorites.length > 0 ? (
-                  <div className="space-y-2">
-                    {filteredFavorites.map((track) => (
-                      <div
-                        key={`fav-${track.id}`}
-                        onClick={() => onTrackSelect(track)}
-                        className="w-full flex items-center justify-between p-3.5 rounded-2xl bg-app-card border border-app-card-border shadow-sm active:scale-[0.99] transition-all hover:bg-opacity-80 group cursor-pointer"
-                      >
-                        <div className="flex items-center gap-3.5 overflow-hidden flex-1 select-none">
-                          <img
-                            src={track.coverUrl}
-                            className="w-11 h-11 rounded-xl object-cover shadow"
-                            alt={track.title}
-                            referrerPolicy="no-referrer"
-                          />
-                          <div className="text-left overflow-hidden">
-                            <span className="font-bold text-app-fg text-[14px] leading-tight block truncate group-hover:text-app-accent transition-colors">
-                              {track.title}
-                            </span>
-                            <span className="text-xs text-app-muted truncate block mt-0.5">
-                              {track.artist}
-                            </span>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-1">
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setMenuTrack(track);
-                            }}
-                            className="p-2 text-app-muted hover:text-app-fg hover:bg-app-fg/5 rounded-full transition-all active:scale-90"
-                          >
-                            <MoreVertical size={16} />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-center py-10 px-4 rounded-2xl border border-dashed border-app-card-border opacity-60 bg-app-card/20 text-xs text-app-muted">
-                    {searchQuery ? "Нет треков, соответствующих поиску" : "В вашей медиатеке пока нет любимых песен. Добавьте его через меню песни!"}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* SECTION 2: FAVORITE ARTISTS */}
-            {(activeFilter === 'all' || activeFilter === 'artists') && (
-              <div className="space-y-3">
-                <div className="flex items-center justify-between px-1">
-                  <h2 className="text-sm font-black uppercase tracking-[0.15em] text-app-fg opacity-80 leading-none">Любимые артисты</h2>
-                  <span className="text-[10px] font-black text-app-muted uppercase">
-                    {filteredArtists.length}
-                  </span>
-                </div>
-
-                {filteredArtists.length > 0 ? (
-                  <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide select-none -mx-4 px-4">
-                    {filteredArtists.map((artist) => (
-                      <button
-                        key={`art-${artist.id}`}
-                        onClick={() => artist.id && onArtistSelect(artist.id)}
-                        className="flex flex-col items-center gap-2 group cursor-pointer transition-transform duration-200 active:scale-95 focus:outline-none"
-                        style={{ width: '80px' }}
-                      >
-                        <div className="relative w-16 h-16 rounded-full overflow-hidden border border-app-card-border shadow shadow-app-accent/5 group-hover:scale-105 group-hover:border-app-accent transition-all duration-300">
-                          {artist.coverUrl ? (
+                  {filteredFavorites.length > 0 ? (
+                    <div className="space-y-2">
+                      {filteredFavorites.map((track) => (
+                        <div
+                          key={`fav-${track.id}`}
+                          onClick={() => onTrackSelect(track)}
+                          className="w-full flex items-center justify-between p-3.5 rounded-2xl bg-app-card border border-app-card-border shadow-sm active:scale-[0.99] transition-all hover:bg-opacity-80 group cursor-pointer"
+                        >
+                          <div className="flex items-center gap-3.5 overflow-hidden flex-1 select-none">
                             <img
-                              src={artist.coverUrl}
-                              className="w-full h-full object-cover"
-                              alt={artist.name}
+                              src={track.coverUrl}
+                              className="w-11 h-11 rounded-xl object-cover shadow"
+                              alt={track.title}
                               referrerPolicy="no-referrer"
                             />
-                          ) : (
-                            <div className="w-full h-full bg-app-fg/5 flex items-center justify-center text-app-accent">
-                              <Music size={22} />
+                            <div className="text-left overflow-hidden">
+                              <span className="font-bold text-app-fg text-[14px] leading-tight block truncate group-hover:text-app-accent transition-colors">
+                                {track.title}
+                              </span>
+                              <span className="text-xs text-app-muted truncate block mt-0.5">
+                                {track.artist}
+                              </span>
                             </div>
-                          )}
-                          <div className="absolute inset-0 bg-app-accent/5 opacity-0 group-hover:opacity-100 transition-opacity" />
+                          </div>
+
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setMenuTrack(track);
+                              }}
+                              className="p-2 text-app-muted hover:text-app-fg hover:bg-app-fg/5 rounded-full transition-all active:scale-90"
+                            >
+                              <MoreVertical size={16} />
+                            </button>
+                          </div>
                         </div>
-                        <span className="text-[11px] font-bold text-app-fg group-hover:text-app-accent text-center truncate w-full transition-colors leading-tight">
-                          {artist.name}
-                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-10 px-4 rounded-2xl border border-dashed border-app-card-border opacity-60 bg-app-card/20 text-xs text-app-muted">
+                      {searchQuery ? "No tracks match your search" : "No favorite songs in your library yet. Add them from the track menu!"}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* SECTION: PLAYLISTS SECTION (Moved up after Favorite Tracks) */}
+              {(activeFilter === 'all' || activeFilter === 'playlists') && (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between px-1">
+                    <h2 className="text-sm font-black uppercase tracking-[0.15em] text-app-fg opacity-80 leading-none">Playlists</h2>
+                    <span className="text-[10px] font-black text-app-muted uppercase">
+                      {filteredPlaylists.length}
+                    </span>
+                  </div>
+
+                  {filteredPlaylists.length > 0 ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {filteredPlaylists.map((playlist) => (
+                        <div
+                          key={playlist.id}
+                          onClick={() => setSelectedPlaylist(playlist)}
+                          className="w-full flex items-center justify-between p-3.5 rounded-2xl bg-app-card border border-app-card-border hover:border-app-accent/30 shadow-sm active:scale-[0.99] transition-all hover:bg-opacity-85 group cursor-pointer"
+                        >
+                          <div className="flex items-center gap-4 flex-1 overflow-hidden select-none">
+                            {renderPlaylistCover(playlist)}
+                            <div className="text-left overflow-hidden">
+                              <span className="font-bold text-app-fg text-[14px] leading-tight block truncate group-hover:text-app-accent transition-colors">
+                                {playlist.name}
+                              </span>
+                              <span className="text-xs text-app-muted block mt-0.5">
+                                {playlist.tracks?.length || 0} songs • {playlist.tracks?.length > 0 ? `${playlist.tracks.length * 3} min` : "empty"}
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="flex gap-1" onClick={e => e.stopPropagation()}>
+                            <button
+                              type="button"
+                              onClick={() => handleDeletePlaylist(playlist.id)}
+                              className="p-2 text-app-muted hover:text-red-500 rounded-full hover:bg-red-500/5 transition-all"
+                              title="Delete playlist"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-10 px-4 rounded-3xl border border-dashed border-app-card-border opacity-60 bg-app-card/20 text-xs text-app-muted flex flex-col items-center gap-3">
+                      <Disc size={36} className="opacity-30 text-app-accent-hover" />
+                      <span>You have no created playlists yet.</span>
+                      <button
+                        type="button"
+                        onClick={() => setIsCreatingPlaylist(true)}
+                        className="px-4 py-2 border border-app-accent text-app-accent bg-app-accent/5 hover:bg-app-accent hover:text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all"
+                      >
+                        Create first playlist
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* SECTION 2: FAVORITE ARTISTS */}
+              {(activeFilter === 'all' || activeFilter === 'artists') && (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between px-1">
+                    <h2 className="text-sm font-black uppercase tracking-[0.15em] text-app-fg opacity-80 leading-none">Favorite Artists</h2>
+                    <span className="text-[10px] font-black text-app-muted uppercase">
+                      {filteredArtists.length}
+                    </span>
+                  </div>
+
+                  {filteredArtists.length > 0 ? (
+                    <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide select-none -mx-4 px-4">
+                      {filteredArtists.map((artist) => (
+                        <button
+                          key={`art-${artist.id}`}
+                          onClick={() => artist.id && onArtistSelect(artist.id)}
+                          className="flex flex-col items-center gap-2 group cursor-pointer transition-transform duration-200 active:scale-95 focus:outline-none shrink-0"
+                          style={{ width: '100px' }}
+                        >
+                          <div className="relative w-20 h-20 rounded-full overflow-hidden border border-app-card-border shadow shadow-app-accent/5 group-hover:scale-105 group-hover:border-app-accent transition-all duration-300">
+                            {artist.coverUrl ? (
+                              <img
+                                src={artist.coverUrl}
+                                className="w-full h-full object-cover"
+                                alt={artist.name}
+                                referrerPolicy="no-referrer"
+                              />
+                            ) : (
+                              <div className="w-full h-full bg-app-fg/5 flex items-center justify-center text-app-accent">
+                                <Music size={26} />
+                              </div>
+                            )}
+                            <div className="absolute inset-0 bg-app-accent/5 opacity-0 group-hover:opacity-100 transition-opacity" />
+                          </div>
+                          <span className="text-[11px] font-bold text-app-fg group-hover:text-app-accent text-center truncate w-full transition-colors leading-tight px-1">
+                            {artist.name}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-8 rounded-2xl border border-dashed border-app-card-border opacity-60 bg-app-card/20 text-xs text-app-muted">
+                      Artists will appear automatically from your favorite tracks!
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* SECTION 3: FAVORITE ALBUMS */}
+              {(activeFilter === 'all' || activeFilter === 'albums') && filteredAlbums.length > 0 && (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between px-1">
+                    <h2 className="text-sm font-black uppercase tracking-[0.15em] text-app-fg opacity-80 leading-none">Favorite Albums</h2>
+                    <span className="text-[10px] font-black text-app-muted uppercase">
+                      {filteredAlbums.length}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3.5">
+                    {filteredAlbums.map((album) => (
+                      <button
+                        key={`alb-${album.id}`}
+                        onClick={() => album.id && onAlbumSelect(album.id)}
+                        className="flex items-center gap-3 p-2.5 rounded-2xl bg-app-card/50 border border-app-card-border shadow-sm text-left group hover:bg-app-card active:scale-95 transition-all w-full overflow-hidden"
+                      >
+                        {album.coverUrl ? (
+                          <img 
+                            src={album.coverUrl} 
+                            alt={album.title} 
+                            className="w-11 h-11 rounded-xl object-cover shadow border border-app-card-border"
+                            referrerPolicy="no-referrer"
+                          />
+                        ) : (
+                          <div className="w-11 h-11 rounded-xl bg-app-fg/5 flex items-center justify-center text-app-fg/30">
+                            <Disc size={18} />
+                          </div>
+                        )}
+                        <div className="overflow-hidden flex-1 leading-tight select-none">
+                          <span className="font-bold text-app-fg text-xs block truncate group-hover:text-app-accent transition-colors">
+                            {album.title}
+                          </span>
+                          <span className="text-[10px] text-app-muted block truncate mt-0.5">
+                            {album.artist}
+                          </span>
+                        </div>
                       </button>
                     ))}
                   </div>
-                ) : (
-                  <div className="text-center py-8 rounded-2xl border border-dashed border-app-card-border opacity-60 bg-app-card/20 text-xs text-app-muted">
-                    Артисты появятся автоматически из ваших избранных треков!
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* SECTION 3: FAVORITE ALBUMS */}
-            {(activeFilter === 'all' || activeFilter === 'albums') && filteredAlbums.length > 0 && (
-              <div className="space-y-3">
-                <div className="flex items-center justify-between px-1">
-                  <h2 className="text-sm font-black uppercase tracking-[0.15em] text-app-fg opacity-80 leading-none">Любимые альбомы</h2>
-                  <span className="text-[10px] font-black text-app-muted uppercase">
-                    {filteredAlbums.length}
-                  </span>
                 </div>
-
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3.5">
-                  {filteredAlbums.map((album) => (
-                    <button
-                      key={`alb-${album.id}`}
-                      onClick={() => album.id && onAlbumSelect(album.id)}
-                      className="flex items-center gap-3 p-2.5 rounded-2xl bg-app-card/50 border border-app-card-border shadow-sm text-left group hover:bg-app-card active:scale-95 transition-all w-full overflow-hidden"
-                    >
-                      {album.coverUrl ? (
-                        <img 
-                          src={album.coverUrl} 
-                          alt={album.title} 
-                          className="w-11 h-11 rounded-xl object-cover shadow border border-app-card-border"
-                          referrerPolicy="no-referrer"
-                        />
-                      ) : (
-                        <div className="w-11 h-11 rounded-xl bg-app-fg/5 flex items-center justify-center text-app-fg/30">
-                          <Disc size={18} />
-                        </div>
-                      )}
-                      <div className="overflow-hidden flex-1 leading-tight select-none">
-                        <span className="font-bold text-app-fg text-xs block truncate group-hover:text-app-accent transition-colors">
-                          {album.title}
-                        </span>
-                        <span className="text-[10px] text-app-muted block truncate mt-0.5">
-                          {album.artist}
-                        </span>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* SECTION 4: PLAYLISTS SECTION */}
-            {(activeFilter === 'all' || activeFilter === 'playlists') && (
-              <div className="space-y-4">
-                <div className="flex items-center justify-between px-1">
-                  <h2 className="text-sm font-black uppercase tracking-[0.15em] text-app-fg opacity-80 leading-none">Плейлисты</h2>
-                  <span className="text-[10px] font-black text-app-muted uppercase">
-                    {filteredPlaylists.length}
-                  </span>
-                </div>
-
-                {filteredPlaylists.length > 0 ? (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {filteredPlaylists.map((playlist) => (
-                      <div
-                        key={playlist.id}
-                        onClick={() => setSelectedPlaylist(playlist)}
-                        className="w-full flex items-center justify-between p-3.5 rounded-2xl bg-app-card border border-app-card-border hover:border-app-accent/30 shadow-sm active:scale-[0.99] transition-all hover:bg-opacity-85 group cursor-pointer"
-                      >
-                        <div className="flex items-center gap-4 flex-1 overflow-hidden select-none">
-                          {renderPlaylistCover(playlist)}
-                          <div className="text-left overflow-hidden">
-                            <span className="font-bold text-app-fg text-[14px] leading-tight block truncate group-hover:text-app-accent transition-colors">
-                              {playlist.name}
-                            </span>
-                            <span className="text-xs text-app-muted block mt-0.5">
-                              {playlist.tracks?.length || 0} песен • {playlist.tracks?.length > 0 ? `${playlist.tracks.length * 3} мин` : "пусто"}
-                            </span>
-                          </div>
-                        </div>
-
-                        <div className="flex gap-1" onClick={e => e.stopPropagation()}>
-                          <button
-                            type="button"
-                            onClick={() => handleDeletePlaylist(playlist.id)}
-                            className="p-2 text-app-muted hover:text-red-500 rounded-full hover:bg-red-500/5 transition-all"
-                            title="Delete playlist"
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-center py-10 px-4 rounded-3xl border border-dashed border-app-card-border opacity-60 bg-app-card/20 text-xs text-app-muted flex flex-col items-center gap-3">
-                    <Disc size={36} className="opacity-30 text-app-accent-hover" />
-                    <span>У Вас пока нет созданных плейлистов.</span>
-                    <button
-                      type="button"
-                      onClick={() => setIsCreatingPlaylist(true)}
-                      className="px-4 py-2 border border-app-accent text-app-accent bg-app-accent/5 hover:bg-app-accent hover:text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all"
-                    >
-                      Создать первый плейлист
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
+              )}
+            </div>
           </motion.div>
         ) : (
           /* PLAYLIST INNER TARGET VIEW */
@@ -569,7 +572,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                 className="flex items-center gap-1.5 text-xs font-black uppercase tracking-widest text-app-muted hover:text-app-fg transition-colors"
               >
                 <X size={15} />
-                <span>Назад к плейлистам</span>
+                <span>Back to playlists</span>
               </button>
 
               <button
@@ -577,7 +580,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                 className="flex items-center gap-1 text-xs font-black uppercase tracking-widest text-red-500 hover:text-red-600 hover:bg-red-500/5 px-2.5 py-1 rounded-xl transition-all"
               >
                 <Trash2 size={13} />
-                <span>Удалить</span>
+                <span>Delete</span>
               </button>
             </div>
 
@@ -585,17 +588,17 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
             <div className="flex items-center gap-4 p-5 rounded-3xl bg-app-card border border-app-card-border shadow">
               {renderPlaylistCover(selectedPlaylist)}
               <div className="overflow-hidden select-none">
-                <span className="text-[9px] font-black text-app-accent uppercase tracking-widest block mb-1">ПЛЕЙЛИСТ</span>
+                <span className="text-[9px] font-black text-app-accent uppercase tracking-widest block mb-1">PLAYLIST</span>
                 <h1 className="text-xl font-bold text-app-fg leading-tight truncate">{selectedPlaylist.name}</h1>
                 <p className="text-xs text-app-muted mt-1 leading-none">
-                  Количество: {selectedPlaylist.tracks?.length || 0} песен • {selectedPlaylist.tracks?.length > 0 ? `${selectedPlaylist.tracks.length * 3} минут воспроизведения` : "без треков"}
+                  Total: {selectedPlaylist.tracks?.length || 0} songs • {selectedPlaylist.tracks?.length > 0 ? `${selectedPlaylist.tracks.length * 3} minutes track length` : "no tracks"}
                 </p>
               </div>
             </div>
 
             {/* Tracks listing */}
             <div className="space-y-2.5">
-              <span className="text-[10px] font-black text-app-muted uppercase tracking-widest leading-none block px-1">Треки в плейлисте</span>
+              <span className="text-[10px] font-black text-app-muted uppercase tracking-widest leading-none block px-1">Tracks in Playlist</span>
               
               {selectedPlaylist.tracks && selectedPlaylist.tracks.length > 0 ? (
                 selectedPlaylist.tracks.map((track: Track, idx: number) => (
@@ -643,8 +646,8 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
               ) : (
                 <div className="text-center py-16 px-4 rounded-3xl border border-dashed border-app-card-border opacity-50 bg-app-card/10 text-xs text-app-muted flex flex-col items-center gap-2">
                   <Music size={30} className="text-app-accent opacity-30" />
-                  <span>В плейлисте пока нет песен.</span>
-                  <span className="opacity-60 text-[10px]">Добавьте песни из главного экрана или поиска, используя меню с тремя точками!</span>
+                  <span>No songs in this playlist yet.</span>
+                  <span className="opacity-60 text-[10px]">Add songs from the home tab or search, using the three-dot menu!</span>
                 </div>
               )}
             </div>
@@ -713,7 +716,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                     className="w-full py-3.5 px-4 bg-app-accent hover:bg-opacity-95 text-white font-bold rounded-2xl flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
                   >
                     <Play size={16} fill="currentColor" />
-                    <span>Открыть / Учить песню</span>
+                    <span>Open / Study Song</span>
                   </button>
 
                   <button
@@ -727,11 +730,11 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                         className={cn(isTrackFavorite(menuTrack.id || menuTrack.trackId) ? "text-app-accent fill-app-accent" : "text-app-fg opacity-40")} 
                       />
                       <span>
-                        {isTrackFavorite(menuTrack.id || menuTrack.trackId) ? "Убрать из Избранного" : "Добавить в Избранное"}
+                        {isTrackFavorite(menuTrack.id || menuTrack.trackId) ? "Remove from Favorites" : "Add to Favorites"}
                       </span>
                     </div>
                     {isTrackFavorite(menuTrack.id || menuTrack.trackId) && (
-                      <span className="text-[10px] font-black uppercase text-app-accent tracking-wider bg-app-accent/10 px-2 py-0.5 rounded">В Избранном</span>
+                      <span className="text-[10px] font-black uppercase text-app-accent tracking-wider bg-app-accent/10 px-2 py-0.5 rounded">In Favorites</span>
                     )}
                   </button>
 
@@ -741,7 +744,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                     className="w-full py-3.5 px-4 bg-app-card border border-app-card-border hover:bg-app-fg/5 text-app-fg font-extrabold rounded-2xl flex items-center gap-2 transition-all"
                   >
                     <ListMusic size={16} className="text-app-fg opacity-40" />
-                    <span>Добавить в плейлист...</span>
+                    <span>Add to playlist...</span>
                   </button>
 
                   <button
@@ -752,7 +755,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                     }}
                     className="w-full py-3 px-4 text-xs font-black uppercase tracking-widest text-app-muted hover:text-app-fg mt-2"
                   >
-                    Отмена
+                    Cancel
                   </button>
                 </div>
               ) : (
@@ -764,9 +767,9 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                       onClick={() => setIsAddToPlaylistOpen(false)}
                       className="text-xs font-black text-app-accent uppercase tracking-wider flex items-center gap-1"
                     >
-                      <span>Назад</span>
+                      <span>Back</span>
                     </button>
-                    <span className="text-xs font-black text-app-fg uppercase tracking-wider">Пыберите плейлист</span>
+                    <span className="text-xs font-black text-app-fg uppercase tracking-wider">Select playlist</span>
                     <div className="w-10 h-2" />
                   </div>
 
@@ -791,17 +794,17 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                             {hasTrack ? (
                               <div className="flex items-center gap-1 shrink-0 text-green-500 font-bold text-xs uppercase tracking-wider">
                                 <Check size={14} strokeWidth={2.5} />
-                                <span>Добавлен</span>
+                                <span>Added</span>
                               </div>
                             ) : (
-                              <span className="text-[10px] text-app-muted shrink-0 font-bold uppercase">{playlist.tracks?.length || 0} песен</span>
+                              <span className="text-[10px] text-app-muted shrink-0 font-bold uppercase">{playlist.tracks?.length || 0} songs</span>
                             )}
                           </button>
                         );
                       })
                     ) : (
                       <div className="text-center py-6 text-xs text-app-muted">
-                        Плейлистов пока нет. Нажмите назад и создайте сначала новый плейлист!
+                        No playlists yet. Go back and create a new playlist first!
                       </div>
                     )}
                   </div>
