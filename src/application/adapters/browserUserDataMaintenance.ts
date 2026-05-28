@@ -1,7 +1,14 @@
 import { UserDataMaintenancePort } from "../ports/userDataMaintenancePort";
+import { sqliteService } from "../../services/sqliteService";
 
 export class BrowserUserDataMaintenance implements UserDataMaintenancePort {
   async clearAllUserData(): Promise<void> {
+    try {
+      await sqliteService.clearAllUserData();
+    } catch (sqliteErr) {
+      console.error("Failed to clear SQLite user data:", sqliteErr);
+    }
+
     if (typeof window !== "undefined") {
       if (window.localStorage) {
         localStorage.clear();

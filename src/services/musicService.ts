@@ -1,5 +1,6 @@
 
 import { type Track, Artist, Album } from '../constants';
+import { sqliteService } from './sqliteService';
 export type { Track };
 
 export interface LyricsData {
@@ -509,36 +510,15 @@ export interface TrackLyricsData {
   lastUpdated: number;
 }
 
-const LYRICS_CACHE_KEY = 'lyrify_track_data_v2';
-const RECENT_TRACKS_KEY = 'lyrify_recent_tracks';
-
 export function getCachedTrackData(trackId: string): TrackLyricsData | null {
-  const cache = JSON.parse(localStorage.getItem(LYRICS_CACHE_KEY) || '{}');
-  return cache[trackId] || null;
+  return sqliteService.getCachedTrack(trackId);
 }
 type TrackLyricsDataPatch = Omit<Partial<TrackLyricsData>, 'processingStatus'> & {
   processingStatus?: Partial<TrackLyricsData['processingStatus']>;
 };
 
 export function saveTrackData(trackId: string, data: TrackLyricsDataPatch) {
-  const cache = JSON.parse(localStorage.getItem(LYRICS_CACHE_KEY) || '{}');
-  const existing = cache[trackId] || {};
-  
-  // Deep merge strategy
-  const updated: TrackLyricsData = {
-    ...existing,
-    ...data,
-    processingStatus: {
-      ...(existing.processingStatus || { stage1_completed: false, stage2_completed: false, stage3_completed: false }),
-      ...(data.processingStatus || {})
-    },
-    lines: data.lines || existing.lines || [],
-    lastUpdated: Date.now()
-  };
-
-  cache[trackId] = updated;
-  localStorage.setItem(LYRICS_CACHE_KEY, JSON.stringify(cache));
-  return updated;
+  return sqliteService.saveTrackData(trackId, data);
 }
 
 export function splitLyricsIntoLines(trackId: string, lyrics: string): LyricsLine[] {
@@ -558,10 +538,9 @@ export function getCachedLyrics(trackId: string) { return getCachedTrackData(tra
 export function saveLyricsToCache(trackId: string, data: any) { return saveTrackData(trackId, data); }
 
 export function clearCachedLyrics(trackId: string) {
-  const cache = JSON.parse(localStorage.getItem(LYRICS_CACHE_KEY) || '{}');
-  if (cache[trackId]) {
-    const existing = cache[trackId];
-    cache[trackId] = {
+  const existing = sqliteService.getCachedTrack(trackId);
+  if (existing) {
+    const updated = {
       ...existing,
       rawLyrics: '',
       source: null,
@@ -576,17 +555,14 @@ export function clearCachedLyrics(trackId: string) {
       },
       lastUpdated: Date.now(),
     };
+    sqliteService.saveTrackData(trackId, updated);
   }
-  localStorage.setItem(LYRICS_CACHE_KEY, JSON.stringify(cache));
 }
 
 export function getRecentTracks(): Track[] {
-  return JSON.parse(localStorage.getItem(RECENT_TRACKS_KEY) || '[]');
+  return sqliteService.getRecentTracks();
 }
 
 export function addRecentTrack(track: Track) {
-  const recent = getRecentTracks();
-  const filtered = recent.filter(t => t.id !== track.id);
-  const updated = [track, ...filtered].slice(0, 10); // Keep last 10
-  localStorage.setItem(RECENT_TRACKS_KEY, JSON.stringify(updated));
+  sqliteService.addRecentTrack(track);
 }

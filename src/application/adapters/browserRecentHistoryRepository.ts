@@ -8,6 +8,6 @@ export class BrowserRecentHistoryRepository implements RecentHistoryRepositoryPo
   }
 
   addRecentTrack(track: Track): void {
-    return originalMusicService.addRecentTrack(track);
+    originalMusicService.addRecentTrack(track);
   }
 }

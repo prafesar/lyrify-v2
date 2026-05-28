@@ -1135,6 +1135,7 @@ export default function App() {
                 src={user.photoURL}
                 alt={user.displayName || ""}
                 className="w-full h-full object-cover"
+                referrerPolicy="no-referrer"
               />
             ) : (
               <UserIcon size={18} className="text-app-fg opacity-60 group-hover:text-[var(--accent)] transition-colors" />
@@ -1395,7 +1396,7 @@ export default function App() {
                         >
                           <ChevronLeft size={20} />
                         </button>
-                        <img src={albumDetails.album.coverUrl} className="w-40 h-40 md:w-56 md:h-56 rounded-3xl shadow-2xl border border-app-card-border" />
+                        <img src={albumDetails.album.coverUrl} className="w-40 h-40 md:w-56 md:h-56 rounded-3xl shadow-2xl border border-app-card-border" referrerPolicy="no-referrer" />
                       </div>
                       <div className="flex-1 min-w-0 pb-2">
                         <h2 className="text-2xl md:text-3xl font-black text-app-fg mb-1 leading-tight">{albumDetails.album.title}</h2>
@@ -1467,6 +1468,7 @@ export default function App() {
                           src={artistDetails.artist.artworkUrl} 
                           className="w-20 h-20 md:w-24 md:h-24 rounded-full object-cover shadow-lg border-2 border-app-card-border" 
                           alt={artistDetails.artist.name}
+                          referrerPolicy="no-referrer"
                         />
                       )}
                       
@@ -1490,7 +1492,7 @@ export default function App() {
                               }}
                               className="flex items-center gap-4 p-3 rounded-2xl bg-app-card border border-app-card-border shadow-sm hover:border-app-accent/30 transition-all text-left"
                             >
-                              <img src={track.coverUrl} className="w-10 h-10 rounded-lg object-cover" />
+                              <img src={track.coverUrl} className="w-10 h-10 rounded-lg object-cover" referrerPolicy="no-referrer" />
                               <div className="min-w-0">
                                 <p className="font-bold text-sm truncate">{track.title}</p>
                                 <p className="text-[10px] text-app-muted truncate">{track.album || "Unknown Album"}</p>
@@ -1516,7 +1518,7 @@ export default function App() {
                               className="group text-left space-y-2"
                             >
                               <div className="aspect-square rounded-2xl overflow-hidden bg-app-card border border-app-card-border shadow-sm group-hover:shadow-md transition-all">
-                                <img src={album.coverUrl} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+                                <img src={album.coverUrl} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" referrerPolicy="no-referrer" />
                               </div>
                               <div className="px-1">
                                 <p className="font-bold text-xs truncate leading-tight">{album.title}</p>
@@ -2559,7 +2561,7 @@ export default function App() {
                           <div className="flex items-center gap-3">
                             <div className="w-8 h-8 rounded-lg overflow-hidden bg-app-bg/50 border border-app-card-border shrink-0">
                               {currentTrack.coverUrl ? (
-                                <img src={currentTrack.coverUrl} alt="" className="w-full h-full object-cover" />
+                                <img src={currentTrack.coverUrl} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                               ) : (
                                 <Music className="w-full h-full p-1.5 opacity-20" />
                               )}

@@ -91,6 +91,7 @@ export const OnboardingHero: React.FC<OnboardingHeroProps> = ({ onSelectTrack, o
                     src={demo.coverUrl}
                     alt={demo.title}
                     className="w-12 h-12 rounded-xl object-cover shadow-sm group-hover:scale-105 transition-transform duration-300"
+                    referrerPolicy="no-referrer"
                   />
                   <div className="absolute inset-0 bg-black/20 flex items-center justify-center opacity-0 group-hover:opacity-100 rounded-xl transition-opacity">
                     <Music size={14} className="text-white animate-pulse" />

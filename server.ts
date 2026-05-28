@@ -12,6 +12,13 @@ async function startServer() {
 
   app.use(express.json());
 
+  // Set COOP and COEP headers required for SQLite WASM inside the web worker
+  app.use((req, res, next) => {
+    res.setHeader("Cross-Origin-Opener-Policy", "same-origin");
+    res.setHeader("Cross-Origin-Embedder-Policy", "credentialless");
+    next();
+  });
+
   // Initialize Gemini AI on the server with recommended options
   const ai = new GoogleGenAI({
     apiKey: process.env.GEMINI_API_KEY,

@@ -609,7 +609,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                         src={track.coverUrl}
                         className="w-10 h-10 rounded-xl object-cover shadow border border-app-card-border"
                         alt={track.title}
-                        referrerPolicy="referrer"
+                        referrerPolicy="no-referrer"
                       />
                       <div className="text-left overflow-hidden">
                         <span className="font-bold text-app-fg text-sm block truncate group-hover:text-app-accent transition-colors">

@@ -101,6 +101,7 @@ export default function ITunesPlayer({
               <img 
                 src={coverUrl} 
                 alt={trackTitle}
+                referrerPolicy="no-referrer"
                 className={cn(
                   "w-16 h-16 rounded-2xl object-cover shadow-lg border border-white/10 transition-transform duration-500",
                   isPlaying ? "scale-110 shadow-[0_0_20px_rgba(var(--accent-rgb),0.3)]" : "scale-100"
@@ -163,6 +164,7 @@ export default function ITunesPlayer({
               src="https://upload.wikimedia.org/wikipedia/commons/2/2a/Apple_Music_logo.svg" 
               alt="Apple Music" 
               className="h-3 md:h-4"
+              referrerPolicy="no-referrer"
             />
             <span className="text-[9px] font-medium tracking-tight">Music Preview</span>
           </div>
