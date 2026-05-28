@@ -463,6 +463,7 @@ export interface LyricsLine {
   translation?: string;
   language?: string;
   phrases: Phrase[];
+  isStarred?: boolean;
 }
 
 export interface TrackLyricsData {

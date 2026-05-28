@@ -1,7 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { trackSessionFacade } from "../application";
 import { aiClient } from "../application/adapters/geminiAIAdapter";
-import { userDataRepository } from "../application/adapters/browserUserDataRepository";
+import { 
+  trackCacheRepository, 
+  recentHistoryRepository, 
+  dailyTrackerRepository 
+} from "../application/adapters/browserUserDataRepository";
 import { TrackLyricsData } from "../services/musicService";
 
 // Mock the dependencies of the Facade
@@ -23,16 +27,22 @@ vi.mock("../application/adapters/geminiAIAdapter", () => {
 
 vi.mock("../application/adapters/browserUserDataRepository", () => {
   return {
-    userDataRepository: {
-      recordTrackExplored: vi.fn(),
+    trackCacheRepository: {
       getCachedTrack: vi.fn(),
       saveTrackData: vi.fn(),
+    },
+    recentHistoryRepository: {
+      getRecentTracks: vi.fn(),
       addRecentTrack: vi.fn(),
     },
+    dailyTrackerRepository: {
+      recordTrackExplored: vi.fn(),
+    },
+    userDataRepository: {},
   };
 });
 
-// Since services like splitLyricsIntoLines and searchITunes could be used, mock them if needed or keep default.
+// Mock iTunes metadata/lyrics
 vi.mock("../services/musicService", async () => {
   const actual = await vi.importActual<any>("../services/musicService");
   return {
@@ -64,27 +74,27 @@ describe("TrackSessionFacade Unit Tests", () => {
         lastUpdated: Date.now(),
       };
 
-      vi.mocked(userDataRepository.getCachedTrack).mockReturnValue(cachedTrackData);
+      vi.mocked(trackCacheRepository.getCachedTrack).mockReturnValue(cachedTrackData);
 
       const result = await trackSessionFacade.selectTrack(mockTrack, "Spanish");
 
-      expect(userDataRepository.recordTrackExplored).toHaveBeenCalled();
-      expect(userDataRepository.getCachedTrack).toHaveBeenCalledWith("track-123");
-      expect(userDataRepository.addRecentTrack).toHaveBeenCalled();
+      expect(dailyTrackerRepository.recordTrackExplored).toHaveBeenCalled();
+      expect(trackCacheRepository.getCachedTrack).toHaveBeenCalledWith("track-123");
+      expect(recentHistoryRepository.addRecentTrack).toHaveBeenCalled();
       expect(result.trackId).toBe("track-123");
     });
 
     it("should construct initialTrack if not cached, update recent tracks, and trigger background lookups", async () => {
       const mockTrack = { id: "track-777", title: "New Song", artist: "New Artist" };
-      vi.mocked(userDataRepository.getCachedTrack).mockReturnValue(null);
+      vi.mocked(trackCacheRepository.getCachedTrack).mockReturnValue(null);
       vi.mocked(aiClient.normalizeString).mockImplementation((str) => str.toLowerCase().trim());
       vi.mocked(aiClient.getTrackMeaningFromCache).mockResolvedValue(null);
 
       const result = await trackSessionFacade.selectTrack(mockTrack, "Russian");
 
-      expect(userDataRepository.recordTrackExplored).toHaveBeenCalled();
-      expect(userDataRepository.saveTrackData).toHaveBeenCalledWith("track-777", expect.any(Object));
-      expect(userDataRepository.addRecentTrack).toHaveBeenCalled();
+      expect(dailyTrackerRepository.recordTrackExplored).toHaveBeenCalled();
+      expect(trackCacheRepository.saveTrackData).toHaveBeenCalledWith("track-777", expect.any(Object));
+      expect(recentHistoryRepository.addRecentTrack).toHaveBeenCalled();
       expect(result.trackId).toBe("track-777");
       expect(result.processingStatus.stage1_completed).toBe(false);
     });
@@ -131,7 +141,7 @@ describe("TrackSessionFacade Unit Tests", () => {
       expect(fetchLyrics).toHaveBeenCalledWith("Coldplay", "Yellow");
       expect(aiClient.fetchTrackMeaning).toHaveBeenCalled();
       expect(aiClient.getLineTranslations).toHaveBeenCalled();
-      expect(userDataRepository.saveTrackData).toHaveBeenCalled();
+      expect(trackCacheRepository.saveTrackData).toHaveBeenCalled();
       expect(updated.rawLyrics).toBe(mockLyricsData.lyrics);
       expect(updated.meaning).toBe("Overview Spanish");
       expect(updated.lines[0].translation).toBe("Mira las estrellas");
@@ -189,7 +199,7 @@ describe("TrackSessionFacade Unit Tests", () => {
       const result = await trackSessionFacade.submitManualLyrics(track, "First Line\nSecond Line", "Spanish");
 
       expect(aiClient.extractLyricsMetadata).toHaveBeenCalled();
-      expect(userDataRepository.saveTrackData).toHaveBeenCalled();
+      expect(trackCacheRepository.saveTrackData).toHaveBeenCalled();
       expect(result.rawLyrics).toBe("First Line\nSecond Line");
       expect(result.lines).toHaveLength(2);
     });
