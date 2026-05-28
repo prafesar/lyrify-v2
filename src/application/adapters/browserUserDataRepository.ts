@@ -10,6 +10,7 @@ import { BrowserTrackCacheRepository } from "./browserTrackCacheRepository";
 import { BrowserRecentHistoryRepository } from "./browserRecentHistoryRepository";
 import { BrowserUserPreferencesRepository } from "./browserUserPreferencesRepository";
 import { BrowserLibraryRepository } from "./browserLibraryRepository";
+import { userDataMaintenanceService } from "./browserUserDataMaintenance";
 
 export class BrowserUserDataRepository implements UserDataRepositoryPort {
   private studyCards = new BrowserStudyCardsRepository();
@@ -118,7 +119,7 @@ export class BrowserUserDataRepository implements UserDataRepositoryPort {
   }
 
   async clearAllUserData(): Promise<void> {
-    await this.userPreferences.clearAllUserData();
+    await userDataMaintenanceService.clearAllUserData();
   }
 }
 

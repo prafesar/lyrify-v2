@@ -4,5 +4,4 @@ export interface UserPreferencesRepositoryPort {
   getBoolPreference(key: string, defaultValue: boolean): boolean;
   setBoolPreference(key: string, value: boolean): void;
   removePreference(key: string): void;
-  clearAllUserData(): Promise<void>;
 }

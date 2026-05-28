@@ -50,6 +50,7 @@ import {
   dailyTrackerRepository,
   recentHistoryRepository,
   userPreferencesRepository,
+  userDataMaintenanceService,
   ANALYSIS_PROMPT_VERSION, 
   type Flashcard,
   type PhraseStatus
@@ -771,7 +772,7 @@ export default function App() {
 
   const resetUserData = async () => {
     console.log("Resetting user data...");
-    await userPreferencesRepository.clearAllUserData();
+    await userDataMaintenanceService.clearAllUserData();
     console.log("All user data cleared in repository");
     console.log("Reloading...");
     window.location.reload();

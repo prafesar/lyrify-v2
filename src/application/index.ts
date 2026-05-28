@@ -12,6 +12,7 @@ import {
 import { BrowserLyricsProvider } from "./adapters/browserLyricsProvider";
 import { BrowserMusicMetadata } from "./adapters/browserMusicMetadata";
 import { TrackSessionFacade } from "./trackSessionFacade";
+import { userDataMaintenanceService } from "./adapters/browserUserDataMaintenance";
 
 // Create concrete browser adapters for lyrics and music metadata
 const lyricsProvider = new BrowserLyricsProvider();
@@ -20,7 +21,9 @@ const musicMetadataProvider = new BrowserMusicMetadata();
 // Compose/Wire the TrackSessionFacade inside the composition root
 export const trackSessionFacade = new TrackSessionFacade(
   aiClient,
-  userDataRepository,
+  trackCacheRepository,
+  recentHistoryRepository,
+  dailyTrackerRepository,
   lyricsProvider,
   musicMetadataProvider
 );
@@ -33,7 +36,8 @@ export {
   trackCacheRepository,
   recentHistoryRepository,
   userPreferencesRepository,
-  libraryRepository
+  libraryRepository,
+  userDataMaintenanceService
 };
 
 // Ports
@@ -47,6 +51,7 @@ export { type UserPreferencesRepositoryPort } from "./ports/userPreferencesRepos
 export { type LibraryRepositoryPort } from "./ports/libraryRepositoryPort";
 export { type LyricsProviderPort } from "./ports/lyricsProviderPort";
 export { type MusicMetadataPort } from "./ports/musicMetadataPort";
+export { type UserDataMaintenancePort } from "./ports/userDataMaintenancePort";
 
 // Re-export key domain types for UI independence
 export { type Flashcard, type PhraseStatus } from "../services/localCardService";

@@ -34,18 +34,4 @@ export class BrowserUserPreferencesRepository implements UserPreferencesReposito
       localStorage.removeItem(key);
     }
   }
-
-  async clearAllUserData(): Promise<void> {
-    if (typeof window !== "undefined") {
-      if (window.localStorage) {
-        localStorage.clear();
-      }
-      try {
-        const idb = await import('idb-keyval');
-        await idb.del('lyrify_flashcards');
-      } catch (err) {
-        console.error("Failed to clear idb-keyval in repository:", err);
-      }
-    }
-  }
 }
