@@ -74,7 +74,9 @@ import {
   type LyricOption,
   type Phrase,
   saveTrackData,
+  getTrackDetails,
 } from "./services/musicService";
+import { parseUrl, navigateTo, navigateBack, setTransientTrack, popTransientTrack } from "./services/routerService";
 
 import { determineNextStep } from "./services/nextStepService";
 import { getTrackStudySummary } from "./services/trackSummaryService";
@@ -762,6 +764,16 @@ export default function App() {
     });
   };
 
+  const navigateToTrack = (track: any) => {
+    const id = track?.id || track?.trackId;
+    if (id && id !== "undefined") {
+      setTransientTrack(track);
+      navigateTo(`/track/${id}`);
+    } else {
+      handleTrackSelect(track);
+    }
+  };
+
   const handleAnalyzeSong = async () => {
     await handleAnalyzeSongRaw(targetLanguage, {
       updateRecentTracks: setRecentTracks,
@@ -974,6 +986,73 @@ export default function App() {
 
   // Setup/Synchronize Effects
   useEffect(() => {
+    let active = true;
+
+    const handleLocationChange = async () => {
+      const path = window.location.pathname;
+      const parsed = parseUrl(path);
+
+      console.log("[RouterSync] Syncing route:", parsed);
+
+      if (parsed.type === "explore") {
+        setView("tracks");
+        setArtistDetails(null);
+        setAlbumDetails(null);
+      } else if (parsed.type === "library") {
+        setView("library");
+      } else if (parsed.type === "study") {
+        setView("study");
+      } else if (parsed.type === "settings") {
+        setView("settings");
+      } else if (parsed.type === "artist") {
+        setView("tracks");
+        setAlbumDetails(null);
+        // Load details if not loaded or if id is different
+        if (!artistDetails || artistDetails.artist.id !== parsed.id) {
+          await handleArtistSelect(parsed.id);
+        }
+      } else if (parsed.type === "album") {
+        setView("tracks");
+        setArtistDetails(null);
+        // Load details if not loaded or if id is different
+        if (!albumDetails || albumDetails.album.id !== parsed.id) {
+          await handleAlbumSelect(parsed.id);
+        }
+      } else if (parsed.type === "track") {
+        setView("lyrics");
+        // Load details if not loaded or if id is different
+        if (!currentTrack || currentTrack.trackId !== parsed.id) {
+          const transient = popTransientTrack(parsed.id);
+          if (transient) {
+            await handleTrackSelect(transient);
+          } else {
+            const trackData = await getTrackDetails(parsed.id);
+            if (trackData && active) {
+              await handleTrackSelect(trackData);
+            }
+          }
+        }
+      }
+    };
+
+    window.addEventListener("popstate", handleLocationChange);
+    // Trigger initial on mount
+    handleLocationChange();
+
+    return () => {
+      active = false;
+      window.removeEventListener("popstate", handleLocationChange);
+    };
+  }, [
+    handleArtistSelect,
+    handleAlbumSelect,
+    handleTrackSelect,
+    currentTrack?.trackId,
+    artistDetails?.artist.id,
+    albumDetails?.album.id
+  ]);
+
+  useEffect(() => {
     userPreferencesRepository.setBoolPreference("lyrify_wiped_v3", true);
   }, []);
 
@@ -1127,7 +1206,7 @@ export default function App() {
         </div>
         <div className="flex items-center gap-4">
           <button
-            onClick={() => setView("settings")}
+            onClick={() => navigateTo("/settings")}
             className="w-9 h-9 rounded-xl flex items-center justify-center bg-app-card border border-app-card-border shadow-lg transition-all hover:scale-105 active:scale-95 group overflow-hidden"
           >
             {user?.photoURL ? (
@@ -1194,8 +1273,8 @@ export default function App() {
                       el.scrollIntoView({ behavior: 'smooth', block: 'center' });
                     }
                   }}
-                  onNavigateToStudy={() => setView("study")}
-                  onNavigateToCurrentTrack={() => setView("lyrics")}
+                  onNavigateToStudy={() => navigateTo("/study")}
+                  onNavigateToCurrentTrack={() => currentTrack && navigateToTrack(currentTrack)}
                   hasCurrentTrack={!!currentTrack}
                   mode="details"
                 />
@@ -1212,8 +1291,8 @@ export default function App() {
                       el.scrollIntoView({ behavior: 'smooth', block: 'center' });
                     }
                   }}
-                  onNavigateToStudy={() => setView("study")}
-                  onNavigateToCurrentTrack={() => setView("lyrics")}
+                  onNavigateToStudy={() => navigateTo("/study")}
+                  onNavigateToCurrentTrack={() => currentTrack && navigateToTrack(currentTrack)}
                   hasCurrentTrack={!!currentTrack}
                   mode="next-step"
                 />
@@ -1223,8 +1302,8 @@ export default function App() {
               {!searchResults.length && !artistDetails && !albumDetails && resumeViewModel && (
                 <ResumeStudyBlock
                   viewModel={resumeViewModel}
-                  onResumeTrack={handleTrackSelect}
-                  onResumeStudy={() => setView("study")}
+                  onResumeTrack={navigateToTrack}
+                  onResumeStudy={() => navigateTo("/study")}
                 />
               )}
 
@@ -1390,7 +1469,7 @@ export default function App() {
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            setAlbumDetails(null);
+                            navigateBack("/explore");
                           }}
                           className="absolute -top-2 -left-2 z-10 p-2 bg-app-card border border-app-card-border shadow-lg rounded-xl hover:scale-110 transition-transform"
                         >
@@ -1404,7 +1483,11 @@ export default function App() {
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            handleArtistSelect(albumDetails.album.artistId);
+                            if (albumDetails.album.artistId && !albumDetails.album.artistId.startsWith("artist-") && albumDetails.album.artistId !== "undefined") {
+                              navigateTo(`/artist/${albumDetails.album.artistId}`);
+                            } else {
+                              handleArtistSelect(albumDetails.album.artistId);
+                            }
                           }}
                           className="text-app-muted hover:text-app-accent font-bold transition-colors"
                         >
@@ -1424,7 +1507,7 @@ export default function App() {
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
-                              handleTrackSelect(track);
+                              navigateToTrack(track);
                             }}
                             className="w-full flex items-center gap-4 px-6 py-4 hover:bg-app-fg/5 transition-colors text-left border-b border-app-card-border last:border-0"
                           >
@@ -1456,7 +1539,7 @@ export default function App() {
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
-                          setArtistDetails(null);
+                          navigateBack("/explore");
                         }}
                         className="p-2 hover:bg-app-fg/5 rounded-xl transition-colors shrink-0"
                       >
@@ -1488,7 +1571,7 @@ export default function App() {
                               type="button"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                handleTrackSelect(track);
+                                navigateToTrack(track);
                               }}
                               className="flex items-center gap-4 p-3 rounded-2xl bg-app-card border border-app-card-border shadow-sm hover:border-app-accent/30 transition-all text-left"
                             >
@@ -1513,7 +1596,11 @@ export default function App() {
                               type="button"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                handleAlbumSelect(album.id);
+                                if (album.id && !album.id.startsWith("album-") && album.id !== "undefined") {
+                                  navigateTo(`/album/${album.id}`);
+                                } else {
+                                  handleAlbumSelect(album.id);
+                                }
                               }}
                               className="group text-left space-y-2"
                             >
@@ -1545,11 +1632,11 @@ export default function App() {
                         onSelectOnboardingTrack={handleOnboardingSelectDirect}
                         onDismissOnboarding={handleOnboardingDismissDirect}
                         resumeViewModel={resumeViewModel}
-                        onTrackSelect={handleTrackSelect}
-                        onNavigateToStudy={() => setView("study")}
+                        onTrackSelect={navigateToTrack}
+                        onNavigateToStudy={() => navigateTo("/study")}
                         dailyProgressSummary={dailyProgressSummary}
                         currentTrack={currentTrack}
-                        onNavigateToLyrics={() => setView("lyrics")}
+                        onNavigateToLyrics={() => currentTrack && navigateToTrack(currentTrack)}
                         dynamicTracks={dynamicTracks}
                         isLoadingTracks={isLoadingTracks}
                         onTrackMenuOpen={setActiveMenuTrack}
@@ -1569,9 +1656,21 @@ export default function App() {
                             <div
                               key={item.id}
                               onClick={(e) => {
-                                if (searchEntityType === "musicTrack") handleTrackSelect(item);
-                                else if (searchEntityType === "album") handleAlbumSelect(item.id);
-                                else if (searchEntityType === "musicArtist") handleArtistSelect(item.id);
+                                if (searchEntityType === "musicTrack") {
+                                  navigateToTrack(item);
+                                } else if (searchEntityType === "album") {
+                                  if (item.id && !item.id.startsWith("album-") && item.id !== "undefined") {
+                                    navigateTo(`/album/${item.id}`);
+                                  } else {
+                                    handleAlbumSelect(item.id);
+                                  }
+                                } else if (searchEntityType === "musicArtist") {
+                                  if (item.id && !item.id.startsWith("artist-") && item.id !== "undefined") {
+                                    navigateTo(`/artist/${item.id}`);
+                                  } else {
+                                    handleArtistSelect(item.id);
+                                  }
+                                }
                               }}
                               className="flex items-center gap-4 p-3 rounded-2xl bg-app-card border border-app-card-border shadow-app-card active:scale-[0.98] transition-all hover:bg-opacity-80 group text-left cursor-pointer"
                             >
@@ -1628,7 +1727,7 @@ export default function App() {
               <div className="bg-app-card/50 border-b border-app-card-border backdrop-blur-xl">
                 <div className="max-w-5xl mx-auto w-full px-6 py-4 flex items-center justify-between animate-in fade-in duration-300">
                   <button
-                    onClick={() => setView("tracks")}
+                    onClick={() => navigateBack("/explore")}
                     className="flex items-center gap-1 text-app-fg opacity-40 text-xs font-bold uppercase py-2 px-1 hover:opacity-100 transition-opacity"
                   >
                     <ChevronLeft size={18} /> Library
@@ -1678,7 +1777,9 @@ export default function App() {
                       <div className="flex flex-col gap-0.5">
                         <button
                           onClick={() => {
-                            if (currentTrack.artistId) {
+                            if (currentTrack.artistId && !currentTrack.artistId.startsWith("artist-") && currentTrack.artistId !== "undefined") {
+                              navigateTo(`/artist/${currentTrack.artistId}`);
+                            } else if (currentTrack.artistId) {
                                handleArtistSelect(currentTrack.artistId);
                                setView("tracks");
                             }
@@ -1693,7 +1794,9 @@ export default function App() {
                         {currentTrack.album && (
                           <button
                             onClick={() => {
-                              if (currentTrack.albumId) {
+                              if (currentTrack.albumId && !currentTrack.albumId.startsWith("album-") && currentTrack.albumId !== "undefined") {
+                                navigateTo(`/album/${currentTrack.albumId}`);
+                              } else if (currentTrack.albumId) {
                                 handleAlbumSelect(currentTrack.albumId);
                                 setView("tracks");
                               }
@@ -1711,7 +1814,9 @@ export default function App() {
                     {currentTrack.coverUrl ? (
                       <button 
                         onClick={() => {
-                          if (currentTrack.albumId) {
+                          if (currentTrack.albumId && !currentTrack.albumId.startsWith("album-") && currentTrack.albumId !== "undefined") {
+                            navigateTo(`/album/${currentTrack.albumId}`);
+                          } else if (currentTrack.albumId) {
                             handleAlbumSelect(currentTrack.albumId);
                             setView("tracks");
                           }
@@ -1754,7 +1859,7 @@ export default function App() {
                           setActiveTab('analysis');
                         } else if (actionType === 'go_to_study' || actionType === 'review_again') {
                           setStudyTrackId(currentTrack.trackId);
-                          setView('study');
+                          navigateTo("/study");
                         }
                       }}
                       onTabChange={(tab) => setActiveTab(tab)}
@@ -1768,7 +1873,7 @@ export default function App() {
                       summary={trackStudySummary}
                       onGoToStudy={() => {
                         setStudyTrackId(currentTrack.trackId);
-                        setView("study");
+                        navigateTo("/study");
                       }}
                       trackTitle={`${currentTrack.title} — ${currentTrack.artist}`}
                     />
@@ -2402,8 +2507,8 @@ export default function App() {
             >
               <StudyView
                 onBack={() => {
-                  setView("tracks");
                   setStudyTrackId(undefined);
+                  navigateBack("/explore");
                 }}
                 initialTrackId={studyTrackId}
                 onReviewCompleted={() => {
@@ -2422,7 +2527,7 @@ export default function App() {
               theme={theme}
               setTheme={setTheme}
               onResetData={resetUserData}
-              onClose={() => setView("tracks")}
+              onClose={() => navigateBack("/explore")}
             />
           )}
 
@@ -2435,10 +2540,22 @@ export default function App() {
               className="flex-1 flex flex-col min-h-0 overflow-hidden relative"
             >
               <LibraryView
-                onTrackSelect={handleTrackSelect}
-                onArtistSelect={handleArtistSelect}
-                onAlbumSelect={handleAlbumSelect}
-                onNavigateToStudy={() => setView("study")}
+                onTrackSelect={navigateToTrack}
+                onArtistSelect={(id) => {
+                  if (id && !id.startsWith("artist-") && id !== "undefined") {
+                    navigateTo(`/artist/${id}`);
+                  } else {
+                    handleArtistSelect(id);
+                  }
+                }}
+                onAlbumSelect={(id) => {
+                  if (id && !id.startsWith("album-") && id !== "undefined") {
+                    navigateTo(`/album/${id}`);
+                  } else {
+                    handleAlbumSelect(id);
+                  }
+                }}
+                onNavigateToStudy={() => navigateTo("/study")}
                 recentTracks={recentTracks}
               />
             </motion.div>
@@ -2655,7 +2772,7 @@ export default function App() {
             className="fixed bottom-0 left-0 right-0 z-40 pb-4 pt-3 px-6 bg-app-card/95 backdrop-blur-3xl border-t border-app-card-border flex justify-around items-center shadow-[0_-8px_30px_rgba(0,0,0,0.15)]"
           >
             <button
-              onClick={() => setView("tracks")}
+              onClick={() => navigateTo("/explore")}
               className="p-2 transition-all hover:scale-105 active:scale-95"
               style={{
                 color: view === "tracks" ? "var(--accent)" : "var(--app-fg)",
@@ -2666,7 +2783,7 @@ export default function App() {
 
             <button
               id="navigation-tab-library-btn"
-              onClick={() => setView("library")}
+              onClick={() => navigateTo("/library")}
               className="p-2 transition-all hover:scale-105 active:scale-95"
               style={{
                 color: view === "library" ? "var(--accent)" : "var(--app-fg)",
@@ -2677,7 +2794,7 @@ export default function App() {
 
             <button
               id="navigation-tab-study-btn"
-              onClick={() => setView("study")}
+              onClick={() => navigateTo("/study")}
               className="p-2 transition-all hover:scale-105 active:scale-95 relative"
               style={{
                 color: view === "study" ? "var(--accent)" : "var(--app-fg)",

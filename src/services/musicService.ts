@@ -77,6 +77,32 @@ export async function searchITunes(query: string, entity: 'musicTrack' | 'album'
   }
 }
 
+export async function getTrackDetails(trackId: string, signal?: AbortSignal): Promise<Track | null> {
+  const url = `https://itunes.apple.com/lookup?id=${trackId}`;
+  try {
+    const response = await fetch(url, { signal });
+    const data = await response.json();
+    const results = data.results || [];
+    const item = results.find((r: any) => r.wrapperType === 'track' || r.kind === 'song' || String(r.trackId) === trackId);
+    if (!item) return null;
+    return {
+      id: String(item.trackId),
+      title: item.trackName,
+      artist: item.artistName,
+      artistId: String(item.artistId),
+      album: item.collectionName,
+      albumId: String(item.collectionId),
+      coverUrl: item.artworkUrl100?.replace('100x100', '600x600'),
+      audioUrl: item.previewUrl,
+      appleMusicUrl: item.trackViewUrl
+    } as Track;
+  } catch (err: any) {
+    if (err.name === 'AbortError') throw err;
+    console.error("iTunes track lookup error:", err);
+    return null;
+  }
+}
+
 export async function getArtistDetails(artistId: string, signal?: AbortSignal): Promise<{ artist: Artist, albums: Album[], topTracks: Track[] }> {
   // Increase limit to 50 to get more context and better chance of getting images/tracks
   const url = `https://itunes.apple.com/lookup?id=${artistId}&entity=album,song&limit=50`;

@@ -1,4 +1,4 @@
-import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { SqliteService } from "../services/sqliteService";
 import { BrowserLibraryRepository } from "../application/adapters/browserLibraryRepository";
 
@@ -13,7 +13,7 @@ class MockWorker {
   private playlists: any[] = [];
   private recentHistory: any[] = [];
 
-  constructor(url: any, options?: any) {}
+  constructor(_url: any, _options?: any) {}
 
   postMessage(message: any) {
     MockWorker.postedMessages.push(message);
