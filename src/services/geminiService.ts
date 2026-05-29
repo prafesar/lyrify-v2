@@ -22,18 +22,29 @@ async function callGeminiApi(params: { model: string; contents: any; config?: an
     },
     body: JSON.stringify({ ...params, model: modelToUse })
   });
-  if (!response.ok) {
+
+  const contentType = response.headers.get("content-type") || "";
+  const isJson = contentType.includes("application/json");
+
+  if (!response.ok || !isJson) {
     const errText = await response.text();
     let parsedError;
     try {
       parsedError = JSON.parse(errText);
     } catch {
-      if (errText.trim().startsWith("<") || errText.includes("<!doctype") || errText.includes("<html") || response.status === 504 || response.status === 502) {
+      const trimmerText = errText.trim().toLowerCase();
+      if (
+        trimmerText.startsWith("<") || 
+        trimmerText.includes("<!doctype") || 
+        trimmerText.includes("<html") || 
+        response.status === 504 || 
+        response.status === 502
+      ) {
         throw new Error("The AI service is temporarily unavailable (high traffic or timeout). Please try again in a few moments.");
       }
       throw new Error(errText || `Server returned status ${response.status}`);
     }
-    throw new Error(parsedError.error || parsedError.message || errText || "Request failed");
+    throw new Error(parsedError?.error || parsedError?.message || errText || "Request failed");
   }
   return await response.json();
 }

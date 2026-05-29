@@ -19,24 +19,31 @@ async function startServer() {
     next();
   });
 
-  // Initialize Gemini AI on the server with recommended options
-  const ai = new GoogleGenAI({
-    apiKey: process.env.GEMINI_API_KEY,
-    httpOptions: {
-      headers: {
-        'User-Agent': 'aistudio-build',
+  // Lazy-load Gemini AI on the server as recommended by security/crash guidelines
+  let aiInstance: GoogleGenAI | null = null;
+  function getAiInstance() {
+    if (!aiInstance) {
+      const apiKey = process.env.GEMINI_API_KEY;
+      if (!apiKey) {
+        throw new Error("GEMINI_API_KEY is missing. Please configure it in Settings > Secrets.");
       }
+      aiInstance = new GoogleGenAI({
+        apiKey,
+        httpOptions: {
+          headers: {
+            'User-Agent': 'aistudio-build',
+          }
+        }
+      });
     }
-  });
+    return aiInstance;
+  }
 
   // API Route for Gemini content generation proxy
   app.post("/api/gemini/generate-content", async (req, res) => {
     try {
       const { model, contents, config } = req.body;
-      if (!process.env.GEMINI_API_KEY) {
-        console.error("[server] GEMINI_API_KEY is not defined in environment variables!");
-        return res.status(500).json({ error: "GEMINI_API_KEY is missing. Please configure it in Settings > Secrets." });
-      }
+      const ai = getAiInstance();
 
       const response = await ai.models.generateContent({
         model,

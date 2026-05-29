@@ -1,5 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { parseUrl, navigateTo, navigateBack, setTransientTrack, popTransientTrack, getNavSessionCount, resetNavSessionCount } from "../services/routerService";
+import { initializeWebNavigation } from "../services/webNavigationAdapter";
+import { NavigationCoordinator } from "../services/navigationService";
 
 describe("routerService", () => {
   const originalLocation = window.location;
@@ -28,6 +30,11 @@ describe("routerService", () => {
 
     // Mock dispatchEvent
     window.dispatchEvent = vi.fn();
+
+    // Reset coordinator state and register mock window/history adapter
+    NavigationCoordinator.clearHistory();
+    NavigationCoordinator.syncRouteFromPlatform({ type: "explore" });
+    initializeWebNavigation();
   });
 
   afterEach(() => {
