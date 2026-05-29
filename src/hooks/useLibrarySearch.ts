@@ -4,13 +4,15 @@ import { type Artist, type Album } from "../constants";
 import { 
   userPreferencesRepository,
   recentHistoryRepository, 
-  aiClient 
+  aiClient,
+  libraryRepository
 } from "../application";
 import { 
   searchITunes, 
   getArtistDetails, 
   getAlbumDetails 
 } from "../services/musicService";
+import { sqliteService } from "../services/sqliteService";
 
 export interface UseLibrarySearchResult {
   searchQuery: string;
@@ -67,15 +69,29 @@ export function useLibrarySearch(targetLanguage: string): UseLibrarySearchResult
   const abortControllerRef = useRef<AbortController | null>(null);
   const searchContainerRef = useRef<HTMLDivElement | null>(null);
 
-  // Load recent tracks on mount
+  // Load recent tracks and subscribe to updates from sqliteService
   useEffect(() => {
-    try {
-      const recent = recentHistoryRepository.getRecentTracks();
-      setRecentTracks(recent);
-    } catch (e) {
-      console.error("[useLibrarySearch] Failed to get recent tracks:", e);
-      setRecentTracks([]);
-    }
+    const updateRecent = () => {
+      try {
+        const recent = recentHistoryRepository.getRecentTracks();
+        setRecentTracks(recent);
+      } catch (e) {
+        console.error("[useLibrarySearch] Failed to get recent tracks:", e);
+        setRecentTracks([]);
+      }
+    };
+
+    // Initial load
+    updateRecent();
+
+    // Subscribe to events like "initialized" and "recent_tracks"
+    const unsubscribe = sqliteService.subscribe((event) => {
+      if (event === "initialized" || event === "recent_tracks") {
+        updateRecent();
+      }
+    });
+
+    return unsubscribe;
   }, []);
 
   const cancelSearchDetails = useCallback(() => {
@@ -227,7 +243,60 @@ export function useLibrarySearch(targetLanguage: string): UseLibrarySearchResult
     }, 15000);
 
     try {
-      const details = await getAlbumDetails(albumId, controller.signal);
+      let realAlbumId = albumId;
+      if (!/^\d+$/.test(albumId)) {
+        // Fallback ID (like "album-0"). Let's find real album details in local favorites and recent tracks
+        let favs: Track[] = [];
+        try {
+          favs = await libraryRepository.getFavorites();
+        } catch (err) {
+          console.error("Failed to get favorites:", err);
+        }
+        const allKnownTracks = [...favs, ...recentTracks];
+        const uniqueAlbumTitles = Array.from(new Set(allKnownTracks.map(t => t.album).filter(Boolean)));
+        const albumIdx = parseInt(albumId.replace("album-", ""), 10);
+        const title = uniqueAlbumTitles[albumIdx];
+
+        const match = allKnownTracks.find(t => t.album === title);
+        if (match && match.album && match.artist) {
+          try {
+            const sResults = await searchITunes(`${match.artist} ${match.album}`, 'album', controller.signal);
+            if (sResults && sResults.length > 0) {
+              realAlbumId = sResults[0].id;
+            } else {
+              // Construct a mock album details from our local tracks
+              const albumTracks = allKnownTracks.filter(t => t.album === match.album);
+              const uniqueTracksMap = new Map();
+              albumTracks.forEach(t => uniqueTracksMap.set(t.id || t.title, t));
+              const uniqueTracks = Array.from(uniqueTracksMap.values());
+
+              setAlbumDetails({
+                album: {
+                  id: albumId,
+                  title: match.album,
+                  artist: match.artist,
+                  artistId: match.artistId || "",
+                  coverUrl: match.coverUrl || "",
+                  trackCount: uniqueTracks.length,
+                  releaseDate: ""
+                },
+                tracks: uniqueTracks
+              });
+              setArtistDetails(null);
+              clearTimeout(timeoutId);
+              if (searchContainerRef.current) {
+                searchContainerRef.current.scrollTo({ top: 0, behavior: "smooth" });
+              }
+              return;
+            }
+          } catch (e: any) {
+            if (e.name === 'AbortError') throw e;
+            console.error("Failed to search fallback album on iTunes:", e);
+          }
+        }
+      }
+
+      const details = await getAlbumDetails(realAlbumId, controller.signal);
       if (details && details.album) {
         setAlbumDetails(details);
         setArtistDetails(null);
@@ -247,7 +316,7 @@ export function useLibrarySearch(targetLanguage: string): UseLibrarySearchResult
         abortControllerRef.current = null;
       }
     }
-  }, []);
+  }, [recentTracks]);
 
   // Re-run search if searchEntityType changes and searchQuery is not blank
   useEffect(() => {

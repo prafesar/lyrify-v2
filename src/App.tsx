@@ -36,6 +36,9 @@ import {
   Volume2,
   VolumeX,
   Loader2,
+  Heart,
+  MoreVertical,
+  FolderHeart,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { Track } from "./constants";
@@ -51,6 +54,7 @@ import {
   recentHistoryRepository,
   userPreferencesRepository,
   userDataMaintenanceService,
+  libraryRepository,
   ANALYSIS_PROMPT_VERSION, 
   type Flashcard,
   type PhraseStatus
@@ -63,13 +67,17 @@ import { onAuthStateChanged, type User } from "firebase/auth";
 import StudyView from "./components/StudyView";
 import SettingsView from "./components/SettingsView";
 import PhraseDrawer from "./components/PhraseDrawer";
+import { LibraryView } from "./components/LibraryView";
 import LanguageSelector from "./components/LanguageSelector";
 import {
   type TrackLyricsData,
   type LyricOption,
   type Phrase,
   saveTrackData,
+  getTrackDetails,
 } from "./services/musicService";
+import { useAppNavigation } from "./hooks/useAppNavigation";
+import { setTransientTrack, popTransientTrack, initializeWebNavigation } from "./services/webNavigationAdapter";
 
 import { determineNextStep } from "./services/nextStepService";
 import { getTrackStudySummary } from "./services/trackSummaryService";
@@ -514,9 +522,75 @@ export default function App() {
   const [dbConnectionError, setDbConnectionError] = useState(false);
 
   const {
-    onboardingCompleted,
+    currentRoute,
     view,
-    setView,
+    goToExplore,
+    goToLibrary,
+    goToSettings,
+    goToStudy,
+    goToTrack,
+    goToArtist,
+    goToAlbum,
+    goBack,
+  } = useAppNavigation();
+
+  // Initialize Web Navigation Support
+  useEffect(() => {
+    initializeWebNavigation();
+  }, []);
+
+  // Global track overflow menu and database integration states
+  const [activeMenuTrack, setActiveMenuTrack] = useState<Track | null>(null);
+  const [isAddToPlaylistOpenInApp, setIsAddToPlaylistOpenInApp] = useState(false);
+  const [playlistsInApp, setPlaylistsInApp] = useState<any[]>([]);
+  const [favoritesInApp, setFavoritesInApp] = useState<Track[]>([]);
+
+  const loadAppLibraryData = async () => {
+    try {
+      const favs = await libraryRepository.getFavorites();
+      const lists = await libraryRepository.getPlaylists();
+      setFavoritesInApp(favs || []);
+      setPlaylistsInApp(lists || []);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  useEffect(() => {
+    if (activeMenuTrack) {
+      loadAppLibraryData();
+    }
+  }, [activeMenuTrack]);
+
+  const handleToggleFavoriteInApp = async (track: Track) => {
+    try {
+      await libraryRepository.toggleFavorite(track);
+      await loadAppLibraryData();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const isTrackFavoriteInApp = (trackId: string) => {
+    return favoritesInApp.some(t => {
+      const tid = t.id || t.trackId;
+      return tid === trackId;
+    });
+  };
+
+  const handleAddTrackToPlaylistInApp = async (playlistId: string, track: Track) => {
+    try {
+      await libraryRepository.addTrackToPlaylist(playlistId, track);
+      await loadAppLibraryData();
+      setIsAddToPlaylistOpenInApp(false);
+      setActiveMenuTrack(null);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const {
+    onboardingCompleted,
     activeTab,
     setActiveTab,
     targetLanguage,
@@ -702,9 +776,32 @@ export default function App() {
         setActiveLineIndex(null);
         setIsReadingAll(false);
       },
-      setView,
+      setView: (v) => {
+        if (v === "lyrics") {
+          const id = track?.id || track?.trackId;
+          if (id) {
+            goToTrack(id);
+          }
+        } else if (v === "study") {
+          goToStudy();
+        } else if (v === "settings") {
+          goToSettings();
+        } else if (v === "tracks") {
+          goToExplore();
+        }
+      },
       setActiveTab
     });
+  };
+
+  const navigateToTrack = (track: any) => {
+    const id = track?.id || track?.trackId;
+    if (id && id !== "undefined") {
+      setTransientTrack(track);
+      goToTrack(id);
+    } else {
+      handleTrackSelect(track);
+    }
   };
 
   const handleAnalyzeSong = async () => {
@@ -919,6 +1016,58 @@ export default function App() {
 
   // Setup/Synchronize Effects
   useEffect(() => {
+    let active = true;
+
+    const syncRouteLoaders = async () => {
+      console.log("[RouteLoaderSync] Syncing route:", currentRoute);
+
+      if (currentRoute.type === "explore") {
+        setArtistDetails(null);
+        setAlbumDetails(null);
+      } else if (currentRoute.type === "artist") {
+        setAlbumDetails(null);
+        // Load details if not loaded or if id is different
+        if (!artistDetails || artistDetails.artist.id !== currentRoute.id) {
+          await handleArtistSelect(currentRoute.id);
+        }
+      } else if (currentRoute.type === "album") {
+        setArtistDetails(null);
+        // Load details if not loaded or if id is different
+        if (!albumDetails || albumDetails.album.id !== currentRoute.id) {
+          await handleAlbumSelect(currentRoute.id);
+        }
+      } else if (currentRoute.type === "track") {
+        // Load details if not loaded or if id is different
+        if (!currentTrack || currentTrack.trackId !== currentRoute.id) {
+          const transient = popTransientTrack(currentRoute.id);
+          if (transient) {
+            await handleTrackSelect(transient);
+          } else {
+            const trackData = await getTrackDetails(currentRoute.id);
+            if (trackData && active) {
+              await handleTrackSelect(trackData);
+            }
+          }
+        }
+      }
+    };
+
+    syncRouteLoaders();
+
+    return () => {
+      active = false;
+    };
+  }, [
+    currentRoute,
+    handleArtistSelect,
+    handleAlbumSelect,
+    handleTrackSelect,
+    currentTrack?.trackId,
+    artistDetails?.artist.id,
+    albumDetails?.album.id
+  ]);
+
+  useEffect(() => {
     userPreferencesRepository.setBoolPreference("lyrify_wiped_v3", true);
   }, []);
 
@@ -1072,7 +1221,7 @@ export default function App() {
         </div>
         <div className="flex items-center gap-4">
           <button
-            onClick={() => setView("settings")}
+            onClick={goToSettings}
             className="w-9 h-9 rounded-xl flex items-center justify-center bg-app-card border border-app-card-border shadow-lg transition-all hover:scale-105 active:scale-95 group overflow-hidden"
           >
             {user?.photoURL ? (
@@ -1080,6 +1229,7 @@ export default function App() {
                 src={user.photoURL}
                 alt={user.displayName || ""}
                 className="w-full h-full object-cover"
+                referrerPolicy="no-referrer"
               />
             ) : (
               <UserIcon size={18} className="text-app-fg opacity-60 group-hover:text-[var(--accent)] transition-colors" />
@@ -1125,7 +1275,7 @@ export default function App() {
               initial={{ opacity: 0, scale: 0.98 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.98 }}
-              className="flex-1 overflow-y-auto px-6 pt-8 pb-32"
+              className="flex-1 overflow-y-auto px-6 pt-8 pb-32 max-w-5xl mx-auto w-full scrollbar-hide"
             >
               {/* 🎯 Daily Goal Details (Daily Milestones) */}
               {!searchResults.length && !artistDetails && !albumDetails && (
@@ -1138,8 +1288,8 @@ export default function App() {
                       el.scrollIntoView({ behavior: 'smooth', block: 'center' });
                     }
                   }}
-                  onNavigateToStudy={() => setView("study")}
-                  onNavigateToCurrentTrack={() => setView("lyrics")}
+                  onNavigateToStudy={() => goToStudy()}
+                  onNavigateToCurrentTrack={() => currentTrack && navigateToTrack(currentTrack)}
                   hasCurrentTrack={!!currentTrack}
                   mode="details"
                 />
@@ -1156,8 +1306,8 @@ export default function App() {
                       el.scrollIntoView({ behavior: 'smooth', block: 'center' });
                     }
                   }}
-                  onNavigateToStudy={() => setView("study")}
-                  onNavigateToCurrentTrack={() => setView("lyrics")}
+                  onNavigateToStudy={() => goToStudy()}
+                  onNavigateToCurrentTrack={() => currentTrack && navigateToTrack(currentTrack)}
                   hasCurrentTrack={!!currentTrack}
                   mode="next-step"
                 />
@@ -1167,8 +1317,8 @@ export default function App() {
               {!searchResults.length && !artistDetails && !albumDetails && resumeViewModel && (
                 <ResumeStudyBlock
                   viewModel={resumeViewModel}
-                  onResumeTrack={handleTrackSelect}
-                  onResumeStudy={() => setView("study")}
+                  onResumeTrack={navigateToTrack}
+                  onResumeStudy={() => goToStudy()}
                 />
               )}
 
@@ -1334,13 +1484,13 @@ export default function App() {
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            setAlbumDetails(null);
+                            goBack({ type: "explore" });
                           }}
                           className="absolute -top-2 -left-2 z-10 p-2 bg-app-card border border-app-card-border shadow-lg rounded-xl hover:scale-110 transition-transform"
                         >
                           <ChevronLeft size={20} />
                         </button>
-                        <img src={albumDetails.album.coverUrl} className="w-40 h-40 md:w-56 md:h-56 rounded-3xl shadow-2xl border border-app-card-border" />
+                        <img src={albumDetails.album.coverUrl} className="w-40 h-40 md:w-56 md:h-56 rounded-3xl shadow-2xl border border-app-card-border" referrerPolicy="no-referrer" />
                       </div>
                       <div className="flex-1 min-w-0 pb-2">
                         <h2 className="text-2xl md:text-3xl font-black text-app-fg mb-1 leading-tight">{albumDetails.album.title}</h2>
@@ -1348,7 +1498,11 @@ export default function App() {
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            handleArtistSelect(albumDetails.album.artistId);
+                            if (albumDetails.album.artistId && !albumDetails.album.artistId.startsWith("artist-") && albumDetails.album.artistId !== "undefined") {
+                              goToArtist(albumDetails.album.artistId);
+                            } else {
+                              handleArtistSelect(albumDetails.album.artistId);
+                            }
                           }}
                           className="text-app-muted hover:text-app-accent font-bold transition-colors"
                         >
@@ -1368,7 +1522,7 @@ export default function App() {
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
-                              handleTrackSelect(track);
+                              navigateToTrack(track);
                             }}
                             className="w-full flex items-center gap-4 px-6 py-4 hover:bg-app-fg/5 transition-colors text-left border-b border-app-card-border last:border-0"
                           >
@@ -1400,7 +1554,7 @@ export default function App() {
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
-                          setArtistDetails(null);
+                          goBack({ type: "explore" });
                         }}
                         className="p-2 hover:bg-app-fg/5 rounded-xl transition-colors shrink-0"
                       >
@@ -1412,6 +1566,7 @@ export default function App() {
                           src={artistDetails.artist.artworkUrl} 
                           className="w-20 h-20 md:w-24 md:h-24 rounded-full object-cover shadow-lg border-2 border-app-card-border" 
                           alt={artistDetails.artist.name}
+                          referrerPolicy="no-referrer"
                         />
                       )}
                       
@@ -1431,11 +1586,11 @@ export default function App() {
                               type="button"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                handleTrackSelect(track);
+                                navigateToTrack(track);
                               }}
                               className="flex items-center gap-4 p-3 rounded-2xl bg-app-card border border-app-card-border shadow-sm hover:border-app-accent/30 transition-all text-left"
                             >
-                              <img src={track.coverUrl} className="w-10 h-10 rounded-lg object-cover" />
+                              <img src={track.coverUrl} className="w-10 h-10 rounded-lg object-cover" referrerPolicy="no-referrer" />
                               <div className="min-w-0">
                                 <p className="font-bold text-sm truncate">{track.title}</p>
                                 <p className="text-[10px] text-app-muted truncate">{track.album || "Unknown Album"}</p>
@@ -1456,12 +1611,16 @@ export default function App() {
                               type="button"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                handleAlbumSelect(album.id);
+                                if (album.id && !album.id.startsWith("album-") && album.id !== "undefined") {
+                                  goToAlbum(album.id);
+                                } else {
+                                  handleAlbumSelect(album.id);
+                                }
                               }}
                               className="group text-left space-y-2"
                             >
                               <div className="aspect-square rounded-2xl overflow-hidden bg-app-card border border-app-card-border shadow-sm group-hover:shadow-md transition-all">
-                                <img src={album.coverUrl} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+                                <img src={album.coverUrl} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" referrerPolicy="no-referrer" />
                               </div>
                               <div className="px-1">
                                 <p className="font-bold text-xs truncate leading-tight">{album.title}</p>
@@ -1488,13 +1647,14 @@ export default function App() {
                         onSelectOnboardingTrack={handleOnboardingSelectDirect}
                         onDismissOnboarding={handleOnboardingDismissDirect}
                         resumeViewModel={resumeViewModel}
-                        onTrackSelect={handleTrackSelect}
-                        onNavigateToStudy={() => setView("study")}
+                        onTrackSelect={navigateToTrack}
+                        onNavigateToStudy={() => goToStudy()}
                         dailyProgressSummary={dailyProgressSummary}
                         currentTrack={currentTrack}
-                        onNavigateToLyrics={() => setView("lyrics")}
+                        onNavigateToLyrics={() => currentTrack && navigateToTrack(currentTrack)}
                         dynamicTracks={dynamicTracks}
                         isLoadingTracks={isLoadingTracks}
+                        onTrackMenuOpen={setActiveMenuTrack}
                       />
                     )}
 
@@ -1508,29 +1668,39 @@ export default function App() {
                         </h2>
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                           {searchResults.map((item) => (
-                            <button
+                            <div
                               key={item.id}
-                              type="button"
-                              disabled={isLoadingLyrics}
                               onClick={(e) => {
-                                e.stopPropagation();
-                                if (searchEntityType === "musicTrack") handleTrackSelect(item);
-                                else if (searchEntityType === "album") handleAlbumSelect(item.id);
-                                else if (searchEntityType === "musicArtist") handleArtistSelect(item.id);
+                                if (searchEntityType === "musicTrack") {
+                                  navigateToTrack(item);
+                                } else if (searchEntityType === "album") {
+                                  if (item.id && !item.id.startsWith("album-") && item.id !== "undefined") {
+                                    goToAlbum(item.id);
+                                  } else {
+                                    handleAlbumSelect(item.id);
+                                  }
+                                } else if (searchEntityType === "musicArtist") {
+                                  if (item.id && !item.id.startsWith("artist-") && item.id !== "undefined") {
+                                    goToArtist(item.id);
+                                  } else {
+                                    handleArtistSelect(item.id);
+                                  }
+                                }
                               }}
-                              className="flex items-center gap-4 p-3 rounded-2xl bg-app-card border border-app-card-border shadow-app-card active:scale-[0.98] transition-all hover:bg-opacity-80 group text-left"
+                              className="flex items-center gap-4 p-3 rounded-2xl bg-app-card border border-app-card-border shadow-app-card active:scale-[0.98] transition-all hover:bg-opacity-80 group text-left cursor-pointer"
                             >
                               {item.coverUrl ? (
                                 <img
                                   src={item.coverUrl}
                                   className="w-12 h-12 rounded-xl object-cover shadow-sm group-hover:scale-105 transition-transform"
+                                  referrerPolicy="no-referrer"
                                 />
                               ) : (
                                 <div className="w-12 h-12 rounded-xl bg-app-fg/5 flex items-center justify-center text-app-fg/20">
                                   {searchEntityType === "musicArtist" ? <UserIcon size={24} /> : <Disc size={24} />}
                                 </div>
                               )}
-                              <div className="text-left overflow-hidden flex-1">
+                              <div className="text-left overflow-hidden flex-1 min-w-0">
                                 <p className="font-bold text-app-fg leading-tight truncate">
                                   {item.title || item.name}
                                 </p>
@@ -1538,8 +1708,19 @@ export default function App() {
                                   {item.artist || item.genre || "Artist"}
                                 </p>
                               </div>
-                              <ChevronRight size={16} className="text-app-fg opacity-0 group-hover:opacity-20 transition-opacity" />
-                            </button>
+                              <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                                {searchEntityType === "musicTrack" && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setActiveMenuTrack(item)}
+                                    className="p-2 text-app-muted hover:text-app-fg hover:bg-app-fg/5 rounded-full transition-all"
+                                  >
+                                    <MoreVertical size={16} />
+                                  </button>
+                                )}
+                                <ChevronRight size={16} className="text-app-fg opacity-0 group-hover:opacity-20 transition-opacity" />
+                              </div>
+                            </div>
                           ))}
                         </div>
                       </div>
@@ -1558,41 +1739,43 @@ export default function App() {
               exit={{ opacity: 0, x: -50 }}
               className="flex-1 flex flex-col overflow-hidden"
             >
-              <div className="px-6 py-4 flex items-center justify-between bg-app-card/50 border-b border-app-card-border backdrop-blur-xl">
-                <button
-                  onClick={() => setView("tracks")}
-                  className="flex items-center gap-1 text-app-fg opacity-40 text-xs font-bold uppercase py-2 px-1"
-                >
-                  <ChevronLeft size={18} /> Library
-                </button>
-                <div className="flex items-center gap-4">
-                  {isLoadingLyrics && (
-                    <div className={cn(
-                      "flex items-center gap-2 px-3 py-1 rounded-full border animate-pulse",
-                      loadingStep === "searching" ? "bg-amber-500/10 border-amber-500/20" : "bg-[var(--accent)]/10 border-[var(--accent)]/20"
-                    )}>
-                      <RefreshCw
-                        size={12}
-                        className={cn(
-                          "animate-spin",
-                          loadingStep === "searching" ? "text-amber-500 duration-[2s]" : "text-[var(--accent)] duration-700"
-                        )}
-                      />
-                      <span className={cn(
-                        "text-[10px] font-black uppercase tracking-widest",
-                        loadingStep === "searching" ? "text-amber-500" : "text-[var(--accent)]"
+              <div className="bg-app-card/50 border-b border-app-card-border backdrop-blur-xl">
+                <div className="max-w-5xl mx-auto w-full px-6 py-4 flex items-center justify-between animate-in fade-in duration-300">
+                  <button
+                    onClick={() => goBack({ type: "explore" })}
+                    className="flex items-center gap-1 text-app-fg opacity-40 text-xs font-bold uppercase py-2 px-1 hover:opacity-100 transition-opacity"
+                  >
+                    <ChevronLeft size={18} /> Library
+                  </button>
+                  <div className="flex items-center gap-4">
+                    {isLoadingLyrics && (
+                      <div className={cn(
+                        "flex items-center gap-2 px-3 py-1 rounded-full border animate-pulse",
+                        loadingStep === "searching" ? "bg-amber-500/10 border-amber-500/20" : "bg-[var(--accent)]/10 border-[var(--accent)]/20"
                       )}>
-                        {loadingStep === "searching" ? "Searching Lyrics" : 
-                         loadingStep === "meaning" ? "Generating Preview" : "Analyzing Track"}
-                      </span>
-                    </div>
-                  )}
+                        <RefreshCw
+                          size={12}
+                          className={cn(
+                            "animate-spin",
+                            loadingStep === "searching" ? "text-amber-500 duration-[2s]" : "text-[var(--accent)] duration-700"
+                          )}
+                        />
+                        <span className={cn(
+                          "text-[10px] font-black uppercase tracking-widest",
+                          loadingStep === "searching" ? "text-amber-500" : "text-[var(--accent)]"
+                        )}>
+                          {loadingStep === "searching" ? "Searching Lyrics" : 
+                           loadingStep === "meaning" ? "Generating Preview" : "Analyzing Track"}
+                        </span>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
 
               <div
                 ref={scrollContainerRef}
-                className="flex-1 overflow-y-auto px-8 pt-4 pb-12 scrollbar-hide relative"
+                className="flex-1 overflow-y-auto px-8 pt-4 pb-12 scrollbar-hide relative w-full max-w-5xl mx-auto"
               >
                 <div className="mb-4">
                   <span
@@ -1609,9 +1792,11 @@ export default function App() {
                       <div className="flex flex-col gap-0.5">
                         <button
                           onClick={() => {
-                            if (currentTrack.artistId) {
+                            if (currentTrack.artistId && !currentTrack.artistId.startsWith("artist-") && currentTrack.artistId !== "undefined") {
+                              goToArtist(currentTrack.artistId);
+                            } else if (currentTrack.artistId) {
                                handleArtistSelect(currentTrack.artistId);
-                               setView("tracks");
+                               goToExplore();
                             }
                           }}
                           className={cn(
@@ -1624,9 +1809,11 @@ export default function App() {
                         {currentTrack.album && (
                           <button
                             onClick={() => {
-                              if (currentTrack.albumId) {
+                              if (currentTrack.albumId && !currentTrack.albumId.startsWith("album-") && currentTrack.albumId !== "undefined") {
+                                goToAlbum(currentTrack.albumId);
+                              } else if (currentTrack.albumId) {
                                 handleAlbumSelect(currentTrack.albumId);
-                                setView("tracks");
+                                goToExplore();
                               }
                             }}
                             className={cn(
@@ -1642,9 +1829,11 @@ export default function App() {
                     {currentTrack.coverUrl ? (
                       <button 
                         onClick={() => {
-                          if (currentTrack.albumId) {
+                          if (currentTrack.albumId && !currentTrack.albumId.startsWith("album-") && currentTrack.albumId !== "undefined") {
+                            goToAlbum(currentTrack.albumId);
+                          } else if (currentTrack.albumId) {
                             handleAlbumSelect(currentTrack.albumId);
-                            setView("tracks");
+                            goToExplore();
                           }
                         }}
                         className={cn(
@@ -1685,7 +1874,7 @@ export default function App() {
                           setActiveTab('analysis');
                         } else if (actionType === 'go_to_study' || actionType === 'review_again') {
                           setStudyTrackId(currentTrack.trackId);
-                          setView('study');
+                          goToStudy();
                         }
                       }}
                       onTabChange={(tab) => setActiveTab(tab)}
@@ -1699,7 +1888,7 @@ export default function App() {
                       summary={trackStudySummary}
                       onGoToStudy={() => {
                         setStudyTrackId(currentTrack.trackId);
-                        setView("study");
+                        goToStudy();
                       }}
                       trackTitle={`${currentTrack.title} — ${currentTrack.artist}`}
                     />
@@ -2333,8 +2522,8 @@ export default function App() {
             >
               <StudyView
                 onBack={() => {
-                  setView("tracks");
                   setStudyTrackId(undefined);
+                  goBack({ type: "explore" });
                 }}
                 initialTrackId={studyTrackId}
                 onReviewCompleted={() => {
@@ -2353,8 +2542,38 @@ export default function App() {
               theme={theme}
               setTheme={setTheme}
               onResetData={resetUserData}
-              onClose={() => setView("tracks")}
+              onClose={() => goBack({ type: "explore" })}
             />
+          )}
+
+          {view === "library" && (
+            <motion.div
+              key="library"
+              initial={{ opacity: 0, scale: 0.98 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.98 }}
+              className="flex-1 flex flex-col min-h-0 overflow-hidden relative"
+            >
+              <LibraryView
+                onTrackSelect={navigateToTrack}
+                onArtistSelect={(id) => {
+                  if (id && !id.startsWith("artist-") && id !== "undefined") {
+                    goToArtist(id);
+                  } else {
+                    handleArtistSelect(id);
+                  }
+                }}
+                onAlbumSelect={(id) => {
+                  if (id && !id.startsWith("album-") && id !== "undefined") {
+                    goToAlbum(id);
+                  } else {
+                    handleAlbumSelect(id);
+                  }
+                }}
+                onNavigateToStudy={() => goToStudy()}
+                recentTracks={recentTracks}
+              />
+            </motion.div>
           )}
         </AnimatePresence>
       </main>
@@ -2474,7 +2693,7 @@ export default function App() {
                           <div className="flex items-center gap-3">
                             <div className="w-8 h-8 rounded-lg overflow-hidden bg-app-bg/50 border border-app-card-border shrink-0">
                               {currentTrack.coverUrl ? (
-                                <img src={currentTrack.coverUrl} alt="" className="w-full h-full object-cover" />
+                                <img src={currentTrack.coverUrl} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                               ) : (
                                 <Music className="w-full h-full p-1.5 opacity-20" />
                               )}
@@ -2568,7 +2787,7 @@ export default function App() {
             className="fixed bottom-0 left-0 right-0 z-40 pb-4 pt-3 px-6 bg-app-card/95 backdrop-blur-3xl border-t border-app-card-border flex justify-around items-center shadow-[0_-8px_30px_rgba(0,0,0,0.15)]"
           >
             <button
-              onClick={() => setView("tracks")}
+              onClick={goToExplore}
               className="p-2 transition-all hover:scale-105 active:scale-95"
               style={{
                 color: view === "tracks" ? "var(--accent)" : "var(--app-fg)",
@@ -2578,8 +2797,19 @@ export default function App() {
             </button>
 
             <button
+              id="navigation-tab-library-btn"
+              onClick={goToLibrary}
+              className="p-2 transition-all hover:scale-105 active:scale-95"
+              style={{
+                color: view === "library" ? "var(--accent)" : "var(--app-fg)",
+              }}
+            >
+              <FolderHeart size={24} className={cn("transition-opacity duration-200", view === "library" ? "opacity-100" : "opacity-40 hover:opacity-100")} />
+            </button>
+
+            <button
               id="navigation-tab-study-btn"
-              onClick={() => setView("study")}
+              onClick={() => goToStudy()}
               className="p-2 transition-all hover:scale-105 active:scale-95 relative"
               style={{
                 color: view === "study" ? "var(--accent)" : "var(--app-fg)",
@@ -2596,6 +2826,161 @@ export default function App() {
               )}
             </button>
           </motion.footer>
+        )}
+      </AnimatePresence>
+
+      {/* Global Track Action Context Menu Drawer */}
+      <AnimatePresence>
+        {activeMenuTrack && (
+          <div className="fixed inset-0 z-[110] flex items-end justify-center p-0">
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => {
+                setActiveMenuTrack(null);
+                setIsAddToPlaylistOpenInApp(false);
+              }}
+              className="absolute inset-0 bg-app-bg/60 backdrop-blur-md"
+            />
+
+            {/* Content Drawer */}
+            <motion.div
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              transition={{ type: "spring", damping: 30, stiffness: 300 }}
+              className="relative w-full max-w-lg bg-app-card/90 backdrop-blur-3xl border-t border-app-card-border rounded-t-[2.5rem] p-8 space-y-6 shadow-2xl z-10 select-none pb-12"
+            >
+              {/* Drag bar indicator */}
+              <div className="w-12 h-1.5 bg-app-fg/10 rounded-full mx-auto" />
+
+              {!isAddToPlaylistOpenInApp ? (
+                <>
+                  {/* Track Meta */}
+                  <div className="flex items-center gap-4 border-b border-app-card-border pb-4">
+                    {activeMenuTrack.coverUrl ? (
+                      <img
+                        src={activeMenuTrack.coverUrl}
+                        className="w-16 h-16 rounded-2xl object-cover shadow-md"
+                        referrerPolicy="no-referrer"
+                      />
+                    ) : (
+                      <div className="w-16 h-16 rounded-2xl bg-app-fg/5 flex items-center justify-center text-app-fg/20">
+                        <Disc size={28} />
+                      </div>
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <p className="font-bold text-lg text-app-fg truncate mb-0.5">
+                        {activeMenuTrack.title}
+                      </p>
+                      <p className="text-sm text-app-muted truncate">
+                        {activeMenuTrack.artist}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Options List */}
+                  <div className="space-y-2">
+                    {/* Toggle Favorite */}
+                    <button
+                      type="button"
+                      onClick={() => handleToggleFavoriteInApp(activeMenuTrack)}
+                      className="w-full flex items-center justify-between p-4 rounded-2xl hover:bg-app-fg/5 active:scale-[0.99] transition-all text-left"
+                    >
+                      <div className="flex items-center gap-4">
+                        <Heart
+                          size={20}
+                          className={cn(
+                            "transition-colors",
+                            isTrackFavoriteInApp(activeMenuTrack.id)
+                              ? "fill-red-500 text-red-500"
+                              : "text-app-muted"
+                          )}
+                        />
+                        <span className="font-medium text-app-fg">
+                          {isTrackFavoriteInApp(activeMenuTrack.id)
+                            ? "Remove from favorites"
+                            : "Add to favorites"}
+                        </span>
+                      </div>
+                      {isTrackFavoriteInApp(activeMenuTrack.id) && (
+                        <Check size={18} className="text-red-500" />
+                      )}
+                    </button>
+
+                    {/* Add to Playlist button */}
+                    <button
+                      type="button"
+                      onClick={() => setIsAddToPlaylistOpenInApp(true)}
+                      className="w-full flex items-center gap-4 p-4 rounded-2xl hover:bg-app-fg/5 active:scale-[0.99] transition-all text-left"
+                    >
+                      <ListMusic size={20} className="text-app-muted" />
+                      <span className="font-medium text-app-fg">Add to playlist</span>
+                    </button>
+                  </div>
+
+                  {/* Close button */}
+                  <button
+                    type="button"
+                    onClick={() => setActiveMenuTrack(null)}
+                    className="w-full py-4 bg-app-fg/5 hover:bg-app-fg/10 active:scale-[0.99] rounded-2xl text-center font-semibold text-app-fg transition-all"
+                  >
+                    Close
+                  </button>
+                </>
+              ) : (
+                <>
+                  <div className="flex items-center gap-4 mb-4">
+                    <button
+                      type="button"
+                      onClick={() => setIsAddToPlaylistOpenInApp(false)}
+                      className="p-2 hover:bg-app-fg/5 rounded-full transition-colors text-app-muted hover:text-app-fg"
+                    >
+                      <ChevronLeft size={20} />
+                    </button>
+                    <h3 className="font-bold text-lg text-app-fg">Add to playlist</h3>
+                  </div>
+
+                  {playlistsInApp.length > 0 ? (
+                    <div className="max-h-60 overflow-y-auto space-y-2 pr-1 scrollbar-hide">
+                      {playlistsInApp.map((playlist) => {
+                        const hasTrack = playlist.tracks?.some((t: any) => (t.id || t.trackId) === activeMenuTrack.id);
+                        return (
+                          <button
+                            key={playlist.id}
+                            type="button"
+                            onClick={() => handleAddTrackToPlaylistInApp(playlist.id, activeMenuTrack)}
+                            className="w-full flex items-center justify-between p-4 rounded-2xl hover:bg-app-fg/5 active:scale-[0.99] transition-all text-left"
+                          >
+                            <span className="font-medium text-app-fg">{playlist.name}</span>
+                            {hasTrack ? (
+                              <Check size={18} className="text-green-500" />
+                            ) : (
+                              <span className="text-xs text-app-muted">Add</span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="text-center py-8 text-app-muted italic">
+                      You don't have any playlists yet. Create them in the Library tab!
+                    </div>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => setIsAddToPlaylistOpenInApp(false)}
+                    className="w-full py-4 bg-app-fg/5 hover:bg-app-fg/10 active:scale-[0.99] rounded-2xl text-center font-semibold text-app-fg transition-all"
+                  >
+                    Back
+                  </button>
+                </>
+              )}
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
 

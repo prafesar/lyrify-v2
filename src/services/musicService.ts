@@ -1,5 +1,6 @@
 
 import { type Track, Artist, Album } from '../constants';
+import { sqliteService } from './sqliteService';
 export type { Track };
 
 export interface LyricsData {
@@ -26,7 +27,8 @@ export async function searchITunes(query: string, entity: 'musicTrack' | 'album'
             artworksMap.set(String(item.artistId), item.artworkUrl100.replace('100x100', '600x600'));
           }
         });
-      } catch (e) {
+      } catch (e: any) {
+        if (e.name === 'AbortError') throw e;
         console.warn("Failed to fetch auxiliary artworks:", e);
       }
     }
@@ -66,9 +68,38 @@ export async function searchITunes(query: string, entity: 'musicTrack' | 'album'
         } as any;
       }
     });
-  } catch (error) {
+  } catch (error: any) {
+    if (error.name === 'AbortError') {
+      throw error;
+    }
     console.error("iTunes search error:", error);
     return [];
+  }
+}
+
+export async function getTrackDetails(trackId: string, signal?: AbortSignal): Promise<Track | null> {
+  const url = `https://itunes.apple.com/lookup?id=${trackId}`;
+  try {
+    const response = await fetch(url, { signal });
+    const data = await response.json();
+    const results = data.results || [];
+    const item = results.find((r: any) => r.wrapperType === 'track' || r.kind === 'song' || String(r.trackId) === trackId);
+    if (!item) return null;
+    return {
+      id: String(item.trackId),
+      title: item.trackName,
+      artist: item.artistName,
+      artistId: String(item.artistId),
+      album: item.collectionName,
+      albumId: String(item.collectionId),
+      coverUrl: item.artworkUrl100?.replace('100x100', '600x600'),
+      audioUrl: item.previewUrl,
+      appleMusicUrl: item.trackViewUrl
+    } as Track;
+  } catch (err: any) {
+    if (err.name === 'AbortError') throw err;
+    console.error("iTunes track lookup error:", err);
+    return null;
   }
 }
 
@@ -237,7 +268,8 @@ export async function getAlbumDetails(albumId: string, signal?: AbortSignal): Pr
             tracks = fallbackTracks;
           }
         }
-      } catch (err) {
+      } catch (err: any) {
+        if (err.name === 'AbortError') throw err;
         console.error("Fallback search failed:", err);
       }
     }
@@ -253,7 +285,10 @@ export async function getAlbumDetails(albumId: string, signal?: AbortSignal): Pr
     });
 
     return { album, tracks };
-  } catch (error) {
+  } catch (error: any) {
+    if (error.name === 'AbortError') {
+      throw error;
+    }
     console.error("iTunes album lookup error:", error);
     return { 
       album: { id: albumId, title: "Error Loading", artist: "", artistId: "", coverUrl: "", trackCount: 0, releaseDate: "" }, 
@@ -501,36 +536,15 @@ export interface TrackLyricsData {
   lastUpdated: number;
 }
 
-const LYRICS_CACHE_KEY = 'lyrify_track_data_v2';
-const RECENT_TRACKS_KEY = 'lyrify_recent_tracks';
-
 export function getCachedTrackData(trackId: string): TrackLyricsData | null {
-  const cache = JSON.parse(localStorage.getItem(LYRICS_CACHE_KEY) || '{}');
-  return cache[trackId] || null;
+  return sqliteService.getCachedTrack(trackId);
 }
 type TrackLyricsDataPatch = Omit<Partial<TrackLyricsData>, 'processingStatus'> & {
   processingStatus?: Partial<TrackLyricsData['processingStatus']>;
 };
 
 export function saveTrackData(trackId: string, data: TrackLyricsDataPatch) {
-  const cache = JSON.parse(localStorage.getItem(LYRICS_CACHE_KEY) || '{}');
-  const existing = cache[trackId] || {};
-  
-  // Deep merge strategy
-  const updated: TrackLyricsData = {
-    ...existing,
-    ...data,
-    processingStatus: {
-      ...(existing.processingStatus || { stage1_completed: false, stage2_completed: false, stage3_completed: false }),
-      ...(data.processingStatus || {})
-    },
-    lines: data.lines || existing.lines || [],
-    lastUpdated: Date.now()
-  };
-
-  cache[trackId] = updated;
-  localStorage.setItem(LYRICS_CACHE_KEY, JSON.stringify(cache));
-  return updated;
+  return sqliteService.saveTrackData(trackId, data);
 }
 
 export function splitLyricsIntoLines(trackId: string, lyrics: string): LyricsLine[] {
@@ -550,10 +564,9 @@ export function getCachedLyrics(trackId: string) { return getCachedTrackData(tra
 export function saveLyricsToCache(trackId: string, data: any) { return saveTrackData(trackId, data); }
 
 export function clearCachedLyrics(trackId: string) {
-  const cache = JSON.parse(localStorage.getItem(LYRICS_CACHE_KEY) || '{}');
-  if (cache[trackId]) {
-    const existing = cache[trackId];
-    cache[trackId] = {
+  const existing = sqliteService.getCachedTrack(trackId);
+  if (existing) {
+    const updated = {
       ...existing,
       rawLyrics: '',
       source: null,
@@ -568,17 +581,14 @@ export function clearCachedLyrics(trackId: string) {
       },
       lastUpdated: Date.now(),
     };
+    sqliteService.saveTrackData(trackId, updated);
   }
-  localStorage.setItem(LYRICS_CACHE_KEY, JSON.stringify(cache));
 }
 
 export function getRecentTracks(): Track[] {
-  return JSON.parse(localStorage.getItem(RECENT_TRACKS_KEY) || '[]');
+  return sqliteService.getRecentTracks();
 }
 
 export function addRecentTrack(track: Track) {
-  const recent = getRecentTracks();
-  const filtered = recent.filter(t => t.id !== track.id);
-  const updated = [track, ...filtered].slice(0, 10); // Keep last 10
-  localStorage.setItem(RECENT_TRACKS_KEY, JSON.stringify(updated));
+  sqliteService.addRecentTrack(track);
 }

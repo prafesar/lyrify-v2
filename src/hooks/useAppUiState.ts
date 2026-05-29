@@ -3,6 +3,7 @@ import { type User } from "firebase/auth";
 import { type Flashcard, type PhraseStatus } from "../application";
 import { userPreferencesRepository, aiClient } from "../application";
 import { isOnboardingCompleted } from "../services/onboardingService";
+import { NavigationCoordinator } from "../services/navigationService";
 
 export interface EditingLineInfo {
   index: number;
@@ -31,7 +32,6 @@ const explainPhraseStructured = (phrase: string, targetLanguage: string) =>
 
 export function useAppUiState() {
   const [onboardingCompleted, setOnboardingCompleted] = useState(() => isOnboardingCompleted());
-  const [view, setView] = useState<"tracks" | "study" | "lyrics" | "settings">("tracks");
   const [activeTab, setActiveTab] = useState<"preview" | "lyrics" | "analysis">("preview");
   const [targetLanguage, setTargetLanguage] = useState(
     () => userPreferencesRepository.getPreference("lyrify_target_lang", "Russian")
@@ -94,7 +94,7 @@ export function useAppUiState() {
     if (nextStepState.type === "FIND_LYRICS" || nextStepState.type === "GENERATE_ANALYSIS" || nextStepState.type === "SAVE_FIRST_PHRASE") {
       setActiveTab("lyrics");
     } else if (nextStepState.type === "GO_TO_STUDY") {
-      setView("study");
+      NavigationCoordinator.goToStudy();
     }
   }, []);
 
@@ -196,8 +196,6 @@ ${result.explanation}`);
   return {
     onboardingCompleted,
     setOnboardingCompleted,
-    view,
-    setView,
     activeTab,
     setActiveTab,
     targetLanguage,

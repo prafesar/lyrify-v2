@@ -1,37 +1,24 @@
 import { UserPreferencesRepositoryPort } from "../ports/userPreferencesRepositoryPort";
+import { sqliteService } from "../../services/sqliteService";
 
 export class BrowserUserPreferencesRepository implements UserPreferencesRepositoryPort {
   getPreference(key: string, defaultValue: string): string {
-    if (typeof window === "undefined" || !window.localStorage) {
-      return defaultValue;
-    }
-    return localStorage.getItem(key) || defaultValue;
+    return sqliteService.getPreference(key, defaultValue);
   }
 
   setPreference(key: string, value: string): void {
-    if (typeof window !== "undefined" && window.localStorage) {
-      localStorage.setItem(key, value);
-    }
+    sqliteService.setPreference(key, value);
   }
 
   getBoolPreference(key: string, defaultValue: boolean): boolean {
-    if (typeof window === "undefined" || !window.localStorage) {
-      return defaultValue;
-    }
-    const val = localStorage.getItem(key);
-    if (val === null) return defaultValue;
-    return val === "true";
+    return sqliteService.getBoolPreference(key, defaultValue);
   }
 
   setBoolPreference(key: string, value: boolean): void {
-    if (typeof window !== "undefined" && window.localStorage) {
-      localStorage.setItem(key, String(value));
-    }
+    sqliteService.setBoolPreference(key, value);
   }
 
   removePreference(key: string): void {
-    if (typeof window !== "undefined" && window.localStorage) {
-      localStorage.removeItem(key);
-    }
+    sqliteService.removePreference(key);
   }
 }
