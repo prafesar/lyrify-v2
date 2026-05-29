@@ -6,6 +6,7 @@ class MockWorker {
   public onmessage: ((e: MessageEvent) => void) | null = null;
   public static postedMessages: any[] = [];
   public static forceEmptyQuery = false;
+  public static customInitPayload: any = null;
   
   // In-memory simulated database state inside the companion mock
   private favorites: any[] = [];
@@ -23,7 +24,7 @@ class MockWorker {
       if (type === "INIT") {
         this.triggerMessage({
           type: "INIT_OK",
-          payload: {
+          payload: MockWorker.customInitPayload || {
             preferences: {},
             recentHistory: [],
             trackCache: {},
@@ -116,6 +117,7 @@ describe("SQLite OPFS Seeding, Safeguards & Legacy Migration Tests", () => {
     localStorage.clear();
     MockWorker.postedMessages = [];
     MockWorker.forceEmptyQuery = false;
+    MockWorker.customInitPayload = null;
   });
 
   afterEach(() => {
@@ -212,5 +214,60 @@ describe("SQLite OPFS Seeding, Safeguards & Legacy Migration Tests", () => {
     // Verified: original playlist ID is preserved, not randomized.
     expect(playlists[0].id).toBe("legacy-playlist-uuid-777");
     expect(playlists[0].name).toBe("Old Favorites Playlist");
+  });
+
+  it("should handle partial OPFS bootstrap scenario where some domains are in SQLite but others require seeding from backups", async () => {
+    global.Worker = MockWorker as any;
+
+    const mockTrack = { id: "track_seeded_99", title: "Seeded Track", artist: "Seeded Artist" };
+    // Simulated pre-existing database with recentHistory but empty favorites & playlists
+    MockWorker.customInitPayload = {
+      preferences: {},
+      recentHistory: [mockTrack],
+      trackCache: {},
+      favorites: [],
+      playlists: [],
+      storageMode: "opfs"
+    };
+
+    // Simulated local backups containing both favorites and playlists
+    const backupFavTrack = { id: "fav_backup_1", title: "Far Away", artist: "Singer" };
+    const backupPlaylist = {
+      id: "playlist-opfs-partial",
+      name: "Partial Rock",
+      createdAt: Date.now(),
+      trackIds: ["fav_backup_1"],
+      tracks: [backupFavTrack]
+    };
+
+    localStorage.setItem("cantolex_favorites_backup", JSON.stringify([backupFavTrack]));
+    localStorage.setItem("cantolex_playlists_backup", JSON.stringify([backupPlaylist]));
+    localStorage.removeItem("cantolex_recent_tracks_backup"); // empty recent backup
+
+    const service = new SqliteService();
+    await service.init();
+
+    // 1. Verify recent tracks are recovered from worker
+    expect(service.getRecentTracks().length).toBe(1);
+    expect(service.getRecentTracks()[0].id).toBe("track_seeded_99");
+
+    // 2. Verify favorites are seeded from backup since they were empty in worker
+    const favs = await service.getFavorites();
+    expect(favs.length).toBe(1);
+    expect(favs[0].id).toBe("fav_backup_1");
+
+    // 3. Verify playlists are seeded from backup since they were empty in worker
+    const playlists = await service.getPlaylists();
+    expect(playlists.length).toBe(1);
+    expect(playlists[0].id).toBe("playlist-opfs-partial");
+
+    // 4. Verify that missing domains were actually posted as writes to the worker
+    const messageTypes = MockWorker.postedMessages.map((m) => m.type);
+    expect(messageTypes).toContain("TOGGLE_FAVORITE");
+    expect(messageTypes).toContain("CREATE_PLAYLIST");
+    
+    // recent was already in SQLite, so ADD_RECENT_TRACK is not called for it on bootstrap
+    const addRecentMsgs = MockWorker.postedMessages.filter(m => m.type === "ADD_RECENT_TRACK");
+    expect(addRecentMsgs.length).toBe(0);
   });
 });

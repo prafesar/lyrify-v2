@@ -132,18 +132,22 @@ export class SqliteService {
     }
   }
 
-  private async seedLocalBackupsToWorker() {
+  private async seedRecentTracksToWorker() {
     try {
-      console.log("[SqliteService] Seeding local backups to SQLite worker...");
-      
-      // 1. Seed Recent Tracks
+      console.log("[SqliteService] Seeding recent tracks backup to SQLite worker...");
       if (this.recentTracks.length > 0) {
         for (const track of this.recentTracks) {
           await this.sendWorkerMsgInternal("ADD_RECENT_TRACK", { track });
         }
       }
+    } catch (err) {
+      console.warn("[SqliteService] Failed to seed recent tracks to worker:", err);
+    }
+  }
 
-      // 2. Seed Favorites
+  private async seedFavoritesToWorker() {
+    try {
+      console.log("[SqliteService] Seeding favorites backup to SQLite worker...");
       if (this.favorites.length > 0) {
         for (const track of this.favorites) {
           const isFav = await this.sendWorkerMsgInternal<boolean>("IS_FAVORITE", { trackId: track.id });
@@ -152,8 +156,14 @@ export class SqliteService {
           }
         }
       }
+    } catch (err) {
+      console.warn("[SqliteService] Failed to seed favorites to worker:", err);
+    }
+  }
 
-      // 3. Seed Playlists
+  private async seedPlaylistsToWorker() {
+    try {
+      console.log("[SqliteService] Seeding playlists backup to SQLite worker...");
       if (this.playlists.length > 0) {
         for (const pl of this.playlists) {
           await this.sendWorkerMsgInternal("CREATE_PLAYLIST", { name: pl.name, id: pl.id });
@@ -164,9 +174,8 @@ export class SqliteService {
           }
         }
       }
-      console.log("[SqliteService] Seeding of local backups completed successfully.");
     } catch (err) {
-      console.warn("[SqliteService] Failed to seed backups in worker:", err);
+      console.warn("[SqliteService] Failed to seed playlists to worker:", err);
     }
   }
 
@@ -231,38 +240,43 @@ export class SqliteService {
               this.playlists = this.getPlaylistsBackup();
 
               // Seed everything to the transient worker, fully awaiting it
-              await this.seedLocalBackupsToWorker();
+              await this.seedRecentTracksToWorker();
+              await this.seedFavoritesToWorker();
+              await this.seedPlaylistsToWorker();
             } else {
-              // OPFS Mode: Check if worker has populated collections
-              let hasWorkerData = false;
+              // OPFS Mode: Check if worker has populated collections on a per-domain basis
 
+              // 1. Recent Tracks Domain
               if (recentHistory && recentHistory.length > 0) {
                 this.recentTracks = recentHistory;
                 this.saveRecentTracksBackup(this.recentTracks);
-                hasWorkerData = true;
               } else {
                 this.recentTracks = this.getRecentTracksBackup();
+                if (this.recentTracks.length > 0) {
+                  await this.seedRecentTracksToWorker();
+                }
               }
 
+              // 2. Favorites Domain
               if (favorites && favorites.length > 0) {
                 this.favorites = favorites;
                 this.saveFavoritesBackup(this.favorites);
-                hasWorkerData = true;
               } else {
                 this.favorites = this.getFavoritesBackup();
+                if (this.favorites.length > 0) {
+                  await this.seedFavoritesToWorker();
+                }
               }
 
+              // 3. Playlists Domain
               if (playlists && playlists.length > 0) {
                 this.playlists = playlists;
                 this.savePlaylistsBackup(this.playlists);
-                hasWorkerData = true;
               } else {
                 this.playlists = this.getPlaylistsBackup();
-              }
-
-              // If worker database was empty but we have local backup data, seed OPFS worker
-              if (!hasWorkerData) {
-                await this.seedLocalBackupsToWorker();
+                if (this.playlists.length > 0) {
+                  await this.seedPlaylistsToWorker();
+                }
               }
             }
 
