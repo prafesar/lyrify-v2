@@ -132,25 +132,41 @@ export class SqliteService {
     }
   }
 
-  private async hydrateTransientDatabaseToWorker() {
+  private async seedLocalBackupsToWorker() {
     try {
-      for (const track of this.favorites) {
-        const isFav = await this.sendWorkerMsg<boolean>("IS_FAVORITE", { trackId: track.id });
-        if (!isFav) {
-          await this.sendWorkerMsg("TOGGLE_FAVORITE", { track });
+      console.log("[SqliteService] Seeding local backups to SQLite worker...");
+      
+      // 1. Seed Recent Tracks
+      if (this.recentTracks.length > 0) {
+        for (const track of this.recentTracks) {
+          await this.sendWorkerMsgInternal("ADD_RECENT_TRACK", { track });
         }
       }
 
-      for (const pl of this.playlists) {
-        await this.sendWorkerMsg("CREATE_PLAYLIST", { name: pl.name, id: pl.id });
-        if (pl.tracks && Array.isArray(pl.tracks)) {
-          for (const tr of pl.tracks) {
-            await this.sendWorkerMsg("ADD_TRACK_TO_PLAYLIST", { playlistId: pl.id, track: tr });
+      // 2. Seed Favorites
+      if (this.favorites.length > 0) {
+        for (const track of this.favorites) {
+          const isFav = await this.sendWorkerMsgInternal<boolean>("IS_FAVORITE", { trackId: track.id });
+          if (!isFav) {
+            await this.sendWorkerMsgInternal("TOGGLE_FAVORITE", { track });
           }
         }
       }
+
+      // 3. Seed Playlists
+      if (this.playlists.length > 0) {
+        for (const pl of this.playlists) {
+          await this.sendWorkerMsgInternal("CREATE_PLAYLIST", { name: pl.name, id: pl.id });
+          if (pl.tracks && Array.isArray(pl.tracks)) {
+            for (const tr of pl.tracks) {
+              await this.sendWorkerMsgInternal("ADD_TRACK_TO_PLAYLIST", { playlistId: pl.id, track: tr });
+            }
+          }
+        }
+      }
+      console.log("[SqliteService] Seeding of local backups completed successfully.");
     } catch (err) {
-      console.warn("[SqliteService] Failed to hydrate SQLite db under transient mode:", err);
+      console.warn("[SqliteService] Failed to seed backups in worker:", err);
     }
   }
 
@@ -209,71 +225,44 @@ export class SqliteService {
             this.trackCache = trackCache || {};
 
             if (this.storageMode === "transient" || this.storageMode === "error") {
-              const backup = this.getRecentTracksBackup();
-              if (backup.length > 0) {
-                this.recentTracks = backup;
-                for (const track of backup) {
-                  this.sendWorkerMsg("ADD_RECENT_TRACK", { track }).catch(() => {});
-                }
-              } else {
-                this.recentTracks = recentHistory || [];
-              }
-
+              // Load from local localStorage backups first
+              this.recentTracks = this.getRecentTracksBackup();
               this.favorites = this.getFavoritesBackup();
               this.playlists = this.getPlaylistsBackup();
 
-              // Await sequential hydration to prevent UI race condition
-              await this.hydrateTransientDatabaseToWorker();
+              // Seed everything to the transient worker, fully awaiting it
+              await this.seedLocalBackupsToWorker();
             } else {
-              // OPFS Mode with Robust Seeding/Syncing Fallback
+              // OPFS Mode: Check if worker has populated collections
+              let hasWorkerData = false;
+
               if (recentHistory && recentHistory.length > 0) {
                 this.recentTracks = recentHistory;
                 this.saveRecentTracksBackup(this.recentTracks);
+                hasWorkerData = true;
               } else {
-                const backup = this.getRecentTracksBackup();
-                if (backup.length > 0) {
-                  this.recentTracks = backup;
-                  for (const track of backup) {
-                    this.sendWorkerMsg("ADD_RECENT_TRACK", { track }).catch(() => {});
-                  }
-                } else {
-                  this.recentTracks = [];
-                }
+                this.recentTracks = this.getRecentTracksBackup();
               }
 
               if (favorites && favorites.length > 0) {
                 this.favorites = favorites;
                 this.saveFavoritesBackup(this.favorites);
+                hasWorkerData = true;
               } else {
-                const favBackup = this.getFavoritesBackup();
-                if (favBackup.length > 0) {
-                  this.favorites = favBackup;
-                  for (const track of favBackup) {
-                    this.sendWorkerMsg("TOGGLE_FAVORITE", { track }).catch(() => {});
-                  }
-                } else {
-                  this.favorites = [];
-                }
+                this.favorites = this.getFavoritesBackup();
               }
 
               if (playlists && playlists.length > 0) {
                 this.playlists = playlists;
                 this.savePlaylistsBackup(this.playlists);
+                hasWorkerData = true;
               } else {
-                const plBackup = this.getPlaylistsBackup();
-                if (plBackup.length > 0) {
-                  this.playlists = plBackup;
-                  for (const pl of plBackup) {
-                    this.sendWorkerMsg("CREATE_PLAYLIST", { name: pl.name, id: pl.id }).catch(() => {});
-                    if (pl.tracks && Array.isArray(pl.tracks)) {
-                      for (const tr of pl.tracks) {
-                        this.sendWorkerMsg("ADD_TRACK_TO_PLAYLIST", { playlistId: pl.id, track: tr }).catch(() => {});
-                      }
-                    }
-                  }
-                } else {
-                  this.playlists = [];
-                }
+                this.playlists = this.getPlaylistsBackup();
+              }
+
+              // If worker database was empty but we have local backup data, seed OPFS worker
+              if (!hasWorkerData) {
+                await this.seedLocalBackupsToWorker();
               }
             }
 
@@ -324,16 +313,22 @@ export class SqliteService {
     return this.initPromise;
   }
 
-  private async sendWorkerMsg<T = void>(type: string, payload: any): Promise<T> {
+  private sendWorkerMsgInternal<T = void>(type: string, payload: any): Promise<T> {
     if (!this.worker) return Promise.resolve(undefined as any);
-
-    await this.init();
 
     return new Promise((resolve, reject) => {
       const messageId = String(++this.messageIdCounter);
       this.pendingCallbacks.set(messageId, { resolve, reject });
       this.worker!.postMessage({ type, payload, messageId });
     });
+  }
+
+  private async sendWorkerMsg<T = void>(type: string, payload: any): Promise<T> {
+    if (!this.worker) return Promise.resolve(undefined as any);
+
+    await this.init();
+
+    return this.sendWorkerMsgInternal<T>(type, payload);
   }
 
   // --- Preferences ---
@@ -458,8 +453,12 @@ export class SqliteService {
     try {
       const res = await this.sendWorkerMsg<Track[]>("GET_FAVORITES", {});
       if (res) {
-        this.favorites = res;
-        this.saveFavoritesBackup(res);
+        if (res.length === 0 && this.favorites.length > 0) {
+          console.warn("[SqliteService] Prevented wiping favorites cache with empty worker response.");
+        } else {
+          this.favorites = res;
+          this.saveFavoritesBackup(res);
+        }
       }
     } catch (err) {
       console.warn("[SqliteService] Failed to get favorites from worker, using cache:", err);
@@ -501,8 +500,12 @@ export class SqliteService {
     try {
       const res = await this.sendWorkerMsg<any[]>("GET_PLAYLISTS", {});
       if (res) {
-        this.playlists = res;
-        this.savePlaylistsBackup(res);
+        if (res.length === 0 && this.playlists.length > 0) {
+          console.warn("[SqliteService] Prevented wiping playlists cache with empty worker response.");
+        } else {
+          this.playlists = res;
+          this.savePlaylistsBackup(res);
+        }
       }
     } catch (err) {
       console.warn("[SqliteService] Failed to get playlists from worker, using cache:", err);
@@ -510,8 +513,8 @@ export class SqliteService {
     return [...this.playlists];
   }
 
-  public async createPlaylist(name: string): Promise<string> {
-    const newId = `playlist-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  public async createPlaylist(name: string, id?: string): Promise<string> {
+    const newId = id || `playlist-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     const newPl = {
       id: newId,
       name,

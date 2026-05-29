@@ -42,7 +42,7 @@ export class BrowserLibraryRepository implements LibraryRepositoryPort {
           if (Array.isArray(lists) && lists.length > 0) {
             console.log(`[BrowserLibraryRepository] Migrating ${lists.length} playlists...`);
             for (const playlist of lists) {
-              const sqlitePlaylistId = await sqliteService.createPlaylist(playlist.name);
+              const sqlitePlaylistId = await sqliteService.createPlaylist(playlist.name, playlist.id);
               const tracks = playlist.tracks || [];
               for (const track of tracks) {
                 await sqliteService.addTrackToPlaylist(sqlitePlaylistId, track);
