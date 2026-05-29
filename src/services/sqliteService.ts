@@ -11,7 +11,7 @@ class SqliteService {
   private trackCache: Record<string, TrackLyricsData> = {};
 
   // Track async callbacks for background writes/commands
-  private pendingCallbacks = new Map<string, { resolve: () => void; reject: (err: any) => void }>();
+  private pendingCallbacks = new Map<string, { resolve: (res?: any) => void; reject: (err: any) => void }>();
   private messageIdCounter = 0;
 
   constructor() {
@@ -73,9 +73,9 @@ class SqliteService {
             // Fallback gracefully utilizing transient local memory representation
             this.isInitialized = true;
             resolve();
-          } else if (type === "WRITE_OK") {
+          } else if (type === "WRITE_OK" || type === "QUERY_OK") {
             if (messageId && this.pendingCallbacks.has(messageId)) {
-              this.pendingCallbacks.get(messageId)!.resolve();
+              this.pendingCallbacks.get(messageId)!.resolve(payload);
               this.pendingCallbacks.delete(messageId);
             }
           } else if (type === "ERROR") {
@@ -100,8 +100,8 @@ class SqliteService {
     return this.initPromise;
   }
 
-  private async sendWorkerMsg(type: string, payload: any): Promise<void> {
-    if (!this.worker) return;
+  private async sendWorkerMsg<T = void>(type: string, payload: any): Promise<T> {
+    if (!this.worker) return Promise.resolve(undefined as any);
 
     await this.init();
 
@@ -203,6 +203,39 @@ class SqliteService {
       console.warn("[SqliteService] Failed to clear local sync cache:", e);
     }
     await this.sendWorkerMsg("CLEAR_ALL", {});
+  }
+
+  // --- Library / Favorites & Playlists (SQLite Backed) ---
+  public async getFavorites(): Promise<Track[]> {
+    return this.sendWorkerMsg<Track[]>("GET_FAVORITES", {});
+  }
+
+  public async toggleFavorite(track: Track): Promise<boolean> {
+    return this.sendWorkerMsg<boolean>("TOGGLE_FAVORITE", { track });
+  }
+
+  public async isFavorite(trackId: string): Promise<boolean> {
+    return this.sendWorkerMsg<boolean>("IS_FAVORITE", { trackId });
+  }
+
+  public async getPlaylists(): Promise<any[]> {
+    return this.sendWorkerMsg<any[]>("GET_PLAYLISTS", {});
+  }
+
+  public async createPlaylist(name: string): Promise<string> {
+    return this.sendWorkerMsg<string>("CREATE_PLAYLIST", { name });
+  }
+
+  public async addTrackToPlaylist(playlistId: string, track: Track): Promise<void> {
+    return this.sendWorkerMsg<void>("ADD_TRACK_TO_PLAYLIST", { playlistId, track });
+  }
+
+  public async removeTrackFromPlaylist(playlistId: string, trackId: string): Promise<void> {
+    return this.sendWorkerMsg<void>("REMOVE_TRACK_FROM_PLAYLIST", { playlistId, trackId });
+  }
+
+  public async deletePlaylist(playlistId: string): Promise<void> {
+    return this.sendWorkerMsg<void>("DELETE_PLAYLIST", { playlistId });
   }
 }
 
