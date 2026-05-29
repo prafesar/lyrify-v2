@@ -230,12 +230,66 @@ async function init() {
       },
     });
 
+    const favorites: Track[] = [];
+    try {
+      db.exec({
+        sql: "SELECT track_json FROM favorite_tracks ORDER BY added_at DESC",
+        rowMode: "object",
+        callback: (row: any) => {
+          try {
+            favorites.push(JSON.parse(row.track_json));
+          } catch (e) {
+            error("Error parsing favorite track JSON in init:", e);
+          }
+        }
+      });
+    } catch (e) {
+      error("Error reading favorite tracks at init:", e);
+    }
+
+    const playlists: any[] = [];
+    try {
+      db.exec({
+        sql: "SELECT id, name, created_at FROM playlists ORDER BY created_at DESC",
+        rowMode: "object",
+        callback: (row: any) => {
+          playlists.push({
+            id: row.id,
+            name: row.name,
+            createdAt: row.created_at,
+            trackIds: [],
+            tracks: []
+          });
+        }
+      });
+
+      for (const pl of playlists) {
+        db.exec({
+          sql: "SELECT track_id, track_json FROM playlist_items WHERE playlist_id = ? ORDER BY added_at ASC",
+          bind: [pl.id],
+          rowMode: "object",
+          callback: (row: any) => {
+            pl.trackIds.push(row.track_id);
+            try {
+              pl.tracks.push(JSON.parse(row.track_json));
+            } catch (e) {
+              error("Error parsing playlist track JSON in init:", e);
+            }
+          }
+        });
+      }
+    } catch (e) {
+      error("Error reading playlists at init:", e);
+    }
+
     self.postMessage({
       type: "INIT_OK",
       payload: {
         preferences,
         recentHistory,
         trackCache,
+        favorites,
+        playlists,
         storageMode,
       },
     });
@@ -430,10 +484,10 @@ self.onmessage = async (event) => {
       }
 
       case "CREATE_PLAYLIST": {
-        const { name } = payload;
-        const newId = `playlist-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        const { name, id } = payload;
+        const newId = id || `playlist-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
         db.exec({
-          sql: "INSERT INTO playlists (id, name, created_at) VALUES (?, ?, ?)",
+          sql: "INSERT OR REPLACE INTO playlists (id, name, created_at) VALUES (?, ?, ?)",
           bind: [newId, name, Date.now()]
         });
         self.postMessage({ type: "QUERY_OK", payload: newId, messageId });

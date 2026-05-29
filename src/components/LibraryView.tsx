@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { Track } from '../constants';
 import { libraryRepository } from '../application';
+import { sqliteService } from '../services/sqliteService';
 import { cn } from '../lib/utils';
 
 interface LibraryViewProps {
@@ -54,6 +55,16 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
 
   useEffect(() => {
     loadData();
+
+    const unsubscribe = sqliteService.subscribe((event) => {
+      if (event === "initialized" || event === "favorites" || event === "playlists") {
+        loadData();
+      }
+    });
+
+    return () => {
+      unsubscribe();
+    };
   }, []);
 
   // Update dynamic list of artists from favorites and recent tracks

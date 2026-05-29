@@ -126,4 +126,92 @@ describe("SQLite Service Integration Smoke Tests", () => {
     expect(freshRecents[0].title).toBe("Title Reload");
     expect(freshService.getStorageMode()).toBe("error"); // In vitest terminal runner without worker support it should be error, which triggered the fallback!
   });
+
+  it("should handle error mode (lack of worker) with fully functioning favorites, playlists, and backups", async () => {
+    const errService = new SqliteService();
+    await errService.init();
+    expect(errService.getStorageMode()).toBe("error");
+
+    localStorage.removeItem("cantolex_favorites_backup");
+    localStorage.removeItem("cantolex_playlists_backup");
+
+    // Add a favorite
+    const trackMock = { id: "track_error_test", title: "Error Track", artist: "Err", album: "", coverUrl: "" };
+    await errService.toggleFavorite(trackMock);
+
+    // Verify favorite is returned synchronously and preserved in backups
+    const favs = await errService.getFavorites();
+    expect(favs.length).toBe(1);
+    expect(favs[0].id).toBe("track_error_test");
+    expect(errService["getFavoritesBackup"]()).toEqual(favs);
+
+    // Add a playlist
+    const playlistId = await errService.createPlaylist("Error Playlist");
+    expect(playlistId).toBeDefined();
+
+    // Add track to playlist
+    await errService.addTrackToPlaylist(playlistId, trackMock);
+    
+    // Verify playlist is retrieved correctly
+    const playlists = await errService.getPlaylists();
+    expect(playlists.length).toBe(1);
+    expect(playlists[0].id).toBe(playlistId);
+    expect(playlists[0].name).toBe("Error Playlist");
+    expect(playlists[0].trackIds).toContain("track_error_test");
+    
+    // Check that backups are updated
+    expect(errService["getPlaylistsBackup"]()).toEqual(playlists);
+  });
+
+  it("should preserve original playlist identity/IDs across transient/error restoration", async () => {
+    const existingPlaylist = {
+      id: "playlist-custom-123",
+      name: "My Indie Playlist",
+      createdAt: Date.now(),
+      trackIds: ["track_indie_1"],
+      tracks: [{ id: "track_indie_1", title: "Indie Track", artist: "Artist", album: "", coverUrl: "" }]
+    };
+    const existingFavorites = [
+      { id: "track_indie_1", title: "Indie Track", artist: "Artist", album: "", coverUrl: "" }
+    ];
+
+    localStorage.setItem("cantolex_playlists_backup", JSON.stringify([existingPlaylist]));
+    localStorage.setItem("cantolex_favorites_backup", JSON.stringify(existingFavorites));
+
+    // Spin up fresh service instance
+    const freshService = new SqliteService();
+    await freshService.init();
+
+    // Check favorites & playlists restoration
+    const restoredFavorites = await freshService.getFavorites();
+    expect(restoredFavorites.length).toBe(1);
+    expect(restoredFavorites[0].id).toBe("track_indie_1");
+
+    const restoredPlaylists = await freshService.getPlaylists();
+    expect(restoredPlaylists.length).toBe(1);
+    expect(restoredPlaylists[0].id).toBe("playlist-custom-123"); // original ID preserved!
+    expect(restoredPlaylists[0].name).toBe("My Indie Playlist");
+  });
+
+  it("should reactively notify UI subscriber when initialization or hydration finishes", async () => {
+    localStorage.setItem("cantolex_favorites_backup", JSON.stringify([
+      { id: "reactive_track", title: "Reactive", artist: "Artist", album: "", coverUrl: "" }
+    ]));
+
+    const mockService = new SqliteService();
+    const eventLog: string[] = [];
+    
+    // Subscribe before initialization finishes
+    mockService.subscribe((evt) => {
+      eventLog.push(evt);
+    });
+
+    await mockService.init();
+
+    // Event sequence has executed and we received correct notifications
+    expect(eventLog).toContain("initialized");
+    const favs = await mockService.getFavorites();
+    expect(favs.length).toBe(1);
+    expect(favs[0].id).toBe("reactive_track");
+  });
 });
