@@ -66,4 +66,36 @@ describe("SQLite Service Integration Smoke Tests", () => {
     expect(recents[0].id).toBe("tb"); // Most recently added should go first
     expect(recents[1].id).toBe("ta");
   });
+
+  it("should notify subscribers when events occur or if already initialized", () => {
+    const eventsReceived: string[] = [];
+    const unsubscribe = sqliteService.subscribe((event) => {
+      eventsReceived.push(event);
+    });
+
+    try {
+      // Since it's already initialized, subbing triggers "initialized" immediately
+      expect(eventsReceived).toContain("initialized");
+
+      eventsReceived.length = 0; // clear
+
+      // Trigger preference update
+      sqliteService.setPreference("subscribed_key", "subscribed_val");
+      expect(eventsReceived).toContain("preferences");
+
+      eventsReceived.length = 0; // clear
+
+      // Trigger recent track update
+      sqliteService.addRecentTrack({
+        id: "test_sub_track",
+        title: "Sub Track",
+        artist: "Artist",
+        album: "",
+        coverUrl: ""
+      });
+      expect(eventsReceived).toContain("recent_tracks");
+    } finally {
+      unsubscribe();
+    }
+  });
 });

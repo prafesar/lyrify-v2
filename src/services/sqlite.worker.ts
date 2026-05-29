@@ -177,7 +177,7 @@ function bootstrapDb(sqlite3: any) {
 // Initialize SQLite WASM Module
 async function init() {
   try {
-    const sqlite3 = await sqlite3InitModule({
+    const sqlite3 = await (sqlite3InitModule as any)({
       print: log,
       printErr: error,
     });

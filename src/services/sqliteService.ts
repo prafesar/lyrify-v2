@@ -14,6 +14,9 @@ class SqliteService {
   private pendingCallbacks = new Map<string, { resolve: (res?: any) => void; reject: (err: any) => void }>();
   private messageIdCounter = 0;
 
+  // Subscriber callbacks for async changes and readiness notifications
+  private changeListeners = new Set<(event: string) => void>();
+
   constructor() {
     // Attempt to hydrate preferences synchronously from localStorage for instant page-load recovery
     try {
@@ -37,6 +40,32 @@ class SqliteService {
     } catch (e) {
       console.warn("[SqliteService] Failed to write sync preferences to localStorage:", e);
     }
+  }
+
+  // --- Change Listener Subscription System ---
+  public subscribe(listener: (event: string) => void): () => void {
+    this.changeListeners.add(listener);
+    // If already initialized, fire immediately to make sure they get the hydrated state
+    if (this.isInitialized) {
+      try {
+        listener("initialized");
+      } catch (e) {
+        console.error("[SqliteService] Subscriber error in immediate notification:", e);
+      }
+    }
+    return () => {
+      this.changeListeners.delete(listener);
+    };
+  }
+
+  private notify(event: string) {
+    this.changeListeners.forEach((listener) => {
+      try {
+        listener(event);
+      } catch (e) {
+        console.error("[SqliteService] Subscriber error for event:", event, e);
+      }
+    });
   }
 
   public init(): Promise<void> {
@@ -68,11 +97,13 @@ class SqliteService {
             this.isInitialized = true;
             console.log("[SqliteService] Hydrated successfully from SQLite OPFS DB.");
             resolve();
+            this.notify("initialized");
           } else if (type === "INIT_ERROR") {
             console.error("[SqliteService] SQLite worker initialization error:", payload.message);
             // Fallback gracefully utilizing transient local memory representation
             this.isInitialized = true;
             resolve();
+            this.notify("initialized");
           } else if (type === "WRITE_OK" || type === "QUERY_OK") {
             if (messageId && this.pendingCallbacks.has(messageId)) {
               this.pendingCallbacks.get(messageId)!.resolve(payload);
@@ -121,6 +152,7 @@ class SqliteService {
   public setPreference(key: string, value: string): void {
     this.preferences[key] = value;
     this.savePrefsToLocal();
+    this.notify("preferences");
     this.sendWorkerMsg("SET_PREFERENCE", { key, value }).catch((err) =>
       console.warn("[SqliteService] Failed to backup preferences in database:", err)
     );
@@ -136,6 +168,7 @@ class SqliteService {
     const strVal = String(value);
     this.preferences[key] = strVal;
     this.savePrefsToLocal();
+    this.notify("preferences");
     this.sendWorkerMsg("SET_PREFERENCE", { key, value: strVal }).catch((err) =>
       console.warn("[SqliteService] Failed to backup preferences in database:", err)
     );
@@ -144,6 +177,7 @@ class SqliteService {
   public removePreference(key: string): void {
     delete this.preferences[key];
     this.savePrefsToLocal();
+    this.notify("preferences");
     this.sendWorkerMsg("REMOVE_PREFERENCE", { key }).catch((err) =>
       console.warn("[SqliteService] Failed to remove preference in database:", err)
     );
@@ -160,6 +194,7 @@ class SqliteService {
       track,
       ...this.recentTracks.filter((t) => String(t.id) !== String(track.id)),
     ].slice(0, 10);
+    this.notify("recent_tracks");
 
     this.sendWorkerMsg("ADD_RECENT_TRACK", { track }).catch((err) =>
       console.warn("[SqliteService] Failed to backup recent track item:", err)
@@ -172,7 +207,7 @@ class SqliteService {
   }
 
   public saveTrackData(trackId: string, data: any): TrackLyricsData {
-    const existing = this.trackCache[trackId] || { id: trackId };
+    const existing = (this.trackCache[trackId] || { id: trackId }) as any;
     const updated = {
       ...existing,
       ...data,

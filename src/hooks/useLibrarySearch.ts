@@ -12,6 +12,7 @@ import {
   getArtistDetails, 
   getAlbumDetails 
 } from "../services/musicService";
+import { sqliteService } from "../services/sqliteService";
 
 export interface UseLibrarySearchResult {
   searchQuery: string;
@@ -68,15 +69,29 @@ export function useLibrarySearch(targetLanguage: string): UseLibrarySearchResult
   const abortControllerRef = useRef<AbortController | null>(null);
   const searchContainerRef = useRef<HTMLDivElement | null>(null);
 
-  // Load recent tracks on mount
+  // Load recent tracks and subscribe to updates from sqliteService
   useEffect(() => {
-    try {
-      const recent = recentHistoryRepository.getRecentTracks();
-      setRecentTracks(recent);
-    } catch (e) {
-      console.error("[useLibrarySearch] Failed to get recent tracks:", e);
-      setRecentTracks([]);
-    }
+    const updateRecent = () => {
+      try {
+        const recent = recentHistoryRepository.getRecentTracks();
+        setRecentTracks(recent);
+      } catch (e) {
+        console.error("[useLibrarySearch] Failed to get recent tracks:", e);
+        setRecentTracks([]);
+      }
+    };
+
+    // Initial load
+    updateRecent();
+
+    // Subscribe to events like "initialized" and "recent_tracks"
+    const unsubscribe = sqliteService.subscribe((event) => {
+      if (event === "initialized" || event === "recent_tracks") {
+        updateRecent();
+      }
+    });
+
+    return unsubscribe;
   }, []);
 
   const cancelSearchDetails = useCallback(() => {
