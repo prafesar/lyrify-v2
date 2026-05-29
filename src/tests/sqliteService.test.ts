@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { sqliteService } from "../services/sqliteService";
+import { sqliteService, SqliteService } from "../services/sqliteService";
 
 describe("SQLite Service Integration Smoke Tests", () => {
   beforeEach(async () => {
@@ -97,5 +97,33 @@ describe("SQLite Service Integration Smoke Tests", () => {
     } finally {
       unsubscribe();
     }
+  });
+
+  it("should survive reload / fresh instance scenario using conscious local backup fallback", async () => {
+    // 1. Clear any state first
+    await sqliteService.clearAllUserData();
+    expect(sqliteService.getRecentTracks().length).toBe(0);
+
+    // 2. Add a recent track using first instance
+    const trackMock = {
+      id: "track_reload_test_id",
+      title: "Title Reload",
+      artist: "Artist Reload",
+      album: "Album Reload",
+      coverUrl: "http://temp.local/reload.png"
+    };
+    sqliteService.addRecentTrack(trackMock);
+
+    // 3. Instantiate a completely fresh SqliteService instance representing window reload / new worker / new page
+    const freshService = new SqliteService();
+    // Wait for resolution
+    await freshService.init();
+
+    // 4. Verify that fresh service has successfully hydrated our track
+    const freshRecents = freshService.getRecentTracks();
+    expect(freshRecents.length).toBe(1);
+    expect(freshRecents[0].id).toBe("track_reload_test_id");
+    expect(freshRecents[0].title).toBe("Title Reload");
+    expect(freshService.getStorageMode()).toBe("error"); // In vitest terminal runner without worker support it should be error, which triggered the fallback!
   });
 });

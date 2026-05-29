@@ -1,9 +1,10 @@
 import { Track, TrackLyricsData } from "./musicService";
 
-class SqliteService {
+export class SqliteService {
   private worker: Worker | null = null;
   private isInitialized = false;
   private initPromise: Promise<void> | null = null;
+  private storageMode: "opfs" | "transient" | "error" | null = null;
 
   // Replicated in-memory cache for synchronous reads
   private preferences: Record<string, string> = {};
@@ -39,6 +40,94 @@ class SqliteService {
       }
     } catch (e) {
       console.warn("[SqliteService] Failed to write sync preferences to localStorage:", e);
+    }
+  }
+
+  public getStorageMode(): "opfs" | "transient" | "error" | null {
+    return this.storageMode;
+  }
+
+  private getRecentTracksBackup(): Track[] {
+    try {
+      if (typeof window !== "undefined" && window.localStorage) {
+        const val = localStorage.getItem("cantolex_recent_tracks_backup");
+        if (val) {
+          return JSON.parse(val);
+        }
+      }
+    } catch (e) {
+      console.warn("[SqliteService] Failed to read recent tracks backup from localStorage:", e);
+    }
+    return [];
+  }
+
+  private saveRecentTracksBackup(tracks: Track[]) {
+    try {
+      if (typeof window !== "undefined" && window.localStorage) {
+        localStorage.setItem("cantolex_recent_tracks_backup", JSON.stringify(tracks));
+      }
+    } catch (e) {
+      console.warn("[SqliteService] Failed to write recent tracks backup to localStorage:", e);
+    }
+  }
+
+  private async updateFavoritesBackup() {
+    try {
+      const favs = await this.getFavorites();
+      if (typeof window !== "undefined" && window.localStorage) {
+        localStorage.setItem("cantolex_favorites_backup", JSON.stringify(favs));
+      }
+    } catch (e) {
+      console.warn("[SqliteService] Failed to update favorites backup:", e);
+    }
+  }
+
+  private async updatePlaylistsBackup() {
+    try {
+      const playlists = await this.getPlaylists();
+      if (typeof window !== "undefined" && window.localStorage) {
+        localStorage.setItem("cantolex_playlists_backup", JSON.stringify(playlists));
+      }
+    } catch (e) {
+      console.warn("[SqliteService] Failed to update playlists backup:", e);
+    }
+  }
+
+  private async hydrateTransientLibraryBackups() {
+    try {
+      if (typeof window === "undefined" || !window.localStorage) return;
+
+      // 1. Favorites
+      const favsStr = localStorage.getItem("cantolex_favorites_backup");
+      if (favsStr) {
+        const favs: Track[] = JSON.parse(favsStr);
+        if (Array.isArray(favs)) {
+          for (const track of favs) {
+            const isFav = await this.isFavorite(track.id);
+            if (!isFav) {
+              await this.sendWorkerMsg("TOGGLE_FAVORITE", { track });
+            }
+          }
+        }
+      }
+
+      // 2. Playlists
+      const plStr = localStorage.getItem("cantolex_playlists_backup");
+      if (plStr) {
+        const playlists = JSON.parse(plStr);
+        if (Array.isArray(playlists)) {
+          for (const pl of playlists) {
+            const plId = await this.sendWorkerMsg<string>("CREATE_PLAYLIST", { name: pl.name });
+            if (pl.tracks && Array.isArray(pl.tracks)) {
+              for (const tr of pl.tracks) {
+                await this.sendWorkerMsg("ADD_TRACK_TO_PLAYLIST", { playlistId: plId, track: tr });
+              }
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.warn("[SqliteService] Failed to hydrate library domain backups in transient mode:", err);
     }
   }
 
@@ -83,7 +172,9 @@ class SqliteService {
           const { type, payload, messageId } = event.data;
 
           if (type === "INIT_OK") {
-            const { preferences, recentHistory, trackCache } = payload;
+            const { preferences, recentHistory, trackCache, storageMode: sMode } = payload;
+            this.storageMode = sMode || "opfs";
+
             // Merge SQLite database preferences with our current in-memory cache,
             // giving precedence to whatever was already loaded synchronously or written.
             this.preferences = {
@@ -92,15 +183,37 @@ class SqliteService {
             };
             this.savePrefsToLocal();
 
-            this.recentTracks = recentHistory || [];
+            if (this.storageMode === "transient" || this.storageMode === "error") {
+              const backup = this.getRecentTracksBackup();
+              if (backup.length > 0) {
+                this.recentTracks = backup;
+                for (const track of backup) {
+                  this.sendWorkerMsg("ADD_RECENT_TRACK", { track }).catch(() => {});
+                }
+              } else {
+                this.recentTracks = recentHistory || [];
+              }
+              this.hydrateTransientLibraryBackups();
+            } else {
+              this.recentTracks = recentHistory || [];
+              this.saveRecentTracksBackup(this.recentTracks);
+            }
+
             this.trackCache = trackCache || {};
             this.isInitialized = true;
-            console.log("[SqliteService] Hydrated successfully from SQLite OPFS DB.");
+            console.log(`[SqliteService] Hydrated successfully from SQLite DB. Mode: ${this.storageMode}`);
             resolve();
             this.notify("initialized");
           } else if (type === "INIT_ERROR") {
+            this.storageMode = payload.storageMode || "error";
             console.error("[SqliteService] SQLite worker initialization error:", payload.message);
-            // Fallback gracefully utilizing transient local memory representation
+            
+            const backup = this.getRecentTracksBackup();
+            if (backup.length > 0) {
+              this.recentTracks = backup;
+            }
+            this.hydrateTransientLibraryBackups();
+
             this.isInitialized = true;
             resolve();
             this.notify("initialized");
@@ -123,6 +236,12 @@ class SqliteService {
         this.worker.postMessage({ type: "INIT" });
       } catch (err) {
         console.error("[SqliteService] Failed to establish Web Worker, operating in memory backup.", err);
+        this.storageMode = "error";
+        const backup = this.getRecentTracksBackup();
+        if (backup.length > 0) {
+          this.recentTracks = backup;
+        }
+        this.hydrateTransientLibraryBackups();
         this.isInitialized = true;
         resolve();
       }
@@ -194,6 +313,9 @@ class SqliteService {
       track,
       ...this.recentTracks.filter((t) => String(t.id) !== String(track.id)),
     ].slice(0, 10);
+    
+    // Always store a local backup
+    this.saveRecentTracksBackup(this.recentTracks);
     this.notify("recent_tracks");
 
     this.sendWorkerMsg("ADD_RECENT_TRACK", { track }).catch((err) =>
@@ -233,6 +355,9 @@ class SqliteService {
     try {
       if (typeof window !== "undefined" && window.localStorage) {
         localStorage.removeItem("cantolex_sqlite_prefs_sync");
+        localStorage.removeItem("cantolex_recent_tracks_backup");
+        localStorage.removeItem("cantolex_favorites_backup");
+        localStorage.removeItem("cantolex_playlists_backup");
       }
     } catch (e) {
       console.warn("[SqliteService] Failed to clear local sync cache:", e);
@@ -246,7 +371,9 @@ class SqliteService {
   }
 
   public async toggleFavorite(track: Track): Promise<boolean> {
-    return this.sendWorkerMsg<boolean>("TOGGLE_FAVORITE", { track });
+    const res = await this.sendWorkerMsg<boolean>("TOGGLE_FAVORITE", { track });
+    this.updateFavoritesBackup();
+    return res;
   }
 
   public async isFavorite(trackId: string): Promise<boolean> {
@@ -258,19 +385,27 @@ class SqliteService {
   }
 
   public async createPlaylist(name: string): Promise<string> {
-    return this.sendWorkerMsg<string>("CREATE_PLAYLIST", { name });
+    const res = await this.sendWorkerMsg<string>("CREATE_PLAYLIST", { name });
+    this.updatePlaylistsBackup();
+    return res;
   }
 
   public async addTrackToPlaylist(playlistId: string, track: Track): Promise<void> {
-    return this.sendWorkerMsg<void>("ADD_TRACK_TO_PLAYLIST", { playlistId, track });
+    const res = await this.sendWorkerMsg<void>("ADD_TRACK_TO_PLAYLIST", { playlistId, track });
+    this.updatePlaylistsBackup();
+    return res;
   }
 
   public async removeTrackFromPlaylist(playlistId: string, trackId: string): Promise<void> {
-    return this.sendWorkerMsg<void>("REMOVE_TRACK_FROM_PLAYLIST", { playlistId, trackId });
+    const res = await this.sendWorkerMsg<void>("REMOVE_TRACK_FROM_PLAYLIST", { playlistId, trackId });
+    this.updatePlaylistsBackup();
+    return res;
   }
 
   public async deletePlaylist(playlistId: string): Promise<void> {
-    return this.sendWorkerMsg<void>("DELETE_PLAYLIST", { playlistId });
+    const res = await this.sendWorkerMsg<void>("DELETE_PLAYLIST", { playlistId });
+    this.updatePlaylistsBackup();
+    return res;
   }
 }
 

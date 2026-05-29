@@ -16,6 +16,7 @@ interface TrackLyricsData {
 
 // Global SQLite instance and database reference
 let db: any = null;
+let storageMode: "opfs" | "transient" = "transient";
 
 const log = (...args: any[]) => console.log("[sqlite-worker]", ...args);
 const error = (...args: any[]) => console.error("[sqlite-worker]", ...args);
@@ -24,11 +25,19 @@ const error = (...args: any[]) => console.error("[sqlite-worker]", ...args);
 function bootstrapDb(sqlite3: any) {
   try {
     if ("opfs" in sqlite3) {
-      db = new sqlite3.oo1.OpfsDb("/cantolex_lyrify.sqlite3");
-      log("Successfully opened database in OPFS (persists across reloads).");
+      try {
+        db = new sqlite3.oo1.OpfsDb("/cantolex_lyrify.sqlite3");
+        log("Successfully opened database in OPFS (persists across reloads).");
+        storageMode = "opfs";
+      } catch (e) {
+        error("Failed to open OPFS database, falling back to oo1.DB:", e);
+        db = new sqlite3.oo1.DB("/cantolex_lyrify.sqlite3", "c");
+        storageMode = "transient";
+      }
     } else {
       db = new sqlite3.oo1.DB("/cantolex_lyrify.sqlite3", "c");
       log("OPFS NOT available. Falling back to in-memory/transient local DB.");
+      storageMode = "transient";
     }
 
     // Enable foreign key constraints
@@ -227,6 +236,7 @@ async function init() {
         preferences,
         recentHistory,
         trackCache,
+        storageMode,
       },
     });
   } catch (err: any) {
@@ -235,6 +245,7 @@ async function init() {
       type: "INIT_ERROR",
       payload: {
         message: err.message || String(err),
+        storageMode: "error",
       },
     });
   }
