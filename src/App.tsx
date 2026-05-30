@@ -1273,7 +1273,7 @@ export default function App() {
             onClick={goToSettings}
             className="w-9 h-9 rounded-xl flex items-center justify-center bg-app-card border border-app-card-border shadow-lg transition-all hover:scale-105 active:scale-95 group overflow-hidden"
           >
-            {user?.photoURL ? (
+            {user?.photoURL && user.photoURL !== "" ? (
               <img
                 src={user.photoURL}
                 alt={user.displayName || ""}
@@ -1637,7 +1637,7 @@ export default function App() {
                         <ChevronLeft size={24} />
                       </button>
                       
-                      {artistDetails.artist.artworkUrl && (
+                      {artistDetails.artist.artworkUrl && artistDetails.artist.artworkUrl !== "" && (
                         <img 
                           src={artistDetails.artist.artworkUrl} 
                           className="w-20 h-20 md:w-24 md:h-24 rounded-full object-cover shadow-lg border-2 border-app-card-border" 
@@ -1687,7 +1687,7 @@ export default function App() {
                               }}
                               className="flex items-center gap-4 p-3 rounded-2xl bg-app-card border border-app-card-border shadow-sm hover:border-app-accent/30 transition-all text-left"
                             >
-                              {track.coverUrl ? (
+                              {track.coverUrl && track.coverUrl !== "" ? (
                                 <img src={track.coverUrl} className="w-10 h-10 rounded-lg object-cover" referrerPolicy="no-referrer" />
                               ) : (
                                 <div className="w-10 h-10 rounded-lg bg-app-fg/5 border border-app-card-border flex items-center justify-center text-app-fg/30 shrink-0">
@@ -1723,7 +1723,7 @@ export default function App() {
                               className="group text-left space-y-2"
                             >
                               <div className="aspect-square rounded-2xl overflow-hidden bg-app-card border border-app-card-border shadow-sm group-hover:shadow-md transition-all flex items-center justify-center">
-                                {album.coverUrl ? (
+                                {album.coverUrl && album.coverUrl !== "" ? (
                                   <img src={album.coverUrl} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" referrerPolicy="no-referrer" />
                                 ) : (
                                   <Disc size={32} className="text-app-fg/10" />
@@ -1796,7 +1796,7 @@ export default function App() {
                               }}
                               className="flex items-center gap-4 p-3 rounded-2xl bg-app-card border border-app-card-border shadow-app-card active:scale-[0.98] transition-all hover:bg-opacity-80 group text-left cursor-pointer"
                             >
-                              {item.coverUrl ? (
+                              {item.coverUrl && item.coverUrl !== "" ? (
                                 <img
                                   src={item.coverUrl}
                                   className="w-12 h-12 rounded-xl object-cover shadow-sm group-hover:scale-105 transition-transform"
@@ -1951,7 +1951,7 @@ export default function App() {
                         )}
                       </div>
                     </div>
-                    {currentTrack.coverUrl ? (
+                    {currentTrack.coverUrl && currentTrack.coverUrl !== "" ? (
                       <button 
                         onClick={() => {
                           if (currentTrack.albumId && !currentTrack.albumId.startsWith("album-") && currentTrack.albumId !== "undefined") {
@@ -2817,7 +2817,7 @@ export default function App() {
                         ) : (
                           <div className="flex items-center gap-3">
                             <div className="w-8 h-8 rounded-lg overflow-hidden bg-app-bg/50 border border-app-card-border shrink-0">
-                              {currentTrack.coverUrl ? (
+                              {currentTrack.coverUrl && currentTrack.coverUrl !== "" ? (
                                 <img src={currentTrack.coverUrl} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                               ) : (
                                 <Music className="w-full h-full p-1.5 opacity-20" />
@@ -2985,7 +2985,7 @@ export default function App() {
                 <>
                   {/* Track Meta */}
                   <div className="flex items-center gap-4 border-b border-app-card-border pb-4">
-                    {activeMenuTrack.coverUrl ? (
+                    {activeMenuTrack.coverUrl && activeMenuTrack.coverUrl !== "" ? (
                       <img
                         src={activeMenuTrack.coverUrl}
                         className="w-16 h-16 rounded-2xl object-cover shadow-md"
@@ -3134,7 +3134,7 @@ export default function App() {
               <div className="p-8 space-y-8">
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex items-center gap-6">
-                    {currentTrack.coverUrl && (
+                    {currentTrack.coverUrl && currentTrack.coverUrl !== "" && (
                       <img
                         src={currentTrack.coverUrl}
                         className="w-20 h-20 rounded-2xl object-cover shadow-lg border border-app-card-border"

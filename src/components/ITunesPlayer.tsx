@@ -97,7 +97,7 @@ export default function ITunesPlayer({
 
         <div className="flex items-center gap-4">
           <div className="relative shrink-0">
-            {coverUrl ? (
+            {coverUrl && coverUrl !== "" ? (
               <img 
                 src={coverUrl} 
                 alt={trackTitle}

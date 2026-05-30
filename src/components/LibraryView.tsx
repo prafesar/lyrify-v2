@@ -485,7 +485,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                           style={{ width: '100px' }}
                         >
                           <div className="relative w-20 h-20 rounded-full overflow-hidden border border-app-card-border shadow shadow-app-accent/5 group-hover:scale-105 group-hover:border-app-accent transition-all duration-300">
-                            {artist.coverUrl ? (
+                            {artist.coverUrl && artist.coverUrl !== "" ? (
                               <img
                                 src={artist.coverUrl}
                                 className="w-full h-full object-cover"
@@ -530,7 +530,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                         onClick={() => album.id && onAlbumSelect(album.id)}
                         className="flex items-center gap-3 p-2.5 rounded-2xl bg-app-card/50 border border-app-card-border shadow-sm text-left group hover:bg-app-card active:scale-95 transition-all w-full overflow-hidden"
                       >
-                        {album.coverUrl ? (
+                        {album.coverUrl && album.coverUrl !== "" ? (
                           <img 
                             src={album.coverUrl} 
                             alt={album.title} 
