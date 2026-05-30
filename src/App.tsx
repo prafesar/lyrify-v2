@@ -517,6 +517,22 @@ const AnalysisPhraseCard = ({
   );
 };
 
+const mapTrackLyricsDataToTrack = (data: TrackLyricsData): Track => ({
+  id: data.trackId,
+  trackId: data.trackId,
+  title: data.title,
+  artist: data.artist,
+  artistId: data.artistId,
+  album: data.album || "",
+  albumId: data.albumId,
+  coverUrl: data.coverUrl || "",
+  audioUrl: data.audioUrl,
+  sourceLanguage: data.sourceLanguage,
+  difficulty: data.difficulty,
+  authors: data.authors,
+  lyricSource: data.lyricSource
+});
+
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [studyTrackId, setStudyTrackId] = useState<string | undefined>(undefined);
@@ -1237,14 +1253,13 @@ export default function App() {
   };
   return (
     <div className="relative h-screen w-full bg-app-bg text-app-fg font-sans overflow-hidden flex flex-col transition-colors duration-300">
-      {/* Hidden Audio for Preview */}
       <audio
         ref={previewAudioRef}
         onTimeUpdate={handlePreviewTimeUpdate}
         onLoadedMetadata={handlePreviewLoadedMetadata}
         onEnded={handlePreviewEnded}
         muted={isMuted}
-        src={currentTrack?.audioUrl}
+        src={currentTrack?.audioUrl || null}
       />
       {/* Background Decor */}
       <div className="fixed inset-0 z-0 pointer-events-none bg-accent-glow transition-all duration-500">
@@ -1899,15 +1914,15 @@ export default function App() {
                         </h1>
                         <button
                           type="button"
-                          onClick={() => handleToggleFavoriteInApp(currentTrack)}
+                          onClick={() => handleToggleFavoriteInApp(mapTrackLyricsDataToTrack(currentTrack))}
                           className="p-1.5 hover:bg-app-fg/5 rounded-full transition-colors shrink-0"
-                          title={isTrackFavoriteInApp(currentTrack.trackId || currentTrack.id) ? "Remove from Favorites" : "Add to Favorites"}
+                          title={isTrackFavoriteInApp(currentTrack.trackId) ? "Remove from Favorites" : "Add to Favorites"}
                         >
                           <Heart
                             size={22}
                             className={cn(
                               "transition-all duration-300",
-                              isTrackFavoriteInApp(currentTrack.trackId || currentTrack.id)
+                              isTrackFavoriteInApp(currentTrack.trackId)
                                 ? "fill-red-500 text-red-500 scale-110"
                                 : "text-app-fg/30 hover:text-red-500/80 hover:scale-105"
                             )}

@@ -176,7 +176,7 @@ export default function ITunesPlayer({
 
       <audio
         ref={audioRef}
-        src={audioUrl}
+        src={audioUrl || null}
         onTimeUpdate={handleTimeUpdate}
         onLoadedMetadata={handleLoadedMetadata}
         onEnded={handleEnded}

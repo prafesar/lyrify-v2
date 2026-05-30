@@ -223,7 +223,15 @@ describe("SQLite Service Integration Smoke Tests", () => {
     await activeService.init();
 
     const artistMock = { id: "artist_123", name: "Indie Singer", artworkUrl: "http://temp.local/art.png" };
-    const albumMock = { id: "album_456", title: "Indie Album", artist: "Indie Singer", coverUrl: "http://temp.local/alb.png" };
+    const albumMock = { 
+      id: "album_456", 
+      title: "Indie Album", 
+      artist: "Indie Singer", 
+      artistId: "artist_123",
+      coverUrl: "http://temp.local/alb.png",
+      trackCount: 10,
+      releaseDate: "2026-05-30"
+    };
 
     // Initially should not be favorite
     expect(await activeService.isFavoriteArtist("artist_123")).toBe(false);

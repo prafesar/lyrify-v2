@@ -485,9 +485,9 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                           style={{ width: '100px' }}
                         >
                           <div className="relative w-20 h-20 rounded-full overflow-hidden border border-app-card-border shadow shadow-app-accent/5 group-hover:scale-105 group-hover:border-app-accent transition-all duration-300">
-                            {artist.coverUrl && artist.coverUrl !== "" ? (
+                            {artist.artworkUrl && artist.artworkUrl !== "" ? (
                               <img
-                                src={artist.coverUrl}
+                                src={artist.artworkUrl}
                                 className="w-full h-full object-cover"
                                 alt={artist.name}
                                 referrerPolicy="no-referrer"
@@ -507,7 +507,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                     </div>
                   ) : (
                     <div className="text-center py-8 rounded-2xl border border-dashed border-app-card-border opacity-60 bg-app-card/20 text-xs text-app-muted">
-                      Artists will appear automatically from your favorite tracks!
+                      Artists will appear automatically from your favorite artists! Add them manually to see them here.
                     </div>
                   )}
                 </div>

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
-import { History, ChevronRight, Search, Globe, Music, ChevronDown, Check, X, MoreVertical } from 'lucide-react';
+import { History, ChevronRight, Search, Globe, Music, ChevronDown, Check, X, MoreVertical, Disc } from 'lucide-react';
 import { Track, TrackLyricsData } from '../services/musicService';
 import { ResumeViewModel } from '../services/resumeService';
 import { DailyProgressSummary } from '../application';
