@@ -1539,7 +1539,7 @@ export default function App() {
                         >
                           <ChevronLeft size={20} />
                         </button>
-                        {albumDetails.album.coverUrl ? (
+                        {albumDetails.album.coverUrl && albumDetails.album.coverUrl !== "" ? (
                           <img src={albumDetails.album.coverUrl} className="w-40 h-40 md:w-56 md:h-56 rounded-3xl shadow-2xl border border-app-card-border" referrerPolicy="no-referrer" />
                         ) : (
                           <div className="w-40 h-40 md:w-56 md:h-56 rounded-3xl bg-app-fg/5 border border-app-card-border flex items-center justify-center text-app-fg/30 shadow-2xl shrink-0">
