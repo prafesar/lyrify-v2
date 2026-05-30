@@ -531,6 +531,7 @@ export interface TrackLyricsData {
     pl?: string;
   };
   lines: LyricsLine[];
+  phrases?: Phrase[];
   fullTranslation?: string;
   promptVersion?: number;
   translationPromptVersion?: number;

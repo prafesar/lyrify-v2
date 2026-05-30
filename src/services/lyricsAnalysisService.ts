@@ -37,108 +37,136 @@ export function findMatchingLineIds(lines: LyricsLine[], phraseText: string): st
 }
 
 /**
+ * Synchronizes and aligns flat track.phrases, individual line.phrases and stable lineIds.
+ * Absolutely pure and functional. Does NOT mutate the input track or its elements.
+ */
+export function syncTrackPhrasesFromLines(track: TrackLyricsData): TrackLyricsData {
+  if (!track) return track;
+
+  // Clone lines and ensure each line has a generated stable lineId
+  const lines: LyricsLine[] = (track.lines || []).map((line) => {
+    const lineId = line.lineId || generateLineId(line.original);
+    // Deep clone the line phrases if they exist, making sure they use 'text' property
+    const linePhrases = (line.phrases || []).map((p: any) => {
+      const textVal = p.text || p.phrase || '';
+      const { phrase: legacyPhrase, ...rest } = p; // remove legacy .phrase field
+      return {
+        ...rest,
+        text: textVal,
+      } as Phrase;
+    });
+
+    return {
+      ...line,
+      lineId,
+      phrases: linePhrases
+    };
+  });
+
+  // Track phrases to collect
+  const uniquePhrasesMap = new Map<string, { phraseObj: Phrase; lineIdsSet: Set<string> }>();
+
+  // Helper to ingest a phrase into map safely
+  const ingestPhrase = (p: any, defaultLineId?: string) => {
+    const textVal = p.text || p.phrase || '';
+    if (!textVal) return;
+    const key = textVal.toLowerCase();
+
+    const lineIdsSet = new Set<string>();
+    if (defaultLineId) lineIdsSet.add(defaultLineId);
+    if (p.lineIds && Array.isArray(p.lineIds)) {
+      for (const id of p.lineIds) {
+        if (id) lineIdsSet.add(id);
+      }
+    }
+
+    const { phrase: legacyPhrase, ...rest } = p;
+    const phraseObj: Phrase = {
+      ...rest,
+      id: p.id || `${track.trackId}_${textVal.replace(/\s+/g, '_')}`,
+      text: textVal,
+      lemmas: p.lemmas || [],
+      type: p.type || 'phrase',
+      normalizedText: p.normalizedText || normalizePhraseText(textVal),
+      source: p.source || 'llm',
+      createdAt: p.createdAt || Date.now()
+    };
+
+    const existing = uniquePhrasesMap.get(key);
+    if (!existing) {
+      uniquePhrasesMap.set(key, { phraseObj, lineIdsSet });
+    } else {
+      // Merge
+      for (const id of lineIdsSet) {
+        existing.lineIdsSet.add(id);
+      }
+      // If the incoming phrase is from user explicitly, prefer its metadata
+      if (p.source === 'user' && existing.phraseObj.source !== 'user') {
+        existing.phraseObj = { ...existing.phraseObj, ...phraseObj };
+      }
+    }
+  };
+
+  // First process track.phrases
+  if (track.phrases && Array.isArray(track.phrases)) {
+    for (const p of track.phrases) {
+      ingestPhrase(p);
+    }
+  }
+
+  // Then process lines
+  for (const line of lines) {
+    if (line.phrases) {
+      for (const p of line.phrases) {
+        ingestPhrase(p, line.lineId);
+      }
+    }
+  }
+
+  // Compile final clean list of phrases and sync lineIds
+  const syncedPhrases: Phrase[] = [];
+  uniquePhrasesMap.forEach(({ phraseObj, lineIdsSet }) => {
+    // LLM phrases automatically align to any lines matching as a substring
+    const autoMatched = findMatchingLineIds(lines, phraseObj.text);
+    for (const lid of autoMatched) {
+      lineIdsSet.add(lid);
+    }
+
+    const lineIds = Array.from(lineIdsSet);
+    syncedPhrases.push({
+      ...phraseObj,
+      lineIds
+    });
+  });
+
+  // Re-map lines to contain their strictly aligned synced phrases
+  const updatedLines = lines.map(line => {
+    const alignedPhrases = syncedPhrases.filter(p => p.lineIds?.includes(line.lineId!));
+    return {
+      ...line,
+      phrases: alignedPhrases
+    };
+  });
+
+  return {
+    ...track,
+    lines: updatedLines,
+    phrases: syncedPhrases
+  };
+}
+
+/**
  * Conservative linking pipeline:
  * Enhances/links phrases with stable lineIds within a TrackLyricsData module.
+ * Made completely pure.
  */
 export function linkPhrasesToLines(track: TrackLyricsData): TrackLyricsData {
-  if (!track || !track.lines) return track;
-
-  const lines = track.lines;
-  
-  // Make sure lines have lineIds
-  for (const line of lines) {
-    if (!line.lineId) {
-      line.lineId = generateLineId(line.original);
-    }
-  }
-
-  // If track has flat track.phrases, align them into line.phrases
-  if (track.phrases && Array.isArray(track.phrases)) {
-    for (const phrase of track.phrases) {
-      const text = phrase.text || (phrase as any).phrase || '';
-      if (!text) continue;
-      
-      const phraseTextValue = phrase.text || text;
-      const phraseIdValue = phrase.id || `${track.trackId}_${text.replace(/\s+/g, '_')}`;
-      
-      const matchedIds = findMatchingLineIds(lines, text);
-      const isUser = phrase.source === 'user';
-      
-      const enrichedPhrase: Phrase = {
-        ...phrase,
-        id: phraseIdValue,
-        text: phraseTextValue,
-        translation: phrase.translation || '',
-        explanation: phrase.explanation || '',
-        normalizedText: phrase.normalizedText || normalizePhraseText(text),
-        lineIds: phrase.lineIds || (matchedIds.length > 0 ? matchedIds : []),
-        source: phrase.source || 'llm',
-        createdAt: phrase.createdAt || Date.now()
-      };
-
-      for (const line of lines) {
-        const isMatched = matchedIds.includes(line.lineId!) || (isUser && phrase.lineIds?.includes(line.lineId!));
-        if (isMatched) {
-          if (!line.phrases) {
-            line.phrases = [];
-          }
-          if (!line.phrases.some(p => (p.text || (p as any).phrase || '').toLowerCase() === text.toLowerCase())) {
-            line.phrases.push(enrichedPhrase);
-          }
-        }
-      }
-    }
-  }
-
-  // Also enrich any existing lines.phrases directly
-  for (const line of lines) {
-    const parentLineId = line.lineId!;
-    if (line.phrases) {
-      line.phrases = line.phrases.map((phrase: Phrase) => {
-        const text = phrase.text || (phrase as any).phrase || '';
-        const phraseTextValue = phrase.text || text;
-        const phraseIdValue = phrase.id || `${track.trackId}_${text.replace(/\s+/g, '_')}`;
-        const normalized = normalizePhraseText(text);
-
-        const matchedIds = findMatchingLineIds(lines, text);
-        if (!matchedIds.includes(parentLineId)) {
-          matchedIds.push(parentLineId);
-        }
-
-        return {
-          ...phrase,
-          id: phraseIdValue,
-          text: phraseTextValue,
-          normalizedText: phrase.normalizedText || normalized,
-          lineIds: phrase.lineIds || matchedIds,
-          source: phrase.source || 'llm',
-          createdAt: phrase.createdAt || Date.now()
-        };
-      });
-    } else {
-      line.phrases = [];
-    }
-  }
-
-  // Collect all unique phrases back to track.phrases to keep them in sync
-  const uniquePhrasesMap = new Map<string, Phrase>();
-  for (const line of lines) {
-    if (line.phrases) {
-      for (const phrase of line.phrases) {
-        const key = (phrase.text || '').toLowerCase();
-        if (key && !uniquePhrasesMap.has(key)) {
-          uniquePhrasesMap.set(key, phrase);
-        }
-      }
-    }
-  }
-  track.phrases = Array.from(uniquePhrasesMap.values());
-
-  return track;
+  return syncTrackPhrasesFromLines(track);
 }
 
 /**
  * Adds a new user-added phrase to the track's lines.
+ * Made completely pure.
  */
 export function addUserPhrase(
   track: TrackLyricsData,
@@ -184,12 +212,12 @@ export function addUserPhrase(
     lines: updatedLines
   };
 
-  // Re-run the sync/linking pipeline to populate track.phrases nicely 
-  return linkPhrasesToLines(updatedTrack);
+  return syncTrackPhrasesFromLines(updatedTrack);
 }
 
 /**
  * Edits an existing phrase.
+ * Made completely pure.
  */
 export function editPhrase(
   track: TrackLyricsData,
@@ -198,11 +226,12 @@ export function editPhrase(
 ): TrackLyricsData {
   const updatedTrackPhrases = track.phrases?.map((phrase) => {
     if (phrase.id === phraseId) {
+      const { phrase: legacyPhrase, ...rest } = phrase as any;
       return {
-        ...phrase,
+        ...rest,
         ...updates,
         updatedAt: Date.now()
-      };
+      } as Phrase;
     }
     return phrase;
   }) || [];
@@ -213,11 +242,12 @@ export function editPhrase(
       ...line,
       phrases: line.phrases.map((phrase) => {
         if (phrase.id === phraseId) {
+          const { phrase: legacyPhrase, ...rest } = phrase as any;
           return {
-            ...phrase,
+            ...rest,
             ...updates,
             updatedAt: Date.now()
-          };
+          } as Phrase;
         }
         return phrase;
       })
@@ -230,11 +260,12 @@ export function editPhrase(
     lines: updatedLines
   };
 
-  return linkPhrasesToLines(updatedTrack);
+  return syncTrackPhrasesFromLines(updatedTrack);
 }
 
 /**
  * Deletes/hides a phrase.
+ * Made completely pure.
  */
 export function deletePhrase(
   track: TrackLyricsData,
@@ -256,11 +287,12 @@ export function deletePhrase(
     lines: updatedLines
   };
 
-  return linkPhrasesToLines(updatedTrack);
+  return syncTrackPhrasesFromLines(updatedTrack);
 }
 
 /**
  * Links an existing phrase to an additional line.
+ * Made completely pure.
  */
 export function linkPhraseToLine(
   track: TrackLyricsData,
@@ -274,6 +306,10 @@ export function linkPhraseToLine(
       foundPhrase = p;
       break;
     }
+  }
+
+  if (!foundPhrase && track.phrases) {
+    foundPhrase = track.phrases.find(p => p.id === phraseId) || null;
   }
 
   if (!foundPhrase) return track;
@@ -315,14 +351,17 @@ export function linkPhraseToLine(
     };
   });
 
-  return {
+  const updatedTrack = {
     ...track,
     lines: updatedLines
   };
+
+  return syncTrackPhrasesFromLines(updatedTrack);
 }
 
 /**
  * Unlinks a phrase from a specific line.
+ * Made completely pure.
  */
 export function unlinkPhraseFromLine(
   track: TrackLyricsData,
@@ -336,6 +375,10 @@ export function unlinkPhraseFromLine(
       foundPhrase = p;
       break;
     }
+  }
+
+  if (!foundPhrase && track.phrases) {
+    foundPhrase = track.phrases.find(p => p.id === phraseId) || null;
   }
 
   if (!foundPhrase) return track;
@@ -369,10 +412,12 @@ export function unlinkPhraseFromLine(
     return line;
   });
 
-  return {
+  const updatedTrack = {
     ...track,
     lines: updatedLines
   };
+
+  return syncTrackPhrasesFromLines(updatedTrack);
 }
 
 export interface StarredLineData {
