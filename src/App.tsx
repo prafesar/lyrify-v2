@@ -3728,6 +3728,8 @@ export default function App() {
         user={user}
         onCardUpdated={() => { loadUserCards(); }}
         phraseMetadata={phraseMetadata}
+        currentTrack={currentTrack}
+        setCurrentTrack={setCurrentTrack}
       />
     </div>
   );

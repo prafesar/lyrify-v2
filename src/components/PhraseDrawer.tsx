@@ -1,8 +1,11 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Plus, Check, Loader2, Sparkles, Quote, BookOpen, RefreshCw, CheckCircle2 } from 'lucide-react';
+import { X, Plus, Check, Loader2, Sparkles, Quote, BookOpen, RefreshCw, CheckCircle2, Trash2, Edit3, Save } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { studyCardsRepository, PhraseStatus, Flashcard } from '../application';
+import { saveTrackData } from '../services/musicService';
+import { addUserPhrase, editPhrase, deletePhrase } from '../services/lyricsAnalysisService';
+
 const addPhraseToStudy = (phraseData: any, status?: PhraseStatus) => studyCardsRepository.addPhraseToStudy(phraseData, status);
 const updatePhraseStatus = (cardId: string, status: PhraseStatus) => studyCardsRepository.updatePhraseStatus(cardId, status);
 
@@ -19,6 +22,8 @@ interface PhraseDrawerProps {
   user: any;
   onCardUpdated: (card: Flashcard) => void;
   phraseMetadata: Map<string, Flashcard>;
+  currentTrack?: any;
+  setCurrentTrack?: React.Dispatch<React.SetStateAction<any>>;
 }
 
 export default function PhraseDrawer({
@@ -34,14 +39,75 @@ export default function PhraseDrawer({
   user,
   onCardUpdated,
   phraseMetadata,
+  currentTrack,
+  setCurrentTrack
 }: PhraseDrawerProps) {
   const [busyId, setBusyId] = useState<string | null>(null);
 
-  if (lineIndex === null || !phraseAnalysis?.lines?.[lineIndex]) return null;
+  // States for adding a custom user phrase
+  const [isAdding, setIsAdding] = useState(false);
+  const [newPhraseText, setNewPhraseText] = useState('');
+  const [newTranslation, setNewTranslation] = useState('');
+  const [newExplanation, setNewExplanation] = useState('');
 
-  const lineData = phraseAnalysis.lines[lineIndex];
+  // States for inline phrase edit
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editTranslationText, setEditTranslationText] = useState('');
+  const [editExplanationText, setEditExplanationText] = useState('');
+
+  if (lineIndex === null) return null;
+
+  // Prefer lines from reactive currentTrack if available, otherwise fallback to phraseAnalysis
+  const activeTrack = currentTrack || phraseAnalysis;
+  const lineData = activeTrack?.lines?.[lineIndex!];
+  if (!lineData) return null;
+
   const lineText = lineData.original || '';
   const linePhrases = lineData.phrases || [];
+
+  const handleAddUserPhraseSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newPhraseText.trim() || !newTranslation.trim()) return;
+
+    if (activeTrack && setCurrentTrack) {
+      const targetLineId = lineData.lineId;
+      const updatedTrack = addUserPhrase(
+        activeTrack,
+        newPhraseText,
+        newTranslation,
+        newExplanation,
+        targetLineId
+      );
+
+      saveTrackData(activeTrack.trackId, updatedTrack);
+      setCurrentTrack(updatedTrack);
+
+      setNewPhraseText('');
+      setNewTranslation('');
+      setNewExplanation('');
+      setIsAdding(false);
+    }
+  };
+
+  const handleEditPhraseSubmit = (phraseId: string) => {
+    if (activeTrack && setCurrentTrack) {
+      const updatedTrack = editPhrase(activeTrack, phraseId, {
+        translation: editTranslationText,
+        explanation: editExplanationText
+      });
+      saveTrackData(activeTrack.trackId, updatedTrack);
+      setCurrentTrack(updatedTrack);
+      setEditingId(null);
+    }
+  };
+
+  const handleDeletePhraseClick = (phraseId: string) => {
+    if (confirm("Are you sure you want to remove this phrase?") && activeTrack && setCurrentTrack) {
+      const updatedTrack = deletePhrase(activeTrack, phraseId);
+      saveTrackData(activeTrack.trackId, updatedTrack);
+      setCurrentTrack(updatedTrack);
+    }
+  };
 
   const getStatusIcon = (status?: PhraseStatus) => {
     switch (status) {
@@ -166,71 +232,213 @@ export default function PhraseDrawer({
                 </button>
               </div>
 
+              <div className="flex items-center justify-between mt-6 mb-4">
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] font-black uppercase tracking-widest opacity-60">Analysis Phrases</span>
+                </div>
+                {activeTrack && setCurrentTrack && (
+                  <button
+                    onClick={() => setIsAdding(!isAdding)}
+                    className="flex items-center gap-1 px-2.5 py-1 bg-[var(--accent)]/10 hover:bg-[var(--accent)]/20 text-[var(--accent)] text-xs font-bold rounded-xl transition-all"
+                  >
+                    {isAdding ? <X size={12} /> : <Plus size={12} />}
+                    {isAdding ? "Cancel" : "Add Phrase"}
+                  </button>
+                )}
+              </div>
+
+              {/* Add Custom Phrase Form */}
+              {isAdding && (
+                <motion.form
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  onSubmit={handleAddUserPhraseSubmit}
+                  className="mb-6 p-5 rounded-3xl border border-app-card-border bg-app-fg/5 space-y-4"
+                >
+                  <div>
+                    <label className="block text-[8px] uppercase font-black tracking-widest text-app-fg/50 mb-1">Phrase *</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Break down"
+                      value={newPhraseText}
+                      onChange={(e) => setNewPhraseText(e.target.value)}
+                      className="w-full px-3 py-2 bg-app-card border border-app-card-border rounded-xl text-xs focus:outline-none focus:border-app-accent text-app-fg font-sans"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[8px] uppercase font-black tracking-widest text-app-fg/50 mb-1">Translation *</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Сломаться"
+                      value={newTranslation}
+                      onChange={(e) => setNewTranslation(e.target.value)}
+                      className="w-full px-3 py-2 bg-app-card border border-app-card-border rounded-xl text-xs focus:outline-none focus:border-app-accent text-app-fg font-sans"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[8px] uppercase font-black tracking-widest text-app-fg/50 mb-1">Explanation (Optional)</label>
+                    <textarea
+                      placeholder="e.g. Phrasal verb or specific contextual meaning"
+                      value={newExplanation}
+                      onChange={(e) => setNewExplanation(e.target.value)}
+                      className="w-full px-3 py-2 bg-app-card border border-app-card-border rounded-xl text-xs focus:outline-none focus:border-app-accent text-app-fg font-sans resize-none h-16"
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    className="w-full py-2 bg-app-accent text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-app-accent/90 transition-all text-center"
+                  >
+                    Save Custom Phrase
+                  </button>
+                </motion.form>
+              )}
+
               <div className="space-y-6">
                 {linePhrases.length > 0 ? (
                   linePhrases.map((phrase: any, idx: number) => {
                     const text = phrase.phrase || phrase.text;
                     const card = phraseMetadata.get(text);
                     const isBusy = busyId === text;
+                    const isEditing = editingId === phrase.id;
 
                     return (
                       <motion.div
-                        key={idx}
+                        key={phrase.id || idx}
                         initial={{ opacity: 0, x: -10 }}
                         animate={{ opacity: 1, x: 0 }}
                         transition={{ delay: idx * 0.05 }}
                         className="group relative flex flex-col p-5 rounded-3xl bg-app-fg/5 border border-app-card-border hover:border-app-accent/30 transition-all overflow-hidden"
                       >
-                        <div className="flex items-start justify-between gap-4 mb-3">
-                          <div className="min-w-0 flex-1">
-                            <h4 className="text-lg font-bold text-app-fg leading-tight">{text}</h4>
-                            <p className="text-sm text-app-fg opacity-40 font-serif italic mt-1">{phrase.translation}</p>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            {card ? (
-                              <button
-                                onClick={() => handleAction(phrase, 'toggle')}
-                                disabled={isBusy}
-                                className={cn(
-                                  "flex items-center gap-2 px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all",
-                                  card.status === 'known' ? "text-green-500 bg-green-500/10 border-green-500/20" : "text-orange-500 bg-orange-500/10 border-orange-500/20"
-                                )}
-                              >
-                                {isBusy ? <RefreshCw size={12} className="animate-spin" /> : getStatusIcon(card.status)}
-                                {card.status}
-                              </button>
-                            ) : (
+                        {isEditing ? (
+                          <div className="space-y-3">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[9px] font-black uppercase tracking-widest text-[var(--accent)]">Editing Phrase</span>
                               <div className="flex gap-2">
                                 <button
-                                  onClick={() => handleMarkKnown(phrase)}
-                                  disabled={isBusy}
-                                  className="p-2.5 rounded-xl bg-green-500/10 text-green-500 hover:bg-green-500 hover:text-white transition-all active:scale-95 shadow-sm"
-                                  title="Mark as Known"
+                                  onClick={() => handleEditPhraseSubmit(phrase.id)}
+                                  className="p-1.5 rounded-lg bg-green-500/10 text-green-500 hover:bg-green-500 hover:text-white transition-all"
+                                  title="Save changes"
                                 >
-                                  {isBusy ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
+                                  <Save size={14} />
                                 </button>
                                 <button
-                                  onClick={() => handleAction(phrase, 'add')}
-                                  disabled={isBusy}
-                                  className="p-2.5 rounded-xl bg-[var(--accent)]/10 text-[var(--accent)] hover:bg-[var(--accent)] hover:text-white transition-all active:scale-95 shadow-sm"
-                                  title="Add to Study"
+                                  onClick={() => setEditingId(null)}
+                                  className="p-1.5 rounded-lg bg-app-fg/10 text-app-fg hover:bg-app-fg/20 transition-all"
+                                  title="Cancel"
                                 >
-                                  {isBusy ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
+                                  <X size={14} />
                                 </button>
                               </div>
-                            )}
-                          </div>
-                        </div>
-                        {phrase.explanation && (
-                          <div className="mt-2 pt-3 border-t border-app-fg/5">
-                            <div className="flex items-center gap-2 mb-1.5 opacity-40">
-                              <Quote size={10} />
-                              <span className="text-[9px] font-black uppercase tracking-widest">Meaning</span>
                             </div>
-                            <p className="text-xs text-app-fg opacity-60 leading-relaxed font-serif">
-                              {phrase.explanation}
-                            </p>
+                            
+                            <div>
+                              <h4 className="text-sm font-bold text-app-fg opacity-60">Phrase: {text}</h4>
+                            </div>
+
+                            <div>
+                              <label className="block text-[8px] uppercase font-bold text-app-fg/40 mb-1">Translation</label>
+                              <input
+                                type="text"
+                                value={editTranslationText}
+                                onChange={(e) => setEditTranslationText(e.target.value)}
+                                className="w-full px-2 py-1.5 bg-app-card border border-app-card-border rounded-lg text-xs text-app-fg focus:outline-none"
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block text-[8px] uppercase font-bold text-app-fg/40 mb-1">Explanation</label>
+                              <textarea
+                                value={editExplanationText}
+                                onChange={(e) => setEditExplanationText(e.target.value)}
+                                className="w-full px-2 py-1.5 bg-app-card border border-app-card-border rounded-lg text-xs text-app-fg focus:outline-none resize-none h-12"
+                              />
+                            </div>
                           </div>
+                        ) : (
+                          <>
+                            <div className="flex items-start justify-between gap-4 mb-3">
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <h4 className="text-lg font-bold text-app-fg leading-tight">{text}</h4>
+                                  {phrase.source === 'user' && (
+                                    <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-app-accent/10 text-app-accent font-extrabold uppercase tracking-wide">User Custom</span>
+                                  )}
+                                </div>
+                                <p className="text-sm text-app-fg opacity-40 font-serif italic">{phrase.translation}</p>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                {/* Inline edits if reactive state allows */}
+                                {activeTrack && setCurrentTrack && (
+                                  <div className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
+                                    <button
+                                      onClick={() => {
+                                        setEditingId(phrase.id);
+                                        setEditTranslationText(phrase.translation || '');
+                                        setEditExplanationText(phrase.explanation || '');
+                                      }}
+                                      className="p-1.5 rounded-lg bg-blue-500/10 text-blue-500 hover:bg-blue-500 hover:text-white transition-all"
+                                      title="Edit Phrase"
+                                    >
+                                      <Edit3 size={12} />
+                                    </button>
+                                    <button
+                                      onClick={() => handleDeletePhraseClick(phrase.id)}
+                                      className="p-1.5 rounded-lg bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white transition-all"
+                                      title="Delete Phrase"
+                                    >
+                                      <Trash2 size={12} />
+                                    </button>
+                                  </div>
+                                )}
+
+                                {card ? (
+                                  <button
+                                    onClick={() => handleAction(phrase, 'toggle')}
+                                    disabled={isBusy}
+                                    className={cn(
+                                      "flex items-center gap-2 px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all shrink-0",
+                                      card.status === 'known' ? "text-green-500 bg-green-500/10 border-green-500/20" : "text-orange-500 bg-orange-500/10 border-orange-500/20"
+                                    )}
+                                  >
+                                    {isBusy ? <RefreshCw size={12} className="animate-spin" /> : getStatusIcon(card.status)}
+                                    {card.status}
+                                  </button>
+                                ) : (
+                                  <div className="flex gap-2 shrink-0">
+                                    <button
+                                      onClick={() => handleMarkKnown(phrase)}
+                                      disabled={isBusy}
+                                      className="p-2.5 rounded-xl bg-green-500/10 text-green-500 hover:bg-green-500 hover:text-white transition-all active:scale-95 shadow-sm"
+                                      title="Mark as Known"
+                                    >
+                                      {isBusy ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
+                                    </button>
+                                    <button
+                                      onClick={() => handleAction(phrase, 'add')}
+                                      disabled={isBusy}
+                                      className="p-2.5 rounded-xl bg-[var(--accent)]/10 text-[var(--accent)] hover:bg-[var(--accent)] hover:text-white transition-all active:scale-95 shadow-sm"
+                                      title="Add to Study"
+                                    >
+                                      {isBusy ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                            {phrase.explanation && (
+                              <div className="mt-2 pt-3 border-t border-app-fg/5">
+                                <div className="flex items-center gap-2 mb-1.5 opacity-40">
+                                  <Quote size={10} />
+                                  <span className="text-[9px] font-black uppercase tracking-widest">Meaning</span>
+                                </div>
+                                <p className="text-xs text-app-fg opacity-60 leading-relaxed font-serif">
+                                  {phrase.explanation}
+                                </p>
+                              </div>
+                            )}
+                          </>
                         )}
                       </motion.div>
                     );
@@ -244,7 +452,7 @@ export default function PhraseDrawer({
                       <h3 className="font-bold text-app-fg opacity-60">No phrases identified</h3>
                       <p className="text-sm text-app-fg opacity-40 leading-relaxed">
                         We haven't analyzed the individual phrases for this line yet. 
-                        Try regenerating the track analysis.
+                        Try adding a phrase using the button above.
                       </p>
                     </div>
                   </div>

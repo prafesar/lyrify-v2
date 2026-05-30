@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { 
   trackSessionFacade, 
   recentHistoryRepository, 
@@ -16,6 +16,7 @@ import {
   fetchLyricsFromOption, 
   clearCachedLyrics 
 } from "../services/musicService";
+import { linkPhrasesToLines } from "../services/lyricsAnalysisService";
 
 export interface UseTrackSessionResult {
   currentTrack: TrackLyricsData | null;
@@ -492,8 +493,13 @@ export function useTrackSession(): UseTrackSessionResult {
     }, targetLanguage, callbacks);
   }, [currentTrack, handleTrackSelect]);
 
+  const linkedTrack = useMemo(() => {
+    if (!currentTrack) return null;
+    return linkPhrasesToLines(currentTrack);
+  }, [currentTrack]);
+
   return {
-    currentTrack,
+    currentTrack: linkedTrack,
     isLoadingLyrics,
     loadingStep,
     lyricsFetchError,
