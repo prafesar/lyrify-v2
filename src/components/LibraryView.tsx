@@ -190,27 +190,37 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
       );
     }
     if (listTracks.length < 4) {
-      return (
+      return listTracks[0].coverUrl ? (
         <img 
           src={listTracks[0].coverUrl} 
           alt={playlist.name} 
           className="w-16 h-16 rounded-2xl object-cover shadow-md border border-app-card-border"
           referrerPolicy="no-referrer"
         />
+      ) : (
+        <div className="w-16 h-16 rounded-2xl bg-app-fg/5 border border-app-card-border flex items-center justify-center text-app-fg/30">
+          <Disc size={28} />
+        </div>
       );
     }
     // Render 2x2 grid collage
     return (
       <div className="w-16 h-16 rounded-2xl overflow-hidden grid grid-cols-2 shadow-md border border-app-card-border">
-        {listTracks.slice(0, 4).map((t: Track, idx: number) => (
-          <img 
-            key={idx} 
-            src={t.coverUrl} 
-            alt="" 
-            className="w-8 h-8 object-cover"
-            referrerPolicy="no-referrer"
-          />
-        ))}
+        {listTracks.slice(0, 4).map((t: Track, idx: number) => 
+          t.coverUrl ? (
+            <img 
+              key={idx} 
+              src={t.coverUrl} 
+              alt="" 
+              className="w-8 h-8 object-cover"
+              referrerPolicy="no-referrer"
+            />
+          ) : (
+            <div key={idx} className="w-8 h-8 bg-app-fg/5 flex items-center justify-center text-app-fg/20">
+              <Disc size={12} />
+            </div>
+          )
+        )}
       </div>
     );
   };
@@ -351,12 +361,18 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                           className="w-full flex items-center justify-between p-3.5 rounded-2xl bg-app-card border border-app-card-border shadow-sm active:scale-[0.99] transition-all hover:bg-opacity-80 group cursor-pointer"
                         >
                           <div className="flex items-center gap-3.5 overflow-hidden flex-1 select-none">
-                            <img
-                              src={track.coverUrl}
-                              className="w-11 h-11 rounded-xl object-cover shadow"
-                              alt={track.title}
-                              referrerPolicy="no-referrer"
-                            />
+                            {track.coverUrl ? (
+                              <img
+                                src={track.coverUrl}
+                                className="w-11 h-11 rounded-xl object-cover shadow"
+                                alt={track.title}
+                                referrerPolicy="no-referrer"
+                              />
+                            ) : (
+                              <div className="w-11 h-11 rounded-xl bg-app-fg/5 border border-app-card-border flex items-center justify-center text-app-fg/30 shrink-0 animate-pulse">
+                                <Disc size={18} />
+                              </div>
+                            )}
                             <div className="text-left overflow-hidden">
                               <span className="font-bold text-app-fg text-[14px] leading-tight block truncate group-hover:text-app-accent transition-colors">
                                 {track.title}
@@ -593,12 +609,18 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                     className="w-full flex items-center justify-between p-3 rounded-2xl bg-app-card/65 border border-app-card-border hover:border-app-accent/20 hover:bg-app-card transition-all group cursor-pointer shadow-sm"
                   >
                     <div className="flex items-center gap-3 overflow-hidden flex-1 select-none">
-                      <img
-                        src={track.coverUrl}
-                        className="w-10 h-10 rounded-xl object-cover shadow border border-app-card-border"
-                        alt={track.title}
-                        referrerPolicy="no-referrer"
-                      />
+                      {track.coverUrl ? (
+                        <img
+                          src={track.coverUrl}
+                          className="w-10 h-10 rounded-xl object-cover shadow border border-app-card-border"
+                          alt={track.title}
+                          referrerPolicy="no-referrer"
+                        />
+                      ) : (
+                        <div className="w-10 h-10 rounded-xl bg-app-fg/5 border border-app-card-border flex items-center justify-center text-app-fg/30 shrink-0">
+                          <Disc size={16} />
+                        </div>
+                      )}
                       <div className="text-left overflow-hidden">
                         <span className="font-bold text-app-fg text-sm block truncate group-hover:text-app-accent transition-colors">
                           {track.title}
@@ -680,12 +702,18 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
 
               {/* Track summary */}
               <div className="flex items-center gap-4 text-left p-3.5 bg-app-fg/5 rounded-2xl mb-5 border border-app-card-border/60">
-                <img
-                  src={menuTrack.coverUrl}
-                  alt={menuTrack.title}
-                  className="w-14 h-14 rounded-xl object-cover shadow shadow-black/20"
-                  referrerPolicy="no-referrer"
-                />
+                {menuTrack.coverUrl ? (
+                  <img
+                    src={menuTrack.coverUrl}
+                    alt={menuTrack.title}
+                    className="w-14 h-14 rounded-xl object-cover shadow shadow-black/20"
+                    referrerPolicy="no-referrer"
+                  />
+                ) : (
+                  <div className="w-14 h-14 rounded-xl bg-app-fg/5 border border-app-card-border flex items-center justify-center text-app-fg/30 shrink-0">
+                    <Disc size={20} />
+                  </div>
+                )}
                 <div className="overflow-hidden flex-1 select-none">
                   <h3 className="font-bold text-app-fg leading-tight truncate">{menuTrack.title}</h3>
                   <p className="text-xs text-app-muted truncate mt-0.5">{menuTrack.artist}</p>

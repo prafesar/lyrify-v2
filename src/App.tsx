@@ -1539,7 +1539,13 @@ export default function App() {
                         >
                           <ChevronLeft size={20} />
                         </button>
-                        <img src={albumDetails.album.coverUrl} className="w-40 h-40 md:w-56 md:h-56 rounded-3xl shadow-2xl border border-app-card-border" referrerPolicy="no-referrer" />
+                        {albumDetails.album.coverUrl ? (
+                          <img src={albumDetails.album.coverUrl} className="w-40 h-40 md:w-56 md:h-56 rounded-3xl shadow-2xl border border-app-card-border" referrerPolicy="no-referrer" />
+                        ) : (
+                          <div className="w-40 h-40 md:w-56 md:h-56 rounded-3xl bg-app-fg/5 border border-app-card-border flex items-center justify-center text-app-fg/30 shadow-2xl shrink-0">
+                            <Disc size={56} />
+                          </div>
+                        )}
                       </div>
                       <div className="flex-1 min-w-0 pb-2">
                         <div className="flex items-center gap-3 mb-1">
@@ -1681,7 +1687,13 @@ export default function App() {
                               }}
                               className="flex items-center gap-4 p-3 rounded-2xl bg-app-card border border-app-card-border shadow-sm hover:border-app-accent/30 transition-all text-left"
                             >
-                              <img src={track.coverUrl} className="w-10 h-10 rounded-lg object-cover" referrerPolicy="no-referrer" />
+                              {track.coverUrl ? (
+                                <img src={track.coverUrl} className="w-10 h-10 rounded-lg object-cover" referrerPolicy="no-referrer" />
+                              ) : (
+                                <div className="w-10 h-10 rounded-lg bg-app-fg/5 border border-app-card-border flex items-center justify-center text-app-fg/30 shrink-0">
+                                  <Disc size={18} />
+                                </div>
+                              )}
                               <div className="min-w-0">
                                 <p className="font-bold text-sm truncate">{track.title}</p>
                                 <p className="text-[10px] text-app-muted truncate">{track.album || "Unknown Album"}</p>
@@ -1710,8 +1722,12 @@ export default function App() {
                               }}
                               className="group text-left space-y-2"
                             >
-                              <div className="aspect-square rounded-2xl overflow-hidden bg-app-card border border-app-card-border shadow-sm group-hover:shadow-md transition-all">
-                                <img src={album.coverUrl} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" referrerPolicy="no-referrer" />
+                              <div className="aspect-square rounded-2xl overflow-hidden bg-app-card border border-app-card-border shadow-sm group-hover:shadow-md transition-all flex items-center justify-center">
+                                {album.coverUrl ? (
+                                  <img src={album.coverUrl} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" referrerPolicy="no-referrer" />
+                                ) : (
+                                  <Disc size={32} className="text-app-fg/10" />
+                                )}
                               </div>
                               <div className="px-1">
                                 <p className="font-bold text-xs truncate leading-tight">{album.title}</p>
