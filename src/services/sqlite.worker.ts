@@ -134,6 +134,34 @@ function bootstrapDb(sqlite3: any) {
             );
           `);
         }
+      },
+      {
+        version: 3,
+        up: (database: any) => {
+          // Favorite artists relational table
+          database.exec(`
+            CREATE TABLE IF NOT EXISTS favorite_artists (
+              id TEXT PRIMARY KEY,
+              name TEXT NOT NULL,
+              image_url TEXT,
+              artist_json TEXT NOT NULL,
+              added_at INTEGER NOT NULL
+            );
+          `);
+
+          // Favorite albums relational table
+          database.exec(`
+            CREATE TABLE IF NOT EXISTS favorite_albums (
+              id TEXT PRIMARY KEY,
+              title TEXT NOT NULL,
+              artist TEXT NOT NULL,
+              artist_id TEXT,
+              image_url TEXT,
+              album_json TEXT NOT NULL,
+              added_at INTEGER NOT NULL
+            );
+          `);
+        }
       }
     ];
 
@@ -247,6 +275,40 @@ async function init() {
       error("Error reading favorite tracks at init:", e);
     }
 
+    const favoriteArtists: any[] = [];
+    try {
+      db.exec({
+        sql: "SELECT artist_json FROM favorite_artists ORDER BY added_at DESC",
+        rowMode: "object",
+        callback: (row: any) => {
+          try {
+            favoriteArtists.push(JSON.parse(row.artist_json));
+          } catch (e) {
+            error("Error parsing favorite artist JSON in init:", e);
+          }
+        }
+      });
+    } catch (e) {
+      error("Error reading favorite artists at init:", e);
+    }
+
+    const favoriteAlbums: any[] = [];
+    try {
+      db.exec({
+        sql: "SELECT album_json FROM favorite_albums ORDER BY added_at DESC",
+        rowMode: "object",
+        callback: (row: any) => {
+          try {
+            favoriteAlbums.push(JSON.parse(row.album_json));
+          } catch (e) {
+            error("Error parsing favorite album JSON in init:", e);
+          }
+        }
+      });
+    } catch (e) {
+      error("Error reading favorite albums at init:", e);
+    }
+
     const playlists: any[] = [];
     try {
       db.exec({
@@ -289,6 +351,8 @@ async function init() {
         recentHistory,
         trackCache,
         favorites,
+        favoriteArtists,
+        favoriteAlbums,
         playlists,
         storageMode,
       },
@@ -374,6 +438,8 @@ self.onmessage = async (event) => {
         db.exec("DELETE FROM recent_history");
         db.exec("DELETE FROM track_cache");
         db.exec("DELETE FROM favorite_tracks");
+        db.exec("DELETE FROM favorite_artists");
+        db.exec("DELETE FROM favorite_albums");
         db.exec("DELETE FROM playlists");
         db.exec("DELETE FROM playlist_items");
         self.postMessage({ type: "WRITE_OK", messageId });
@@ -441,6 +507,138 @@ self.onmessage = async (event) => {
         db.exec({
           sql: "SELECT 1 FROM favorite_tracks WHERE id = ?",
           bind: [String(trackId)],
+          callback: () => { exists = true; }
+        });
+        self.postMessage({ type: "QUERY_OK", payload: exists, messageId });
+        break;
+      }
+
+      case "GET_FAVORITE_ARTISTS": {
+        const artists: any[] = [];
+        db.exec({
+          sql: "SELECT artist_json FROM favorite_artists ORDER BY added_at DESC",
+          rowMode: "object",
+          callback: (row: any) => {
+            try {
+              artists.push(JSON.parse(row.artist_json));
+            } catch (e) {
+              error("Error parsing favorite artist JSON:", e);
+            }
+          }
+        });
+        self.postMessage({ type: "QUERY_OK", payload: artists, messageId });
+        break;
+      }
+
+      case "TOGGLE_FAVORITE_ARTIST": {
+        const { artist } = payload;
+        const artistId = String(artist.id);
+        
+        let exists = false;
+        db.exec({
+          sql: "SELECT 1 FROM favorite_artists WHERE id = ?",
+          bind: [artistId],
+          callback: () => { exists = true; }
+        });
+
+        let isFavNow = false;
+        if (exists) {
+          db.exec({
+            sql: "DELETE FROM favorite_artists WHERE id = ?",
+            bind: [artistId]
+          });
+          isFavNow = false;
+        } else {
+          db.exec({
+            sql: "INSERT OR REPLACE INTO favorite_artists (id, name, image_url, artist_json, added_at) VALUES (?, ?, ?, ?, ?)",
+            bind: [
+              artistId,
+              artist.name,
+              artist.artworkUrl || artist.coverUrl || "",
+              JSON.stringify(artist),
+              Date.now()
+            ]
+          });
+          isFavNow = true;
+        }
+
+        self.postMessage({ type: "QUERY_OK", payload: isFavNow, messageId });
+        break;
+      }
+
+      case "IS_FAVORITE_ARTIST": {
+        const { artistId } = payload;
+        let exists = false;
+        db.exec({
+          sql: "SELECT 1 FROM favorite_artists WHERE id = ?",
+          bind: [String(artistId)],
+          callback: () => { exists = true; }
+        });
+        self.postMessage({ type: "QUERY_OK", payload: exists, messageId });
+        break;
+      }
+
+      case "GET_FAVORITE_ALBUMS": {
+        const albums: any[] = [];
+        db.exec({
+          sql: "SELECT album_json FROM favorite_albums ORDER BY added_at DESC",
+          rowMode: "object",
+          callback: (row: any) => {
+            try {
+              albums.push(JSON.parse(row.album_json));
+            } catch (e) {
+              error("Error parsing favorite album JSON:", e);
+            }
+          }
+        });
+        self.postMessage({ type: "QUERY_OK", payload: albums, messageId });
+        break;
+      }
+
+      case "TOGGLE_FAVORITE_ALBUM": {
+        const { album } = payload;
+        const albumId = String(album.id);
+        
+        let exists = false;
+        db.exec({
+          sql: "SELECT 1 FROM favorite_albums WHERE id = ?",
+          bind: [albumId],
+          callback: () => { exists = true; }
+        });
+
+        let isFavNow = false;
+        if (exists) {
+          db.exec({
+            sql: "DELETE FROM favorite_albums WHERE id = ?",
+            bind: [albumId]
+          });
+          isFavNow = false;
+        } else {
+          db.exec({
+            sql: "INSERT OR REPLACE INTO favorite_albums (id, title, artist, artist_id, image_url, album_json, added_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            bind: [
+              albumId,
+              album.title,
+              album.artist,
+              album.artistId || "",
+              album.coverUrl || "",
+              JSON.stringify(album),
+              Date.now()
+            ]
+          });
+          isFavNow = true;
+        }
+
+        self.postMessage({ type: "QUERY_OK", payload: isFavNow, messageId });
+        break;
+      }
+
+      case "IS_FAVORITE_ALBUM": {
+        const { albumId } = payload;
+        let exists = false;
+        db.exec({
+          sql: "SELECT 1 FROM favorite_albums WHERE id = ?",
+          bind: [String(albumId)],
           callback: () => { exists = true; }
         });
         self.postMessage({ type: "QUERY_OK", payload: exists, messageId });

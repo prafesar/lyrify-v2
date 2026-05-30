@@ -214,4 +214,47 @@ describe("SQLite Service Integration Smoke Tests", () => {
     expect(favs.length).toBe(1);
     expect(favs[0].id).toBe("reactive_track");
   });
+
+  it("should support toggling, checking, and retrieving favorite artists and albums including backups", async () => {
+    localStorage.removeItem("cantolex_favorite_artists_backup");
+    localStorage.removeItem("cantolex_favorite_albums_backup");
+
+    const activeService = new SqliteService();
+    await activeService.init();
+
+    const artistMock = { id: "artist_123", name: "Indie Singer", artworkUrl: "http://temp.local/art.png" };
+    const albumMock = { id: "album_456", title: "Indie Album", artist: "Indie Singer", coverUrl: "http://temp.local/alb.png" };
+
+    // Initially should not be favorite
+    expect(await activeService.isFavoriteArtist("artist_123")).toBe(false);
+    expect(await activeService.isFavoriteAlbum("album_456")).toBe(false);
+
+    // Toggle to add
+    await activeService.toggleFavoriteArtist(artistMock);
+    await activeService.toggleFavoriteAlbum(albumMock);
+
+    // Should now be favorite
+    expect(await activeService.isFavoriteArtist("artist_123")).toBe(true);
+    expect(await activeService.isFavoriteAlbum("album_456")).toBe(true);
+
+    // Check backups and retrieval
+    const artists = await activeService.getFavoriteArtists();
+    const albums = await activeService.getFavoriteAlbums();
+
+    expect(artists.length).toBe(1);
+    expect(artists[0].id).toBe("artist_123");
+    expect(artists[0].name).toBe("Indie Singer");
+
+    expect(albums.length).toBe(1);
+    expect(albums[0].id).toBe("album_456");
+    expect(albums[0].title).toBe("Indie Album");
+
+    // Toggle again to remove
+    await activeService.toggleFavoriteArtist(artistMock);
+    await activeService.toggleFavoriteAlbum(albumMock);
+
+    // Should be removed
+    expect(await activeService.isFavoriteArtist("artist_123")).toBe(false);
+    expect(await activeService.isFavoriteAlbum("album_456")).toBe(false);
+  });
 });

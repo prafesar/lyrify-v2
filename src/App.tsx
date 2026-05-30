@@ -41,7 +41,7 @@ import {
   FolderHeart,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
-import { Track } from "./constants";
+import { Track, Artist, Album } from "./constants";
 import { SUPPORTED_LANGUAGES } from "./lib/languages";
 import { useUserCards } from "./hooks/useUserCards";
 import { usePlayback } from "./hooks/usePlayback";
@@ -76,6 +76,7 @@ import {
   saveTrackData,
   getTrackDetails,
 } from "./services/musicService";
+import { sqliteService } from "./services/sqliteService";
 import { useAppNavigation } from "./hooks/useAppNavigation";
 import { setTransientTrack, popTransientTrack, initializeWebNavigation } from "./services/webNavigationAdapter";
 
@@ -544,17 +545,39 @@ export default function App() {
   const [isAddToPlaylistOpenInApp, setIsAddToPlaylistOpenInApp] = useState(false);
   const [playlistsInApp, setPlaylistsInApp] = useState<any[]>([]);
   const [favoritesInApp, setFavoritesInApp] = useState<Track[]>([]);
+  const [favoriteArtistsInApp, setFavoriteArtistsInApp] = useState<Artist[]>([]);
+  const [favoriteAlbumsInApp, setFavoriteAlbumsInApp] = useState<Album[]>([]);
 
   const loadAppLibraryData = async () => {
     try {
       const favs = await libraryRepository.getFavorites();
+      const favArtists = await libraryRepository.getFavoriteArtists();
+      const favAlbums = await libraryRepository.getFavoriteAlbums();
       const lists = await libraryRepository.getPlaylists();
       setFavoritesInApp(favs || []);
+      setFavoriteArtistsInApp(favArtists || []);
+      setFavoriteAlbumsInApp(favAlbums || []);
       setPlaylistsInApp(lists || []);
     } catch (err) {
       console.error(err);
     }
   };
+
+  useEffect(() => {
+    // Initial load
+    loadAppLibraryData();
+
+    // Subscribe to database changes to refresh global layout favorite states
+    const unsubscribe = sqliteService.subscribe((event) => {
+      if (event === "initialized" || event === "favorites" || event === "playlists") {
+        loadAppLibraryData();
+      }
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, []);
 
   useEffect(() => {
     if (activeMenuTrack) {
@@ -576,6 +599,32 @@ export default function App() {
       const tid = t.id || t.trackId;
       return tid === trackId;
     });
+  };
+
+  const handleToggleFavoriteArtistInApp = async (artist: Artist) => {
+    try {
+      await libraryRepository.toggleFavoriteArtist(artist);
+      await loadAppLibraryData();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const isArtistFavoriteInApp = (artistId: string) => {
+    return favoriteArtistsInApp.some(a => String(a.id) === String(artistId));
+  };
+
+  const handleToggleFavoriteAlbumInApp = async (album: Album) => {
+    try {
+      await libraryRepository.toggleFavoriteAlbum(album);
+      await loadAppLibraryData();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const isAlbumFavoriteInApp = (albumId: string) => {
+    return favoriteAlbumsInApp.some(al => String(al.id) === String(albumId));
   };
 
   const handleAddTrackToPlaylistInApp = async (playlistId: string, track: Track) => {
@@ -1493,7 +1542,28 @@ export default function App() {
                         <img src={albumDetails.album.coverUrl} className="w-40 h-40 md:w-56 md:h-56 rounded-3xl shadow-2xl border border-app-card-border" referrerPolicy="no-referrer" />
                       </div>
                       <div className="flex-1 min-w-0 pb-2">
-                        <h2 className="text-2xl md:text-3xl font-black text-app-fg mb-1 leading-tight">{albumDetails.album.title}</h2>
+                        <div className="flex items-center gap-3 mb-1">
+                          <h2 className="text-2xl md:text-3xl font-black text-app-fg leading-tight truncate">{albumDetails.album.title}</h2>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleToggleFavoriteAlbumInApp(albumDetails.album);
+                            }}
+                            className="p-1.5 hover:bg-app-fg/5 rounded-full transition-colors shrink-0"
+                            title={isAlbumFavoriteInApp(albumDetails.album.id) ? "Remove from Favorites" : "Add to Favorites"}
+                          >
+                            <Heart
+                              size={20}
+                              className={cn(
+                                "transition-all duration-300",
+                                isAlbumFavoriteInApp(albumDetails.album.id)
+                                  ? "fill-red-500 text-red-500 scale-110"
+                                  : "text-app-fg/30 hover:text-red-500/85 hover:scale-105"
+                              )}
+                            />
+                          </button>
+                        </div>
                         <button 
                           type="button"
                           onClick={(e) => {
@@ -1571,7 +1641,28 @@ export default function App() {
                       )}
                       
                       <div className="min-w-0">
-                        <h2 className="text-3xl font-black text-app-fg truncate">{artistDetails.artist.name}</h2>
+                        <div className="flex items-center gap-3">
+                          <h2 className="text-3xl font-black text-app-fg truncate">{artistDetails.artist.name}</h2>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleToggleFavoriteArtistInApp(artistDetails.artist);
+                            }}
+                            className="p-1.5 hover:bg-app-fg/5 rounded-full transition-colors shrink-0"
+                            title={isArtistFavoriteInApp(artistDetails.artist.id) ? "Remove from Favorites" : "Add to Favorites"}
+                          >
+                            <Heart
+                              size={22}
+                              className={cn(
+                                "transition-all duration-300",
+                                isArtistFavoriteInApp(artistDetails.artist.id)
+                                  ? "fill-red-500 text-red-500 scale-110"
+                                  : "text-app-fg/30 hover:text-red-500/85 hover:scale-105"
+                              )}
+                            />
+                          </button>
+                        </div>
                         <p className="text-sm text-app-muted uppercase tracking-widest">{artistDetails.artist.genre}</p>
                       </div>
                     </div>
@@ -1786,9 +1877,27 @@ export default function App() {
                   </span>
                   <div className="flex items-start justify-between gap-4">
                     <div className="min-w-0 flex-1">
-                      <h1 className="text-3xl font-bold text-app-fg mb-1 leading-tight">
-                        {currentTrack.title}
-                      </h1>
+                      <div className="flex items-center gap-3 mb-1">
+                        <h1 className="text-3xl font-bold text-app-fg leading-tight truncate">
+                          {currentTrack.title}
+                        </h1>
+                        <button
+                          type="button"
+                          onClick={() => handleToggleFavoriteInApp(currentTrack)}
+                          className="p-1.5 hover:bg-app-fg/5 rounded-full transition-colors shrink-0"
+                          title={isTrackFavoriteInApp(currentTrack.trackId || currentTrack.id) ? "Remove from Favorites" : "Add to Favorites"}
+                        >
+                          <Heart
+                            size={22}
+                            className={cn(
+                              "transition-all duration-300",
+                              isTrackFavoriteInApp(currentTrack.trackId || currentTrack.id)
+                                ? "fill-red-500 text-red-500 scale-110"
+                                : "text-app-fg/30 hover:text-red-500/80 hover:scale-105"
+                            )}
+                          />
+                        </button>
+                      </div>
                       <div className="flex flex-col gap-0.5">
                         <button
                           onClick={() => {

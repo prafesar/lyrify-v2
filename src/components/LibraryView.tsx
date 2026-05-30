@@ -4,7 +4,7 @@ import {
   Search, ChevronRight, X, Heart, ListMusic, Music, MoreVertical, 
   Play, Trash2, Plus, Disc, Star, Check, Sparkles, FolderHeart
 } from 'lucide-react';
-import { Track } from '../constants';
+import { Track, Artist, Album } from '../constants';
 import { libraryRepository } from '../application';
 import { sqliteService } from '../services/sqliteService';
 import { cn } from '../lib/utils';
@@ -26,6 +26,8 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
 }) => {
   // Library States
   const [favorites, setFavorites] = useState<Track[]>([]);
+  const [favoriteArtists, setFavoriteArtists] = useState<Artist[]>([]);
+  const [favoriteAlbums, setFavoriteAlbums] = useState<Album[]>([]);
   const [playlists, setPlaylists] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState<'all' | 'tracks' | 'playlists' | 'artists' | 'albums'>('all');
@@ -45,8 +47,12 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
   const loadData = async () => {
     try {
       const favs = await libraryRepository.getFavorites();
+      const favArtists = await libraryRepository.getFavoriteArtists();
+      const favAlbums = await libraryRepository.getFavoriteAlbums();
       const lists = await libraryRepository.getPlaylists();
       setFavorites(favs || []);
+      setFavoriteArtists(favArtists || []);
+      setFavoriteAlbums(favAlbums || []);
       setPlaylists(lists || []);
     } catch (err) {
       console.error("Failed to load library data:", err);
@@ -66,38 +72,6 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
       unsubscribe();
     };
   }, []);
-
-  // Update dynamic list of artists from favorites and recent tracks
-  const favoriteArtists = useMemo(() => {
-    const allKnownTracks = [...favorites, ...recentTracks];
-    const uniqueArtistNames = Array.from(new Set(allKnownTracks.map(t => t.artist).filter(Boolean)));
-    
-    return uniqueArtistNames.map((name, index) => {
-      // Find representative image
-      const representativeTrack = allKnownTracks.find(t => t.artist === name);
-      return {
-        id: representativeTrack?.artistId || `artist-${index}`,
-        name,
-        coverUrl: representativeTrack?.coverUrl || '',
-      };
-    });
-  }, [favorites, recentTracks]);
-
-  // Update dynamic list of albums from favorites
-  const favoriteAlbums = useMemo(() => {
-    const allKnownTracks = [...favorites, ...recentTracks];
-    const uniqueAlbumTitles = Array.from(new Set(allKnownTracks.map(t => t.album).filter(Boolean)));
-    
-    return uniqueAlbumTitles.map((title, index) => {
-      const representativeTrack = allKnownTracks.find(t => t.album === title);
-      return {
-        id: representativeTrack?.albumId || `album-${index}`,
-        title,
-        artist: representativeTrack?.artist || 'Unknown Artist',
-        coverUrl: representativeTrack?.coverUrl || '',
-      };
-    });
-  }, [favorites, recentTracks]);
 
   // Handle Favorite Toggle from Context Menu
   const handleToggleFavorite = async (track: Track) => {

@@ -1,4 +1,5 @@
 import { Track, TrackLyricsData } from "./musicService";
+import { Artist, Album } from "../constants";
 
 export class SqliteService {
   private worker: Worker | null = null;
@@ -11,6 +12,8 @@ export class SqliteService {
   private recentTracks: Track[] = [];
   private trackCache: Record<string, TrackLyricsData> = {};
   private favorites: Track[] = [];
+  private favoriteArtists: Artist[] = [];
+  private favoriteAlbums: Album[] = [];
   private playlists: any[] = [];
 
   // Track async callbacks for background writes/commands
@@ -37,6 +40,16 @@ export class SqliteService {
         const favoritesBackup = localStorage.getItem("cantolex_favorites_backup");
         if (favoritesBackup) {
           this.favorites = JSON.parse(favoritesBackup) || [];
+        }
+
+        const favoriteArtistsBackup = localStorage.getItem("cantolex_favorite_artists_backup");
+        if (favoriteArtistsBackup) {
+          this.favoriteArtists = JSON.parse(favoriteArtistsBackup) || [];
+        }
+
+        const favoriteAlbumsBackup = localStorage.getItem("cantolex_favorite_albums_backup");
+        if (favoriteAlbumsBackup) {
+          this.favoriteAlbums = JSON.parse(favoriteAlbumsBackup) || [];
         }
 
         const playlistsBackup = localStorage.getItem("cantolex_playlists_backup");
@@ -110,6 +123,50 @@ export class SqliteService {
     }
   }
 
+  private getFavoriteArtistsBackup(): Artist[] {
+    try {
+      if (typeof window !== "undefined" && window.localStorage) {
+        const val = localStorage.getItem("cantolex_favorite_artists_backup");
+        if (val) return JSON.parse(val);
+      }
+    } catch (e) {
+      console.warn("[SqliteService] Failed to read favorite artists backup from localStorage:", e);
+    }
+    return [];
+  }
+
+  private saveFavoriteArtistsBackup(arr: Artist[]) {
+    try {
+      if (typeof window !== "undefined" && window.localStorage) {
+        localStorage.setItem("cantolex_favorite_artists_backup", JSON.stringify(arr));
+      }
+    } catch (e) {
+      console.warn("[SqliteService] Failed to write favorite artists backup to localStorage:", e);
+    }
+  }
+
+  private getFavoriteAlbumsBackup(): Album[] {
+    try {
+      if (typeof window !== "undefined" && window.localStorage) {
+        const val = localStorage.getItem("cantolex_favorite_albums_backup");
+        if (val) return JSON.parse(val);
+      }
+    } catch (e) {
+      console.warn("[SqliteService] Failed to read favorite albums backup from localStorage:", e);
+    }
+    return [];
+  }
+
+  private saveFavoriteAlbumsBackup(arr: Album[]) {
+    try {
+      if (typeof window !== "undefined" && window.localStorage) {
+        localStorage.setItem("cantolex_favorite_albums_backup", JSON.stringify(arr));
+      }
+    } catch (e) {
+      console.warn("[SqliteService] Failed to write favorite albums backup to localStorage:", e);
+    }
+  }
+
   private getPlaylistsBackup(): any[] {
     try {
       if (typeof window !== "undefined" && window.localStorage) {
@@ -158,6 +215,38 @@ export class SqliteService {
       }
     } catch (err) {
       console.warn("[SqliteService] Failed to seed favorites to worker:", err);
+    }
+  }
+
+  private async seedFavoriteArtistsToWorker() {
+    try {
+      console.log("[SqliteService] Seeding favorite artists backup to SQLite worker...");
+      if (this.favoriteArtists.length > 0) {
+        for (const artist of this.favoriteArtists) {
+          const isFav = await this.sendWorkerMsgInternal<boolean>("IS_FAVORITE_ARTIST", { artistId: artist.id });
+          if (!isFav) {
+            await this.sendWorkerMsgInternal("TOGGLE_FAVORITE_ARTIST", { artist });
+          }
+        }
+      }
+    } catch (err) {
+      console.warn("[SqliteService] Failed to seed favorite artists to worker:", err);
+    }
+  }
+
+  private async seedFavoriteAlbumsToWorker() {
+    try {
+      console.log("[SqliteService] Seeding favorite albums backup to SQLite worker...");
+      if (this.favoriteAlbums.length > 0) {
+        for (const album of this.favoriteAlbums) {
+          const isFav = await this.sendWorkerMsgInternal<boolean>("IS_FAVORITE_ALBUM", { albumId: album.id });
+          if (!isFav) {
+            await this.sendWorkerMsgInternal("TOGGLE_FAVORITE_ALBUM", { album });
+          }
+        }
+      }
+    } catch (err) {
+      console.warn("[SqliteService] Failed to seed favorite albums to worker:", err);
     }
   }
 
@@ -220,7 +309,7 @@ export class SqliteService {
           const { type, payload, messageId } = event.data;
 
           if (type === "INIT_OK") {
-            const { preferences, recentHistory, trackCache, favorites, playlists, storageMode: sMode } = payload;
+            const { preferences, recentHistory, trackCache, favorites, favoriteArtists, favoriteAlbums, playlists, storageMode: sMode } = payload;
             this.storageMode = sMode || "opfs";
 
             // Merge SQLite database preferences with our current in-memory cache,
@@ -237,11 +326,15 @@ export class SqliteService {
               // Load from local localStorage backups first
               this.recentTracks = this.getRecentTracksBackup();
               this.favorites = this.getFavoritesBackup();
+              this.favoriteArtists = this.getFavoriteArtistsBackup();
+              this.favoriteAlbums = this.getFavoriteAlbumsBackup();
               this.playlists = this.getPlaylistsBackup();
 
               // Seed everything to the transient worker, fully awaiting it
               await this.seedRecentTracksToWorker();
               await this.seedFavoritesToWorker();
+              await this.seedFavoriteArtistsToWorker();
+              await this.seedFavoriteAlbumsToWorker();
               await this.seedPlaylistsToWorker();
             } else {
               // OPFS Mode: Check if worker has populated collections on a per-domain basis
@@ -268,6 +361,28 @@ export class SqliteService {
                 }
               }
 
+              // 2b. Favorite Artists Domain
+              if (favoriteArtists && favoriteArtists.length > 0) {
+                this.favoriteArtists = favoriteArtists;
+                this.saveFavoriteArtistsBackup(this.favoriteArtists);
+              } else {
+                this.favoriteArtists = this.getFavoriteArtistsBackup();
+                if (this.favoriteArtists.length > 0) {
+                  await this.seedFavoriteArtistsToWorker();
+                }
+              }
+
+              // 2c. Favorite Albums Domain
+              if (favoriteAlbums && favoriteAlbums.length > 0) {
+                this.favoriteAlbums = favoriteAlbums;
+                this.saveFavoriteAlbumsBackup(this.favoriteAlbums);
+              } else {
+                this.favoriteAlbums = this.getFavoriteAlbumsBackup();
+                if (this.favoriteAlbums.length > 0) {
+                  await this.seedFavoriteAlbumsToWorker();
+                }
+              }
+
               // 3. Playlists Domain
               if (playlists && playlists.length > 0) {
                 this.playlists = playlists;
@@ -290,6 +405,8 @@ export class SqliteService {
             
             this.recentTracks = this.getRecentTracksBackup();
             this.favorites = this.getFavoritesBackup();
+            this.favoriteArtists = this.getFavoriteArtistsBackup();
+            this.favoriteAlbums = this.getFavoriteAlbumsBackup();
             this.playlists = this.getPlaylistsBackup();
 
             this.isInitialized = true;
@@ -317,6 +434,8 @@ export class SqliteService {
         this.storageMode = "error";
         this.recentTracks = this.getRecentTracksBackup();
         this.favorites = this.getFavoritesBackup();
+        this.favoriteArtists = this.getFavoriteArtistsBackup();
+        this.favoriteAlbums = this.getFavoriteAlbumsBackup();
         this.playlists = this.getPlaylistsBackup();
         this.isInitialized = true;
         resolve();
@@ -445,12 +564,16 @@ export class SqliteService {
     this.recentTracks = [];
     this.trackCache = {};
     this.favorites = [];
+    this.favoriteArtists = [];
+    this.favoriteAlbums = [];
     this.playlists = [];
     try {
       if (typeof window !== "undefined" && window.localStorage) {
         localStorage.removeItem("cantolex_sqlite_prefs_sync");
         localStorage.removeItem("cantolex_recent_tracks_backup");
         localStorage.removeItem("cantolex_favorites_backup");
+        localStorage.removeItem("cantolex_favorite_artists_backup");
+        localStorage.removeItem("cantolex_favorite_albums_backup");
         localStorage.removeItem("cantolex_playlists_backup");
       }
     } catch (e) {
@@ -505,6 +628,100 @@ export class SqliteService {
   public async isFavorite(trackId: string): Promise<boolean> {
     const tid = String(trackId);
     return this.favorites.some((t) => String(t.id) === tid);
+  }
+
+  public async getFavoriteArtists(): Promise<Artist[]> {
+    if (this.storageMode === "error") {
+      return [...this.favoriteArtists];
+    }
+    try {
+      const res = await this.sendWorkerMsg<Artist[]>("GET_FAVORITE_ARTISTS", {});
+      if (res) {
+        if (res.length === 0 && this.favoriteArtists.length > 0) {
+          console.warn("[SqliteService] Prevented wiping favorite artists cache with empty worker response.");
+        } else {
+          this.favoriteArtists = res;
+          this.saveFavoriteArtistsBackup(res);
+        }
+      }
+    } catch (err) {
+      console.warn("[SqliteService] Failed to get favorite artists from worker, using cache:", err);
+    }
+    return [...this.favoriteArtists];
+  }
+
+  public async toggleFavoriteArtist(artist: Artist): Promise<boolean> {
+    const artistId = String(artist.id);
+    const idx = this.favoriteArtists.findIndex((a) => String(a.id) === artistId);
+    const isFavNow = idx === -1;
+    if (idx !== -1) {
+      this.favoriteArtists.splice(idx, 1);
+    } else {
+      this.favoriteArtists.push(artist);
+    }
+    this.saveFavoriteArtistsBackup(this.favoriteArtists);
+    this.notify("favorites"); // Notify 'favorites' to trigger view updates of the library!
+
+    if (this.storageMode !== "error") {
+      try {
+        await this.sendWorkerMsg("TOGGLE_FAVORITE_ARTIST", { artist });
+      } catch (err) {
+        console.warn("[SqliteService] Failed to save favorite artist toggle in worker:", err);
+      }
+    }
+    return isFavNow;
+  }
+
+  public async isFavoriteArtist(artistId: string): Promise<boolean> {
+    const aid = String(artistId);
+    return this.favoriteArtists.some((a) => String(a.id) === aid);
+  }
+
+  public async getFavoriteAlbums(): Promise<Album[]> {
+    if (this.storageMode === "error") {
+      return [...this.favoriteAlbums];
+    }
+    try {
+      const res = await this.sendWorkerMsg<Album[]>("GET_FAVORITE_ALBUMS", {});
+      if (res) {
+        if (res.length === 0 && this.favoriteAlbums.length > 0) {
+          console.warn("[SqliteService] Prevented wiping favorite albums cache with empty worker response.");
+        } else {
+          this.favoriteAlbums = res;
+          this.saveFavoriteAlbumsBackup(res);
+        }
+      }
+    } catch (err) {
+      console.warn("[SqliteService] Failed to get favorite albums from worker, using cache:", err);
+    }
+    return [...this.favoriteAlbums];
+  }
+
+  public async toggleFavoriteAlbum(album: Album): Promise<boolean> {
+    const albumId = String(album.id);
+    const idx = this.favoriteAlbums.findIndex((al) => String(al.id) === albumId);
+    const isFavNow = idx === -1;
+    if (idx !== -1) {
+      this.favoriteAlbums.splice(idx, 1);
+    } else {
+      this.favoriteAlbums.push(album);
+    }
+    this.saveFavoriteAlbumsBackup(this.favoriteAlbums);
+    this.notify("favorites"); // Notify 'favorites' to trigger view updates of the library!
+
+    if (this.storageMode !== "error") {
+      try {
+        await this.sendWorkerMsg("TOGGLE_FAVORITE_ALBUM", { album });
+      } catch (err) {
+        console.warn("[SqliteService] Failed to save favorite album toggle in worker:", err);
+      }
+    }
+    return isFavNow;
+  }
+
+  public async isFavoriteAlbum(albumId: string): Promise<boolean> {
+    const alid = String(albumId);
+    return this.favoriteAlbums.some((al) => String(al.id) === alid);
   }
 
   public async getPlaylists(): Promise<any[]> {
