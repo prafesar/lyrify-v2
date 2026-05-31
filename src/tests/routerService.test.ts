@@ -13,20 +13,26 @@ describe("routerService", () => {
     popTransientTrack("non-existent");
     
     // Mock window.location
-    delete (window as any).location;
-    window.location = {
-      ...originalLocation,
-      pathname: "/explore",
-    };
+    Object.defineProperty(window, 'location', {
+      value: {
+        ...originalLocation,
+        pathname: "/explore",
+      },
+      configurable: true,
+      writable: true,
+    });
 
     // Mock window.history
-    delete (window as any).history;
-    window.history = {
-      ...originalHistory,
-      pushState: vi.fn(),
-      replaceState: vi.fn(),
-      back: vi.fn(),
-    };
+    Object.defineProperty(window, 'history', {
+      value: {
+        ...originalHistory,
+        pushState: vi.fn(),
+        replaceState: vi.fn(),
+        back: vi.fn(),
+      },
+      configurable: true,
+      writable: true,
+    });
 
     // Mock dispatchEvent
     window.dispatchEvent = vi.fn();
@@ -38,8 +44,16 @@ describe("routerService", () => {
   });
 
   afterEach(() => {
-    window.location = originalLocation;
-    window.history = originalHistory;
+    Object.defineProperty(window, 'location', {
+      value: originalLocation,
+      configurable: true,
+      writable: true,
+    });
+    Object.defineProperty(window, 'history', {
+      value: originalHistory,
+      configurable: true,
+      writable: true,
+    });
   });
 
   describe("parseUrl", () => {
