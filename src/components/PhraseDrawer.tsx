@@ -239,10 +239,15 @@ export default function PhraseDrawer({
                 {activeTrack && setCurrentTrack && (
                   <button
                     onClick={() => setIsAdding(!isAdding)}
-                    className="flex items-center gap-1 px-2.5 py-1 bg-[var(--accent)]/10 hover:bg-[var(--accent)]/20 text-[var(--accent)] text-xs font-bold rounded-xl transition-all"
+                    className={cn(
+                      "flex items-center gap-1.5 px-3.5 py-2 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all shadow-sm",
+                      isAdding
+                        ? "bg-app-fg/10 hover:bg-app-fg/15 text-app-fg"
+                        : "bg-orange-500 hover:bg-orange-600 text-white hover:scale-105 active:scale-95"
+                    )}
                   >
-                    {isAdding ? <X size={12} /> : <Plus size={12} />}
-                    {isAdding ? "Cancel" : "Add Phrase"}
+                    {isAdding ? <X size={12} strokeWidth={3} /> : <Plus size={12} strokeWidth={3} />}
+                    <span>{isAdding ? "Cancel" : "Add custom phrase"}</span>
                   </button>
                 )}
               </div>
@@ -358,37 +363,45 @@ export default function PhraseDrawer({
                           </div>
                         ) : (
                           <>
-                            <div className="flex items-start justify-between gap-4 mb-3">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-3 pb-3 border-b border-app-fg/5">
                               <div className="min-w-0 flex-1">
-                                <div className="flex items-center gap-2 mb-1">
+                                <div className="flex items-center flex-wrap gap-2 mb-1.5">
                                   <h4 className="text-lg font-bold text-app-fg leading-tight">{text}</h4>
-                                  {phrase.source === 'user' && (
-                                    <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-app-accent/10 text-app-accent font-extrabold uppercase tracking-wide">User Custom</span>
+                                  {phrase.source === 'user' ? (
+                                    <span className="text-[8px] px-2 py-0.5 rounded-full bg-orange-500/10 text-orange-600 font-extrabold uppercase tracking-wide">
+                                      Custom Phrase
+                                    </span>
+                                  ) : (
+                                    <span className="text-[8px] px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-600 font-extrabold uppercase tracking-wide flex items-center gap-0.5">
+                                      <Sparkles size={8} className="fill-blue-600/35" />
+                                      <span>AI Phrase</span>
+                                    </span>
                                   )}
                                 </div>
-                                <p className="text-sm text-app-fg opacity-40 font-serif italic">{phrase.translation}</p>
+                                <p className="text-sm text-app-fg opacity-65 font-serif italic">{phrase.translation}</p>
                               </div>
-                              <div className="flex items-center gap-2">
-                                {/* Inline edits if reactive state allows */}
+
+                              <div className="flex items-center gap-2.5 ml-auto sm:ml-0 shrink-0">
+                                {/* Inline edits is always visible and friendly to mobile */}
                                 {activeTrack && setCurrentTrack && (
-                                  <div className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
+                                  <div className="flex items-center gap-1.5 border-r border-app-fg/10 pr-2.5">
                                     <button
                                       onClick={() => {
                                         setEditingId(phrase.id);
                                         setEditTranslationText(phrase.translation || '');
                                         setEditExplanationText(phrase.explanation || '');
                                       }}
-                                      className="p-1.5 rounded-lg bg-blue-500/10 text-blue-500 hover:bg-blue-500 hover:text-white transition-all"
-                                      title="Edit Phrase"
+                                      className="p-2 rounded-xl bg-orange-500/10 text-orange-600 hover:bg-orange-500 hover:text-white transition-all"
+                                      title={phrase.source === 'user' ? "Edit custom phrase details" : "Edit translation (creates custom AI override)"}
                                     >
-                                      <Edit3 size={12} />
+                                      <Edit3 size={13} />
                                     </button>
                                     <button
                                       onClick={() => handleDeletePhraseClick(phrase.id)}
-                                      className="p-1.5 rounded-lg bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white transition-all"
-                                      title="Delete Phrase"
+                                      className="p-2 rounded-xl bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white transition-all"
+                                      title={phrase.source === 'user' ? "Permanently delete custom phrase" : "Hide this AI phrase locally from views"}
                                     >
-                                      <Trash2 size={12} />
+                                      <Trash2 size={13} />
                                     </button>
                                   </div>
                                 )}
@@ -398,30 +411,30 @@ export default function PhraseDrawer({
                                     onClick={() => handleAction(phrase, 'toggle')}
                                     disabled={isBusy}
                                     className={cn(
-                                      "flex items-center gap-2 px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all shrink-0",
+                                      "flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all shrink-0",
                                       card.status === 'known' ? "text-green-500 bg-green-500/10 border-green-500/20" : "text-orange-500 bg-orange-500/10 border-orange-500/20"
                                     )}
                                   >
                                     {isBusy ? <RefreshCw size={12} className="animate-spin" /> : getStatusIcon(card.status)}
-                                    {card.status}
+                                    <span>{card.status}</span>
                                   </button>
                                 ) : (
-                                  <div className="flex gap-2 shrink-0">
+                                  <div className="flex items-center gap-1.5 shrink-0">
                                     <button
                                       onClick={() => handleMarkKnown(phrase)}
                                       disabled={isBusy}
-                                      className="p-2.5 rounded-xl bg-green-500/10 text-green-500 hover:bg-green-500 hover:text-white transition-all active:scale-95 shadow-sm"
+                                      className="p-2 rounded-xl bg-green-500/10 text-green-500 hover:bg-green-500 hover:text-white transition-all active:scale-95 shadow-sm"
                                       title="Mark as Known"
                                     >
-                                      {isBusy ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
+                                      {isBusy ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
                                     </button>
                                     <button
                                       onClick={() => handleAction(phrase, 'add')}
                                       disabled={isBusy}
-                                      className="p-2.5 rounded-xl bg-[var(--accent)]/10 text-[var(--accent)] hover:bg-[var(--accent)] hover:text-white transition-all active:scale-95 shadow-sm"
+                                      className="p-2 rounded-xl bg-orange-500/10 text-orange-600 hover:bg-orange-500 hover:text-white transition-all active:scale-95 shadow-sm"
                                       title="Add to Study"
                                     >
-                                      {isBusy ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
+                                      {isBusy ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
                                     </button>
                                   </div>
                                 )}

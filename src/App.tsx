@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { motion, AnimatePresence, useMotionValue } from "motion/react";
 import {
   Play,
@@ -39,6 +39,7 @@ import {
   Heart,
   MoreVertical,
   FolderHeart,
+  ListFilter,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { Track, Artist, Album } from "./constants";
@@ -215,6 +216,10 @@ interface LyricLineProps {
   shadowingAttempts: number;
   handleToggleStarLine: (index: number) => void;
   onOpenLineDrawer?: (i: number) => void;
+  isSelectionMode?: boolean;
+  isSelectedForAnalysis?: boolean;
+  onToggleSelection?: (lineId: string) => void;
+  lineId?: string;
 }
 
 const LyricLine = ({
@@ -236,6 +241,10 @@ const LyricLine = ({
   shadowingAttempts,
   handleToggleStarLine,
   onOpenLineDrawer,
+  isSelectionMode = false,
+  isSelectedForAnalysis = false,
+  onToggleSelection,
+  lineId,
 }: LyricLineProps) => {
   const trimmedLine = line.trim();
   if (!trimmedLine && isCompact) return null;
@@ -274,13 +283,37 @@ const LyricLine = ({
         className={cn(
           "group relative flex flex-col gap-1 rounded-[1.5rem] border cursor-pointer z-10 transition-all duration-300",
           isCompact ? "px-4 py-1" : "px-6 py-1.5",
-          activeLineIndex === i
-            ? "scale-[1.01] bg-app-card/60 border-app-card-border shadow-xl z-20 brightness-110"
-            : "border-transparent bg-transparent opacity-65 hover:opacity-100 hover:bg-app-card/5",
+          isSelectionMode
+            ? isSelectedForAnalysis
+              ? "bg-orange-500/10 border-orange-500/30 scale-[1.005] opacity-100 shadow-sm"
+              : "border-app-card-border/40 bg-transparent opacity-80 hover:opacity-100 hover:bg-app-card/5"
+            : activeLineIndex === i
+              ? "scale-[1.01] bg-app-card/60 border-app-card-border shadow-xl z-20 brightness-110"
+              : "border-transparent bg-transparent opacity-65 hover:opacity-100 hover:bg-app-card/5",
         )}
-        onClick={() => trimmedLine && handleLineClick(line, i)}
+        onClick={() => {
+          if (!trimmedLine) return;
+          if (isSelectionMode) {
+            onToggleSelection?.(lineId || "");
+          } else {
+            handleLineClick(line, i);
+          }
+        }}
       >
         <div className="flex items-center gap-4 w-full relative z-10">
+          {isSelectionMode && (
+            <div className="shrink-0 flex items-center justify-center">
+              <div className={cn(
+                "w-5 h-5 rounded-md border flex items-center justify-center transition-all",
+                isSelectedForAnalysis 
+                  ? "bg-orange-500 border-orange-500 text-white" 
+                  : "border-app-fg/20 bg-app-card"
+              )}>
+                {isSelectedForAnalysis && <Check size={12} strokeWidth={3} />}
+              </div>
+            </div>
+          )}
+
           <div className="flex-1 min-w-0">
             <p
               className={cn(
@@ -294,7 +327,7 @@ const LyricLine = ({
             </p>
           </div>
 
-          {trimmedLine && (
+          {trimmedLine && !isSelectionMode && (
             <div className="flex items-center gap-2 shrink-0">
               {phrasesInLine && phrasesInLine.length > 0 && onOpenLineDrawer && (
                 <button
@@ -746,7 +779,8 @@ export default function App() {
     handleRegenerateAnalysis: handleRegenerateAnalysisRaw,
     handleManualLyricsSearch,
     handleSelectLyricOption: handleSelectLyricOptionRaw,
-    handleAnalyzeStarredLines: handleAnalyzeStarredLinesRaw
+    handleAnalyzeStarredLines: handleAnalyzeStarredLinesRaw,
+    handleAnalyzeSelectedLines: handleAnalyzeSelectedLinesRaw
   } = useTrackSession();
 
   const {
@@ -793,6 +827,26 @@ export default function App() {
     setIsReadingAll,
     handleLineClick
   } = usePlayback(currentTrack, phraseMetadata, targetLanguage);
+
+  const [isAnalysisSelectionMode, setIsAnalysisSelectionMode] = useState(false);
+  const [selectedLineIdsForAnalysis, setSelectedLineIdsForAnalysis] = useState<string[]>([]);
+
+  const handleToggleLineSelection = useCallback((lineId: string) => {
+    setSelectedLineIdsForAnalysis(prev => {
+      if (prev.includes(lineId)) {
+        return prev.filter(id => id !== lineId);
+      } else {
+        return [...prev, lineId];
+      }
+    });
+  }, []);
+
+  const handleRunAnalyzeSelectedLines = async () => {
+    if (selectedLineIdsForAnalysis.length === 0) return;
+    await handleAnalyzeSelectedLinesRaw(selectedLineIdsForAnalysis, targetLanguage, { loadCommunityTracks });
+    setSelectedLineIdsForAnalysis([]);
+    setIsAnalysisSelectionMode(false);
+  };
 
   // Derived memoized progress View Models
   const nextStepState = useMemo(() => {
@@ -1080,6 +1134,10 @@ export default function App() {
           setSelectedLineIndexForDrawer(index);
           setIsPhraseDrawerOpen(true);
         }}
+        isSelectionMode={isAnalysisSelectionMode}
+        isSelectedForAnalysis={selectedLineIdsForAnalysis.includes(currentTrack?.lines?.[i]?.lineId || "")}
+        onToggleSelection={handleToggleLineSelection}
+        lineId={currentTrack?.lines?.[i]?.lineId}
       />
     );
   };
@@ -2273,9 +2331,52 @@ export default function App() {
                   <div className="flex flex-col gap-1 pb-32">
                     <div className="flex justify-end px-1 pb-4">
                       {(currentTrack.rawLyrics || lyricsFetchError) && (
-                        <div className="flex gap-2 items-center">
+                        <div className="flex flex-wrap gap-2 items-center justify-end w-full">
                           {currentTrack.rawLyrics && (
-                            <div className="flex bg-app-card/80 backdrop-blur-md border border-app-card-border p-1 rounded-2xl shadow-sm text-xs gap-1.5 items-center">
+                            <>
+                              {isAnalysisSelectionMode ? (
+                                <div className="flex bg-app-card/90 backdrop-blur-md border border-orange-500/30 p-1.5 rounded-2xl shadow-lg text-xs gap-2 items-center pr-2 pl-3">
+                                  <span className="text-[10px] font-bold text-orange-500 uppercase tracking-widest animate-pulse shrink-0">
+                                    Selecting ({selectedLineIdsForAnalysis.length})
+                                  </span>
+                                  <button
+                                    onClick={handleRunAnalyzeSelectedLines}
+                                    disabled={selectedLineIdsForAnalysis.length === 0 || isGeneratingAnalysis}
+                                    className={cn(
+                                      "px-3 py-1.5 rounded-xl font-black transition-all text-[10px] uppercase tracking-wider flex items-center gap-1.5 shrink-0",
+                                      selectedLineIdsForAnalysis.length === 0
+                                        ? "bg-app-card border border-app-card-border/60 text-app-fg opacity-40 cursor-not-allowed"
+                                        : "bg-orange-500 text-white shadow-lg shadow-orange-500/20 hover:scale-105 active:scale-95"
+                                    )}
+                                  >
+                                    <Brain size={12} className={isGeneratingAnalysis ? "animate-spin" : ""} />
+                                    <span>Analyze Selected</span>
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      setIsAnalysisSelectionMode(false);
+                                      setSelectedLineIdsForAnalysis([]);
+                                    }}
+                                    className="px-2.5 py-1.5 rounded-xl hover:bg-app-fg/5 text-app-fg opacity-65 hover:opacity-100 font-bold uppercase text-[10px] tracking-wider shrink-0"
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  onClick={() => {
+                                    setIsAnalysisSelectionMode(true);
+                                    setSelectedLineIdsForAnalysis([]);
+                                  }}
+                                  className="px-3.5 py-2 bg-app-card border border-app-card-border hover:border-app-fg/20 rounded-2xl text-[10px] font-bold uppercase tracking-widest text-app-fg flex items-center gap-1.5 shadow-sm hover:scale-102 transition-all active:scale-98"
+                                  title="Select specific lyric lines for precise targeted AI analysis and collocations"
+                                >
+                                  <ListFilter size={12} className="text-orange-500" />
+                                  <span>Select lines for analysis</span>
+                                </button>
+                              )}
+
+                              <div className="flex bg-app-card/80 backdrop-blur-md border border-app-card-border p-1 rounded-2xl shadow-sm text-xs gap-1.5 items-center">
                               {(() => {
                                 const srcLangObj = SUPPORTED_LANGUAGES.find(l => 
                                   l.name.toLowerCase() === (currentTrack?.sourceLanguage || "English").toLowerCase() ||
@@ -2347,9 +2448,10 @@ export default function App() {
                                 );
                               })()}
                             </div>
-                          )}
-                        </div>
-                      )}
+                          </>
+                        )}
+                      </div>
+                    )}
                     </div>
                     {currentTrack.rawLyrics ? (() => {
                       let linesToRender = currentTrack.lines || [];
@@ -2602,7 +2704,7 @@ export default function App() {
                                       title={starredCount === 0 ? "Star some lyric lines first to run targeted analysis" : "Analyze only starred lines to add precise collocations of your choice"}
                                     >
                                       <Sparkles size={10} className={isGeneratingAnalysis ? "animate-spin" : ""} />
-                                      {isGeneratingAnalysis ? "Analyzing..." : `Starred Lyrics (${starredCount})`}
+                                      {isGeneratingAnalysis ? "Analyzing..." : `Analyze starred (${starredCount})`}
                                     </button>
 
                                     {(!currentTrack.promptVersion || currentTrack.promptVersion < ANALYSIS_PROMPT_VERSION) && (
@@ -2682,13 +2784,14 @@ export default function App() {
                                 Generate Deep Analysis
                               </button>
 
-                              {starredCount > 0 && (
+                               {starredCount > 0 && (
                                 <button
                                   onClick={handleAnalyzeStarredLines}
                                   className="px-10 py-5 rounded-3xl bg-orange-500/10 border border-orange-500/20 text-orange-500 font-black uppercase tracking-[0.2em] text-[10px] shadow-2xl hover:scale-105 transition-all flex items-center gap-3"
+                                  title="Analyze starred lyric lines for targeted vocabulary"
                                 >
                                   <Brain size={16} />
-                                  Analyze Starred ({starredCount})
+                                  Analyze starred ({starredCount})
                                 </button>
                               )}
                             </div>
