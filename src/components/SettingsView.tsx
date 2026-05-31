@@ -37,7 +37,7 @@ export default function SettingsView({ user, targetLanguage, setTargetLanguage, 
             className="w-16 h-16 rounded-2xl flex items-center justify-center border transition-colors overflow-hidden"
             style={{ backgroundColor: 'color-mix(in srgb, var(--accent) 15%, transparent)', borderColor: 'color-mix(in srgb, var(--accent) 20%, transparent)' }}
           >
-            {user?.photoURL ? (
+            {user?.photoURL && user.photoURL !== "" ? (
               <img src={user.photoURL} alt={user.displayName || 'User'} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
             ) : (
               <User style={{ color: 'var(--accent)' }} size={32} />

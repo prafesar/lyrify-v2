@@ -4,7 +4,7 @@ import {
   Search, ChevronRight, X, Heart, ListMusic, Music, MoreVertical, 
   Play, Trash2, Plus, Disc, Star, Check, Sparkles, FolderHeart
 } from 'lucide-react';
-import { Track } from '../constants';
+import { Track, Artist, Album } from '../constants';
 import { libraryRepository } from '../application';
 import { sqliteService } from '../services/sqliteService';
 import { cn } from '../lib/utils';
@@ -26,6 +26,8 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
 }) => {
   // Library States
   const [favorites, setFavorites] = useState<Track[]>([]);
+  const [favoriteArtists, setFavoriteArtists] = useState<Artist[]>([]);
+  const [favoriteAlbums, setFavoriteAlbums] = useState<Album[]>([]);
   const [playlists, setPlaylists] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState<'all' | 'tracks' | 'playlists' | 'artists' | 'albums'>('all');
@@ -45,8 +47,12 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
   const loadData = async () => {
     try {
       const favs = await libraryRepository.getFavorites();
+      const favArtists = await libraryRepository.getFavoriteArtists();
+      const favAlbums = await libraryRepository.getFavoriteAlbums();
       const lists = await libraryRepository.getPlaylists();
       setFavorites(favs || []);
+      setFavoriteArtists(favArtists || []);
+      setFavoriteAlbums(favAlbums || []);
       setPlaylists(lists || []);
     } catch (err) {
       console.error("Failed to load library data:", err);
@@ -66,38 +72,6 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
       unsubscribe();
     };
   }, []);
-
-  // Update dynamic list of artists from favorites and recent tracks
-  const favoriteArtists = useMemo(() => {
-    const allKnownTracks = [...favorites, ...recentTracks];
-    const uniqueArtistNames = Array.from(new Set(allKnownTracks.map(t => t.artist).filter(Boolean)));
-    
-    return uniqueArtistNames.map((name, index) => {
-      // Find representative image
-      const representativeTrack = allKnownTracks.find(t => t.artist === name);
-      return {
-        id: representativeTrack?.artistId || `artist-${index}`,
-        name,
-        coverUrl: representativeTrack?.coverUrl || '',
-      };
-    });
-  }, [favorites, recentTracks]);
-
-  // Update dynamic list of albums from favorites
-  const favoriteAlbums = useMemo(() => {
-    const allKnownTracks = [...favorites, ...recentTracks];
-    const uniqueAlbumTitles = Array.from(new Set(allKnownTracks.map(t => t.album).filter(Boolean)));
-    
-    return uniqueAlbumTitles.map((title, index) => {
-      const representativeTrack = allKnownTracks.find(t => t.album === title);
-      return {
-        id: representativeTrack?.albumId || `album-${index}`,
-        title,
-        artist: representativeTrack?.artist || 'Unknown Artist',
-        coverUrl: representativeTrack?.coverUrl || '',
-      };
-    });
-  }, [favorites, recentTracks]);
 
   // Handle Favorite Toggle from Context Menu
   const handleToggleFavorite = async (track: Track) => {
@@ -216,27 +190,37 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
       );
     }
     if (listTracks.length < 4) {
-      return (
+      return listTracks[0].coverUrl ? (
         <img 
           src={listTracks[0].coverUrl} 
           alt={playlist.name} 
           className="w-16 h-16 rounded-2xl object-cover shadow-md border border-app-card-border"
           referrerPolicy="no-referrer"
         />
+      ) : (
+        <div className="w-16 h-16 rounded-2xl bg-app-fg/5 border border-app-card-border flex items-center justify-center text-app-fg/30">
+          <Disc size={28} />
+        </div>
       );
     }
     // Render 2x2 grid collage
     return (
       <div className="w-16 h-16 rounded-2xl overflow-hidden grid grid-cols-2 shadow-md border border-app-card-border">
-        {listTracks.slice(0, 4).map((t: Track, idx: number) => (
-          <img 
-            key={idx} 
-            src={t.coverUrl} 
-            alt="" 
-            className="w-8 h-8 object-cover"
-            referrerPolicy="no-referrer"
-          />
-        ))}
+        {listTracks.slice(0, 4).map((t: Track, idx: number) => 
+          t.coverUrl ? (
+            <img 
+              key={idx} 
+              src={t.coverUrl} 
+              alt="" 
+              className="w-8 h-8 object-cover"
+              referrerPolicy="no-referrer"
+            />
+          ) : (
+            <div key={idx} className="w-8 h-8 bg-app-fg/5 flex items-center justify-center text-app-fg/20">
+              <Disc size={12} />
+            </div>
+          )
+        )}
       </div>
     );
   };
@@ -377,12 +361,18 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                           className="w-full flex items-center justify-between p-3.5 rounded-2xl bg-app-card border border-app-card-border shadow-sm active:scale-[0.99] transition-all hover:bg-opacity-80 group cursor-pointer"
                         >
                           <div className="flex items-center gap-3.5 overflow-hidden flex-1 select-none">
-                            <img
-                              src={track.coverUrl}
-                              className="w-11 h-11 rounded-xl object-cover shadow"
-                              alt={track.title}
-                              referrerPolicy="no-referrer"
-                            />
+                            {track.coverUrl ? (
+                              <img
+                                src={track.coverUrl}
+                                className="w-11 h-11 rounded-xl object-cover shadow"
+                                alt={track.title}
+                                referrerPolicy="no-referrer"
+                              />
+                            ) : (
+                              <div className="w-11 h-11 rounded-xl bg-app-fg/5 border border-app-card-border flex items-center justify-center text-app-fg/30 shrink-0 animate-pulse">
+                                <Disc size={18} />
+                              </div>
+                            )}
                             <div className="text-left overflow-hidden">
                               <span className="font-bold text-app-fg text-[14px] leading-tight block truncate group-hover:text-app-accent transition-colors">
                                 {track.title}
@@ -495,9 +485,9 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                           style={{ width: '100px' }}
                         >
                           <div className="relative w-20 h-20 rounded-full overflow-hidden border border-app-card-border shadow shadow-app-accent/5 group-hover:scale-105 group-hover:border-app-accent transition-all duration-300">
-                            {artist.coverUrl ? (
+                            {artist.artworkUrl && artist.artworkUrl !== "" ? (
                               <img
-                                src={artist.coverUrl}
+                                src={artist.artworkUrl}
                                 className="w-full h-full object-cover"
                                 alt={artist.name}
                                 referrerPolicy="no-referrer"
@@ -517,7 +507,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                     </div>
                   ) : (
                     <div className="text-center py-8 rounded-2xl border border-dashed border-app-card-border opacity-60 bg-app-card/20 text-xs text-app-muted">
-                      Artists will appear automatically from your favorite tracks!
+                      Artists will appear automatically from your favorite artists! Add them manually to see them here.
                     </div>
                   )}
                 </div>
@@ -540,7 +530,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                         onClick={() => album.id && onAlbumSelect(album.id)}
                         className="flex items-center gap-3 p-2.5 rounded-2xl bg-app-card/50 border border-app-card-border shadow-sm text-left group hover:bg-app-card active:scale-95 transition-all w-full overflow-hidden"
                       >
-                        {album.coverUrl ? (
+                        {album.coverUrl && album.coverUrl !== "" ? (
                           <img 
                             src={album.coverUrl} 
                             alt={album.title} 
@@ -619,12 +609,18 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                     className="w-full flex items-center justify-between p-3 rounded-2xl bg-app-card/65 border border-app-card-border hover:border-app-accent/20 hover:bg-app-card transition-all group cursor-pointer shadow-sm"
                   >
                     <div className="flex items-center gap-3 overflow-hidden flex-1 select-none">
-                      <img
-                        src={track.coverUrl}
-                        className="w-10 h-10 rounded-xl object-cover shadow border border-app-card-border"
-                        alt={track.title}
-                        referrerPolicy="no-referrer"
-                      />
+                      {track.coverUrl ? (
+                        <img
+                          src={track.coverUrl}
+                          className="w-10 h-10 rounded-xl object-cover shadow border border-app-card-border"
+                          alt={track.title}
+                          referrerPolicy="no-referrer"
+                        />
+                      ) : (
+                        <div className="w-10 h-10 rounded-xl bg-app-fg/5 border border-app-card-border flex items-center justify-center text-app-fg/30 shrink-0">
+                          <Disc size={16} />
+                        </div>
+                      )}
                       <div className="text-left overflow-hidden">
                         <span className="font-bold text-app-fg text-sm block truncate group-hover:text-app-accent transition-colors">
                           {track.title}
@@ -706,12 +702,18 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
 
               {/* Track summary */}
               <div className="flex items-center gap-4 text-left p-3.5 bg-app-fg/5 rounded-2xl mb-5 border border-app-card-border/60">
-                <img
-                  src={menuTrack.coverUrl}
-                  alt={menuTrack.title}
-                  className="w-14 h-14 rounded-xl object-cover shadow shadow-black/20"
-                  referrerPolicy="no-referrer"
-                />
+                {menuTrack.coverUrl ? (
+                  <img
+                    src={menuTrack.coverUrl}
+                    alt={menuTrack.title}
+                    className="w-14 h-14 rounded-xl object-cover shadow shadow-black/20"
+                    referrerPolicy="no-referrer"
+                  />
+                ) : (
+                  <div className="w-14 h-14 rounded-xl bg-app-fg/5 border border-app-card-border flex items-center justify-center text-app-fg/30 shrink-0">
+                    <Disc size={20} />
+                  </div>
+                )}
                 <div className="overflow-hidden flex-1 select-none">
                   <h3 className="font-bold text-app-fg leading-tight truncate">{menuTrack.title}</h3>
                   <p className="text-xs text-app-muted truncate mt-0.5">{menuTrack.artist}</p>

@@ -45,9 +45,9 @@ describe('musicService cache and local persistence regressions', () => {
     const lines = splitLyricsIntoLines('track-42', '  first line  \n\nsecond line');
 
     expect(lines).toEqual([
-      { id: 'track-42:line:0', index: 0, original: 'first line', phrases: [] },
-      { id: 'track-42:line:1', index: 1, original: '', phrases: [] },
-      { id: 'track-42:line:2', index: 2, original: 'second line', phrases: [] },
+      { id: 'track-42:line:0', lineId: 'line_781e3b91', index: 0, original: 'first line', phrases: [] },
+      { id: 'track-42:line:1', lineId: 'empty_line', index: 1, original: '', phrases: [] },
+      { id: 'track-42:line:2', lineId: 'line_edde7d5b', index: 2, original: 'second line', phrases: [] },
     ]);
   });
 

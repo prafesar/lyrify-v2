@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { 
   trackSessionFacade, 
   recentHistoryRepository, 
@@ -16,6 +16,13 @@ import {
   fetchLyricsFromOption, 
   clearCachedLyrics 
 } from "../services/musicService";
+import { 
+  linkPhrasesToLines, 
+  buildStarredLinesAnalysisInput, 
+  mergeGeneratedPhrasesForLines,
+  buildSelectedLinesAnalysisInput,
+  mergeGeneratedPhrasesForSelectedLines
+} from "../services/lyricsAnalysisService";
 
 export interface UseTrackSessionResult {
   currentTrack: TrackLyricsData | null;
@@ -116,6 +123,22 @@ export interface UseTrackSessionResult {
       setActiveTab: (t: "preview" | "lyrics" | "analysis") => void;
     }
   ) => void;
+
+  handleAnalyzeStarredLines: (
+    targetLanguage: string,
+    callbacks: {
+      loadCommunityTracks: () => void;
+    }
+  ) => Promise<void>;
+
+  handleAnalyzeSelectedLines: (
+    selectedLineIds: string[],
+    targetLanguage: string,
+    callbacks: {
+      loadCommunityTracks: () => void;
+    },
+    instruction?: string
+  ) => Promise<void>;
 }
 
 export function useTrackSession(): UseTrackSessionResult {
@@ -492,8 +515,131 @@ export function useTrackSession(): UseTrackSessionResult {
     }, targetLanguage, callbacks);
   }, [currentTrack, handleTrackSelect]);
 
+  const handleAnalyzeStarredLines = useCallback(async (
+    targetLanguage: string,
+    callbacks: {
+      loadCommunityTracks: () => void;
+    }
+  ) => {
+    if (!currentTrack) {
+      setAnalysisError("No current track loaded.");
+      return;
+    }
+
+    const starredLines = currentTrack.lines.filter(l => l.isStarred);
+    if (starredLines.length === 0) {
+      setAnalysisError("No starred lines to analyze. Please star some lines first!");
+      return;
+    }
+
+    setIsGeneratingAnalysis(true);
+    setAnalysisError(null);
+
+    try {
+      // Prepare payload
+      const input = buildStarredLinesAnalysisInput(currentTrack);
+
+      // Call Gemini Targeted Analysis API
+      const result = await aiClient.generateTargetedAnalysis(
+        input.title,
+        input.artist,
+        targetLanguage,
+        input.starredLines,
+        input.existingPhrases
+      );
+
+      if (!result || !result.phrases || result.phrases.length === 0) {
+        console.warn("Targeted analysis returned no phrases.");
+      }
+
+      // Merge and align phrases
+      const mergedTrack = mergeGeneratedPhrasesForLines(currentTrack, result?.phrases || []);
+
+      // Persist locally
+      setCurrentTrack(mergedTrack);
+      saveTrackData(mergedTrack.trackId, mergedTrack);
+
+      // Async upload to cache/cloud
+      aiClient.saveTrackToSharedCache(mergedTrack).catch(e => {
+        console.error("Cache share failed:", e);
+      });
+
+      callbacks.loadCommunityTracks();
+    } catch (err: any) {
+      console.error("Targeted starred analysis failed:", err);
+      setAnalysisError(err?.message || "An unexpected error occurred during targeted analysis. Please try again.");
+    } finally {
+      setIsGeneratingAnalysis(false);
+    }
+  }, [currentTrack]);
+
+  const handleAnalyzeSelectedLines = useCallback(async (
+    selectedLineIds: string[],
+    targetLanguage: string,
+    callbacks: {
+      loadCommunityTracks: () => void;
+    },
+    instruction?: string
+  ) => {
+    if (!currentTrack) {
+      setAnalysisError("No current track loaded.");
+      return;
+    }
+
+    if (!selectedLineIds || selectedLineIds.length === 0) {
+      setAnalysisError("No lines selected to analyze. Please select some lines first!");
+      return;
+    }
+
+    setIsGeneratingAnalysis(true);
+    setAnalysisError(null);
+
+    try {
+      // Prepare payload
+      const input = buildSelectedLinesAnalysisInput(currentTrack, selectedLineIds);
+
+      // Call Gemini Targeted Analysis API
+      const result = await aiClient.generateTargetedAnalysis(
+        input.title,
+        input.artist,
+        targetLanguage,
+        input.selectedLines,
+        input.existingPhrases,
+        instruction
+      );
+
+      if (!result || !result.phrases || result.phrases.length === 0) {
+        console.warn("Targeted analysis returned no phrases.");
+      }
+
+      // Merge and align phrases targeting precise selected lines
+      const mergedTrack = mergeGeneratedPhrasesForSelectedLines(currentTrack, result?.phrases || [], selectedLineIds);
+
+      // Persist locally
+      setCurrentTrack(mergedTrack);
+      saveTrackData(mergedTrack.trackId, mergedTrack);
+
+      // Async upload to cache/cloud
+      aiClient.saveTrackToSharedCache(mergedTrack).catch(e => {
+        console.error("Cache share failed:", e);
+      });
+
+      callbacks.loadCommunityTracks();
+    } catch (err: any) {
+      console.error("Targeted selected lines analysis failed:", err);
+      setAnalysisError(err?.message || "An unexpected error occurred during targeted analysis. Please try again.");
+    } finally {
+      setIsGeneratingAnalysis(false);
+    }
+  }, [currentTrack]);
+
+  const linkedTrack = useMemo(() => {
+    if (!currentTrack) return null;
+    return linkPhrasesToLines(currentTrack);
+  }, [currentTrack]);
+
   return {
-    currentTrack,
+    currentTrack: linkedTrack,
     isLoadingLyrics,
     loadingStep,
     lyricsFetchError,
@@ -527,6 +673,8 @@ export function useTrackSession(): UseTrackSessionResult {
     handleResetAnalysis,
     handleManualLyricsSearch,
     handleSelectLyricOption,
-    handleResetLyrics
+    handleResetLyrics,
+    handleAnalyzeStarredLines,
+    handleAnalyzeSelectedLines
   };
 }

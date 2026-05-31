@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
-import { History, ChevronRight, Search, Globe, Music, ChevronDown, Check, X, MoreVertical } from 'lucide-react';
+import { History, ChevronRight, Search, Globe, Music, ChevronDown, Check, X, MoreVertical, Disc } from 'lucide-react';
 import { Track, TrackLyricsData } from '../services/musicService';
 import { ResumeViewModel } from '../services/resumeService';
 import { DailyProgressSummary } from '../application';
@@ -235,11 +235,17 @@ export const TracksHomeShell: React.FC<TracksHomeShellProps> = ({
               className="w-full flex items-center justify-between p-4 rounded-3xl bg-app-card border border-app-card-border shadow-app-card active:scale-[0.98] transition-all hover:bg-opacity-80 group cursor-pointer"
             >
               <div className="flex items-center gap-4 flex-1 min-w-0">
-                <img
-                  src={track.coverUrl}
-                  className="w-16 h-16 rounded-2xl object-cover shadow-lg shrink-0"
-                  referrerPolicy="no-referrer"
-                />
+                {track.coverUrl ? (
+                  <img
+                    src={track.coverUrl}
+                    className="w-16 h-16 rounded-2xl object-cover shadow-lg shrink-0"
+                    referrerPolicy="no-referrer"
+                  />
+                ) : (
+                  <div className="w-16 h-16 rounded-2xl bg-app-fg/5 flex items-center justify-center text-app-fg/20 shrink-0 border border-app-card-border">
+                    <Disc size={24} />
+                  </div>
+                )}
                 <div className="text-left min-w-0 flex-1">
                   <p className="font-bold text-app-fg leading-tight mb-0.5 truncate">
                     {track.title}
@@ -312,11 +318,17 @@ export const TracksHomeShell: React.FC<TracksHomeShellProps> = ({
                     className="w-full flex items-center justify-between p-4 rounded-3xl bg-app-card border border-app-card-border shadow-app-card active:scale-[0.98] transition-all hover:bg-opacity-80 group cursor-pointer"
                   >
                     <div className="flex items-center gap-4 flex-1 min-w-0">
-                      <img
-                        src={track.coverUrl}
-                        className="w-16 h-16 rounded-2xl object-cover shadow-lg shrink-0"
-                        referrerPolicy="no-referrer"
-                      />
+                      {track.coverUrl ? (
+                        <img
+                          src={track.coverUrl}
+                          className="w-16 h-16 rounded-2xl object-cover shadow-lg shrink-0"
+                          referrerPolicy="no-referrer"
+                        />
+                      ) : (
+                        <div className="w-16 h-16 rounded-2xl bg-app-fg/5 flex items-center justify-center text-app-fg/20 shrink-0 border border-app-card-border">
+                          <Disc size={24} />
+                        </div>
+                      )}
                       <div className="text-left min-w-0 flex-1">
                         <div className="flex items-center gap-2 mb-0.5">
                           <p className="font-bold text-app-fg leading-tight truncate">

@@ -1,5 +1,5 @@
 import { LibraryRepositoryPort } from "../ports/libraryRepositoryPort";
-import { Track } from "../../services/musicService";
+import { Track, Artist, Album } from "../../constants";
 import { sqliteService } from "../../services/sqliteService";
 
 export class BrowserLibraryRepository implements LibraryRepositoryPort {
@@ -74,6 +74,36 @@ export class BrowserLibraryRepository implements LibraryRepositoryPort {
   async isFavorite(trackId: string): Promise<boolean> {
     await this.checkAndMigrateLegacyData();
     return sqliteService.isFavorite(trackId);
+  }
+
+  async getFavoriteArtists(): Promise<Artist[]> {
+    await this.checkAndMigrateLegacyData();
+    return sqliteService.getFavoriteArtists();
+  }
+
+  async toggleFavoriteArtist(artist: Artist): Promise<boolean> {
+    await this.checkAndMigrateLegacyData();
+    return sqliteService.toggleFavoriteArtist(artist);
+  }
+
+  async isFavoriteArtist(artistId: string): Promise<boolean> {
+    await this.checkAndMigrateLegacyData();
+    return sqliteService.isFavoriteArtist(artistId);
+  }
+
+  async getFavoriteAlbums(): Promise<Album[]> {
+    await this.checkAndMigrateLegacyData();
+    return sqliteService.getFavoriteAlbums();
+  }
+
+  async toggleFavoriteAlbum(album: Album): Promise<boolean> {
+    await this.checkAndMigrateLegacyData();
+    return sqliteService.toggleFavoriteAlbum(album);
+  }
+
+  async isFavoriteAlbum(albumId: string): Promise<boolean> {
+    await this.checkAndMigrateLegacyData();
+    return sqliteService.isFavoriteAlbum(albumId);
   }
 
   async getPlaylists(): Promise<any[]> {

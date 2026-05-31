@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { motion, AnimatePresence, useMotionValue } from "motion/react";
 import {
   Play,
@@ -39,9 +39,10 @@ import {
   Heart,
   MoreVertical,
   FolderHeart,
+  ListFilter,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
-import { Track } from "./constants";
+import { Track, Artist, Album } from "./constants";
 import { SUPPORTED_LANGUAGES } from "./lib/languages";
 import { useUserCards } from "./hooks/useUserCards";
 import { usePlayback } from "./hooks/usePlayback";
@@ -76,6 +77,7 @@ import {
   saveTrackData,
   getTrackDetails,
 } from "./services/musicService";
+import { sqliteService } from "./services/sqliteService";
 import { useAppNavigation } from "./hooks/useAppNavigation";
 import { setTransientTrack, popTransientTrack, initializeWebNavigation } from "./services/webNavigationAdapter";
 
@@ -89,6 +91,7 @@ import { TrackProgressTracker } from "./components/TrackProgressTracker";
 import { TracksHomeShell } from "./components/TracksHomeShell";
 import { DailyProgressBlock } from "./components/DailyProgressBlock";
 import { ResumeStudyBlock } from "./components/ResumeStudyBlock";
+import { AnalysisPhraseWorkspace } from "./components/AnalysisPhraseWorkspace";
 
 
 
@@ -214,6 +217,10 @@ interface LyricLineProps {
   shadowingAttempts: number;
   handleToggleStarLine: (index: number) => void;
   onOpenLineDrawer?: (i: number) => void;
+  isSelectionMode?: boolean;
+  isSelectedForAnalysis?: boolean;
+  onToggleSelection?: (lineId: string) => void;
+  lineId?: string;
 }
 
 const LyricLine = ({
@@ -235,6 +242,10 @@ const LyricLine = ({
   shadowingAttempts,
   handleToggleStarLine,
   onOpenLineDrawer,
+  isSelectionMode = false,
+  isSelectedForAnalysis = false,
+  onToggleSelection,
+  lineId,
 }: LyricLineProps) => {
   const trimmedLine = line.trim();
   if (!trimmedLine && isCompact) return null;
@@ -273,13 +284,37 @@ const LyricLine = ({
         className={cn(
           "group relative flex flex-col gap-1 rounded-[1.5rem] border cursor-pointer z-10 transition-all duration-300",
           isCompact ? "px-4 py-1" : "px-6 py-1.5",
-          activeLineIndex === i
-            ? "scale-[1.01] bg-app-card/60 border-app-card-border shadow-xl z-20 brightness-110"
-            : "border-transparent bg-transparent opacity-65 hover:opacity-100 hover:bg-app-card/5",
+          isSelectionMode
+            ? isSelectedForAnalysis
+              ? "bg-orange-500/10 border-orange-500/30 scale-[1.005] opacity-100 shadow-sm"
+              : "border-app-card-border/40 bg-transparent opacity-80 hover:opacity-100 hover:bg-app-card/5"
+            : activeLineIndex === i
+              ? "scale-[1.01] bg-app-card/60 border-app-card-border shadow-xl z-20 brightness-110"
+              : "border-transparent bg-transparent opacity-65 hover:opacity-100 hover:bg-app-card/5",
         )}
-        onClick={() => trimmedLine && handleLineClick(line, i)}
+        onClick={() => {
+          if (!trimmedLine) return;
+          if (isSelectionMode) {
+            onToggleSelection?.(lineId || "");
+          } else {
+            handleLineClick(line, i);
+          }
+        }}
       >
         <div className="flex items-center gap-4 w-full relative z-10">
+          {isSelectionMode && (
+            <div className="shrink-0 flex items-center justify-center">
+              <div className={cn(
+                "w-5 h-5 rounded-md border flex items-center justify-center transition-all",
+                isSelectedForAnalysis 
+                  ? "bg-orange-500 border-orange-500 text-white" 
+                  : "border-app-fg/20 bg-app-card"
+              )}>
+                {isSelectedForAnalysis && <Check size={12} strokeWidth={3} />}
+              </div>
+            </div>
+          )}
+
           <div className="flex-1 min-w-0">
             <p
               className={cn(
@@ -293,7 +328,7 @@ const LyricLine = ({
             </p>
           </div>
 
-          {trimmedLine && (
+          {trimmedLine && !isSelectionMode && (
             <div className="flex items-center gap-2 shrink-0">
               {phrasesInLine && phrasesInLine.length > 0 && onOpenLineDrawer && (
                 <button
@@ -516,6 +551,22 @@ const AnalysisPhraseCard = ({
   );
 };
 
+const mapTrackLyricsDataToTrack = (data: TrackLyricsData): Track => ({
+  id: data.trackId,
+  trackId: data.trackId,
+  title: data.title,
+  artist: data.artist,
+  artistId: data.artistId,
+  album: data.album || "",
+  albumId: data.albumId,
+  coverUrl: data.coverUrl || "",
+  audioUrl: data.audioUrl,
+  sourceLanguage: data.sourceLanguage,
+  difficulty: data.difficulty,
+  authors: data.authors,
+  lyricSource: data.lyricSource
+});
+
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [studyTrackId, setStudyTrackId] = useState<string | undefined>(undefined);
@@ -544,17 +595,39 @@ export default function App() {
   const [isAddToPlaylistOpenInApp, setIsAddToPlaylistOpenInApp] = useState(false);
   const [playlistsInApp, setPlaylistsInApp] = useState<any[]>([]);
   const [favoritesInApp, setFavoritesInApp] = useState<Track[]>([]);
+  const [favoriteArtistsInApp, setFavoriteArtistsInApp] = useState<Artist[]>([]);
+  const [favoriteAlbumsInApp, setFavoriteAlbumsInApp] = useState<Album[]>([]);
 
   const loadAppLibraryData = async () => {
     try {
       const favs = await libraryRepository.getFavorites();
+      const favArtists = await libraryRepository.getFavoriteArtists();
+      const favAlbums = await libraryRepository.getFavoriteAlbums();
       const lists = await libraryRepository.getPlaylists();
       setFavoritesInApp(favs || []);
+      setFavoriteArtistsInApp(favArtists || []);
+      setFavoriteAlbumsInApp(favAlbums || []);
       setPlaylistsInApp(lists || []);
     } catch (err) {
       console.error(err);
     }
   };
+
+  useEffect(() => {
+    // Initial load
+    loadAppLibraryData();
+
+    // Subscribe to database changes to refresh global layout favorite states
+    const unsubscribe = sqliteService.subscribe((event) => {
+      if (event === "initialized" || event === "favorites" || event === "playlists") {
+        loadAppLibraryData();
+      }
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, []);
 
   useEffect(() => {
     if (activeMenuTrack) {
@@ -576,6 +649,32 @@ export default function App() {
       const tid = t.id || t.trackId;
       return tid === trackId;
     });
+  };
+
+  const handleToggleFavoriteArtistInApp = async (artist: Artist) => {
+    try {
+      await libraryRepository.toggleFavoriteArtist(artist);
+      await loadAppLibraryData();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const isArtistFavoriteInApp = (artistId: string) => {
+    return favoriteArtistsInApp.some(a => String(a.id) === String(artistId));
+  };
+
+  const handleToggleFavoriteAlbumInApp = async (album: Album) => {
+    try {
+      await libraryRepository.toggleFavoriteAlbum(album);
+      await loadAppLibraryData();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const isAlbumFavoriteInApp = (albumId: string) => {
+    return favoriteAlbumsInApp.some(al => String(al.id) === String(albumId));
   };
 
   const handleAddTrackToPlaylistInApp = async (playlistId: string, track: Track) => {
@@ -680,7 +779,9 @@ export default function App() {
     handleGenerateAnalysis: handleGenerateAnalysisRaw,
     handleRegenerateAnalysis: handleRegenerateAnalysisRaw,
     handleManualLyricsSearch,
-    handleSelectLyricOption: handleSelectLyricOptionRaw
+    handleSelectLyricOption: handleSelectLyricOptionRaw,
+    handleAnalyzeStarredLines: handleAnalyzeStarredLinesRaw,
+    handleAnalyzeSelectedLines: handleAnalyzeSelectedLinesRaw
   } = useTrackSession();
 
   const {
@@ -727,6 +828,61 @@ export default function App() {
     setIsReadingAll,
     handleLineClick
   } = usePlayback(currentTrack, phraseMetadata, targetLanguage);
+
+  const [isAnalysisSelectionMode, setIsAnalysisSelectionMode] = useState(false);
+  const [selectedLineIdsForAnalysis, setSelectedLineIdsForAnalysis] = useState<string[]>([]);
+  const [isAnalysisModalOpen, setIsAnalysisModalOpen] = useState(false);
+  const [analysisCustomFocus, setAnalysisCustomFocus] = useState("");
+  const [analysisSelectedPresets, setAnalysisSelectedPresets] = useState<string[]>([]);
+  const [trackSearchQuery, setTrackSearchQuery] = useState("");
+
+  const handleToggleLineSelection = useCallback((lineId: string) => {
+    setSelectedLineIdsForAnalysis(prev => {
+      if (prev.includes(lineId)) {
+        return prev.filter(id => id !== lineId);
+      } else {
+        return [...prev, lineId];
+      }
+    });
+  }, []);
+
+  const handleRunAnalyzeSelectedLines = () => {
+    if (selectedLineIdsForAnalysis.length === 0) return;
+    setIsAnalysisModalOpen(true);
+  };
+
+  const handleConfirmAnalyzeSelectedLines = async () => {
+    if (selectedLineIdsForAnalysis.length === 0) return;
+
+    // Construct final instruction for AI
+    let finalInstruction = "";
+    if (analysisSelectedPresets.length > 0) {
+      finalInstruction += `Selected focus filters:\n${analysisSelectedPresets.map(preset => `- ${preset}`).join("\n")}`;
+    }
+    if (analysisCustomFocus.trim()) {
+      if (finalInstruction) finalInstruction += "\n\n";
+      finalInstruction += `User focus requests:\n${analysisCustomFocus.trim()}`;
+    }
+
+    setIsAnalysisModalOpen(false);
+
+    try {
+      await handleAnalyzeSelectedLinesRaw(
+        selectedLineIdsForAnalysis,
+        targetLanguage,
+        { loadCommunityTracks },
+        finalInstruction
+      );
+      // Clean states only upon successful completion/submission of the call
+      setSelectedLineIdsForAnalysis([]);
+      setIsAnalysisSelectionMode(false);
+      setAnalysisCustomFocus("");
+      setAnalysisSelectedPresets([]);
+    } catch (err) {
+      console.error("Analysis execution failed:", err);
+      // Leave selectedLineIdsForAnalysis intact so user doesn't lose selection on error
+    }
+  };
 
   // Derived memoized progress View Models
   const nextStepState = useMemo(() => {
@@ -824,6 +980,10 @@ export default function App() {
 
   const handleRegenerateAnalysis = async () => {
     await handleRegenerateAnalysisRaw(targetLanguage, { loadCommunityTracks });
+  };
+
+  const handleAnalyzeStarredLines = async () => {
+    await handleAnalyzeStarredLinesRaw(targetLanguage, { loadCommunityTracks });
   };
 
   const handleSelectLyricOption = async (option: LyricOption) => {
@@ -1010,6 +1170,10 @@ export default function App() {
           setSelectedLineIndexForDrawer(index);
           setIsPhraseDrawerOpen(true);
         }}
+        isSelectionMode={isAnalysisSelectionMode}
+        isSelectedForAnalysis={selectedLineIdsForAnalysis.includes(currentTrack?.lines?.[i]?.lineId || "")}
+        onToggleSelection={handleToggleLineSelection}
+        lineId={currentTrack?.lines?.[i]?.lineId}
       />
     );
   };
@@ -1188,14 +1352,13 @@ export default function App() {
   };
   return (
     <div className="relative h-screen w-full bg-app-bg text-app-fg font-sans overflow-hidden flex flex-col transition-colors duration-300">
-      {/* Hidden Audio for Preview */}
       <audio
         ref={previewAudioRef}
         onTimeUpdate={handlePreviewTimeUpdate}
         onLoadedMetadata={handlePreviewLoadedMetadata}
         onEnded={handlePreviewEnded}
         muted={isMuted}
-        src={currentTrack?.audioUrl}
+        src={currentTrack?.audioUrl || null}
       />
       {/* Background Decor */}
       <div className="fixed inset-0 z-0 pointer-events-none bg-accent-glow transition-all duration-500">
@@ -1224,7 +1387,7 @@ export default function App() {
             onClick={goToSettings}
             className="w-9 h-9 rounded-xl flex items-center justify-center bg-app-card border border-app-card-border shadow-lg transition-all hover:scale-105 active:scale-95 group overflow-hidden"
           >
-            {user?.photoURL ? (
+            {user?.photoURL && user.photoURL !== "" ? (
               <img
                 src={user.photoURL}
                 alt={user.displayName || ""}
@@ -1490,10 +1653,37 @@ export default function App() {
                         >
                           <ChevronLeft size={20} />
                         </button>
-                        <img src={albumDetails.album.coverUrl} className="w-40 h-40 md:w-56 md:h-56 rounded-3xl shadow-2xl border border-app-card-border" referrerPolicy="no-referrer" />
+                        {albumDetails.album.coverUrl && albumDetails.album.coverUrl !== "" ? (
+                          <img src={albumDetails.album.coverUrl} className="w-40 h-40 md:w-56 md:h-56 rounded-3xl shadow-2xl border border-app-card-border" referrerPolicy="no-referrer" />
+                        ) : (
+                          <div className="w-40 h-40 md:w-56 md:h-56 rounded-3xl bg-app-fg/5 border border-app-card-border flex items-center justify-center text-app-fg/30 shadow-2xl shrink-0">
+                            <Disc size={56} />
+                          </div>
+                        )}
                       </div>
                       <div className="flex-1 min-w-0 pb-2">
-                        <h2 className="text-2xl md:text-3xl font-black text-app-fg mb-1 leading-tight">{albumDetails.album.title}</h2>
+                        <div className="flex items-center gap-3 mb-1">
+                          <h2 className="text-2xl md:text-3xl font-black text-app-fg leading-tight truncate">{albumDetails.album.title}</h2>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleToggleFavoriteAlbumInApp(albumDetails.album);
+                            }}
+                            className="p-1.5 hover:bg-app-fg/5 rounded-full transition-colors shrink-0"
+                            title={isAlbumFavoriteInApp(albumDetails.album.id) ? "Remove from Favorites" : "Add to Favorites"}
+                          >
+                            <Heart
+                              size={20}
+                              className={cn(
+                                "transition-all duration-300",
+                                isAlbumFavoriteInApp(albumDetails.album.id)
+                                  ? "fill-red-500 text-red-500 scale-110"
+                                  : "text-app-fg/30 hover:text-red-500/85 hover:scale-105"
+                              )}
+                            />
+                          </button>
+                        </div>
                         <button 
                           type="button"
                           onClick={(e) => {
@@ -1561,7 +1751,7 @@ export default function App() {
                         <ChevronLeft size={24} />
                       </button>
                       
-                      {artistDetails.artist.artworkUrl && (
+                      {artistDetails.artist.artworkUrl && artistDetails.artist.artworkUrl !== "" && (
                         <img 
                           src={artistDetails.artist.artworkUrl} 
                           className="w-20 h-20 md:w-24 md:h-24 rounded-full object-cover shadow-lg border-2 border-app-card-border" 
@@ -1571,7 +1761,28 @@ export default function App() {
                       )}
                       
                       <div className="min-w-0">
-                        <h2 className="text-3xl font-black text-app-fg truncate">{artistDetails.artist.name}</h2>
+                        <div className="flex items-center gap-3">
+                          <h2 className="text-3xl font-black text-app-fg truncate">{artistDetails.artist.name}</h2>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleToggleFavoriteArtistInApp(artistDetails.artist);
+                            }}
+                            className="p-1.5 hover:bg-app-fg/5 rounded-full transition-colors shrink-0"
+                            title={isArtistFavoriteInApp(artistDetails.artist.id) ? "Remove from Favorites" : "Add to Favorites"}
+                          >
+                            <Heart
+                              size={22}
+                              className={cn(
+                                "transition-all duration-300",
+                                isArtistFavoriteInApp(artistDetails.artist.id)
+                                  ? "fill-red-500 text-red-500 scale-110"
+                                  : "text-app-fg/30 hover:text-red-500/85 hover:scale-105"
+                              )}
+                            />
+                          </button>
+                        </div>
                         <p className="text-sm text-app-muted uppercase tracking-widest">{artistDetails.artist.genre}</p>
                       </div>
                     </div>
@@ -1590,7 +1801,13 @@ export default function App() {
                               }}
                               className="flex items-center gap-4 p-3 rounded-2xl bg-app-card border border-app-card-border shadow-sm hover:border-app-accent/30 transition-all text-left"
                             >
-                              <img src={track.coverUrl} className="w-10 h-10 rounded-lg object-cover" referrerPolicy="no-referrer" />
+                              {track.coverUrl && track.coverUrl !== "" ? (
+                                <img src={track.coverUrl} className="w-10 h-10 rounded-lg object-cover" referrerPolicy="no-referrer" />
+                              ) : (
+                                <div className="w-10 h-10 rounded-lg bg-app-fg/5 border border-app-card-border flex items-center justify-center text-app-fg/30 shrink-0">
+                                  <Disc size={18} />
+                                </div>
+                              )}
                               <div className="min-w-0">
                                 <p className="font-bold text-sm truncate">{track.title}</p>
                                 <p className="text-[10px] text-app-muted truncate">{track.album || "Unknown Album"}</p>
@@ -1619,8 +1836,12 @@ export default function App() {
                               }}
                               className="group text-left space-y-2"
                             >
-                              <div className="aspect-square rounded-2xl overflow-hidden bg-app-card border border-app-card-border shadow-sm group-hover:shadow-md transition-all">
-                                <img src={album.coverUrl} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" referrerPolicy="no-referrer" />
+                              <div className="aspect-square rounded-2xl overflow-hidden bg-app-card border border-app-card-border shadow-sm group-hover:shadow-md transition-all flex items-center justify-center">
+                                {album.coverUrl && album.coverUrl !== "" ? (
+                                  <img src={album.coverUrl} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" referrerPolicy="no-referrer" />
+                                ) : (
+                                  <Disc size={32} className="text-app-fg/10" />
+                                )}
                               </div>
                               <div className="px-1">
                                 <p className="font-bold text-xs truncate leading-tight">{album.title}</p>
@@ -1689,7 +1910,7 @@ export default function App() {
                               }}
                               className="flex items-center gap-4 p-3 rounded-2xl bg-app-card border border-app-card-border shadow-app-card active:scale-[0.98] transition-all hover:bg-opacity-80 group text-left cursor-pointer"
                             >
-                              {item.coverUrl ? (
+                              {item.coverUrl && item.coverUrl !== "" ? (
                                 <img
                                   src={item.coverUrl}
                                   className="w-12 h-12 rounded-xl object-cover shadow-sm group-hover:scale-105 transition-transform"
@@ -1786,9 +2007,27 @@ export default function App() {
                   </span>
                   <div className="flex items-start justify-between gap-4">
                     <div className="min-w-0 flex-1">
-                      <h1 className="text-3xl font-bold text-app-fg mb-1 leading-tight">
-                        {currentTrack.title}
-                      </h1>
+                      <div className="flex items-center gap-3 mb-1">
+                        <h1 className="text-3xl font-bold text-app-fg leading-tight truncate">
+                          {currentTrack.title}
+                        </h1>
+                        <button
+                          type="button"
+                          onClick={() => handleToggleFavoriteInApp(mapTrackLyricsDataToTrack(currentTrack))}
+                          className="p-1.5 hover:bg-app-fg/5 rounded-full transition-colors shrink-0"
+                          title={isTrackFavoriteInApp(currentTrack.trackId) ? "Remove from Favorites" : "Add to Favorites"}
+                        >
+                          <Heart
+                            size={22}
+                            className={cn(
+                              "transition-all duration-300",
+                              isTrackFavoriteInApp(currentTrack.trackId)
+                                ? "fill-red-500 text-red-500 scale-110"
+                                : "text-app-fg/30 hover:text-red-500/80 hover:scale-105"
+                            )}
+                          />
+                        </button>
+                      </div>
                       <div className="flex flex-col gap-0.5">
                         <button
                           onClick={() => {
@@ -1826,7 +2065,7 @@ export default function App() {
                         )}
                       </div>
                     </div>
-                    {currentTrack.coverUrl ? (
+                    {currentTrack.coverUrl && currentTrack.coverUrl !== "" ? (
                       <button 
                         onClick={() => {
                           if (currentTrack.albumId && !currentTrack.albumId.startsWith("album-") && currentTrack.albumId !== "undefined") {
@@ -2126,11 +2365,78 @@ export default function App() {
 
                 {activeTab === "lyrics" && (
                   <div className="flex flex-col gap-1 pb-32">
+                    {/* Search Input in Lyrics Tab */}
+                    {currentTrack.rawLyrics && (
+                      <div className="relative mb-4 px-1">
+                        <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-app-fg opacity-40">
+                          <Search size={18} />
+                        </div>
+                        <input
+                          type="text"
+                          placeholder="Search original text, translations, or phrases in lyrics..."
+                          value={trackSearchQuery}
+                          onChange={(e) => setTrackSearchQuery(e.target.value)}
+                          className="w-full pl-12 pr-10 py-3.5 bg-app-card border border-app-card-border rounded-2xl text-lg font-medium text-app-fg placeholder-app-fg/30 focus:outline-none focus:border-app-accent/50 transition-all font-sans"
+                        />
+                        {trackSearchQuery && (
+                          <button
+                            onClick={() => setTrackSearchQuery("")}
+                            className="absolute inset-y-0 right-0 pr-4 flex items-center text-app-fg opacity-45 hover:opacity-100 transition-opacity"
+                          >
+                            <X size={14} />
+                          </button>
+                        )}
+                      </div>
+                    )}
+
                     <div className="flex justify-end px-1 pb-4">
                       {(currentTrack.rawLyrics || lyricsFetchError) && (
-                        <div className="flex gap-2 items-center">
+                        <div className="flex flex-wrap gap-2 items-center justify-end w-full">
                           {currentTrack.rawLyrics && (
-                            <div className="flex bg-app-card/80 backdrop-blur-md border border-app-card-border p-1 rounded-2xl shadow-sm text-xs gap-1.5 items-center">
+                            <>
+                              {isAnalysisSelectionMode ? (
+                                <div className="flex bg-app-card/90 backdrop-blur-md border border-orange-500/30 p-1.5 rounded-2xl shadow-lg text-xs gap-2 items-center pr-2 pl-3">
+                                  <span className="text-[10px] font-bold text-orange-500 uppercase tracking-widest animate-pulse shrink-0">
+                                    Selecting ({selectedLineIdsForAnalysis.length})
+                                  </span>
+                                  <button
+                                    onClick={handleRunAnalyzeSelectedLines}
+                                    disabled={selectedLineIdsForAnalysis.length === 0 || isGeneratingAnalysis}
+                                    className={cn(
+                                      "px-3 py-1.5 rounded-xl font-black transition-all text-[10px] uppercase tracking-wider flex items-center gap-1.5 shrink-0",
+                                      selectedLineIdsForAnalysis.length === 0
+                                        ? "bg-app-card border border-app-card-border/60 text-app-fg opacity-40 cursor-not-allowed"
+                                        : "bg-orange-500 text-white shadow-lg shadow-orange-500/20 hover:scale-105 active:scale-95"
+                                    )}
+                                  >
+                                    <Brain size={12} className={isGeneratingAnalysis ? "animate-spin" : ""} />
+                                    <span>Analyze Selected</span>
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      setIsAnalysisSelectionMode(false);
+                                      setSelectedLineIdsForAnalysis([]);
+                                    }}
+                                    className="px-2.5 py-1.5 rounded-xl hover:bg-app-fg/5 text-app-fg opacity-65 hover:opacity-100 font-bold uppercase text-[10px] tracking-wider shrink-0"
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  onClick={() => {
+                                    setIsAnalysisSelectionMode(true);
+                                    setSelectedLineIdsForAnalysis([]);
+                                  }}
+                                  className="px-3.5 py-2 bg-app-card border border-app-card-border hover:border-app-fg/20 rounded-2xl text-[10px] font-bold uppercase tracking-widest text-app-fg flex items-center gap-1.5 shadow-sm hover:scale-102 transition-all active:scale-98"
+                                  title="Select specific lyric lines for precise targeted AI analysis and collocations"
+                                >
+                                  <ListFilter size={12} className="text-orange-500" />
+                                  <span>Select lines for analysis</span>
+                                </button>
+                              )}
+
+                              <div className="flex bg-app-card/80 backdrop-blur-md border border-app-card-border p-1 rounded-2xl shadow-sm text-xs gap-1.5 items-center">
                               {(() => {
                                 const srcLangObj = SUPPORTED_LANGUAGES.find(l => 
                                   l.name.toLowerCase() === (currentTrack?.sourceLanguage || "English").toLowerCase() ||
@@ -2202,9 +2508,10 @@ export default function App() {
                                 );
                               })()}
                             </div>
-                          )}
-                        </div>
-                      )}
+                          </>
+                        )}
+                      </div>
+                    )}
                     </div>
                     {currentTrack.rawLyrics ? (() => {
                       let linesToRender = currentTrack.lines || [];
@@ -2227,6 +2534,33 @@ export default function App() {
                           <div className="py-24 text-center space-y-4">
                             <Star size={40} className="mx-auto text-amber-500/40" />
                             <p className="text-sm font-bold text-app-fg opacity-45">No starred lines.</p>
+                          </div>
+                        );
+                      }
+
+                      if (trackSearchQuery.trim()) {
+                        const q = trackSearchQuery.toLowerCase().trim();
+                        linesToRender = linesToRender.filter((line: any) => {
+                          const matchesOriginal = line.original?.toLowerCase().includes(q);
+                          const matchesTranslation = line.translation?.toLowerCase().includes(q);
+                          const matchesPhrases = line.phrases?.some((p: any) => 
+                            p.text?.toLowerCase().includes(q) || p.translation?.toLowerCase().includes(q)
+                          );
+                          return matchesOriginal || matchesTranslation || matchesPhrases;
+                        });
+                      }
+
+                      if (trackSearchQuery.trim() && linesToRender.length === 0) {
+                        return (
+                          <div className="py-24 text-center space-y-4">
+                            <Search size={40} className="mx-auto text-app-fg opacity-15" />
+                            <p className="text-sm font-bold text-app-fg opacity-45">No matching lyric lines.</p>
+                            <button
+                              onClick={() => setTrackSearchQuery("")}
+                              className="px-4 py-2 border border-app-card-border hover:border-app-fg/25 rounded-xl text-xs font-bold text-app-fg"
+                            >
+                              Clear Search
+                            </button>
                           </div>
                         );
                       }
@@ -2425,60 +2759,34 @@ export default function App() {
                           </div>
                         </div>
                       </div>
-                    ) : (currentTrack.lines.some(l => l.phrases && l.phrases.length > 0)) ? (
+                    ) : ((currentTrack.phrases && currentTrack.phrases.length > 0) || currentTrack.lines.some(l => l.phrases && l.phrases.length > 0)) ? (
                       <motion.div
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         className="space-y-12"
                       >
-                        {/* Phrases Section - Extracted from lines */}
-                        <section className="space-y-6">
-                          <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-xl bg-orange-500/10 flex items-center justify-center text-orange-500">
-                              <Star size={16} />
-                            </div>
-                            <h2 className="text-xs font-black uppercase tracking-[0.2em] opacity-60">
-                              Key Phrases
-                            </h2>
-                            <div className="flex gap-2 ml-auto">
-                              {(!currentTrack.promptVersion || currentTrack.promptVersion < ANALYSIS_PROMPT_VERSION) && (
-                                <div className="px-2 py-1 rounded-lg bg-[var(--accent)]/10 text-[var(--accent)] text-[8px] font-black uppercase tracking-widest flex items-center gap-1.5 animate-pulse">
-                                  <Sparkles size={10} />
-                                  New Version Available
-                                </div>
-                              )}
-                              <button
-                                onClick={handleRegenerateAnalysis}
-                                disabled={isGeneratingAnalysis}
-                                className={cn(
-                                  "px-3 py-1.5 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2",
-                                  !currentTrack.promptVersion || currentTrack.promptVersion < ANALYSIS_PROMPT_VERSION
-                                    ? "bg-[var(--accent)] border-[var(--accent)] text-white shadow-lg shadow-[var(--accent)]/20 opacity-100"
-                                    : "bg-app-card border-app-card-border opacity-40 hover:opacity-100 hover:text-[var(--accent)]"
-                                )}
-                                title="Reset and regenerate analysis"
-                              >
-                                <RefreshCw size={10} className={isGeneratingAnalysis ? "animate-spin" : ""} />
-                                {!currentTrack.promptVersion || currentTrack.promptVersion < ANALYSIS_PROMPT_VERSION ? "Update Analysis" : "Regenerate"}
-                              </button>
-
-                            </div>
-                          </div>
-                          <div className="grid gap-4">
-                            {currentTrack.lines.flatMap(l => l.phrases).filter((p, i, self) => self.findIndex(t => t.text === p.text) === i).map((item, idx) => {
-                              const card = phraseMetadata.get(item.text);
-                              return (
-                                  <AnalysisPhraseCard
-                                    key={idx}
-                                    item={item}
-                                    idx={idx}
-                                    card={card}
-                                    handleSetAnalysisPhraseStatus={handleSetAnalysisPhraseStatus}
-                                  />
-                              );
-                            })}
-                          </div>
-                        </section>
+                        <AnalysisPhraseWorkspace
+                          currentTrack={currentTrack}
+                          trackSearchQuery={trackSearchQuery}
+                          setTrackSearchQuery={setTrackSearchQuery}
+                          phraseMetadata={phraseMetadata}
+                          handleSetAnalysisPhraseStatus={handleSetAnalysisPhraseStatus}
+                          speak={speak}
+                          onUpdateTrack={async (updatedTrack) => {
+                            setCurrentTrack(updatedTrack);
+                            await saveTrackData(updatedTrack.trackId, updatedTrack);
+                            loadCommunityTracks();
+                          }}
+                          targetLanguage={targetLanguage}
+                          onGoToLine={(original, index) => {
+                            setActiveTab("lyrics");
+                            setTimeout(() => {
+                              handleLineClick(original, index);
+                            }, 100);
+                          }}
+                          isGeneratingAnalysis={isGeneratingAnalysis}
+                          handleRegenerateAnalysis={handleRegenerateAnalysis}
+                        />
                       </motion.div>
                     ) : (
                       <div className="py-20 flex flex-col items-center justify-center text-center space-y-8 font-sans">
@@ -2487,7 +2795,13 @@ export default function App() {
                         </div>
                         <div className="space-y-3">
                           <h3 className="text-2xl font-bold text-app-fg">No Analysis Yet</h3>
-                          <p className="text-app-fg opacity-40 max-w-sm mx-auto font-sans">Click below to start deep learning for this song.</p>
+                          {(() => {
+                            const starredCount = currentTrack?.lines?.filter(l => l.isStarred).length || 0;
+                            if (starredCount > 0) {
+                              return <p className="text-app-fg opacity-40 max-w-sm mx-auto font-sans">You have starred {starredCount} lines! Click below to run targeted analysis on them, or analyze the full song.</p>;
+                            }
+                            return <p className="text-app-fg opacity-40 max-w-sm mx-auto font-sans">Click below to start deep learning for this song, or star specific lines first for targeted analysis.</p>;
+                          })()}
                         </div>
 
                         {analysisError && (
@@ -2497,13 +2811,15 @@ export default function App() {
                           </div>
                         )}
 
-                        <button
-                          onClick={() => handleGenerateAnalysis()}
-                          className="px-10 py-5 rounded-3xl bg-app-fg text-app-bg font-black uppercase tracking-[0.2em] text-[10px] shadow-2xl hover:scale-105 transition-all flex items-center gap-3"
-                        >
-                          <Sparkles size={16} />
-                          Generate Deep Analysis
-                        </button>
+                            <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
+                              <button
+                                onClick={() => handleGenerateAnalysis()}
+                                className="px-10 py-5 rounded-3xl bg-app-fg text-app-bg font-black uppercase tracking-[0.2em] text-[10px] shadow-2xl hover:scale-105 transition-all flex items-center gap-3"
+                              >
+                                <Sparkles size={16} />
+                                Generate Deep Analysis
+                              </button>
+                            </div>
                       </div>
                     )}
                   </div>
@@ -2692,7 +3008,7 @@ export default function App() {
                         ) : (
                           <div className="flex items-center gap-3">
                             <div className="w-8 h-8 rounded-lg overflow-hidden bg-app-bg/50 border border-app-card-border shrink-0">
-                              {currentTrack.coverUrl ? (
+                              {currentTrack.coverUrl && currentTrack.coverUrl !== "" ? (
                                 <img src={currentTrack.coverUrl} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                               ) : (
                                 <Music className="w-full h-full p-1.5 opacity-20" />
@@ -2860,7 +3176,7 @@ export default function App() {
                 <>
                   {/* Track Meta */}
                   <div className="flex items-center gap-4 border-b border-app-card-border pb-4">
-                    {activeMenuTrack.coverUrl ? (
+                    {activeMenuTrack.coverUrl && activeMenuTrack.coverUrl !== "" ? (
                       <img
                         src={activeMenuTrack.coverUrl}
                         className="w-16 h-16 rounded-2xl object-cover shadow-md"
@@ -3009,7 +3325,7 @@ export default function App() {
               <div className="p-8 space-y-8">
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex items-center gap-6">
-                    {currentTrack.coverUrl && (
+                    {currentTrack.coverUrl && currentTrack.coverUrl !== "" && (
                       <img
                         src={currentTrack.coverUrl}
                         className="w-20 h-20 rounded-2xl object-cover shadow-lg border border-app-card-border"
@@ -3318,6 +3634,124 @@ export default function App() {
         )}
       </AnimatePresence>
 
+      {/* Targeted Analysis Configuration Modal */}
+      <AnimatePresence>
+        {isAnalysisModalOpen && currentTrack && (
+          <div className="fixed inset-0 z-[110] flex items-end sm:items-center justify-center p-0 sm:p-12 overflow-y-auto">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsAnalysisModalOpen(false)}
+              className="fixed inset-0 bg-app-bg/60 backdrop-blur-md"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 100 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 100 }}
+              className="relative w-full max-w-lg bg-app-bg border border-app-card-border rounded-t-[2.5rem] sm:rounded-[2.5rem] overflow-hidden shadow-2xl z-10"
+            >
+              <div className="p-8 space-y-6">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-1">
+                    <span
+                      className="text-[10px] font-black uppercase tracking-[0.4em] text-orange-500"
+                    >
+                      Targeted Analysis
+                    </span>
+                    <h3 className="text-xl font-black text-app-fg leading-tight">
+                      Configure AI Focus
+                    </h3>
+                  </div>
+                  <button
+                    onClick={() => setIsAnalysisModalOpen(false)}
+                    className="text-app-fg opacity-20 hover:opacity-100 transition-colors p-1"
+                  >
+                    <X size={20} />
+                  </button>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-app-card border border-app-card-border flex items-center justify-between animate-fadeIn">
+                  <span className="text-xs font-bold text-app-fg">Selected Lyric Lines</span>
+                  <span className="px-3 py-1 bg-orange-500/10 text-orange-600 rounded-full font-black text-xs">
+                    {selectedLineIdsForAnalysis.length} lines
+                  </span>
+                </div>
+
+                <div className="space-y-3">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-app-fg opacity-50 block">
+                    Preset focus areas (Multi-select)
+                  </label>
+                  <div className="flex flex-wrap gap-2">
+                    {[
+                      "Explain grammar",
+                      "Break into useful phrases",
+                      "Explain at B2 level",
+                      "Focus on idioms/collocations",
+                      "Explain cultural context"
+                    ].map((preset) => {
+                      const isSelected = analysisSelectedPresets.includes(preset);
+                      return (
+                        <button
+                          key={preset}
+                          type="button"
+                          onClick={() => {
+                            setAnalysisSelectedPresets(prev =>
+                              prev.includes(preset)
+                                ? prev.filter(p => p !== preset)
+                                : [...prev, preset]
+                            );
+                          }}
+                          className={cn(
+                            "px-3.5 py-2 rounded-xl text-xs font-semibold transition-all shadow-sm border",
+                            isSelected
+                              ? "bg-orange-500 border-orange-500 text-white"
+                              : "bg-app-card border-app-card-border text-app-fg hover:bg-app-card/80"
+                          )}
+                        >
+                          {preset}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label htmlFor="custom-ai-focus" className="text-[10px] font-black uppercase tracking-widest text-app-fg opacity-50 block">
+                    What should AI focus on? (Additional custom instructions)
+                  </label>
+                  <textarea
+                    id="custom-ai-focus"
+                    placeholder="e.g. Focus on slang verbs, parse metaphorical translations, or explain usage of particle words..."
+                    value={analysisCustomFocus}
+                    onChange={(e) => setAnalysisCustomFocus(e.target.value)}
+                    className="w-full h-24 p-3.5 bg-app-card border border-app-card-border rounded-2xl text-sm text-app-fg placeholder-app-fg/30 focus:outline-none focus:border-orange-500/50 resize-none transition-all"
+                  />
+                </div>
+
+                <div className="flex gap-3 pt-2">
+                  <button
+                    onClick={() => {
+                      setIsAnalysisModalOpen(false);
+                    }}
+                    className="flex-1 py-3.5 rounded-2xl bg-app-card border border-app-card-border hover:bg-app-card/80 text-app-fg text-xs font-black uppercase tracking-widest transition-all"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleConfirmAnalyzeSelectedLines}
+                    disabled={selectedLineIdsForAnalysis.length === 0}
+                    className="flex-1 py-3.5 rounded-2xl bg-orange-500 hover:bg-orange-600 text-white text-xs font-black uppercase tracking-widest hover:scale-102 transition-all disabled:opacity-40"
+                  >
+                    Analyze
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       {/* Phrase Action Modal (Know, Study, Explain) */}
       <AnimatePresence>
         {isEditModalOpen && (
@@ -3588,6 +4022,8 @@ export default function App() {
         user={user}
         onCardUpdated={() => { loadUserCards(); }}
         phraseMetadata={phraseMetadata}
+        currentTrack={currentTrack}
+        setCurrentTrack={setCurrentTrack}
       />
     </div>
   );

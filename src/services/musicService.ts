@@ -483,16 +483,23 @@ export interface Phrase {
   id: string;
   text: string;
   lemmas: string[];
-  type: 'collocation' | 'idiom' | 'phrasal_verb' | 'cultural_ref' | 'vocabulary' | 'phrase';
+  type: 'collocation' | 'idiom' | 'phrasal_verb' | 'cultural_ref' | 'vocabulary' | 'phrase' | string;
   translation?: string;
   explanation?: string;
   isUniversal?: boolean;
   learningPriority?: string;
   language?: string;
+  normalizedText?: string;
+  lineIds?: string[];
+  source?: 'llm' | 'user';
+  createdAt?: number;
+  updatedAt?: number;
+  note?: string;
 }
 
 export interface LyricsLine {
   id: string;
+  lineId?: string;
   index: number;
   original: string;
   translation?: string;
@@ -525,6 +532,7 @@ export interface TrackLyricsData {
     pl?: string;
   };
   lines: LyricsLine[];
+  phrases?: Phrase[];
   fullTranslation?: string;
   promptVersion?: number;
   translationPromptVersion?: number;
@@ -536,26 +544,67 @@ export interface TrackLyricsData {
   lastUpdated: number;
 }
 
+export function normalizeLineText(text: string): string {
+  return text
+    .trim()
+    .toLowerCase()
+    .normalize('NFC')
+    .replace(/\s+/g, ' ')
+    .replace(/[.,/#!$%^&*;:{}=\-_`~()?"'«»„“]/g, '');
+}
+
+export function generateLineId(text: string): string {
+  const normalized = normalizeLineText(text);
+  if (!normalized) return 'empty_line';
+  let hash = 5381;
+  for (let i = 0; i < normalized.length; i++) {
+    hash = (hash * 33) ^ normalized.charCodeAt(i);
+  }
+  return `line_${(hash >>> 0).toString(16)}`;
+}
+
 export function getCachedTrackData(trackId: string): TrackLyricsData | null {
-  return sqliteService.getCachedTrack(trackId);
+  const track = sqliteService.getCachedTrack(trackId);
+  if (!track) return null;
+  if (track.lines) {
+    track.lines = track.lines.map((line) => {
+      if (!line.lineId) {
+        line.lineId = generateLineId(line.original);
+      }
+      return line;
+    });
+  }
+  return track;
 }
 type TrackLyricsDataPatch = Omit<Partial<TrackLyricsData>, 'processingStatus'> & {
   processingStatus?: Partial<TrackLyricsData['processingStatus']>;
 };
 
 export function saveTrackData(trackId: string, data: TrackLyricsDataPatch) {
+  if (data.lines) {
+    data.lines = data.lines.map((line) => {
+      if (!line.lineId) {
+        line.lineId = generateLineId(line.original);
+      }
+      return line;
+    });
+  }
   return sqliteService.saveTrackData(trackId, data);
 }
 
 export function splitLyricsIntoLines(trackId: string, lyrics: string): LyricsLine[] {
   return lyrics
     .split('\n')
-    .map((line, idx) => ({
-      id: `${trackId}:line:${idx}`,
-      index: idx,
-      original: line.trim(),
-      phrases: []
-    }));
+    .map((line, idx) => {
+      const trimmed = line.trim();
+      return {
+        id: `${trackId}:line:${idx}`,
+        lineId: generateLineId(trimmed),
+        index: idx,
+        original: trimmed,
+        phrases: []
+      };
+    });
 }
 
 // Keep backward compatibility for now if needed, but we'll migrate App.tsx

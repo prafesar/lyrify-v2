@@ -87,6 +87,18 @@ export class GeminiAIAdapter implements AiPort {
     return originalGeminiService.completeLyricsAnalysis(lyrics, artist, title, targetLanguage);
   }
 
+  async generateTargetedAnalysis(
+    title: string,
+    artist: string,
+    targetLanguage: string,
+    starredLines: any[],
+    existingPhrases: any[],
+    instruction?: string
+  ): Promise<{ phrases: any[] }> {
+    return originalGeminiService.generateTargetedAnalysis(title, artist, targetLanguage, starredLines, existingPhrases, instruction);
+  }
+
+
   async getLatestAnalyzedTracks(maxCount?: number): Promise<TrackMeaningEntry[]> {
     return originalGeminiService.getLatestAnalyzedTracks(maxCount);
   }

@@ -109,6 +109,16 @@ export interface AiPort {
     metadata?: Partial<TrackMetadata>
   ): Promise<TrackLyricsData>;
 
+  generateTargetedAnalysis(
+    title: string,
+    artist: string,
+    targetLanguage: string,
+    starredLines: any[],
+    existingPhrases: any[],
+    instruction?: string
+  ): Promise<{ phrases: any[] }>;
+
+
   getLatestAnalyzedTracks(maxCount?: number): Promise<TrackMeaningEntry[]>;
 
   getLineTranslations(

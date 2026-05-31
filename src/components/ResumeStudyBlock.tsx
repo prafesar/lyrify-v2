@@ -38,7 +38,7 @@ export const ResumeStudyBlock: React.FC<ResumeStudyBlockProps> = ({
 
       {/* Content wrapper */}
       <div className="flex items-start gap-3.5 flex-1 min-w-0">
-        {!isStudy && viewModel.trackingTrack?.coverUrl ? (
+        {!isStudy && viewModel.trackingTrack?.coverUrl && viewModel.trackingTrack?.coverUrl !== "" ? (
           <div className="w-12 h-12 rounded-xl overflow-hidden shrink-0 mt-0.5 border border-app-card-border bg-app-card flex items-center justify-center relative">
             <img
               src={viewModel.trackingTrack.coverUrl}
