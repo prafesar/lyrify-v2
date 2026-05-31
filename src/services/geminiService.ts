@@ -886,17 +886,18 @@ ${lyrics}
 }
 
 /**
- * Targeted Analysis: Extracts useful collocations/idioms for specifically selected starred lines.
+ * Targeted Analysis: Extracts useful collocations/idioms for specifically selected or targeted lyric lines.
  */
 export async function generateTargetedAnalysis(
   title: string,
   artist: string,
   targetLanguage: string,
-  starredLines: any[],
-  existingPhrases: any[]
+  selectedLines: any[],
+  existingPhrases: any[],
+  instruction?: string
 ): Promise<{ phrases: any[] }> {
   // Format selected lines and existing phrases cleanly
-  const starredLinesStr = starredLines
+  const selectedLinesStr = selectedLines
     .map(line => `Line ID: "${line.lineId}" (index: ${line.index})\nOriginal: "${line.original}"\nTranslation: "${line.translation || ''}"`)
     .join("\n\n");
 
@@ -904,14 +905,14 @@ export async function generateTargetedAnalysis(
     .map(p => `- Text: "${p.text || ''}", Type: "${p.type || ''}", Translation: "${p.translation || ''}"`)
     .join("\n");
 
-  const prompt = `Role: Expert linguistic analyst and music teacher.
-Perform a targeted analysis of the raw starred lyric lines of "${title}" by "${artist}".
-Your goal is to extract useful collocations, idioms, phrasal verbs, or cultural/vocabulary chunks (minimum 2 words, preferably 3-6 words) specifically from these starred lines to help a language learner master the content.
+  let prompt = `Role: Expert linguistic analyst and music teacher.
+Perform a targeted analysis of the raw selected lyric lines of "${title}" by "${artist}".
+Your goal is to extract useful collocations, idioms, phrasal verbs, or cultural/vocabulary chunks (minimum 2 words, preferably 3-6 words) specifically from these selected lines to help a language learner master the content.
 
 We are translating/explaining in targeted learning language: "${targetLanguage}".
 
-Starred Lines (with associated Line IDs):
-${starredLinesStr}
+Selected Lyric Lines (with associated Line IDs):
+${selectedLinesStr}
 
 Already analyzed/existing phrases on these lines (do NOT output these in your response to avoid redundancy):
 ${existingPhrasesStr || "None"}
@@ -920,10 +921,14 @@ SELECTION RULES:
 1. MAX 1-2 NEW PHRASES PER LINE. Focus heavily on actual expressions/chunks rather than single words.
 2. NO DUPLICATES: Do not suggest any phrase that has been suggested before or is already in the "Already analyzed/existing phrases" list.
 3. EXACT MATCH: Each suggested "text" must be an EXACT substring of the "original" line from which it is extracted.
-4. MAPPING TO LINE IDS: For each phrase, specify which "lineIds" *from the starred lines input* it was extracted from. If a phrase is present on multiple starred lines and has the exact same meaning, list all those lineIds.
-5. NO PHRASES WITHOUT LINE IDS: Every phrase must have at least one valid "lineId" from the input.
+4. MAPPING TO LINE IDS: For each phrase, specify which "lineIds" *from the selected lines input* it was extracted from. If a phrase is present on multiple selected lines and has the exact same meaning, list all those lineIds.
+5. NO PHRASES WITHOUT LINE IDS: Every phrase must have at least one valid "lineId" from the input.`;
 
-Return a valid JSON object with the following structure exactly:
+  if (instruction && instruction.trim()) {
+    prompt += `\n\nUSER FOCUS & FOCUS INSTRUCTIONS:\nFollow these focus instructions exactly when choosing/explaining phrases:\n${instruction.trim()}`;
+  }
+
+  prompt += `\n\nReturn a valid JSON object with the following structure exactly:
 {
   "phrases": [
     {

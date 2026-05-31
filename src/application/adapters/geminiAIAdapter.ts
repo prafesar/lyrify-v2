@@ -92,9 +92,10 @@ export class GeminiAIAdapter implements AiPort {
     artist: string,
     targetLanguage: string,
     starredLines: any[],
-    existingPhrases: any[]
+    existingPhrases: any[],
+    instruction?: string
   ): Promise<{ phrases: any[] }> {
-    return originalGeminiService.generateTargetedAnalysis(title, artist, targetLanguage, starredLines, existingPhrases);
+    return originalGeminiService.generateTargetedAnalysis(title, artist, targetLanguage, starredLines, existingPhrases, instruction);
   }
 
 

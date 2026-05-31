@@ -114,7 +114,8 @@ export interface AiPort {
     artist: string,
     targetLanguage: string,
     starredLines: any[],
-    existingPhrases: any[]
+    existingPhrases: any[],
+    instruction?: string
   ): Promise<{ phrases: any[] }>;
 
 

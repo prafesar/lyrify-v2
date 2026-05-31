@@ -136,7 +136,8 @@ export interface UseTrackSessionResult {
     targetLanguage: string,
     callbacks: {
       loadCommunityTracks: () => void;
-    }
+    },
+    instruction?: string
   ) => Promise<void>;
 }
 
@@ -577,7 +578,8 @@ export function useTrackSession(): UseTrackSessionResult {
     targetLanguage: string,
     callbacks: {
       loadCommunityTracks: () => void;
-    }
+    },
+    instruction?: string
   ) => {
     if (!currentTrack) {
       setAnalysisError("No current track loaded.");
@@ -602,7 +604,8 @@ export function useTrackSession(): UseTrackSessionResult {
         input.artist,
         targetLanguage,
         input.selectedLines,
-        input.existingPhrases
+        input.existingPhrases,
+        instruction
       );
 
       if (!result || !result.phrases || result.phrases.length === 0) {

@@ -830,6 +830,9 @@ export default function App() {
 
   const [isAnalysisSelectionMode, setIsAnalysisSelectionMode] = useState(false);
   const [selectedLineIdsForAnalysis, setSelectedLineIdsForAnalysis] = useState<string[]>([]);
+  const [isAnalysisModalOpen, setIsAnalysisModalOpen] = useState(false);
+  const [analysisCustomFocus, setAnalysisCustomFocus] = useState("");
+  const [analysisSelectedPresets, setAnalysisSelectedPresets] = useState<string[]>([]);
 
   const handleToggleLineSelection = useCallback((lineId: string) => {
     setSelectedLineIdsForAnalysis(prev => {
@@ -841,11 +844,42 @@ export default function App() {
     });
   }, []);
 
-  const handleRunAnalyzeSelectedLines = async () => {
+  const handleRunAnalyzeSelectedLines = () => {
     if (selectedLineIdsForAnalysis.length === 0) return;
-    await handleAnalyzeSelectedLinesRaw(selectedLineIdsForAnalysis, targetLanguage, { loadCommunityTracks });
-    setSelectedLineIdsForAnalysis([]);
-    setIsAnalysisSelectionMode(false);
+    setIsAnalysisModalOpen(true);
+  };
+
+  const handleConfirmAnalyzeSelectedLines = async () => {
+    if (selectedLineIdsForAnalysis.length === 0) return;
+
+    // Construct final instruction for AI
+    let finalInstruction = "";
+    if (analysisSelectedPresets.length > 0) {
+      finalInstruction += `Selected focus filters:\n${analysisSelectedPresets.map(preset => `- ${preset}`).join("\n")}`;
+    }
+    if (analysisCustomFocus.trim()) {
+      if (finalInstruction) finalInstruction += "\n\n";
+      finalInstruction += `User focus requests:\n${analysisCustomFocus.trim()}`;
+    }
+
+    setIsAnalysisModalOpen(false);
+
+    try {
+      await handleAnalyzeSelectedLinesRaw(
+        selectedLineIdsForAnalysis,
+        targetLanguage,
+        { loadCommunityTracks },
+        finalInstruction
+      );
+      // Clean states only upon successful completion/submission of the call
+      setSelectedLineIdsForAnalysis([]);
+      setIsAnalysisSelectionMode(false);
+      setAnalysisCustomFocus("");
+      setAnalysisSelectedPresets([]);
+    } catch (err) {
+      console.error("Analysis execution failed:", err);
+      // Leave selectedLineIdsForAnalysis intact so user doesn't lose selection on error
+    }
   };
 
   // Derived memoized progress View Models
@@ -2688,49 +2722,27 @@ export default function App() {
                               Key Phrases
                             </h2>
                             <div className="flex gap-2 ml-auto">
-                              {(() => {
-                                const starredCount = currentTrack.lines.filter(l => l.isStarred).length;
-                                return (
-                                  <>
-                                    <button
-                                      onClick={handleAnalyzeStarredLines}
-                                      disabled={isGeneratingAnalysis || starredCount === 0}
-                                      className={cn(
-                                        "px-3 py-1.5 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2",
-                                        starredCount === 0
-                                          ? "bg-app-card border-app-card-border opacity-20 cursor-not-allowed"
-                                          : "bg-orange-500/10 border-orange-500/20 text-orange-500 hover:bg-orange-500/15 shadow-sm"
-                                      )}
-                                      title={starredCount === 0 ? "Star some lyric lines first to run targeted analysis" : "Analyze only starred lines to add precise collocations of your choice"}
-                                    >
-                                      <Sparkles size={10} className={isGeneratingAnalysis ? "animate-spin" : ""} />
-                                      {isGeneratingAnalysis ? "Analyzing..." : `Analyze starred (${starredCount})`}
-                                    </button>
+                              {(!currentTrack.promptVersion || currentTrack.promptVersion < ANALYSIS_PROMPT_VERSION) && (
+                                <div className="px-2 py-1 rounded-lg bg-[var(--accent)]/10 text-[var(--accent)] text-[8px] font-black uppercase tracking-widest flex items-center gap-1.5 animate-pulse">
+                                  <Sparkles size={10} />
+                                  New Version Available
+                                </div>
+                              )}
 
-                                    {(!currentTrack.promptVersion || currentTrack.promptVersion < ANALYSIS_PROMPT_VERSION) && (
-                                      <div className="px-2 py-1 rounded-lg bg-[var(--accent)]/10 text-[var(--accent)] text-[8px] font-black uppercase tracking-widest flex items-center gap-1.5 animate-pulse">
-                                        <Sparkles size={10} />
-                                        New Version Available
-                                      </div>
-                                    )}
-
-                                    <button
-                                      onClick={handleRegenerateAnalysis}
-                                      disabled={isGeneratingAnalysis}
-                                      className={cn(
-                                        "px-3 py-1.5 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2",
-                                        !currentTrack.promptVersion || currentTrack.promptVersion < ANALYSIS_PROMPT_VERSION
-                                          ? "bg-[var(--accent)] border-[var(--accent)] text-white shadow-lg shadow-[var(--accent)]/20 opacity-100"
-                                          : "bg-app-card border-app-card-border opacity-40 hover:opacity-100 hover:text-[var(--accent)]"
-                                      )}
-                                      title="Reset and regenerate analysis"
-                                    >
-                                      <RefreshCw size={10} className={isGeneratingAnalysis ? "animate-spin" : ""} />
-                                      {!currentTrack.promptVersion || currentTrack.promptVersion < ANALYSIS_PROMPT_VERSION ? "Update Analysis" : "Regenerate"}
-                                    </button>
-                                  </>
-                                );
-                              })()}
+                              <button
+                                onClick={handleRegenerateAnalysis}
+                                disabled={isGeneratingAnalysis}
+                                className={cn(
+                                  "px-3 py-1.5 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2",
+                                  !currentTrack.promptVersion || currentTrack.promptVersion < ANALYSIS_PROMPT_VERSION
+                                    ? "bg-[var(--accent)] border-[var(--accent)] text-white shadow-lg shadow-[var(--accent)]/20 opacity-100"
+                                    : "bg-app-card border-app-card-border opacity-40 hover:opacity-100 hover:text-[var(--accent)]"
+                                )}
+                                title="Reset and regenerate analysis"
+                              >
+                                <RefreshCw size={10} className={isGeneratingAnalysis ? "animate-spin" : ""} />
+                                {!currentTrack.promptVersion || currentTrack.promptVersion < ANALYSIS_PROMPT_VERSION ? "Update Analysis" : "Regenerate"}
+                              </button>
                             </div>
                           </div>
                           <div className="grid gap-4">
@@ -2772,9 +2784,6 @@ export default function App() {
                           </div>
                         )}
 
-                        {(() => {
-                          const starredCount = currentTrack?.lines?.filter(l => l.isStarred).length || 0;
-                          return (
                             <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
                               <button
                                 onClick={() => handleGenerateAnalysis()}
@@ -2783,20 +2792,7 @@ export default function App() {
                                 <Sparkles size={16} />
                                 Generate Deep Analysis
                               </button>
-
-                               {starredCount > 0 && (
-                                <button
-                                  onClick={handleAnalyzeStarredLines}
-                                  className="px-10 py-5 rounded-3xl bg-orange-500/10 border border-orange-500/20 text-orange-500 font-black uppercase tracking-[0.2em] text-[10px] shadow-2xl hover:scale-105 transition-all flex items-center gap-3"
-                                  title="Analyze starred lyric lines for targeted vocabulary"
-                                >
-                                  <Brain size={16} />
-                                  Analyze starred ({starredCount})
-                                </button>
-                              )}
                             </div>
-                          );
-                        })()}
                       </div>
                     )}
                   </div>
@@ -3605,6 +3601,124 @@ export default function App() {
                 >
                   Done
                 </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Targeted Analysis Configuration Modal */}
+      <AnimatePresence>
+        {isAnalysisModalOpen && currentTrack && (
+          <div className="fixed inset-0 z-[110] flex items-end sm:items-center justify-center p-0 sm:p-12 overflow-y-auto">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsAnalysisModalOpen(false)}
+              className="fixed inset-0 bg-app-bg/60 backdrop-blur-md"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 100 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 100 }}
+              className="relative w-full max-w-lg bg-app-bg border border-app-card-border rounded-t-[2.5rem] sm:rounded-[2.5rem] overflow-hidden shadow-2xl z-10"
+            >
+              <div className="p-8 space-y-6">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-1">
+                    <span
+                      className="text-[10px] font-black uppercase tracking-[0.4em] text-orange-500"
+                    >
+                      Targeted Analysis
+                    </span>
+                    <h3 className="text-xl font-black text-app-fg leading-tight">
+                      Configure AI Focus
+                    </h3>
+                  </div>
+                  <button
+                    onClick={() => setIsAnalysisModalOpen(false)}
+                    className="text-app-fg opacity-20 hover:opacity-100 transition-colors p-1"
+                  >
+                    <X size={20} />
+                  </button>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-app-card border border-app-card-border flex items-center justify-between animate-fadeIn">
+                  <span className="text-xs font-bold text-app-fg">Selected Lyric Lines</span>
+                  <span className="px-3 py-1 bg-orange-500/10 text-orange-600 rounded-full font-black text-xs">
+                    {selectedLineIdsForAnalysis.length} lines
+                  </span>
+                </div>
+
+                <div className="space-y-3">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-app-fg opacity-50 block">
+                    Preset focus areas (Multi-select)
+                  </label>
+                  <div className="flex flex-wrap gap-2">
+                    {[
+                      "Explain grammar",
+                      "Break into useful phrases",
+                      "Explain at B2 level",
+                      "Focus on idioms/collocations",
+                      "Explain cultural context"
+                    ].map((preset) => {
+                      const isSelected = analysisSelectedPresets.includes(preset);
+                      return (
+                        <button
+                          key={preset}
+                          type="button"
+                          onClick={() => {
+                            setAnalysisSelectedPresets(prev =>
+                              prev.includes(preset)
+                                ? prev.filter(p => p !== preset)
+                                : [...prev, preset]
+                            );
+                          }}
+                          className={cn(
+                            "px-3.5 py-2 rounded-xl text-xs font-semibold transition-all shadow-sm border",
+                            isSelected
+                              ? "bg-orange-500 border-orange-500 text-white"
+                              : "bg-app-card border-app-card-border text-app-fg hover:bg-app-card/80"
+                          )}
+                        >
+                          {preset}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label htmlFor="custom-ai-focus" className="text-[10px] font-black uppercase tracking-widest text-app-fg opacity-50 block">
+                    What should AI focus on? (Additional custom instructions)
+                  </label>
+                  <textarea
+                    id="custom-ai-focus"
+                    placeholder="e.g. Focus on slang verbs, parse metaphorical translations, or explain usage of particle words..."
+                    value={analysisCustomFocus}
+                    onChange={(e) => setAnalysisCustomFocus(e.target.value)}
+                    className="w-full h-24 p-3.5 bg-app-card border border-app-card-border rounded-2xl text-sm text-app-fg placeholder-app-fg/30 focus:outline-none focus:border-orange-500/50 resize-none transition-all"
+                  />
+                </div>
+
+                <div className="flex gap-3 pt-2">
+                  <button
+                    onClick={() => {
+                      setIsAnalysisModalOpen(false);
+                    }}
+                    className="flex-1 py-3.5 rounded-2xl bg-app-card border border-app-card-border hover:bg-app-card/80 text-app-fg text-xs font-black uppercase tracking-widest transition-all"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleConfirmAnalyzeSelectedLines}
+                    disabled={selectedLineIdsForAnalysis.length === 0}
+                    className="flex-1 py-3.5 rounded-2xl bg-orange-500 hover:bg-orange-600 text-white text-xs font-black uppercase tracking-widest hover:scale-102 transition-all disabled:opacity-40"
+                  >
+                    Analyze
+                  </button>
+                </div>
               </div>
             </motion.div>
           </div>

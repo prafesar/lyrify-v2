@@ -105,6 +105,17 @@ export class WorkerAIAdapter implements AiPort {
     throw new Error("WorkerAIAdapter is currently in placeholder state.");
   }
 
+  async generateTargetedAnalysis(
+    title: string,
+    artist: string,
+    targetLanguage: string,
+    starredLines: any[],
+    existingPhrases: any[],
+    instruction?: string
+  ): Promise<{ phrases: any[] }> {
+    throw new Error("WorkerAIAdapter is currently in placeholder state. Please use GeminiAIAdapter.");
+  }
+
   async getLatestAnalyzedTracks(maxCount?: number): Promise<TrackMeaningEntry[]> {
     throw new Error("WorkerAIAdapter is currently in placeholder state.");
   }

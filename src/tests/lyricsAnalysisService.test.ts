@@ -6,7 +6,9 @@ import {
   editPhrase, 
   deletePhrase,
   buildStarredLinesAnalysisInput,
-  mergeGeneratedPhrasesForLines
+  mergeGeneratedPhrasesForLines,
+  buildSelectedLinesAnalysisInput,
+  mergeGeneratedPhrasesForSelectedLines
 } from "../services/lyricsAnalysisService";
 
 /**
@@ -249,6 +251,93 @@ describe("lyricsAnalysisService and Line linking tests", () => {
       // Verify that the duplicate is ignored and the new phrase is added
       expect(merged2.phrases?.length).toBe(3); // "Je t'aime", "grand amour", "moi non plus"
       expect(merged2.lines[0].phrases?.length).toBe(2); // "Je t'aime", "moi non plus"
+    });
+  });
+
+  describe("Targeted analysis of selected lyric lines", () => {
+    it("buildSelectedLinesAnalysisInput builds clean inputs for specifically chosen lines", () => {
+      const parentTrack = createTrackMock({
+        trackId: "selected_track_test",
+        lines: [
+          { id: "line1", lineId: "sec-1", index: 0, original: "Hello sweet light", phrases: [] },
+          { id: "line2", lineId: "sec-2", index: 1, original: "Goodbye cold night", phrases: [] },
+          { id: "line3", lineId: "sec-3", index: 2, original: "Just a side text", phrases: [] }
+        ],
+        phrases: []
+      });
+
+      const payload = buildSelectedLinesAnalysisInput(parentTrack, ["sec-1", "sec-2"]);
+
+      expect(payload.title).toBe("Test Track");
+      expect(payload.artist).toBe("Test Artist");
+      expect(payload.selectedLines.length).toBe(2);
+      expect(payload.selectedLines[0].lineId).toBe("sec-1");
+      expect(payload.selectedLines[1].lineId).toBe("sec-2");
+    });
+
+    it("mergeGeneratedPhrasesForSelectedLines merges AI phrases correctly into selected lines while avoiding duplicates", () => {
+      const parentTrack = createTrackMock({
+        trackId: "selected_merge_track",
+        lines: [
+          { id: "line1", lineId: "sel-1", index: 0, original: "Show me the meaning of being lonely", phrases: [] },
+          { id: "line2", lineId: "sel-2", index: 1, original: "Is this the feeling I need to walk with", phrases: [] }
+        ],
+        phrases: []
+      });
+
+      const mockResult = [
+        {
+          text: "Show me the meaning",
+          translation: "Покажи мне значение",
+          explanation: "Beautiful focus phrase",
+          lineIds: ["sel-1"],
+          type: "phrase"
+        },
+        {
+          text: "feeling I need",
+          translation: "чувство, которое мне нужно",
+          explanation: "Vocabulary chunk",
+          lineIds: ["sel-2", "ignored-line-id"],
+          type: "vocabulary"
+        }
+      ];
+
+      // Merge first time
+      const merged1 = mergeGeneratedPhrasesForSelectedLines(parentTrack, mockResult, ["sel-1", "sel-2"]);
+
+      expect(merged1.phrases?.length).toBe(2);
+      expect(merged1.lines[0].phrases?.length).toBe(1);
+      expect(merged1.lines[0].phrases?.[0].text).toBe("Show me the meaning");
+
+      const phrase2 = merged1.phrases?.find(p => p.text === "feeling I need");
+      expect(phrase2).toBeDefined();
+      expect(phrase2?.lineIds).toContain("sel-2");
+      expect(phrase2?.lineIds).not.toContain("ignored-line-id"); // Ignored non-selected line reference
+
+      // Merge duplicate phrase
+      const mockResultDuplicate = [
+        {
+          text: "Show me the meaning", // duplicate
+          translation: "Покажи мне смысл",
+          explanation: "Different explanation",
+          lineIds: ["sel-1"],
+          type: "phrase"
+        },
+        {
+          text: "walk with", // new
+          translation: "идти вместе",
+          explanation: "Verb complement",
+          lineIds: ["sel-2"],
+          type: "phrase"
+        }
+      ];
+
+      const merged2 = mergeGeneratedPhrasesForSelectedLines(merged1, mockResultDuplicate, ["sel-1", "sel-2"]);
+
+      // Total phrases is 3 (2 original + "walk with", duplicate is skipped)
+      expect(merged2.phrases?.length).toBe(3);
+      expect(merged2.lines[0].phrases?.length).toBe(1); // duplicate is skipped, still only "Show me the meaning"
+      expect(merged2.lines[1].phrases?.length).toBe(2); // "feeling I need", "walk with"
     });
   });
 });
