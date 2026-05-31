@@ -173,7 +173,8 @@ export function addUserPhrase(
   phraseText: string,
   translation: string,
   explanation: string,
-  targetLineId?: string
+  targetLineId?: string,
+  note?: string
 ): TrackLyricsData {
   const newPhrase: Phrase = {
     id: generatePhraseId(track.trackId, phraseText),
@@ -186,7 +187,8 @@ export function addUserPhrase(
     lineIds: targetLineId ? [targetLineId] : findMatchingLineIds(track.lines, phraseText),
     source: 'user',
     createdAt: Date.now(),
-    updatedAt: Date.now()
+    updatedAt: Date.now(),
+    note
   };
 
   const updatedLines = track.lines.map((line) => {

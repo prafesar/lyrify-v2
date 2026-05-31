@@ -494,6 +494,7 @@ export interface Phrase {
   source?: 'llm' | 'user';
   createdAt?: number;
   updatedAt?: number;
+  note?: string;
 }
 
 export interface LyricsLine {

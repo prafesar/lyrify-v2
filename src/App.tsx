@@ -91,6 +91,7 @@ import { TrackProgressTracker } from "./components/TrackProgressTracker";
 import { TracksHomeShell } from "./components/TracksHomeShell";
 import { DailyProgressBlock } from "./components/DailyProgressBlock";
 import { ResumeStudyBlock } from "./components/ResumeStudyBlock";
+import { AnalysisPhraseWorkspace } from "./components/AnalysisPhraseWorkspace";
 
 
 
@@ -833,6 +834,7 @@ export default function App() {
   const [isAnalysisModalOpen, setIsAnalysisModalOpen] = useState(false);
   const [analysisCustomFocus, setAnalysisCustomFocus] = useState("");
   const [analysisSelectedPresets, setAnalysisSelectedPresets] = useState<string[]>([]);
+  const [trackSearchQuery, setTrackSearchQuery] = useState("");
 
   const handleToggleLineSelection = useCallback((lineId: string) => {
     setSelectedLineIdsForAnalysis(prev => {
@@ -2363,6 +2365,30 @@ export default function App() {
 
                 {activeTab === "lyrics" && (
                   <div className="flex flex-col gap-1 pb-32">
+                    {/* Search Input in Lyrics Tab */}
+                    {currentTrack.rawLyrics && (
+                      <div className="relative mb-4 px-1">
+                        <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-app-fg opacity-40">
+                          <Search size={18} />
+                        </div>
+                        <input
+                          type="text"
+                          placeholder="Search original text, translations, or phrases in lyrics..."
+                          value={trackSearchQuery}
+                          onChange={(e) => setTrackSearchQuery(e.target.value)}
+                          className="w-full pl-12 pr-10 py-3.5 bg-app-card border border-app-card-border rounded-2xl text-lg font-medium text-app-fg placeholder-app-fg/30 focus:outline-none focus:border-app-accent/50 transition-all font-sans"
+                        />
+                        {trackSearchQuery && (
+                          <button
+                            onClick={() => setTrackSearchQuery("")}
+                            className="absolute inset-y-0 right-0 pr-4 flex items-center text-app-fg opacity-45 hover:opacity-100 transition-opacity"
+                          >
+                            <X size={14} />
+                          </button>
+                        )}
+                      </div>
+                    )}
+
                     <div className="flex justify-end px-1 pb-4">
                       {(currentTrack.rawLyrics || lyricsFetchError) && (
                         <div className="flex flex-wrap gap-2 items-center justify-end w-full">
@@ -2508,6 +2534,33 @@ export default function App() {
                           <div className="py-24 text-center space-y-4">
                             <Star size={40} className="mx-auto text-amber-500/40" />
                             <p className="text-sm font-bold text-app-fg opacity-45">No starred lines.</p>
+                          </div>
+                        );
+                      }
+
+                      if (trackSearchQuery.trim()) {
+                        const q = trackSearchQuery.toLowerCase().trim();
+                        linesToRender = linesToRender.filter((line: any) => {
+                          const matchesOriginal = line.original?.toLowerCase().includes(q);
+                          const matchesTranslation = line.translation?.toLowerCase().includes(q);
+                          const matchesPhrases = line.phrases?.some((p: any) => 
+                            p.text?.toLowerCase().includes(q) || p.translation?.toLowerCase().includes(q)
+                          );
+                          return matchesOriginal || matchesTranslation || matchesPhrases;
+                        });
+                      }
+
+                      if (trackSearchQuery.trim() && linesToRender.length === 0) {
+                        return (
+                          <div className="py-24 text-center space-y-4">
+                            <Search size={40} className="mx-auto text-app-fg opacity-15" />
+                            <p className="text-sm font-bold text-app-fg opacity-45">No matching lyric lines.</p>
+                            <button
+                              onClick={() => setTrackSearchQuery("")}
+                              className="px-4 py-2 border border-app-card-border hover:border-app-fg/25 rounded-xl text-xs font-bold text-app-fg"
+                            >
+                              Clear Search
+                            </button>
                           </div>
                         );
                       }
@@ -2706,60 +2759,34 @@ export default function App() {
                           </div>
                         </div>
                       </div>
-                    ) : (currentTrack.lines.some(l => l.phrases && l.phrases.length > 0)) ? (
+                    ) : ((currentTrack.phrases && currentTrack.phrases.length > 0) || currentTrack.lines.some(l => l.phrases && l.phrases.length > 0)) ? (
                       <motion.div
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         className="space-y-12"
                       >
-                        {/* Phrases Section - Extracted from lines */}
-                        <section className="space-y-6">
-                          <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-xl bg-orange-500/10 flex items-center justify-center text-orange-500">
-                              <Star size={16} />
-                            </div>
-                            <h2 className="text-xs font-black uppercase tracking-[0.2em] opacity-60">
-                              Key Phrases
-                            </h2>
-                            <div className="flex gap-2 ml-auto">
-                              {(!currentTrack.promptVersion || currentTrack.promptVersion < ANALYSIS_PROMPT_VERSION) && (
-                                <div className="px-2 py-1 rounded-lg bg-[var(--accent)]/10 text-[var(--accent)] text-[8px] font-black uppercase tracking-widest flex items-center gap-1.5 animate-pulse">
-                                  <Sparkles size={10} />
-                                  New Version Available
-                                </div>
-                              )}
-
-                              <button
-                                onClick={handleRegenerateAnalysis}
-                                disabled={isGeneratingAnalysis}
-                                className={cn(
-                                  "px-3 py-1.5 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2",
-                                  !currentTrack.promptVersion || currentTrack.promptVersion < ANALYSIS_PROMPT_VERSION
-                                    ? "bg-[var(--accent)] border-[var(--accent)] text-white shadow-lg shadow-[var(--accent)]/20 opacity-100"
-                                    : "bg-app-card border-app-card-border opacity-40 hover:opacity-100 hover:text-[var(--accent)]"
-                                )}
-                                title="Reset and regenerate analysis"
-                              >
-                                <RefreshCw size={10} className={isGeneratingAnalysis ? "animate-spin" : ""} />
-                                {!currentTrack.promptVersion || currentTrack.promptVersion < ANALYSIS_PROMPT_VERSION ? "Update Analysis" : "Regenerate"}
-                              </button>
-                            </div>
-                          </div>
-                          <div className="grid gap-4">
-                            {currentTrack.lines.flatMap(l => l.phrases).filter((p, i, self) => self.findIndex(t => t.text === p.text) === i).map((item, idx) => {
-                              const card = phraseMetadata.get(item.text);
-                              return (
-                                  <AnalysisPhraseCard
-                                    key={idx}
-                                    item={item}
-                                    idx={idx}
-                                    card={card}
-                                    handleSetAnalysisPhraseStatus={handleSetAnalysisPhraseStatus}
-                                  />
-                              );
-                            })}
-                          </div>
-                        </section>
+                        <AnalysisPhraseWorkspace
+                          currentTrack={currentTrack}
+                          trackSearchQuery={trackSearchQuery}
+                          setTrackSearchQuery={setTrackSearchQuery}
+                          phraseMetadata={phraseMetadata}
+                          handleSetAnalysisPhraseStatus={handleSetAnalysisPhraseStatus}
+                          speak={speak}
+                          onUpdateTrack={async (updatedTrack) => {
+                            setCurrentTrack(updatedTrack);
+                            await saveTrackData(updatedTrack.trackId, updatedTrack);
+                            loadCommunityTracks();
+                          }}
+                          targetLanguage={targetLanguage}
+                          onGoToLine={(original, index) => {
+                            setActiveTab("lyrics");
+                            setTimeout(() => {
+                              handleLineClick(original, index);
+                            }, 100);
+                          }}
+                          isGeneratingAnalysis={isGeneratingAnalysis}
+                          handleRegenerateAnalysis={handleRegenerateAnalysis}
+                        />
                       </motion.div>
                     ) : (
                       <div className="py-20 flex flex-col items-center justify-center text-center space-y-8 font-sans">
