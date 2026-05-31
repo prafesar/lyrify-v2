@@ -745,7 +745,8 @@ export default function App() {
     handleGenerateAnalysis: handleGenerateAnalysisRaw,
     handleRegenerateAnalysis: handleRegenerateAnalysisRaw,
     handleManualLyricsSearch,
-    handleSelectLyricOption: handleSelectLyricOptionRaw
+    handleSelectLyricOption: handleSelectLyricOptionRaw,
+    handleAnalyzeStarredLines: handleAnalyzeStarredLinesRaw
   } = useTrackSession();
 
   const {
@@ -889,6 +890,10 @@ export default function App() {
 
   const handleRegenerateAnalysis = async () => {
     await handleRegenerateAnalysisRaw(targetLanguage, { loadCommunityTracks });
+  };
+
+  const handleAnalyzeStarredLines = async () => {
+    await handleAnalyzeStarredLinesRaw(targetLanguage, { loadCommunityTracks });
   };
 
   const handleSelectLyricOption = async (option: LyricOption) => {
@@ -2581,27 +2586,49 @@ export default function App() {
                               Key Phrases
                             </h2>
                             <div className="flex gap-2 ml-auto">
-                              {(!currentTrack.promptVersion || currentTrack.promptVersion < ANALYSIS_PROMPT_VERSION) && (
-                                <div className="px-2 py-1 rounded-lg bg-[var(--accent)]/10 text-[var(--accent)] text-[8px] font-black uppercase tracking-widest flex items-center gap-1.5 animate-pulse">
-                                  <Sparkles size={10} />
-                                  New Version Available
-                                </div>
-                              )}
-                              <button
-                                onClick={handleRegenerateAnalysis}
-                                disabled={isGeneratingAnalysis}
-                                className={cn(
-                                  "px-3 py-1.5 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2",
-                                  !currentTrack.promptVersion || currentTrack.promptVersion < ANALYSIS_PROMPT_VERSION
-                                    ? "bg-[var(--accent)] border-[var(--accent)] text-white shadow-lg shadow-[var(--accent)]/20 opacity-100"
-                                    : "bg-app-card border-app-card-border opacity-40 hover:opacity-100 hover:text-[var(--accent)]"
-                                )}
-                                title="Reset and regenerate analysis"
-                              >
-                                <RefreshCw size={10} className={isGeneratingAnalysis ? "animate-spin" : ""} />
-                                {!currentTrack.promptVersion || currentTrack.promptVersion < ANALYSIS_PROMPT_VERSION ? "Update Analysis" : "Regenerate"}
-                              </button>
+                              {(() => {
+                                const starredCount = currentTrack.lines.filter(l => l.isStarred).length;
+                                return (
+                                  <>
+                                    <button
+                                      onClick={handleAnalyzeStarredLines}
+                                      disabled={isGeneratingAnalysis || starredCount === 0}
+                                      className={cn(
+                                        "px-3 py-1.5 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2",
+                                        starredCount === 0
+                                          ? "bg-app-card border-app-card-border opacity-20 cursor-not-allowed"
+                                          : "bg-orange-500/10 border-orange-500/20 text-orange-500 hover:bg-orange-500/15 shadow-sm"
+                                      )}
+                                      title={starredCount === 0 ? "Star some lyric lines first to run targeted analysis" : "Analyze only starred lines to add precise collocations of your choice"}
+                                    >
+                                      <Sparkles size={10} className={isGeneratingAnalysis ? "animate-spin" : ""} />
+                                      {isGeneratingAnalysis ? "Analyzing..." : `Starred Lyrics (${starredCount})`}
+                                    </button>
 
+                                    {(!currentTrack.promptVersion || currentTrack.promptVersion < ANALYSIS_PROMPT_VERSION) && (
+                                      <div className="px-2 py-1 rounded-lg bg-[var(--accent)]/10 text-[var(--accent)] text-[8px] font-black uppercase tracking-widest flex items-center gap-1.5 animate-pulse">
+                                        <Sparkles size={10} />
+                                        New Version Available
+                                      </div>
+                                    )}
+
+                                    <button
+                                      onClick={handleRegenerateAnalysis}
+                                      disabled={isGeneratingAnalysis}
+                                      className={cn(
+                                        "px-3 py-1.5 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2",
+                                        !currentTrack.promptVersion || currentTrack.promptVersion < ANALYSIS_PROMPT_VERSION
+                                          ? "bg-[var(--accent)] border-[var(--accent)] text-white shadow-lg shadow-[var(--accent)]/20 opacity-100"
+                                          : "bg-app-card border-app-card-border opacity-40 hover:opacity-100 hover:text-[var(--accent)]"
+                                      )}
+                                      title="Reset and regenerate analysis"
+                                    >
+                                      <RefreshCw size={10} className={isGeneratingAnalysis ? "animate-spin" : ""} />
+                                      {!currentTrack.promptVersion || currentTrack.promptVersion < ANALYSIS_PROMPT_VERSION ? "Update Analysis" : "Regenerate"}
+                                    </button>
+                                  </>
+                                );
+                              })()}
                             </div>
                           </div>
                           <div className="grid gap-4">
@@ -2627,7 +2654,13 @@ export default function App() {
                         </div>
                         <div className="space-y-3">
                           <h3 className="text-2xl font-bold text-app-fg">No Analysis Yet</h3>
-                          <p className="text-app-fg opacity-40 max-w-sm mx-auto font-sans">Click below to start deep learning for this song.</p>
+                          {(() => {
+                            const starredCount = currentTrack?.lines?.filter(l => l.isStarred).length || 0;
+                            if (starredCount > 0) {
+                              return <p className="text-app-fg opacity-40 max-w-sm mx-auto font-sans">You have starred {starredCount} lines! Click below to run targeted analysis on them, or analyze the full song.</p>;
+                            }
+                            return <p className="text-app-fg opacity-40 max-w-sm mx-auto font-sans">Click below to start deep learning for this song, or star specific lines first for targeted analysis.</p>;
+                          })()}
                         </div>
 
                         {analysisError && (
@@ -2637,13 +2670,30 @@ export default function App() {
                           </div>
                         )}
 
-                        <button
-                          onClick={() => handleGenerateAnalysis()}
-                          className="px-10 py-5 rounded-3xl bg-app-fg text-app-bg font-black uppercase tracking-[0.2em] text-[10px] shadow-2xl hover:scale-105 transition-all flex items-center gap-3"
-                        >
-                          <Sparkles size={16} />
-                          Generate Deep Analysis
-                        </button>
+                        {(() => {
+                          const starredCount = currentTrack?.lines?.filter(l => l.isStarred).length || 0;
+                          return (
+                            <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
+                              <button
+                                onClick={() => handleGenerateAnalysis()}
+                                className="px-10 py-5 rounded-3xl bg-app-fg text-app-bg font-black uppercase tracking-[0.2em] text-[10px] shadow-2xl hover:scale-105 transition-all flex items-center gap-3"
+                              >
+                                <Sparkles size={16} />
+                                Generate Deep Analysis
+                              </button>
+
+                              {starredCount > 0 && (
+                                <button
+                                  onClick={handleAnalyzeStarredLines}
+                                  className="px-10 py-5 rounded-3xl bg-orange-500/10 border border-orange-500/20 text-orange-500 font-black uppercase tracking-[0.2em] text-[10px] shadow-2xl hover:scale-105 transition-all flex items-center gap-3"
+                                >
+                                  <Brain size={16} />
+                                  Analyze Starred ({starredCount})
+                                </button>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </div>
                     )}
                   </div>

@@ -15,38 +15,54 @@ export enum Type {
 
 async function callGeminiApi(params: { model: string; contents: any; config?: any }) {
   const modelToUse = params.model === "gemini-2.5-flash" ? "gemini-3.5-flash" : params.model;
-  const response = await fetch("/api/gemini/generate-content", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({ ...params, model: modelToUse })
-  });
-
-  const contentType = response.headers.get("content-type") || "";
-  const isJson = contentType.includes("application/json");
-
-  if (!response.ok || !isJson) {
-    const errText = await response.text();
-    let parsedError;
+  
+  let lastError: any = null;
+  const maxAttempts = 3;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
-      parsedError = JSON.parse(errText);
-    } catch {
-      const trimmerText = errText.trim().toLowerCase();
-      if (
-        trimmerText.startsWith("<") || 
-        trimmerText.includes("<!doctype") || 
-        trimmerText.includes("<html") || 
-        response.status === 504 || 
-        response.status === 502
-      ) {
-        throw new Error("The AI service is temporarily unavailable (high traffic or timeout). Please try again in a few moments.");
+      const response = await fetch("/api/gemini/generate-content", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ ...params, model: modelToUse })
+      });
+
+      const contentType = response.headers.get("content-type") || "";
+      const isJson = contentType.includes("application/json");
+
+      if (!response.ok || !isJson) {
+        const errText = await response.text();
+        let parsedError;
+        try {
+          parsedError = JSON.parse(errText);
+        } catch {
+          const trimmerText = errText.trim().toLowerCase();
+          if (
+            trimmerText.startsWith("<") || 
+            trimmerText.includes("<!doctype") || 
+            trimmerText.includes("<html") || 
+            response.status === 504 || 
+            response.status === 502
+          ) {
+            throw new Error("The AI service is temporarily unavailable (high traffic or timeout). Please try again in a few moments.");
+          }
+          throw new Error(errText || `Server returned status ${response.status}`);
+        }
+        throw new Error(parsedError?.error || parsedError?.message || errText || "Request failed");
       }
-      throw new Error(errText || `Server returned status ${response.status}`);
+      return await response.json();
+    } catch (err: any) {
+      lastError = err;
+      console.warn(`[callGeminiApi] Attempt ${attempt} failed:`, err.message || err);
+      if (attempt < maxAttempts) {
+        // Sleep for a short duration before trying again
+        const delay = attempt === 1 ? 1200 : 2500;
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
     }
-    throw new Error(parsedError?.error || parsedError?.message || errText || "Request failed");
   }
-  return await response.json();
+  throw lastError || new Error("Request to Gemini API failed after multiple attempts.");
 }
 export const ANALYSIS_PROMPT_VERSION = 3;
 export const TRANSLATION_PROMPT_VERSION = 4;
@@ -868,6 +884,97 @@ ${lyrics}
     throw error;
   }
 }
+
+/**
+ * Targeted Analysis: Extracts useful collocations/idioms for specifically selected starred lines.
+ */
+export async function generateTargetedAnalysis(
+  title: string,
+  artist: string,
+  targetLanguage: string,
+  starredLines: any[],
+  existingPhrases: any[]
+): Promise<{ phrases: any[] }> {
+  // Format selected lines and existing phrases cleanly
+  const starredLinesStr = starredLines
+    .map(line => `Line ID: "${line.lineId}" (index: ${line.index})\nOriginal: "${line.original}"\nTranslation: "${line.translation || ''}"`)
+    .join("\n\n");
+
+  const existingPhrasesStr = existingPhrases
+    .map(p => `- Text: "${p.text || ''}", Type: "${p.type || ''}", Translation: "${p.translation || ''}"`)
+    .join("\n");
+
+  const prompt = `Role: Expert linguistic analyst and music teacher.
+Perform a targeted analysis of the raw starred lyric lines of "${title}" by "${artist}".
+Your goal is to extract useful collocations, idioms, phrasal verbs, or cultural/vocabulary chunks (minimum 2 words, preferably 3-6 words) specifically from these starred lines to help a language learner master the content.
+
+We are translating/explaining in targeted learning language: "${targetLanguage}".
+
+Starred Lines (with associated Line IDs):
+${starredLinesStr}
+
+Already analyzed/existing phrases on these lines (do NOT output these in your response to avoid redundancy):
+${existingPhrasesStr || "None"}
+
+SELECTION RULES:
+1. MAX 1-2 NEW PHRASES PER LINE. Focus heavily on actual expressions/chunks rather than single words.
+2. NO DUPLICATES: Do not suggest any phrase that has been suggested before or is already in the "Already analyzed/existing phrases" list.
+3. EXACT MATCH: Each suggested "text" must be an EXACT substring of the "original" line from which it is extracted.
+4. MAPPING TO LINE IDS: For each phrase, specify which "lineIds" *from the starred lines input* it was extracted from. If a phrase is present on multiple starred lines and has the exact same meaning, list all those lineIds.
+5. NO PHRASES WITHOUT LINE IDS: Every phrase must have at least one valid "lineId" from the input.
+
+Return a valid JSON object with the following structure exactly:
+{
+  "phrases": [
+    {
+      "text": "Extracted substring",
+      "translation": "Translation of the phrase in ${targetLanguage}",
+      "explanation": "Clear linguistic explanation/context in ${targetLanguage}",
+      "lineIds": ["associated-line-id-from-input"],
+      "type": "collocation|idiom|phrasal_verb|cultural_ref|vocabulary|phrase",
+      "learningPriority": "high|medium|low"
+    }
+  ]
+}`;
+
+  try {
+    const response = await callGeminiApi({
+      model: "gemini-2.5-flash",
+      contents: prompt,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            phrases: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  text: { type: Type.STRING },
+                  translation: { type: Type.STRING },
+                  explanation: { type: Type.STRING },
+                  lineIds: { type: Type.ARRAY, items: { type: Type.STRING } },
+                  type: { type: Type.STRING },
+                  learningPriority: { type: Type.STRING }
+                },
+                required: ["text", "translation", "explanation", "lineIds", "type"]
+              }
+            }
+          },
+          required: ["phrases"]
+        }
+      }
+    });
+
+    const parsed = JSON.parse(response.text);
+    return parsed;
+  } catch (error) {
+    console.error("Targeted Analysis error:", error);
+    throw error;
+  }
+}
+
 
 export async function getLatestAnalyzedTracks(maxCount: number = 10): Promise<TrackMeaningEntry[]> {
   console.log("[geminiService] getLatestAnalyzedTracks called, maxCount:", maxCount);

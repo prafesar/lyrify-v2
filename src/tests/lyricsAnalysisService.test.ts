@@ -4,7 +4,9 @@ import {
   linkPhrasesToLines, 
   addUserPhrase, 
   editPhrase, 
-  deletePhrase 
+  deletePhrase,
+  buildStarredLinesAnalysisInput,
+  mergeGeneratedPhrasesForLines
 } from "../services/lyricsAnalysisService";
 
 /**
@@ -160,5 +162,93 @@ describe("lyricsAnalysisService and Line linking tests", () => {
     const updated = deletePhrase(initialTrack, "p1");
     expect(updated.phrases?.length).toBe(0);
     expect(updated.lines[0].phrases?.length).toBe(0);
+  });
+
+  describe("Targeted analysis of starred lyric lines", () => {
+    it("builds clean inputs for selected starred lines", () => {
+      const parentTrack = createTrackMock({
+        trackId: "target_track",
+        lines: [
+          { id: "line1", lineId: "lid-1", index: 0, original: "First star child", isStarred: true, phrases: [] },
+          { id: "line2", lineId: "lid-2", index: 1, original: "Second ordinary citizen", isStarred: false, phrases: [] }
+        ],
+        phrases: []
+      });
+
+      const payload = buildStarredLinesAnalysisInput(parentTrack);
+
+      expect(payload.title).toBe("Test Track");
+      expect(payload.artist).toBe("Test Artist");
+      expect(payload.starredLines.length).toBe(1);
+      expect(payload.starredLines[0].lineId).toBe("lid-1");
+      expect(payload.starredLines[0].original).toBe("First star child");
+    });
+
+    it("merges LLM generated phrases while preventing duplicates and linking correct line ids", () => {
+      const parentTrack = createTrackMock({
+        trackId: "target_track",
+        lines: [
+          { id: "line1", lineId: "lid-1", index: 0, original: "Je t'aime moi non plus", isStarred: true, phrases: [] },
+          { id: "line2", lineId: "lid-2", index: 1, original: "Un grand amour etrangle", isStarred: true, phrases: [] }
+        ],
+        phrases: []
+      });
+
+      // 1. First merge of new phrases
+      const mockResult1 = [
+        {
+          text: "Je t'aime",
+          translation: "I love you",
+          explanation: "Grammar breakdown",
+          lineIds: ["lid-1"],
+          type: "phrase"
+        },
+        {
+          text: "grand amour",
+          translation: "great love",
+          explanation: "Collocation sample",
+          lineIds: ["lid-2", "lid-invalid-ignored"],
+          type: "collocation"
+        }
+      ];
+
+      const merged1 = mergeGeneratedPhrasesForLines(parentTrack, mockResult1);
+
+      // Verify that phrases were added to track and lines
+      expect(merged1.phrases?.length).toBe(2);
+      expect(merged1.lines[0].phrases?.length).toBe(1);
+      expect(merged1.lines[1].phrases?.length).toBe(1);
+
+      expect(merged1.lines[0].phrases?.[0].text).toBe("Je t'aime");
+      // Checked that invalid or non-starred lines were filtered out from lineIds
+      const gp2 = merged1.phrases?.find(p => p.text === "grand amour");
+      expect(gp2).toBeDefined();
+      expect(gp2?.lineIds).toContain("lid-2");
+      expect(gp2?.lineIds).not.toContain("lid-invalid-ignored");
+
+      // 2. Second merge with a duplicate phrase text and a brand-new phrase
+      const mockResult2 = [
+        {
+          text: "Je t'aime", // duplicate - should be skipped/merged without duplicates
+          translation: "I love you indeed",
+          explanation: "Alternate explanation",
+          lineIds: ["lid-1"],
+          type: "phrase"
+        },
+        {
+          text: "moi non plus", // new
+          translation: "me neither",
+          explanation: "Famous expression matching and linking",
+          lineIds: ["lid-1"],
+          type: "idiom"
+        }
+      ];
+
+      const merged2 = mergeGeneratedPhrasesForLines(merged1, mockResult2);
+
+      // Verify that the duplicate is ignored and the new phrase is added
+      expect(merged2.phrases?.length).toBe(3); // "Je t'aime", "grand amour", "moi non plus"
+      expect(merged2.lines[0].phrases?.length).toBe(2); // "Je t'aime", "moi non plus"
+    });
   });
 });

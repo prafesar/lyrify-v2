@@ -464,3 +464,116 @@ export function getLinkedPhrasesForLines(track: TrackLyricsData, lineIds: string
   }
   return collected;
 }
+
+export interface StarredLinesAnalysisInput {
+  title: string;
+  artist: string;
+  originalLanguage?: string;
+  starredLines: StarredLineData[];
+  existingPhrases: Phrase[];
+}
+
+/**
+ * Builds standard payload data for targeted analysis of starred lyric lines
+ */
+export function buildStarredLinesAnalysisInput(track: TrackLyricsData): StarredLinesAnalysisInput {
+  const starredLines = getStarredLinesWithId(track);
+  const lineIds = starredLines.map(l => l.lineId);
+  const existingPhrases = getLinkedPhrasesForLines(track, lineIds);
+  return {
+    title: track.title,
+    artist: track.artist,
+    originalLanguage: track.sourceLanguage,
+    starredLines,
+    existingPhrases
+  };
+}
+
+/**
+ * Merges structured LLM generated phrases specifically targeting starred lines.
+ * Filters by starred lines, prevents duplicates, assigns correct lineIds, keeps user phrases.
+ */
+export function mergeGeneratedPhrasesForLines(
+  track: TrackLyricsData,
+  generatedPhrases: Array<{
+    text: string;
+    translation: string;
+    explanation: string;
+    lineIds: string[];
+    type: string;
+    learningPriority?: string;
+    lemmas?: string[];
+  }>
+): TrackLyricsData {
+  if (!track || !generatedPhrases) return track;
+
+  const starredLines = getStarredLinesWithId(track);
+  const starredLineIds = new Set(starredLines.map(sl => sl.lineId));
+
+  let updatedLines = (track.lines || []).map(line => ({
+    ...line,
+    lineId: line.lineId || generateLineId(line.original),
+    phrases: line.phrases ? [...line.phrases] : []
+  }));
+
+  for (const gp of generatedPhrases) {
+    const textVal = gp.text?.trim() || '';
+    if (!textVal) continue;
+
+    const normText = normalizePhraseText(textVal);
+    if (!normText) continue;
+
+    // Filter lineIds to only contain the valid starred lineIds
+    const validLineIds = (gp.lineIds || []).filter(lid => starredLineIds.has(lid));
+    if (validLineIds.length === 0) continue;
+
+    // Filter target line ids where this phrase does NOT already exist by normalized text
+    const targetLineIdsToAdd: string[] = [];
+    for (const lid of validLineIds) {
+      const line = updatedLines.find(l => l.lineId === lid);
+      if (line) {
+        const alreadyExists = line.phrases.some(
+          p => normalizePhraseText(p.text || '') === normText
+        );
+        if (!alreadyExists) {
+          targetLineIdsToAdd.push(lid);
+        }
+      }
+    }
+
+    if (targetLineIdsToAdd.length === 0) continue;
+
+    const phraseObj: Phrase = {
+      id: `${track.trackId}:p_llm:${normText}_${Date.now()}_` + Math.random().toString(36).substring(2, 7),
+      text: textVal,
+      lemmas: gp.lemmas || [],
+      type: gp.type || 'phrase',
+      translation: gp.translation || '',
+      explanation: gp.explanation || '',
+      normalizedText: normText,
+      lineIds: targetLineIdsToAdd,
+      source: 'llm',
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      learningPriority: gp.learningPriority
+    };
+
+    updatedLines = updatedLines.map(line => {
+      if (targetLineIdsToAdd.includes(line.lineId!)) {
+        return {
+          ...line,
+          phrases: [...line.phrases, phraseObj]
+        };
+      }
+      return line;
+    });
+  }
+
+  const updatedTrack = {
+    ...track,
+    lines: updatedLines
+  };
+
+  return syncTrackPhrasesFromLines(updatedTrack);
+}
+
