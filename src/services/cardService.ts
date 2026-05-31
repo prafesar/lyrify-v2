@@ -63,7 +63,6 @@ export async function addPhraseToStudy(
   status: PhraseStatus = 'learning'
 ) {
   if (!auth.currentUser) throw new Error("User not authenticated");
-
   const emptyCard = createEmptyCard();
   
   const id = doc(collection(db, CARDS_COLLECTION)).id;
