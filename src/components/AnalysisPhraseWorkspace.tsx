@@ -315,7 +315,7 @@ export const AnalysisPhraseWorkspace: React.FC<AnalysisPhraseWorkspaceProps> = (
                   {/* Top segment / Header - Always visible */}
                   <div className="p-6">
                     {/* One-line Header/Body Layout containing sequence number inline, play button, translation, status button, and vertical dots menu */}
-                    <div className="flex items-start justify-between gap-4 w-full">
+                    <div className="flex items-center justify-between gap-4 w-full">
                       {/* Left Block: Number + Phrase text + play button on 1st line, translation on 2nd line */}
                       <div className="min-w-0 flex-1">
                         {/* First line: Gray Number + Phrase Text + Play Audio Button */}
