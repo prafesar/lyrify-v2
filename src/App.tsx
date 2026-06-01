@@ -330,14 +330,19 @@ const LyricLine = ({
 
           {trimmedLine && !isSelectionMode && (
             <div className="flex items-center gap-2 shrink-0">
-              {phrasesInLine && phrasesInLine.length > 0 && onOpenLineDrawer && (
+              {onOpenLineDrawer && (
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
                     onOpenLineDrawer(i);
                   }}
-                  className="p-1 px-1.5 rounded-lg border border-transparent transition-all hover:scale-110 hover:border-app-card-border hover:bg-app-card/80 text-[var(--accent)]"
-                  title="Line Vocabulary & Phrases Analysis"
+                  className={cn(
+                    "p-1 px-1.5 rounded-lg border border-transparent transition-all hover:scale-110 hover:border-app-card-border hover:bg-app-card/80",
+                    phrasesInLine && phrasesInLine.length > 0
+                      ? "text-[var(--accent)]"
+                      : "text-app-fg opacity-30 hover:opacity-100 hover:text-app-fg"
+                  )}
+                  title={phrasesInLine && phrasesInLine.length > 0 ? "Line Vocabulary & Phrases Analysis" : "Analyze this line..."}
                 >
                   <Sparkles size={16} />
                 </button>
