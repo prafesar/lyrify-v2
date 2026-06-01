@@ -1,12 +1,11 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
-import { motion, AnimatePresence, useMotionValue } from "motion/react";
+import { motion, AnimatePresence } from "motion/react";
 import {
   Play,
   Pause,
   FileText,
   Music,
   Search,
-  Plus,
   Brain,
   Check,
   ChevronLeft,
@@ -32,7 +31,6 @@ import {
   SearchCode,
   Sparkles,
   Star,
-  BookOpen,
   Volume2,
   VolumeX,
   Loader2,
@@ -514,6 +512,7 @@ export default function App() {
 
   useEffect(() => {
     // Initial load
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadAppLibraryData();
 
     // Subscribe to database changes to refresh global layout favorite states
@@ -530,6 +529,7 @@ export default function App() {
 
   useEffect(() => {
     if (activeMenuTrack) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       loadAppLibraryData();
     }
   }, [activeMenuTrack]);
@@ -679,7 +679,6 @@ export default function App() {
     handleRegenerateAnalysis: handleRegenerateAnalysisRaw,
     handleManualLyricsSearch,
     handleSelectLyricOption: handleSelectLyricOptionRaw,
-    handleAnalyzeStarredLines: handleAnalyzeStarredLinesRaw,
     handleAnalyzeSelectedLines: handleAnalyzeSelectedLinesRaw
   } = useTrackSession();
 
@@ -879,10 +878,6 @@ export default function App() {
 
   const handleRegenerateAnalysis = async () => {
     await handleRegenerateAnalysisRaw(targetLanguage, { loadCommunityTracks });
-  };
-
-  const handleAnalyzeStarredLines = async () => {
-    await handleAnalyzeStarredLinesRaw(targetLanguage, { loadCommunityTracks });
   };
 
   const handleSelectLyricOption = async (option: LyricOption) => {
