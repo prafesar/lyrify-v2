@@ -118,6 +118,27 @@ export interface AiPort {
     instruction?: string
   ): Promise<{ phrases: any[] }>;
 
+  generateLearningAssistantResponse(
+    title: string,
+    artist: string,
+    contextType: "line" | "phrase" | "selection",
+    lineContext: { original: string; translation?: string; lineId?: string } | undefined,
+    phraseContext: { text: string; translation?: string; explanation?: string; lineIds?: string[] } | undefined,
+    targetLanguage: string,
+    userQuestion?: string,
+    selectedPreset?: string,
+    existingPhrases: any[]
+  ): Promise<{
+    explanation: string;
+    suggestedPhrases: Array<{
+      text: string;
+      translation: string;
+      explanation?: string;
+      type?: string;
+      lineIds?: string[];
+    }>;
+  }>;
+
 
   getLatestAnalyzedTracks(maxCount?: number): Promise<TrackMeaningEntry[]>;
 

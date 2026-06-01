@@ -35,6 +35,7 @@ interface AnalysisPhraseWorkspaceProps {
   onUpdateTrack: (updatedTrack: TrackLyricsData) => Promise<void>;
   isGeneratingAnalysis?: boolean;
   handleRegenerateAnalysis?: () => void;
+  onOpenAssistantForPhrase?: (phrase: Phrase) => void;
 }
 
 export const AnalysisPhraseWorkspace: React.FC<AnalysisPhraseWorkspaceProps> = ({
@@ -46,11 +47,13 @@ export const AnalysisPhraseWorkspace: React.FC<AnalysisPhraseWorkspaceProps> = (
   speak,
   onUpdateTrack,
   isGeneratingAnalysis = false,
-  handleRegenerateAnalysis
+  handleRegenerateAnalysis,
+  onOpenAssistantForPhrase
 }) => {
   // Local state for Modals
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingPhrase, setEditingPhrase] = useState<Phrase | null>(null);
+  const [inlineEditId, setInlineEditId] = useState<string | null>(null);
 
   // Expanded cards state
   const [expandedPhraseKeys, setExpandedPhraseKeys] = useState<Set<string>>(new Set());
@@ -187,19 +190,25 @@ export const AnalysisPhraseWorkspace: React.FC<AnalysisPhraseWorkspaceProps> = (
     }, currentTrack.sourceLanguage);
   };
 
-  // Open Edit Modal with prefilled values
+  // Open Edit Inline or Modal
   const handleOpenEdit = (phrase: Phrase) => {
-    setEditingPhrase(phrase);
+    setInlineEditId(phrase.id);
     setFormText(phrase.text || "");
     setFormTranslation(phrase.translation || "");
     setFormExplanation(phrase.explanation || "");
     setFormNote(phrase.note || "");
     setFormType(phrase.type || "phrase");
+
+    // Expand the card so edit form is visible immediately
+    const itemKey = phrase.id || phrase.text;
+    const updated = new Set(expandedPhraseKeys);
+    updated.add(itemKey);
+    setExpandedPhraseKeys(updated);
   };
 
   // Save the Edited Phrase
   const handleSaveEdit = async () => {
-    if (!editingPhrase) return;
+    if (!inlineEditId) return;
 
     const updates: Partial<Phrase> = {
       text: formText,
@@ -209,9 +218,9 @@ export const AnalysisPhraseWorkspace: React.FC<AnalysisPhraseWorkspaceProps> = (
       type: formType,
     };
 
-    const updatedTrack = editPhrase(currentTrack, editingPhrase.id, updates);
+    const updatedTrack = editPhrase(currentTrack, inlineEditId, updates);
     await onUpdateTrack(updatedTrack);
-    setEditingPhrase(null);
+    setInlineEditId(null);
     clearForm();
   };
 
@@ -512,126 +521,201 @@ export const AnalysisPhraseWorkspace: React.FC<AnalysisPhraseWorkspaceProps> = (
                     {/* Extended Content (Collapsible segment) */}
                     {isExpanded && (
                       <div 
-                        onClick={(e) => e.stopPropagation()} 
+                        onClick={(e) => {
+                          // Prevent toggling expansion when clicking inside forms
+                          e.stopPropagation();
+                        }} 
                         className="space-y-4 pt-4 mt-4 border-t border-app-card-border/40 animate-fadeIn cursor-default"
                       >
-                        {/* Explanation description */}
-                        {item.explanation && (
-                          <div className="pl-4 border-l-2 border-app-card-border">
-                            <p className="text-base text-app-fg opacity-75 leading-relaxed font-sans font-medium">
-                              {highlightMatch(item.explanation, trackSearchQuery)}
-                            </p>
-                          </div>
-                        )}
+                        {inlineEditId === item.id ? (
+                          /* Inline Edit Form */
+                          <div className="space-y-4 font-sans text-xs">
+                            <span className="text-[10px] font-black uppercase text-orange-500 tracking-wider block">
+                              Edit Phrase Inline
+                            </span>
 
-                        {/* Study action controls for 'Знаю' (known) and 'Учить' (learning) states */}
-                        <div className="flex items-center gap-3 pt-1">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleSetAnalysisPhraseStatus(item.text, item.translation || "", item.explanation || "", "known");
-                            }}
-                            className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-5 py-2.5 rounded-2xl text-[10px] font-sans font-black uppercase tracking-widest transition-all ${
-                              currentStatus === "known"
-                                ? "bg-app-card border border-app-card-border/60 text-app-fg opacity-30 cursor-default"
-                                : "bg-app-bg border border-app-card-border hover:border-app-fg/20 active:scale-95 text-app-fg hover:bg-app-card shadow-xs"
-                            }`}
-                          >
-                            <CheckCircle2 size={13} className="text-app-fg opacity-40 shrink-0" />
-                            <span>Знаю</span>
-                          </button>
+                            <div className="grid gap-3 sm:grid-cols-2">
+                              <div className="space-y-1">
+                                <label className="text-[9px] font-black uppercase text-app-fg opacity-40 tracking-wider block">Phrase / Word</label>
+                                <input
+                                  type="text"
+                                  value={formText}
+                                  onChange={(e) => setFormText(e.target.value)}
+                                  className="w-full px-3 py-2 bg-app-card border border-app-card-border rounded-xl text-xs text-app-fg focus:outline-none focus:border-orange-500/50 font-serif"
+                                />
+                              </div>
 
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleSetAnalysisPhraseStatus(item.text, item.translation || "", item.explanation || "", "learning");
-                            }}
-                            className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-5 py-2.5 rounded-2xl text-[10px] font-sans font-black uppercase tracking-widest transition-all ${
-                              currentStatus === "learning"
-                                ? "bg-orange-500/15 border border-orange-500/30 text-orange-500 cursor-default"
-                                : "bg-app-bg border border-app-card-border hover:border-orange-500/30 active:scale-95 text-orange-500 hover:bg-orange-500/[0.02] shadow-xs"
-                            }`}
-                          >
-                            <RefreshCw size={12} className="text-orange-500 shrink-0" />
-                            <span>Учить</span>
-                          </button>
-                        </div>
+                              <div className="space-y-1">
+                                <label className="text-[9px] font-black uppercase text-app-fg opacity-40 tracking-wider block">Translation</label>
+                                <input
+                                  type="text"
+                                  value={formTranslation}
+                                  onChange={(e) => setFormTranslation(e.target.value)}
+                                  className="w-full px-3 py-2 bg-app-card border border-app-card-border rounded-xl text-xs text-app-fg focus:outline-none focus:border-orange-500/50 font-serif"
+                                />
+                              </div>
+                            </div>
 
-                        {/* User note */}
-                        {item.note && (
-                          <div className="p-4 rounded-xl bg-orange-500/[0.03] border border-orange-500/10 text-xs space-y-1">
-                            <span className="text-[9px] font-black uppercase tracking-wider text-orange-500 opacity-80 block">Personal Note</span>
-                            <p className="text-app-fg opacity-75 leading-relaxed font-sans font-medium select-text">
-                              {highlightMatch(item.note, trackSearchQuery)}
-                            </p>
-                          </div>
-                        )}
+                            <div className="space-y-1">
+                              <label className="text-[9px] font-black uppercase text-app-fg opacity-40 tracking-wider block">Clarification / Explanation</label>
+                              <textarea
+                                rows={2}
+                                value={formExplanation}
+                                onChange={(e) => setFormExplanation(e.target.value)}
+                                className="w-full px-3 py-2 bg-app-card border border-app-card-border rounded-xl text-xs text-app-fg focus:outline-none focus:border-orange-500/50 resize-none font-sans"
+                              />
+                            </div>
 
-                        {/* Lyrics Context (Single first non-empty distinct line as requested) */}
-                        {firstContextLine ? (
-                          <div className="pt-3 border-t border-app-card-border/45 space-y-2">
-                            <span className="text-[9px] font-black uppercase tracking-wider text-app-fg opacity-40 block">Lyrics Context</span>
-                            <div className="p-4 rounded-2xl bg-app-bg border border-app-card-border text-sm">
-                              <p className="font-serif font-semibold text-app-fg leading-snug">
-                                {firstContextLine.original}
-                              </p>
-                              {firstContextLine.translation && (
-                                <p className="font-sans text-xs text-app-fg opacity-50 italic mt-1 leading-snug">
-                                  {firstContextLine.translation}
-                                </p>
-                              )}
+                            <div className="space-y-1">
+                              <label className="text-[9px] font-black uppercase text-app-fg opacity-40 tracking-wider block">Personal Note</label>
+                              <textarea
+                                rows={2}
+                                value={formNote}
+                                onChange={(e) => setFormNote(e.target.value)}
+                                className="w-full px-3 py-2 bg-app-card border border-app-card-border rounded-xl text-xs text-app-fg focus:outline-none focus:border-orange-500/50 resize-none font-sans"
+                              />
+                            </div>
+
+                            <div className="flex gap-2.5 pt-1.5 justify-end">
+                              <button
+                                onClick={handleSaveEdit}
+                                className="px-4 py-2 bg-orange-500 hover:bg-orange-600 rounded-xl text-xxs font-black uppercase text-white tracking-wider transition-colors active:scale-95 duration-150"
+                              >
+                                Save Changes
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setInlineEditId(null);
+                                  clearForm();
+                                }}
+                                className="px-4 py-2 bg-app-card border border-app-card-border hover:bg-app-bg text-app-fg opacity-75 hover:opacity-100 rounded-xl text-xxs font-black uppercase tracking-wider transition-all"
+                              >
+                                Cancel
+                              </button>
                             </div>
                           </div>
                         ) : (
-                          <div className="pt-3 border-t border-app-card-border/45 space-y-1">
-                            <span className="text-[9px] font-black uppercase tracking-wider text-app-fg opacity-40 block">Lyrics Context</span>
-                            <div className="p-3.5 rounded-2xl bg-app-bg border border-app-card-border/40 text-xs">
-                              <p className="font-sans text-app-fg opacity-35 italic">
-                                No lyric context linked
-                              </p>
+                          /* standard Display Mode */
+                          <>
+                            {/* Explanation description */}
+                            {item.explanation && (
+                              <div className="pl-4 border-l-2 border-app-card-border">
+                                <p className="text-base text-app-fg opacity-75 leading-relaxed font-sans font-medium">
+                                  {highlightMatch(item.explanation, trackSearchQuery)}
+                                </p>
+                              </div>
+                            )}
+
+                            {/* Study action controls for 'Знаю' (known) and 'Учить' (learning) states */}
+                            <div className="flex items-center gap-3 pt-1">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleSetAnalysisPhraseStatus(item.text, item.translation || "", item.explanation || "", "known");
+                                }}
+                                className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-5 py-2.5 rounded-2xl text-[10px] font-sans font-black uppercase tracking-widest transition-all ${
+                                  currentStatus === "known"
+                                    ? "bg-app-card border border-app-card-border/60 text-app-fg opacity-30 cursor-default"
+                                    : "bg-app-bg border border-app-card-border hover:border-app-fg/20 active:scale-95 text-app-fg hover:bg-app-card shadow-xs"
+                                }`}
+                              >
+                                <CheckCircle2 size={13} className="text-app-fg opacity-40 shrink-0" />
+                                <span>Знаю</span>
+                              </button>
+
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleSetAnalysisPhraseStatus(item.text, item.translation || "", item.explanation || "", "learning");
+                                }}
+                                className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-5 py-2.5 rounded-2xl text-[10px] font-sans font-black uppercase tracking-widest transition-all ${
+                                  currentStatus === "learning"
+                                    ? "bg-orange-500/15 border border-orange-500/30 text-orange-500 cursor-default"
+                                    : "bg-app-bg border border-app-card-border hover:border-orange-500/30 active:scale-95 text-orange-500 hover:bg-orange-500/[0.02] shadow-xs"
+                                }`}
+                              >
+                                <RefreshCw size={12} className="text-orange-500 shrink-0" />
+                                <span>Учить</span>
+                              </button>
                             </div>
-                          </div>
+
+                            {/* User note */}
+                            {item.note && (
+                              <div className="p-4 rounded-xl bg-orange-500/[0.03] border border-orange-500/10 text-xs space-y-1">
+                                <span className="text-[9px] font-black uppercase tracking-wider text-orange-500 opacity-80 block">Personal Note</span>
+                                <p className="text-app-fg opacity-75 leading-relaxed font-sans font-medium select-text">
+                                  {highlightMatch(item.note, trackSearchQuery)}
+                                </p>
+                              </div>
+                            )}
+
+                            {/* Lyrics Context (Single first non-empty distinct line as requested) */}
+                            {firstContextLine ? (
+                              <div className="pt-3 border-t border-app-card-border/45 space-y-2">
+                                <span className="text-[9px] font-black uppercase tracking-wider text-app-fg opacity-40 block">Lyrics Context</span>
+                                <div className="p-4 rounded-2xl bg-app-bg border border-app-card-border text-sm">
+                                  <p className="font-serif font-semibold text-app-fg leading-snug">
+                                    {firstContextLine.original}
+                                  </p>
+                                  {firstContextLine.translation && (
+                                    <p className="font-sans text-xs text-app-fg opacity-50 italic mt-1 leading-snug">
+                                      {firstContextLine.translation}
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="pt-3 border-t border-app-card-border/45 space-y-1">
+                                <span className="text-[9px] font-black uppercase tracking-wider text-app-fg opacity-40 block">Lyrics Context</span>
+                                <div className="p-3.5 rounded-2xl bg-app-bg border border-app-card-border/40 text-xs">
+                                  <p className="font-sans text-app-fg opacity-35 italic">
+                                    No lyric context linked
+                                  </p>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Metadata Tag and Source Block under the fold after lyrics context */}
+                            <div className="pt-3 border-t border-app-card-border/40 flex flex-wrap items-center gap-2.5">
+                              <span className="text-[9px] font-black uppercase tracking-wider text-app-fg opacity-35 block mr-1.5">Metadata:</span>
+                              
+                              {/* Priority / Type badge */}
+                              <span className="px-2.5 py-1 rounded-lg bg-app-bg text-[9px] font-black uppercase tracking-widest text-app-fg opacity-55 border border-app-card-border flex items-center gap-1.5 shadow-xs">
+                                <Tag size={10} className="text-orange-500" />
+                                {item.type || "phrase"}
+                              </span>
+
+                              {/* Source badge */}
+                              {item.source === "user" ? (
+                                <span className="px-2 py-0.5 rounded-lg bg-orange-500/10 text-orange-500 text-[8px] font-black uppercase tracking-widest flex items-center gap-1">
+                                  <User size={8} />
+                                  User
+                                </span>
+                              ) : (
+                                <span className="px-2 py-0.5 rounded-lg bg-indigo-500/10 text-indigo-500 text-[8px] font-black uppercase tracking-widest flex items-center gap-1">
+                                  <Sparkles size={8} />
+                                  AI
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Action drawers: Ask AI */}
+                            {onOpenAssistantForPhrase && (
+                              <div className="pt-3 border-t border-app-card-border/40 flex items-center justify-end text-xs gap-3">
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onOpenAssistantForPhrase(item);
+                                  }}
+                                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-orange-500 hover:bg-orange-600 hover:scale-[1.02] text-white active:scale-[0.98] transition-all text-[9.5px] font-black uppercase tracking-widest shadow-sm shadow-orange-500/10 cursor-pointer"
+                                >
+                                  <MessageSquare size={11} />
+                                  <span>Ask Assistant</span>
+                                </button>
+                              </div>
+                            )}
+                          </>
                         )}
-
-                        {/* Metadata Tag and Source Block under the fold after lyrics context */}
-                        <div className="pt-3 border-t border-app-card-border/40 flex flex-wrap items-center gap-2.5">
-                          <span className="text-[9px] font-black uppercase tracking-wider text-app-fg opacity-35 block mr-1.5">Metadata:</span>
-                          
-                          {/* Priority / Type badge */}
-                          <span className="px-2.5 py-1 rounded-lg bg-app-bg text-[9px] font-black uppercase tracking-widest text-app-fg opacity-55 border border-app-card-border flex items-center gap-1.5 shadow-xs">
-                            <Tag size={10} className="text-orange-500" />
-                            {item.type || "phrase"}
-                          </span>
-
-                          {/* Source badge */}
-                          {item.source === "user" ? (
-                            <span className="px-2 py-0.5 rounded-lg bg-orange-500/10 text-orange-500 text-[8px] font-black uppercase tracking-widest flex items-center gap-1">
-                              <User size={8} />
-                              User
-                            </span>
-                          ) : (
-                            <span className="px-2 py-0.5 rounded-lg bg-indigo-500/10 text-indigo-500 text-[8px] font-black uppercase tracking-widest flex items-center gap-1">
-                              <Sparkles size={8} />
-                              AI
-                            </span>
-                          )}
-                        </div>
-
-                        {/* Action drawers: Ask AI placeholder */}
-                        <div className="pt-3 border-t border-app-card-border/40 flex items-center justify-end text-xs gap-3">
-                          <div className="group/ask relative">
-                            <button
-                              disabled
-                              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-app-bg text-app-fg/40 text-[9px] font-black uppercase tracking-widest opacity-65 border border-app-card-border cursor-not-allowed"
-                            >
-                              <MessageSquare size={10} />
-                              <span>Ask AI</span>
-                            </button>
-                            <div className="absolute bottom-full right-0 mb-2 opacity-0 group-hover/ask:opacity-100 transition-opacity pointer-events-none z-50 bg-app-fg text-app-bg text-[8px] font-black uppercase tracking-widest px-2.5 py-1.5 rounded-lg whitespace-nowrap shadow-md border border-app-card-border/10">
-                              Coming Next — Deep Dive Q&A
-                            </div>
-                          </div>
-                        </div>
                       </div>
                     )}
                   </div>

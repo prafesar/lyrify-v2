@@ -66,6 +66,8 @@ import { onAuthStateChanged, type User } from "firebase/auth";
 import StudyView from "./components/StudyView";
 import SettingsView from "./components/SettingsView";
 import PhraseDrawer from "./components/PhraseDrawer";
+import { LearningAssistantPanel } from "./components/LearningAssistantPanel";
+import { acceptSuggestedPhrase } from "./services/lyricsAnalysisService";
 import { LibraryView } from "./components/LibraryView";
 import LanguageSelector from "./components/LanguageSelector";
 import {
@@ -730,6 +732,34 @@ export default function App() {
   const [isAnalysisSelectionMode, setIsAnalysisSelectionMode] = useState(false);
   const [selectedLineIdsForAnalysis, setSelectedLineIdsForAnalysis] = useState<string[]>([]);
   const [isAnalysisModalOpen, setIsAnalysisModalOpen] = useState(false);
+
+  // Learning Assistant Panel States
+  const [isAssistantOpen, setIsAssistantOpen] = useState(false);
+  const [assistantContextType, setAssistantContextType] = useState<"line" | "phrase" | "selection">("line");
+  const [assistantLineContext, setAssistantLineContext] = useState<{ original: string; translation?: string; lineId?: string } | undefined>(undefined);
+  const [assistantPhraseContext, setAssistantPhraseContext] = useState<{ text: string; translation?: string; explanation?: string; lineIds?: string[] } | undefined>(undefined);
+
+  const handleAcceptSuggestedPhraseInApp = async (
+    phraseText: string,
+    translation: string,
+    explanation?: string,
+    type?: string,
+    lineIds?: string[]
+  ) => {
+    if (!currentTrack) return;
+    const updatedTrack = acceptSuggestedPhrase(
+      currentTrack,
+      phraseText,
+      translation,
+      explanation,
+      type,
+      lineIds
+    );
+    await saveTrackData(currentTrack.trackId, updatedTrack);
+    setCurrentTrack(updatedTrack);
+    loadUserCards();
+  };
+
   const [analysisCustomFocus, setAnalysisCustomFocus] = useState("");
   const [analysisSelectedPresets, setAnalysisSelectedPresets] = useState<string[]>([]);
   const [trackSearchQuery, setTrackSearchQuery] = useState("");
@@ -781,6 +811,18 @@ export default function App() {
       // Leave selectedLineIdsForAnalysis intact so user doesn't lose selection on error
     }
   };
+
+  const handleOpenAssistantForPhrase = useCallback((phrase: { text: string; translation?: string; explanation?: string; lineIds?: string[] }) => {
+    setAssistantContextType("phrase");
+    setAssistantPhraseContext({
+      text: phrase.text,
+      translation: phrase.translation,
+      explanation: phrase.explanation,
+      lineIds: phrase.lineIds
+    });
+    setAssistantLineContext(undefined);
+    setIsAssistantOpen(true);
+  }, []);
 
   // Derived memoized progress View Models
   const nextStepState = useMemo(() => {
@@ -1061,8 +1103,18 @@ export default function App() {
         shadowingAttempts={shadowingAttempts}
         handleToggleStarLine={handleToggleStarLine}
         onOpenLineDrawer={(index) => {
-          setSelectedLineIndexForDrawer(index);
-          setIsPhraseDrawerOpen(true);
+          if (!currentTrack) return;
+          const targetLine = currentTrack.lines?.[index];
+          if (!targetLine) return;
+
+          setAssistantContextType("line");
+          setAssistantLineContext({
+            original: targetLine.original,
+            translation: targetLine.translation,
+            lineId: targetLine.lineId
+          });
+          setAssistantPhraseContext(undefined);
+          setIsAssistantOpen(true);
         }}
         isSelectionMode={isAnalysisSelectionMode}
         isSelectedForAnalysis={selectedLineIdsForAnalysis.includes(currentTrack?.lines?.[i]?.lineId || "")}
@@ -2308,6 +2360,22 @@ export default function App() {
                                   </button>
                                   <button
                                     onClick={() => {
+                                      setAssistantContextType("selection");
+                                      setIsAssistantOpen(true);
+                                    }}
+                                    disabled={selectedLineIdsForAnalysis.length === 0}
+                                    className={cn(
+                                      "px-3 py-1.5 rounded-xl font-black transition-all text-[10px] uppercase tracking-wider flex items-center gap-1.5 shrink-0",
+                                      selectedLineIdsForAnalysis.length === 0
+                                        ? "bg-app-card border border-app-card-border/60 text-app-fg opacity-40 cursor-not-allowed"
+                                        : "bg-orange-500 text-white shadow-lg shadow-orange-500/20 hover:scale-105 active:scale-95"
+                                    )}
+                                  >
+                                    <Sparkles size={12} />
+                                    <span>Ask Assistant</span>
+                                  </button>
+                                  <button
+                                    onClick={() => {
                                       setIsAnalysisSelectionMode(false);
                                       setSelectedLineIdsForAnalysis([]);
                                     }}
@@ -2673,6 +2741,7 @@ export default function App() {
                           }}
                           isGeneratingAnalysis={isGeneratingAnalysis}
                           handleRegenerateAnalysis={handleRegenerateAnalysis}
+                          onOpenAssistantForPhrase={handleOpenAssistantForPhrase}
                         />
                       </motion.div>
                     ) : (
@@ -3893,6 +3962,24 @@ export default function App() {
               </div>
             </motion.div>
           </>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {isAssistantOpen && currentTrack && (
+          <LearningAssistantPanel
+            isOpen={isAssistantOpen}
+            onClose={() => setIsAssistantOpen(false)}
+            track={currentTrack}
+            contextType={assistantContextType}
+            lineContext={assistantLineContext}
+            phraseContext={assistantPhraseContext}
+            selectedLineIds={selectedLineIdsForAnalysis}
+            targetLanguage={targetLanguage}
+            onAcceptPhrase={handleAcceptSuggestedPhraseInApp}
+            existingPhrases={currentTrack.lines ? currentTrack.lines.flatMap((l: any) => l.phrases || []) : []}
+            speak={speak}
+          />
         )}
       </AnimatePresence>
 
