@@ -5,20 +5,15 @@ import {
   Edit2, 
   Trash2, 
   Volume2, 
-  Lock, 
   CheckCircle2, 
-  BookOpen, 
   Tag, 
   HelpCircle, 
   Sparkles, 
   User, 
   X, 
-  ArrowRight,
   MessageSquare,
   RefreshCw,
-  MoreVertical,
-  ChevronDown,
-  ChevronUp
+  MoreVertical
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { Phrase, LyricsLine, TrackLyricsData } from "../services/musicService";
@@ -38,8 +33,6 @@ interface AnalysisPhraseWorkspaceProps {
   ) => void;
   speak: (text: string, onEnd?: () => void, lang?: string) => void;
   onUpdateTrack: (updatedTrack: TrackLyricsData) => Promise<void>;
-  targetLanguage: string;
-  onGoToLine: (lineOriginal: string, lineIndex: number) => void;
   isGeneratingAnalysis?: boolean;
   handleRegenerateAnalysis?: () => void;
 }
@@ -52,8 +45,6 @@ export const AnalysisPhraseWorkspace: React.FC<AnalysisPhraseWorkspaceProps> = (
   handleSetAnalysisPhraseStatus,
   speak,
   onUpdateTrack,
-  targetLanguage,
-  onGoToLine,
   isGeneratingAnalysis = false,
   handleRegenerateAnalysis
 }) => {
@@ -77,6 +68,34 @@ export const AnalysisPhraseWorkspace: React.FC<AnalysisPhraseWorkspaceProps> = (
 
   // Speech Playing Tracker
   const [currentlySpeakingId, setCurrentlySpeakingId] = useState<string | null>(null);
+
+  // Filter state
+  const [activeFilter, setActiveFilter] = useState<"all" | "new" | "learning" | "known" | "user" | "ai" | "has_note">("all");
+
+  const filtersList = useMemo(() => [
+    { id: "all", label: "All" },
+    { id: "new", label: "New" },
+    { id: "learning", label: "Learning" },
+    { id: "known", label: "Known" },
+    { id: "user", label: "User-added" },
+    { id: "ai", label: "AI-generated" },
+    { id: "has_note", label: "Has note" }
+  ] as const, []);
+
+  // Helper to highlight matched query in textual content
+  const highlightMatch = (text: string, query: string) => {
+    if (!query.trim() || !text) return <>{text}</>;
+    const index = text.toLowerCase().indexOf(query.toLowerCase());
+    if (index === -1) return <>{text}</>;
+    const length = query.length;
+    return (
+      <>
+        {text.substring(0, index)}
+        <mark className="bg-orange-500/20 text-orange-600 rounded-xs px-0.5">{text.substring(index, index + length)}</mark>
+        {text.substring(index + length)}
+      </>
+    );
+  };
 
   // Extract all unique phrases across both track.phrases and nested lines phrases
   const uniquePhrases = useMemo(() => {
@@ -105,10 +124,36 @@ export const AnalysisPhraseWorkspace: React.FC<AnalysisPhraseWorkspaceProps> = (
     return list;
   }, [currentTrack]);
 
-  // Filter phrases based on searched query
+  // Filter phrases based on searched query & filter states
   const filteredPhrases = useMemo(() => {
     let result = uniquePhrases;
 
+    // Apply categorical filters
+    if (activeFilter !== "all") {
+      result = result.filter(phrase => {
+        const card = phraseMetadata.get(phrase.text);
+        const currentStatus = card ? card.status : "new";
+        
+        switch (activeFilter) {
+          case "new":
+            return currentStatus === "new";
+          case "learning":
+            return currentStatus === "learning";
+          case "known":
+            return currentStatus === "known";
+          case "user":
+            return phrase.source === "user";
+          case "ai":
+            return phrase.source !== "user";
+          case "has_note":
+            return !!phrase.note && phrase.note.trim() !== "";
+          default:
+            return true;
+        }
+      });
+    }
+
+    // Apply search query
     if (trackSearchQuery.trim()) {
       const q = trackSearchQuery.toLowerCase().trim();
       result = result.filter(phrase => {
@@ -132,7 +177,7 @@ export const AnalysisPhraseWorkspace: React.FC<AnalysisPhraseWorkspaceProps> = (
     }
 
     return result;
-  }, [uniquePhrases, trackSearchQuery, currentTrack.lines]);
+  }, [uniquePhrases, trackSearchQuery, activeFilter, phraseMetadata, currentTrack.lines]);
 
   // Handle Speech trigger
   const handleVoicing = (phrase: Phrase) => {
@@ -222,53 +267,87 @@ export const AnalysisPhraseWorkspace: React.FC<AnalysisPhraseWorkspaceProps> = (
 
   return (
     <div className="space-y-8 pb-32">
-      {/* Header toolbar with search input and Add Phrase CTA */}
-      <div className="flex gap-4 items-stretch md:items-center justify-between">
-        {/* Search input field */}
-        <div className="relative flex-1">
-          <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-app-fg opacity-40">
-            <Search size={18} />
+      {/* Header toolbar with search input, filters, and Add Phrase CTA */}
+      <div className="space-y-4">
+        <div className="flex gap-4 items-stretch md:items-center justify-between">
+          {/* Search input field */}
+          <div className="relative flex-1">
+            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-app-fg opacity-40">
+              <Search size={18} />
+            </div>
+            <input
+              type="text"
+              placeholder="Search phrases, translations, notes, or lyric context..."
+              value={trackSearchQuery}
+              onChange={(e) => setTrackSearchQuery(e.target.value)}
+              className="w-full pl-12 pr-10 py-3.5 bg-app-card border border-app-card-border rounded-2xl text-lg font-medium text-app-fg placeholder-app-fg/30 focus:outline-none focus:border-app-accent/50 transition-all font-sans"
+            />
+            {trackSearchQuery && (
+              <button
+                onClick={() => setTrackSearchQuery("")}
+                className="absolute inset-y-0 right-0 pr-4 flex items-center text-app-fg opacity-45 hover:opacity-100 transition-opacity"
+              >
+                <X size={14} />
+              </button>
+            )}
           </div>
-          <input
-            type="text"
-            placeholder="Search phrases, translations, notes, or lyric context..."
-            value={trackSearchQuery}
-            onChange={(e) => setTrackSearchQuery(e.target.value)}
-            className="w-full pl-12 pr-10 py-3.5 bg-app-card border border-app-card-border rounded-2xl text-lg font-medium text-app-fg placeholder-app-fg/30 focus:outline-none focus:border-app-accent/50 transition-all font-sans"
-          />
-          {trackSearchQuery && (
+
+          {/* Action Buttons */}
+          <div className="flex items-center gap-3 shrink-0">
+            {handleRegenerateAnalysis && (
+              <button
+                onClick={handleRegenerateAnalysis}
+                disabled={isGeneratingAnalysis}
+                className="flex items-center gap-1.5 px-4 py-3.5 bg-app-card border border-app-card-border text-app-fg opacity-60 hover:opacity-100 hover:text-orange-500 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-30"
+                title="Reset and regenerate analysis"
+              >
+                <RefreshCw size={12} className={isGeneratingAnalysis ? "animate-spin" : ""} />
+                <span className="hidden sm:inline">Regenerate</span>
+              </button>
+            )}
             <button
-              onClick={() => setTrackSearchQuery("")}
-              className="absolute inset-y-0 right-0 pr-4 flex items-center text-app-fg opacity-45 hover:opacity-100 transition-opacity"
+              onClick={() => {
+                clearForm();
+                setIsAddModalOpen(true);
+              }}
+              className="flex items-center justify-center w-12 h-12 bg-orange-500 hover:bg-orange-600 transition-colors text-white rounded-full shadow-lg shrink-0 hover:scale-105 active:scale-95 duration-200"
+              title="Add Custom Phrase"
             >
-              <X size={14} />
+              <Plus size={22} className="stroke-[3]" />
             </button>
-          )}
+          </div>
         </div>
 
-        {/* Action Buttons */}
-        <div className="flex items-center gap-3 shrink-0">
-          {handleRegenerateAnalysis && (
+        {/* Filter Chips Toolbar */}
+        <div className="flex flex-wrap gap-2 items-center">
+          {filtersList.map((filter) => {
+            const isActive = activeFilter === filter.id;
+            return (
+              <button
+                key={filter.id}
+                onClick={() => setActiveFilter(filter.id)}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold font-sans tracking-tight transition-all active:scale-95 border ${
+                  isActive
+                    ? "bg-orange-500 border-orange-500 text-white shadow-md shadow-orange-500/10"
+                    : "bg-app-card border-app-card-border/60 text-app-fg opacity-70 hover:opacity-100 hover:border-app-card-border hover:bg-app-card"
+                }`}
+              >
+                {filter.label}
+              </button>
+            );
+          })}
+          {(activeFilter !== "all" || trackSearchQuery.trim() !== "") && (
             <button
-              onClick={handleRegenerateAnalysis}
-              disabled={isGeneratingAnalysis}
-              className="flex items-center gap-1.5 px-4 py-3.5 bg-app-card border border-app-card-border text-app-fg opacity-60 hover:opacity-100 hover:text-orange-500 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-30"
-              title="Reset and regenerate analysis"
+              onClick={() => {
+                setActiveFilter("all");
+                setTrackSearchQuery("");
+              }}
+              className="text-[10px] font-black uppercase tracking-widest text-orange-500 hover:text-orange-600 px-2 py-1 flex items-center gap-1 transition-colors"
             >
-              <RefreshCw size={12} className={isGeneratingAnalysis ? "animate-spin" : ""} />
-              <span className="hidden sm:inline">Regenerate</span>
+              <X size={10} strokeWidth={3} />
+              <span>Clear filters</span>
             </button>
           )}
-          <button
-            onClick={() => {
-              clearForm();
-              setIsAddModalOpen(true);
-            }}
-            className="flex items-center justify-center w-12 h-12 bg-orange-500 hover:bg-orange-600 transition-colors text-white rounded-full shadow-lg shrink-0 hover:scale-105 active:scale-95 duration-200"
-            title="Add Custom Phrase"
-          >
-            <Plus size={22} className="stroke-[3]" />
-          </button>
         </div>
       </div>
 
@@ -326,7 +405,7 @@ export const AnalysisPhraseWorkspace: React.FC<AnalysisPhraseWorkspaceProps> = (
                           </span>
 
                           <h3 className="text-xl font-serif text-app-fg leading-snug">
-                            {item.text}
+                            {highlightMatch(item.text, trackSearchQuery)}
                           </h3>
 
                           {/* Speech play button styled neatly right next to phrase */}
@@ -349,7 +428,7 @@ export const AnalysisPhraseWorkspace: React.FC<AnalysisPhraseWorkspaceProps> = (
                         {/* Second line: Translation with subtle horizontal indentation aligning with the text */}
                         {item.translation && (
                           <p className="text-base font-serif italic text-app-fg opacity-40 leading-snug pl-6 mt-1 transition-all">
-                            {item.translation}
+                            {highlightMatch(item.translation, trackSearchQuery)}
                           </p>
                         )}
                       </div>
@@ -440,7 +519,7 @@ export const AnalysisPhraseWorkspace: React.FC<AnalysisPhraseWorkspaceProps> = (
                         {item.explanation && (
                           <div className="pl-4 border-l-2 border-app-card-border">
                             <p className="text-base text-app-fg opacity-75 leading-relaxed font-sans font-medium">
-                              {item.explanation}
+                              {highlightMatch(item.explanation, trackSearchQuery)}
                             </p>
                           </div>
                         )}
@@ -483,13 +562,13 @@ export const AnalysisPhraseWorkspace: React.FC<AnalysisPhraseWorkspaceProps> = (
                           <div className="p-4 rounded-xl bg-orange-500/[0.03] border border-orange-500/10 text-xs space-y-1">
                             <span className="text-[9px] font-black uppercase tracking-wider text-orange-500 opacity-80 block">Personal Note</span>
                             <p className="text-app-fg opacity-75 leading-relaxed font-sans font-medium select-text">
-                              {item.note}
+                              {highlightMatch(item.note, trackSearchQuery)}
                             </p>
                           </div>
                         )}
 
                         {/* Lyrics Context (Single first non-empty distinct line as requested) */}
-                        {firstContextLine && (
+                        {firstContextLine ? (
                           <div className="pt-3 border-t border-app-card-border/45 space-y-2">
                             <span className="text-[9px] font-black uppercase tracking-wider text-app-fg opacity-40 block">Lyrics Context</span>
                             <div className="p-4 rounded-2xl bg-app-bg border border-app-card-border text-sm">
@@ -501,6 +580,15 @@ export const AnalysisPhraseWorkspace: React.FC<AnalysisPhraseWorkspaceProps> = (
                                   {firstContextLine.translation}
                                 </p>
                               )}
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="pt-3 border-t border-app-card-border/45 space-y-1">
+                            <span className="text-[9px] font-black uppercase tracking-wider text-app-fg opacity-40 block">Lyrics Context</span>
+                            <div className="p-3.5 rounded-2xl bg-app-bg border border-app-card-border/40 text-xs">
+                              <p className="font-sans text-app-fg opacity-35 italic">
+                                No lyric context linked
+                              </p>
                             </div>
                           </div>
                         )}
@@ -551,14 +639,35 @@ export const AnalysisPhraseWorkspace: React.FC<AnalysisPhraseWorkspaceProps> = (
               );
             })}
           </div>
-        ) : (
-          <div className="py-20 text-center space-y-4">
+        ) : uniquePhrases.length > 0 ? (
+          <div className="py-20 text-center space-y-4 rounded-[2rem] bg-app-card/25 border border-dashed border-app-card-border/60">
             <HelpCircle size={40} className="mx-auto text-app-fg opacity-15" />
             <p className="text-sm font-black text-app-fg opacity-40 uppercase tracking-widest">
               No matching phrases
             </p>
+            <p className="text-xs text-app-fg opacity-30 font-medium max-w-sm mx-auto">
+              We couldn't find any phrases matching your current filters and search query. Try clearing them to see all phrases.
+            </p>
+            <div className="pt-2">
+              <button
+                onClick={() => {
+                  setActiveFilter("all");
+                  setTrackSearchQuery("");
+                }}
+                className="px-5 py-2.5 bg-orange-500 hover:bg-orange-600 text-white rounded-2xl text-xs font-bold transition-all shadow-md active:scale-95 duration-150"
+              >
+                Clear filters & search
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="py-20 text-center space-y-4 rounded-[2rem] bg-app-card/25 border border-dashed border-app-card-border/60">
+            <Sparkles size={40} className="mx-auto text-orange-500 opacity-20" />
+            <p className="text-sm font-black text-app-fg opacity-40 uppercase tracking-widest">
+              No vocabulary analysis yet
+            </p>
             <p className="text-xs text-app-fg opacity-30 font-medium max-w-xs mx-auto">
-              Try adjusting your query or click the circular button above to create a custom study word.
+              This track has no generated or custom phrases yet. Add your first custom phrase or click Regenerate to start analyzing!
             </p>
           </div>
         )}

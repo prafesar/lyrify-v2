@@ -450,112 +450,6 @@ const LyricLine = ({
   );
 };
 
-const AnalysisPhraseCard = ({
-  item,
-  idx,
-  card,
-  handleSetAnalysisPhraseStatus,
-}: {
-  item: any;
-  idx: number;
-  card: any;
-  handleSetAnalysisPhraseStatus: any;
-}) => {
-  const x = useMotionValue(0);
-  const currentStatus: PhraseStatus = card ? card.status : "new";
-
-  return (
-    <div className="relative group/phrase overflow-hidden rounded-[2rem] touch-pan-y">
-      <motion.div
-        style={{ x }}
-        drag="x"
-        dragConstraints={{ left: 0, right: 0 }}
-        dragElastic={1}
-        onDragEnd={(_, info) => {
-          if (info.offset.x < -100) {
-            handleSetAnalysisPhraseStatus(item.text, item.translation || "", item.explanation || "", "known");
-          } else if (info.offset.x > 100) {
-            handleSetAnalysisPhraseStatus(item.text, item.translation || "", item.explanation || "", "learning");
-          }
-        }}
-        className={cn(
-          "flex flex-col gap-3 p-6 rounded-[2rem] bg-app-card border transition-all cursor-pointer relative z-10 touch-pan-y select-none",
-          currentStatus === "known"
-            ? "border-green-500/30 shadow-md shadow-green-500/5 bg-[var(--green-bg,rgba(16,185,129,0.02))]"
-            : currentStatus === "learning"
-              ? "border-orange-500/30 shadow-md shadow-orange-500/5 bg-[var(--orange-bg,rgba(249,115,22,0.02))]"
-              : "border-blue-500/20 bg-blue-500/[0.01]"
-        )}
-      >
-        {/* Swiping Indicator on Left (revealed when dragging right) */}
-        <div className="absolute right-[calc(100%+1px)] top-0 bottom-0 flex items-center pr-4 pointer-events-none">
-          <div className="flex flex-col items-center gap-1 text-orange-500">
-            <div className="p-3 rounded-2xl bg-orange-500 border border-orange-500/20 shadow-lg text-white">
-              <BookOpen size={24} strokeWidth={2.5} />
-            </div>
-            <span className="text-[9px] font-black uppercase tracking-[0.2em] whitespace-nowrap">Learn</span>
-          </div>
-        </div>
-
-        {/* Swiping Indicator on Right (revealed when dragging left) */}
-        <div className="absolute left-[calc(100%+1px)] top-0 bottom-0 flex items-center pl-4 pointer-events-none">
-          <div className="flex flex-col items-center gap-1 text-green-500">
-            <div className="p-3 rounded-2xl bg-green-500 border border-green-500/20 shadow-lg text-white">
-              <Check size={24} strokeWidth={2.5} />
-            </div>
-            <span className="text-[9px] font-black uppercase tracking-[0.2em] whitespace-nowrap">Known</span>
-          </div>
-        </div>
-
-        <div className="flex items-start justify-between gap-2 relative z-10">
-          <div className="flex-1 flex gap-3">
-            <span className="text-xs font-black opacity-20 mt-2 shrink-0">{(idx + 1).toString().padStart(2, '0')}</span>
-            <div className="flex-1">
-              <p className="text-xl font-serif text-app-fg">{item.text}</p>
-              <div className="flex flex-col gap-1 mt-1">
-                {item.translation && <p className="text-lg font-serif italic text-app-fg opacity-60">{item.translation}</p>}
-              </div>
-            </div>
-          </div>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              const nextStatus: PhraseStatus = 
-                currentStatus === "new" ? "learning" :
-                currentStatus === "learning" ? "known" : "new";
-              handleSetAnalysisPhraseStatus(item.text, item.translation || "", item.explanation || "", nextStatus);
-            }}
-            className="shrink-0 flex items-center gap-2 hover:scale-105 active:scale-95 transition-transform cursor-pointer button-badge"
-            aria-label={`Change status from ${currentStatus}`}
-          >
-            {currentStatus === "known" ? (
-              <div className="px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest border border-green-500/10 shadow-sm text-green-500 bg-green-500/10 flex items-center gap-2">
-                <CheckCircle2 size={12} />
-                <span>known</span>
-              </div>
-            ) : currentStatus === "learning" ? (
-              <div className="px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest border border-orange-500/10 shadow-sm text-orange-500 bg-orange-500/10 flex items-center gap-2">
-                <BookOpen size={12} />
-                <span>learning</span>
-              </div>
-            ) : (
-              <div className="px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest border border-blue-500/10 shadow-sm text-blue-500 bg-blue-500/10 flex items-center gap-2">
-                <Plus size={12} />
-                <span>new</span>
-              </div>
-            )}
-          </button>
-        </div>
-        {item.explanation && (
-          <div className="pl-4 border-l-2 border-app-card-border ml-7">
-            <p className="text-lg font-medium text-app-fg opacity-60 group-hover:opacity-80 transition-opacity leading-relaxed">{item.explanation}</p>
-          </div>
-        )}
-      </motion.div>
-    </div>
-  );
-};
-
 const mapTrackLyricsDataToTrack = (data: TrackLyricsData): Track => ({
   id: data.trackId,
   trackId: data.trackId,
@@ -1896,7 +1790,7 @@ export default function App() {
                           {searchResults.map((item) => (
                             <div
                               key={item.id}
-                              onClick={(e) => {
+                              onClick={() => {
                                 if (searchEntityType === "musicTrack") {
                                   navigateToTrack(item);
                                 } else if (searchEntityType === "album") {
@@ -2781,13 +2675,6 @@ export default function App() {
                             setCurrentTrack(updatedTrack);
                             await saveTrackData(updatedTrack.trackId, updatedTrack);
                             loadCommunityTracks();
-                          }}
-                          targetLanguage={targetLanguage}
-                          onGoToLine={(original, index) => {
-                            setActiveTab("lyrics");
-                            setTimeout(() => {
-                              handleLineClick(original, index);
-                            }, 100);
                           }}
                           isGeneratingAnalysis={isGeneratingAnalysis}
                           handleRegenerateAnalysis={handleRegenerateAnalysis}
