@@ -119,9 +119,7 @@ export class WorkerAIAdapter implements AiPort {
   async generateLearningAssistantResponse(
     title: string,
     artist: string,
-    contextType: "line" | "phrase",
-    lineContext: { original: string; translation?: string; lineId?: string } | undefined,
-    phraseContext: { text: string; translation?: string; explanation?: string; lineIds?: string[] } | undefined,
+    phraseContext: { text: string; translation?: string; explanation?: string; lineIds?: string[] },
     targetLanguage: string,
     existingPhrases: any[],
     userQuestion?: string,

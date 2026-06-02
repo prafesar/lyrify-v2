@@ -11,9 +11,7 @@ export interface LearningAssistantPanelProps {
   isOpen: boolean;
   onClose: () => void;
   track: TrackLyricsData;
-  contextType: "line" | "phrase";
-  lineContext?: { original: string; translation?: string; lineId?: string };
-  phraseContext?: { text: string; translation?: string; explanation?: string; lineIds?: string[] };
+  phraseContext: { text: string; translation?: string; explanation?: string; lineIds?: string[] };
   targetLanguage: string;
   onAcceptPhrase: (
     phraseText: string, 
@@ -38,8 +36,6 @@ export const LearningAssistantPanel: React.FC<LearningAssistantPanelProps> = ({
   isOpen,
   onClose,
   track,
-  contextType,
-  lineContext,
   phraseContext,
   targetLanguage,
   onAcceptPhrase,
@@ -81,7 +77,7 @@ export const LearningAssistantPanel: React.FC<LearningAssistantPanelProps> = ({
     setAcceptedPhraseTexts(new Set());
     setRejectedPhraseTexts(new Set());
     setEditingIndex(null);
-  }, [isOpen, contextType, lineContext?.lineId, phraseContext?.text, track.trackId]);
+  }, [isOpen, phraseContext?.text, track.trackId]);
 
   if (!isOpen) return null;
 
@@ -121,8 +117,6 @@ export const LearningAssistantPanel: React.FC<LearningAssistantPanelProps> = ({
       const response = await aiClient.generateLearningAssistantResponse(
         track.title,
         Array.isArray(track.artist) ? track.artist[0] : track.artist || "Unknown",
-        contextType,
-        lineContext,
         phraseContext,
         targetLanguage,
         existingPhrases,
@@ -169,9 +163,7 @@ export const LearningAssistantPanel: React.FC<LearningAssistantPanelProps> = ({
       // Line IDs default alignment
       let lIds = item.lineIds;
       if (!lIds || lIds.length === 0) {
-        lIds = lineContext?.lineId 
-          ? [lineContext.lineId] 
-          : phraseContext?.lineIds;
+        lIds = phraseContext?.lineIds;
       }
 
       await onAcceptPhrase(
@@ -234,7 +226,7 @@ export const LearningAssistantPanel: React.FC<LearningAssistantPanelProps> = ({
             <div>
               <h2 className="text-base font-bold text-app-fg tracking-tight">CantoLex Assistant</h2>
               <span className="text-[10px] font-black tracking-widest text-orange-500 font-bold block uppercase">
-                {contextType === "phrase" ? "Study Phrase / Follow-up" : contextType === "line" ? "Line Analysis" : "Sequence Breakdown"}
+                Study Phrase / Follow-up
               </span>
             </div>
           </div>
@@ -255,20 +247,7 @@ export const LearningAssistantPanel: React.FC<LearningAssistantPanelProps> = ({
               Linguistic Anchor
             </span>
 
-            {contextType === "line" && lineContext && (
-              <div className="space-y-1.5 font-serif">
-                <p className="text-lg font-medium text-app-fg leading-snug italic">
-                  "{lineContext.original}"
-                </p>
-                {lineContext.translation && (
-                  <p className="text-sm text-app-fg opacity-45 font-sans">
-                    {lineContext.translation}
-                  </p>
-                )}
-              </div>
-            )}
-
-            {contextType === "phrase" && phraseContext && (
+            {phraseContext && (
               <div className="space-y-2 font-serif">
                 <p className="text-xl font-bold text-app-fg">
                   {phraseContext.text}
@@ -331,13 +310,7 @@ export const LearningAssistantPanel: React.FC<LearningAssistantPanelProps> = ({
                 <textarea
                   rows={2}
                   maxLength={300}
-                  placeholder={
-                    contextType === "phrase"
-                      ? "Ask about nuances, grammar, synonyms, register, or usage of this phrase..."
-                      : contextType === "line"
-                      ? "Ask about specific grammar, slang, pronunciation tags or line context..."
-                      : "Ask about overall connections, linguistic patterns, or story in this sequence..."
-                  }
+                  placeholder="Ask about nuances, grammar, synonyms, register, or usage of this phrase..."
                   value={userQuestion}
                   onChange={(e) => setUserQuestion(e.target.value)}
                   disabled={isLoading}

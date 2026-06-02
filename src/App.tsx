@@ -218,7 +218,6 @@ interface LyricLineProps {
   shadowingFeedback: "none" | "correct" | "incorrect";
   shadowingAttempts: number;
   handleToggleStarLine: (index: number) => void;
-  onOpenLineDrawer?: (i: number) => void;
   lineId?: string;
   targetLanguage?: string;
   onSaveLineExplanation?: (index: number, explanation: any) => void;
@@ -242,7 +241,6 @@ const LyricLine = ({
   shadowingFeedback,
   shadowingAttempts,
   handleToggleStarLine,
-  onOpenLineDrawer,
   lineId,
   targetLanguage,
   onSaveLineExplanation,
@@ -874,8 +872,6 @@ export default function App() {
 
   // Learning Assistant Panel States
   const [isAssistantOpen, setIsAssistantOpen] = useState(false);
-  const [assistantContextType, setAssistantContextType] = useState<"line" | "phrase">("line");
-  const [assistantLineContext, setAssistantLineContext] = useState<{ original: string; translation?: string; lineId?: string } | undefined>(undefined);
   const [assistantPhraseContext, setAssistantPhraseContext] = useState<{ text: string; translation?: string; explanation?: string; lineIds?: string[] } | undefined>(undefined);
 
   const handleAcceptSuggestedPhraseInApp = async (
@@ -902,14 +898,12 @@ export default function App() {
   const [trackSearchQuery, setTrackSearchQuery] = useState("");
 
   const handleOpenAssistantForPhrase = useCallback((phrase: { text: string; translation?: string; explanation?: string; lineIds?: string[] }) => {
-    setAssistantContextType("phrase");
     setAssistantPhraseContext({
       text: phrase.text,
       translation: phrase.translation,
       explanation: phrase.explanation,
       lineIds: phrase.lineIds
     });
-    setAssistantLineContext(undefined);
     setIsAssistantOpen(true);
   }, []);
 
@@ -1210,20 +1204,6 @@ export default function App() {
         handleToggleStarLine={handleToggleStarLine}
         targetLanguage={targetLanguage}
         onSaveLineExplanation={handleSaveLineExplanation}
-        onOpenLineDrawer={(index) => {
-          if (!currentTrack) return;
-          const targetLine = currentTrack.lines?.[index];
-          if (!targetLine) return;
-
-          setAssistantContextType("line");
-          setAssistantLineContext({
-            original: targetLine.original,
-            translation: targetLine.translation,
-            lineId: targetLine.lineId
-          });
-          setAssistantPhraseContext(undefined);
-          setIsAssistantOpen(true);
-        }}
       />
     );
   };
@@ -3904,13 +3884,11 @@ export default function App() {
       </AnimatePresence>
 
       <AnimatePresence>
-        {isAssistantOpen && currentTrack && (
+        {isAssistantOpen && currentTrack && assistantPhraseContext && (
           <LearningAssistantPanel
             isOpen={isAssistantOpen}
             onClose={() => setIsAssistantOpen(false)}
             track={currentTrack}
-            contextType={assistantContextType}
-            lineContext={assistantLineContext}
             phraseContext={assistantPhraseContext}
             targetLanguage={targetLanguage}
             onAcceptPhrase={handleAcceptSuggestedPhraseInApp}
