@@ -864,7 +864,7 @@ export const AnalysisPhraseWorkspace: React.FC<AnalysisPhraseWorkspaceProps> = (
                     >
                       <option className="bg-app-bg" value="">Auto-detect Line Link (based on text match)</option>
                       {currentTrack.lines.map((line) => (
-                        <option className="bg-app-bg text-app-fg" key={line.lineId || line.id} value={line.lineId || ""}>
+                        <option className="bg-app-bg text-app-fg" key={`${line.lineId || line.id || "line"}_${line.index}`} value={line.lineId || ""}>
                           Line {line.index + 1}: {line.original}
                         </option>
                       ))}

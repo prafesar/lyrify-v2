@@ -405,16 +405,16 @@ const LyricLine = ({
                   e.stopPropagation();
                   handleToggleExplanation();
                 }}
-                className={cn(
-                  "flex items-center gap-1 p-1 px-2.5 rounded-xl border transition-all text-[10px] font-bold uppercase tracking-widest leading-none shrink-0",
-                  isExplaining 
-                    ? "bg-[var(--accent)]/15 border-[var(--accent)]/30 text-app-fg"
-                    : "border-app-card-border/60 bg-app-card/40 hover:bg-app-card text-app-fg/40 hover:text-app-fg hover:border-app-card-border"
-                )}
-                title="Explain line with AI"
+                className="p-2 rounded-xl transition-all hover:scale-120 active:scale-90"
+                title={cachedExpl ? "Show AI explanation" : "Explain line with AI"}
               >
-                <Brain size={12} className={cn(isLoadingExplanation ? "animate-spin text-[var(--accent)]" : "text-[var(--accent)]")} />
-                <span>Explain</span>
+                {isLoadingExplanation ? (
+                  <Brain size={20} className="animate-spin text-[var(--accent)]" />
+                ) : cachedExpl ? (
+                  <Brain size={20} className="fill-[var(--accent)]/15 text-[var(--accent)] drop-shadow-sm" />
+                ) : (
+                  <Brain size={20} className="text-app-fg/20 hover:text-[var(--accent)]/80 transition-all" />
+                )}
               </button>
               <button
                 onClick={(e) => {
@@ -1843,7 +1843,7 @@ export default function App() {
                       {albumDetails.tracks.length > 0 ? (
                         albumDetails.tracks.map((track, idx) => (
                           <button
-                            key={track.id}
+                            key={`${track.id || 'track'}_${idx}`}
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
@@ -1926,9 +1926,9 @@ export default function App() {
                       <div>
                         <h3 className="text-xs font-black uppercase tracking-[0.3em] text-app-fg opacity-40 mb-4 px-2">Top Tracks</h3>
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                          {artistDetails.topTracks.map(track => (
+                          {artistDetails.topTracks.map((track, idx) => (
                             <button
-                              key={track.id}
+                              key={`${track.id || 'track'}_${idx}`}
                               type="button"
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -1957,9 +1957,9 @@ export default function App() {
                       <div>
                         <h3 className="text-xs font-black uppercase tracking-[0.3em] text-app-fg opacity-40 mb-4 px-2">Albums</h3>
                         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                          {artistDetails.albums.map(album => (
+                          {artistDetails.albums.map((album, idx) => (
                             <button
-                              key={album.id}
+                              key={`${album.id || 'album'}_${idx}`}
                               type="button"
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -2023,9 +2023,9 @@ export default function App() {
                           Results
                         </h2>
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                          {searchResults.map((item) => (
+                          {searchResults.map((item, idx) => (
                             <div
-                              key={item.id}
+                              key={`${item.id || 'search'}_${idx}`}
                               onClick={() => {
                                 if (searchEntityType === "musicTrack") {
                                   navigateToTrack(item);
@@ -3408,11 +3408,11 @@ export default function App() {
 
                   {playlistsInApp.length > 0 ? (
                     <div className="max-h-60 overflow-y-auto space-y-2 pr-1 scrollbar-hide">
-                      {playlistsInApp.map((playlist) => {
+                      {playlistsInApp.map((playlist, idx) => {
                         const hasTrack = playlist.tracks?.some((t: any) => (t.id || t.trackId) === activeMenuTrack.id);
                         return (
                           <button
-                            key={playlist.id}
+                            key={`${playlist.id || 'playlist'}_${idx}`}
                             type="button"
                             onClick={() => handleAddTrackToPlaylistInApp(playlist.id, activeMenuTrack)}
                             className="w-full flex items-center justify-between p-4 rounded-2xl hover:bg-app-fg/5 active:scale-[0.99] transition-all text-left"
