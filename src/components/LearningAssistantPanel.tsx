@@ -471,13 +471,13 @@ export const LearningAssistantPanel: React.FC<LearningAssistantPanelProps> = ({
                       </div>
 
                       <div className="space-y-3 select-none">
-                        {pendingSuggestions.map((item) => {
+                        {pendingSuggestions.map((item, idx) => {
                           const originalIndex = suggestedPhrases.findIndex(p => p.text === item.text);
                           const isEditing = editingIndex === originalIndex;
 
                           return (
                             <div 
-                              key={item.text}
+                              key={`${item.text}_${idx}`}
                               className="p-4 rounded-3xl bg-app-bg border border-app-card-border/55 hover:border-app-card-border transition-all"
                             >
                               {isEditing ? (
@@ -606,9 +606,9 @@ export const LearningAssistantPanel: React.FC<LearningAssistantPanelProps> = ({
                       </div>
 
                       <div className="space-y-3 select-none">
-                        {acceptedSuggestions.map((item) => (
+                        {acceptedSuggestions.map((item, idx) => (
                           <div 
-                            key={item.text}
+                            key={`${item.text}_${idx}`}
                             className="p-4 rounded-3xl border border-green-500/20 bg-green-500/[0.015] transition-all"
                           >
                             <div className="flex gap-4 items-start justify-between font-serif font-sans">
