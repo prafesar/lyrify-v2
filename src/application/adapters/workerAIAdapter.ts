@@ -140,6 +140,24 @@ export class WorkerAIAdapter implements AiPort {
     throw new Error("WorkerAIAdapter is currently in placeholder state.");
   }
 
+  async generateLineExplanation(
+    metadata: TrackMetadata,
+    currentLine: { lineId?: string; original: string; translation?: string },
+    prevLine?: { lineId?: string; original: string; translation?: string },
+    nextLine?: { lineId?: string; original: string; translation?: string },
+    targetLanguage?: string,
+    sourceLanguage?: string,
+    onStreamChunk?: (partialSummary: string) => void
+  ): Promise<{
+    summary: string;
+    notes: Array<{
+      type: "idiom" | "cultural" | "collocation" | "grammar" | "nuance";
+      text: string;
+    }>;
+  }> {
+    throw new Error("WorkerAIAdapter is currently in placeholder state.");
+  }
+
   async getLatestAnalyzedTracks(maxCount?: number): Promise<TrackMeaningEntry[]> {
     throw new Error("WorkerAIAdapter is currently in placeholder state.");
   }

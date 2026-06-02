@@ -56,7 +56,8 @@ import {
   libraryRepository,
   ANALYSIS_PROMPT_VERSION, 
   type Flashcard,
-  type PhraseStatus
+  type PhraseStatus,
+  aiClient
 } from "./application";
 
 import { cn } from "./lib/utils";
@@ -221,6 +222,8 @@ interface LyricLineProps {
   isSelectedForAnalysis?: boolean;
   onToggleSelection?: (lineId: string) => void;
   lineId?: string;
+  targetLanguage?: string;
+  onSaveLineExplanation?: (index: number, explanation: any) => void;
 }
 
 const LyricLine = ({
@@ -246,8 +249,75 @@ const LyricLine = ({
   isSelectedForAnalysis = false,
   onToggleSelection,
   lineId,
+  targetLanguage,
+  onSaveLineExplanation,
 }: LyricLineProps) => {
   const trimmedLine = line.trim();
+
+  const [isExplaining, setIsExplaining] = useState(false);
+  const [streamedSummary, setStreamedSummary] = useState("");
+  const [isLoadingExplanation, setIsLoadingExplanation] = useState(false);
+  const [explanationError, setExplanationError] = useState<string | null>(null);
+
+  const cachedExpl = currentTrack?.lines?.[i]?.explanation;
+  const summary = cachedExpl?.summary || "";
+  const notes = cachedExpl?.notes || null;
+
+  const handleToggleExplanation = async () => {
+    if (isExplaining) {
+      setIsExplaining(false);
+    } else {
+      setIsExplaining(true);
+      if (!cachedExpl) {
+        await handleFetchExplanation();
+      }
+    }
+  };
+
+  const handleFetchExplanation = async (force: boolean = false) => {
+    if (isLoadingExplanation) return;
+    setIsLoadingExplanation(true);
+    setExplanationError(null);
+    setStreamedSummary("");
+    
+    try {
+      const prevLine = i > 0 ? currentTrack.lines[i - 1] : undefined;
+      const nextLine = i < currentTrack.lines.length - 1 ? currentTrack.lines[i + 1] : undefined;
+      const targetLang = targetLanguage || currentTrack.targetLanguage || "English";
+      const sourceLang = currentTrack.sourceLanguage || "Auto-detect";
+
+      const metadataPayload = {
+        title: currentTrack.title,
+        artists: [currentTrack.artist],
+      };
+
+      const result = await aiClient.generateLineExplanation(
+        metadataPayload,
+        {
+          original: line,
+          translation: currentTrack?.lines?.[i]?.translation,
+          lineId: lineId
+        },
+        prevLine,
+        nextLine,
+        targetLang,
+        sourceLang,
+        (partialSummary) => {
+          setStreamedSummary(partialSummary);
+        }
+      );
+
+      // Save to cache:
+      if (onSaveLineExplanation) {
+        onSaveLineExplanation(i, result);
+      }
+    } catch (err: any) {
+      console.error("[LyricLine] Explanation fetch error:", err);
+      setExplanationError(err.message || "Failed to explain the line. Please try again.");
+    } finally {
+      setIsLoadingExplanation(false);
+    }
+  };
   if (!trimmedLine && isCompact) return null;
   if (!trimmedLine) return <div className="h-6" />;
 
@@ -350,6 +420,22 @@ const LyricLine = ({
               <button
                 onClick={(e) => {
                   e.stopPropagation();
+                  handleToggleExplanation();
+                }}
+                className={cn(
+                  "flex items-center gap-1 p-1 px-2.5 rounded-xl border transition-all text-[10px] font-bold uppercase tracking-widest leading-none shrink-0",
+                  isExplaining 
+                    ? "bg-[var(--accent)]/15 border-[var(--accent)]/30 text-app-fg"
+                    : "border-app-card-border/60 bg-app-card/40 hover:bg-app-card text-app-fg/40 hover:text-app-fg hover:border-app-card-border"
+                )}
+                title="Explain line with AI"
+              >
+                <Brain size={12} className={cn(isLoadingExplanation ? "animate-spin text-[var(--accent)]" : "text-[var(--accent)]")} />
+                <span>Explain</span>
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
                   handleToggleStarLine(i);
                 }}
                 className="p-2 rounded-xl transition-all hover:scale-120 active:scale-90"
@@ -441,6 +527,107 @@ const LyricLine = ({
                     )}
                   </motion.div>
                 )}
+              </motion.div>
+            )}
+
+            {isExplaining && (
+              <motion.div
+                initial={{ opacity: 0, height: 0, y: -5 }}
+                animate={{ opacity: 1, height: "auto", y: 0 }}
+                exit={{ opacity: 0, height: 0, y: -5 }}
+                transition={{ duration: 0.25 }}
+                className="mt-4 mb-2 p-5 bg-app-card border border-app-card-border/70 rounded-3xl relative overflow-hidden"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {/* Header with Title and Close button */}
+                <div className="flex justify-between items-center mb-3">
+                  <div className="flex items-center gap-2">
+                    <Brain size={14} className="text-[var(--accent)]" />
+                    <span className="text-[10px] font-black uppercase tracking-widest text-app-fg opacity-65">
+                      Line Insight
+                    </span>
+                  </div>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setIsExplaining(false);
+                    }}
+                    className="p-1 rounded-lg hover:bg-app-fg/5 text-app-fg opacity-40 hover:opacity-100 transition-opacity"
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
+
+                {/* Content Area */}
+                <div className="space-y-4">
+                  {/* Summary section */}
+                  {(streamedSummary || summary) ? (
+                    <div className="text-sm font-sans leading-relaxed text-app-fg/80 pr-2 whitespace-pre-line">
+                      {streamedSummary || summary}
+                    </div>
+                  ) : isLoadingExplanation ? (
+                    <div className="flex items-center gap-2 py-1">
+                      <span className="flex h-2 w-2 relative">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[var(--accent)] opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-[var(--accent)]"></span>
+                      </span>
+                      <span className="text-xs italic tracking-wide text-app-fg opacity-40">
+                        Analyzing line syntax nuances...
+                      </span>
+                    </div>
+                  ) : null}
+
+                  {/* Notes list */}
+                  {notes && notes.length > 0 && (
+                    <motion.div 
+                      initial={{ opacity: 0, y: 5 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.2 }}
+                      className="pt-3 border-t border-app-card-border/50 flex flex-col gap-2.5"
+                    >
+                      {notes.map((note: any, nIdx: number) => {
+                        const bgTypeMap: Record<string, string> = {
+                          idiom: "bg-purple-500/10 border-purple-500/20 text-purple-600 dark:text-purple-400",
+                          cultural: "bg-pink-500/10 border-pink-500/20 text-pink-600 dark:text-pink-400",
+                          collocation: "bg-blue-500/10 border-blue-500/20 text-blue-600 dark:text-blue-400",
+                          grammar: "bg-amber-500/10 border-amber-500/20 text-amber-600 dark:text-amber-400",
+                          nuance: "bg-teal-500/10 border-teal-500/20 text-teal-600 dark:text-teal-400"
+                        };
+                        const typeClass = bgTypeMap[note.type] || "bg-app-fg/5 border-app-card-border text-app-fg/70";
+                        return (
+                          <div key={nIdx} className="flex gap-2.5 items-start">
+                            <span className={cn(
+                              "text-[8px] font-black uppercase tracking-widest px-2 py-0.5 mt-0.5 rounded-md border shrink-0",
+                              typeClass
+                            )}>
+                              {note.type}
+                            </span>
+                            <span className="text-xs font-sans text-app-fg/70 leading-normal">
+                              {note.text}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </motion.div>
+                  )}
+
+                  {/* Error display */}
+                  {explanationError && (
+                    <div className="flex gap-2 items-center text-xs text-orange-500 pt-2 border-t border-app-card-border/30">
+                      <AlertTriangle size={14} className="shrink-0" />
+                      <span>{explanationError}</span>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleFetchExplanation(true);
+                        }}
+                        className="ml-auto text-[10px] uppercase tracking-wider font-extrabold underline hover:text-orange-400"
+                      >
+                        Retry
+                      </button>
+                    </div>
+                  )}
+                </div>
               </motion.div>
             )}
           </AnimatePresence>
@@ -863,6 +1050,23 @@ export default function App() {
     saveTrackData(currentTrack.trackId, updatedTrack);
   };
 
+  const handleSaveLineExplanation = (index: number, explanation: any) => {
+    if (!currentTrack) return;
+    const updatedLines = currentTrack.lines.map((l: any) => {
+      if (l.index === index) {
+        return { ...l, explanation };
+      }
+      return l;
+    });
+
+    const updatedTrack = {
+      ...currentTrack,
+      lines: updatedLines,
+    };
+    setCurrentTrack(updatedTrack);
+    saveTrackData(currentTrack.trackId, updatedTrack);
+  };
+
   // Synchronized callback action delegates
   const handleTrackSelect = async (track: any) => {
     await handleTrackSelectRaw(track, targetLanguage, {
@@ -1102,6 +1306,8 @@ export default function App() {
         shadowingFeedback={shadowingFeedback}
         shadowingAttempts={shadowingAttempts}
         handleToggleStarLine={handleToggleStarLine}
+        targetLanguage={targetLanguage}
+        onSaveLineExplanation={handleSaveLineExplanation}
         onOpenLineDrawer={(index) => {
           if (!currentTrack) return;
           const targetLine = currentTrack.lines?.[index];

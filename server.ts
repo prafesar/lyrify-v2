@@ -109,6 +109,37 @@ async function startServer() {
     }
   });
 
+  // API Route for Gemini content generation streaming proxy
+  app.post("/api/gemini/generate-content-stream", async (req, res) => {
+    try {
+      const { model, contents, config } = req.body;
+      const ai = getAiInstance();
+
+      // Set headers for standard chunked stream transfer
+      res.setHeader("Content-Type", "text/plain; charset=utf-8");
+      res.setHeader("Transfer-Encoding", "chunked");
+      res.setHeader("Cache-Control", "no-cache");
+      res.setHeader("Connection", "keep-alive");
+
+      const responseStream = await ai.models.generateContentStream({
+        model,
+        contents,
+        config,
+      });
+
+      for await (const chunk of responseStream) {
+        if (chunk.text) {
+          res.write(chunk.text);
+        }
+      }
+      res.end();
+    } catch (error: any) {
+      console.error("[server] Gemini API stream error:", error);
+      res.status(500).write(JSON.stringify({ error: error.message || "Streaming failed" }));
+      res.end();
+    }
+  });
+
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
