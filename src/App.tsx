@@ -1,12 +1,11 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
-import { motion, AnimatePresence, useMotionValue } from "motion/react";
+import { motion, AnimatePresence } from "motion/react";
 import {
   Play,
   Pause,
   FileText,
   Music,
   Search,
-  Plus,
   Brain,
   Check,
   ChevronLeft,
@@ -32,7 +31,6 @@ import {
   SearchCode,
   Sparkles,
   Star,
-  BookOpen,
   Volume2,
   VolumeX,
   Loader2,
@@ -68,6 +66,8 @@ import { onAuthStateChanged, type User } from "firebase/auth";
 import StudyView from "./components/StudyView";
 import SettingsView from "./components/SettingsView";
 import PhraseDrawer from "./components/PhraseDrawer";
+import { LearningAssistantPanel } from "./components/LearningAssistantPanel";
+import { acceptSuggestedPhrase } from "./services/lyricsAnalysisService";
 import { LibraryView } from "./components/LibraryView";
 import LanguageSelector from "./components/LanguageSelector";
 import {
@@ -330,14 +330,19 @@ const LyricLine = ({
 
           {trimmedLine && !isSelectionMode && (
             <div className="flex items-center gap-2 shrink-0">
-              {phrasesInLine && phrasesInLine.length > 0 && onOpenLineDrawer && (
+              {onOpenLineDrawer && (
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
                     onOpenLineDrawer(i);
                   }}
-                  className="p-1 px-1.5 rounded-lg border border-transparent transition-all hover:scale-110 hover:border-app-card-border hover:bg-app-card/80 text-[var(--accent)]"
-                  title="Line Vocabulary & Phrases Analysis"
+                  className={cn(
+                    "p-1 px-1.5 rounded-lg border border-transparent transition-all hover:scale-110 hover:border-app-card-border hover:bg-app-card/80",
+                    phrasesInLine && phrasesInLine.length > 0
+                      ? "text-[var(--accent)]"
+                      : "text-app-fg opacity-30 hover:opacity-100 hover:text-app-fg"
+                  )}
+                  title={phrasesInLine && phrasesInLine.length > 0 ? "Line Vocabulary & Phrases Analysis" : "Analyze this line..."}
                 >
                   <Sparkles size={16} />
                 </button>
@@ -445,112 +450,6 @@ const LyricLine = ({
   );
 };
 
-const AnalysisPhraseCard = ({
-  item,
-  idx,
-  card,
-  handleSetAnalysisPhraseStatus,
-}: {
-  item: any;
-  idx: number;
-  card: any;
-  handleSetAnalysisPhraseStatus: any;
-}) => {
-  const x = useMotionValue(0);
-  const currentStatus: PhraseStatus = card ? card.status : "new";
-
-  return (
-    <div className="relative group/phrase overflow-hidden rounded-[2rem] touch-pan-y">
-      <motion.div
-        style={{ x }}
-        drag="x"
-        dragConstraints={{ left: 0, right: 0 }}
-        dragElastic={1}
-        onDragEnd={(_, info) => {
-          if (info.offset.x < -100) {
-            handleSetAnalysisPhraseStatus(item.text, item.translation || "", item.explanation || "", "known");
-          } else if (info.offset.x > 100) {
-            handleSetAnalysisPhraseStatus(item.text, item.translation || "", item.explanation || "", "learning");
-          }
-        }}
-        className={cn(
-          "flex flex-col gap-3 p-6 rounded-[2rem] bg-app-card border transition-all cursor-pointer relative z-10 touch-pan-y select-none",
-          currentStatus === "known"
-            ? "border-green-500/30 shadow-md shadow-green-500/5 bg-[var(--green-bg,rgba(16,185,129,0.02))]"
-            : currentStatus === "learning"
-              ? "border-orange-500/30 shadow-md shadow-orange-500/5 bg-[var(--orange-bg,rgba(249,115,22,0.02))]"
-              : "border-blue-500/20 bg-blue-500/[0.01]"
-        )}
-      >
-        {/* Swiping Indicator on Left (revealed when dragging right) */}
-        <div className="absolute right-[calc(100%+1px)] top-0 bottom-0 flex items-center pr-4 pointer-events-none">
-          <div className="flex flex-col items-center gap-1 text-orange-500">
-            <div className="p-3 rounded-2xl bg-orange-500 border border-orange-500/20 shadow-lg text-white">
-              <BookOpen size={24} strokeWidth={2.5} />
-            </div>
-            <span className="text-[9px] font-black uppercase tracking-[0.2em] whitespace-nowrap">Learn</span>
-          </div>
-        </div>
-
-        {/* Swiping Indicator on Right (revealed when dragging left) */}
-        <div className="absolute left-[calc(100%+1px)] top-0 bottom-0 flex items-center pl-4 pointer-events-none">
-          <div className="flex flex-col items-center gap-1 text-green-500">
-            <div className="p-3 rounded-2xl bg-green-500 border border-green-500/20 shadow-lg text-white">
-              <Check size={24} strokeWidth={2.5} />
-            </div>
-            <span className="text-[9px] font-black uppercase tracking-[0.2em] whitespace-nowrap">Known</span>
-          </div>
-        </div>
-
-        <div className="flex items-start justify-between gap-2 relative z-10">
-          <div className="flex-1 flex gap-3">
-            <span className="text-xs font-black opacity-20 mt-2 shrink-0">{(idx + 1).toString().padStart(2, '0')}</span>
-            <div className="flex-1">
-              <p className="text-xl font-serif text-app-fg">{item.text}</p>
-              <div className="flex flex-col gap-1 mt-1">
-                {item.translation && <p className="text-lg font-serif italic text-app-fg opacity-60">{item.translation}</p>}
-              </div>
-            </div>
-          </div>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              const nextStatus: PhraseStatus = 
-                currentStatus === "new" ? "learning" :
-                currentStatus === "learning" ? "known" : "new";
-              handleSetAnalysisPhraseStatus(item.text, item.translation || "", item.explanation || "", nextStatus);
-            }}
-            className="shrink-0 flex items-center gap-2 hover:scale-105 active:scale-95 transition-transform cursor-pointer button-badge"
-            aria-label={`Change status from ${currentStatus}`}
-          >
-            {currentStatus === "known" ? (
-              <div className="px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest border border-green-500/10 shadow-sm text-green-500 bg-green-500/10 flex items-center gap-2">
-                <CheckCircle2 size={12} />
-                <span>known</span>
-              </div>
-            ) : currentStatus === "learning" ? (
-              <div className="px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest border border-orange-500/10 shadow-sm text-orange-500 bg-orange-500/10 flex items-center gap-2">
-                <BookOpen size={12} />
-                <span>learning</span>
-              </div>
-            ) : (
-              <div className="px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest border border-blue-500/10 shadow-sm text-blue-500 bg-blue-500/10 flex items-center gap-2">
-                <Plus size={12} />
-                <span>new</span>
-              </div>
-            )}
-          </button>
-        </div>
-        {item.explanation && (
-          <div className="pl-4 border-l-2 border-app-card-border ml-7">
-            <p className="text-lg font-medium text-app-fg opacity-60 group-hover:opacity-80 transition-opacity leading-relaxed">{item.explanation}</p>
-          </div>
-        )}
-      </motion.div>
-    </div>
-  );
-};
-
 const mapTrackLyricsDataToTrack = (data: TrackLyricsData): Track => ({
   id: data.trackId,
   trackId: data.trackId,
@@ -615,6 +514,7 @@ export default function App() {
 
   useEffect(() => {
     // Initial load
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadAppLibraryData();
 
     // Subscribe to database changes to refresh global layout favorite states
@@ -631,6 +531,7 @@ export default function App() {
 
   useEffect(() => {
     if (activeMenuTrack) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       loadAppLibraryData();
     }
   }, [activeMenuTrack]);
@@ -780,7 +681,6 @@ export default function App() {
     handleRegenerateAnalysis: handleRegenerateAnalysisRaw,
     handleManualLyricsSearch,
     handleSelectLyricOption: handleSelectLyricOptionRaw,
-    handleAnalyzeStarredLines: handleAnalyzeStarredLinesRaw,
     handleAnalyzeSelectedLines: handleAnalyzeSelectedLinesRaw
   } = useTrackSession();
 
@@ -832,6 +732,34 @@ export default function App() {
   const [isAnalysisSelectionMode, setIsAnalysisSelectionMode] = useState(false);
   const [selectedLineIdsForAnalysis, setSelectedLineIdsForAnalysis] = useState<string[]>([]);
   const [isAnalysisModalOpen, setIsAnalysisModalOpen] = useState(false);
+
+  // Learning Assistant Panel States
+  const [isAssistantOpen, setIsAssistantOpen] = useState(false);
+  const [assistantContextType, setAssistantContextType] = useState<"line" | "phrase" | "selection">("line");
+  const [assistantLineContext, setAssistantLineContext] = useState<{ original: string; translation?: string; lineId?: string } | undefined>(undefined);
+  const [assistantPhraseContext, setAssistantPhraseContext] = useState<{ text: string; translation?: string; explanation?: string; lineIds?: string[] } | undefined>(undefined);
+
+  const handleAcceptSuggestedPhraseInApp = async (
+    phraseText: string,
+    translation: string,
+    explanation?: string,
+    type?: string,
+    lineIds?: string[]
+  ) => {
+    if (!currentTrack) return;
+    const updatedTrack = acceptSuggestedPhrase(
+      currentTrack,
+      phraseText,
+      translation,
+      explanation,
+      type,
+      lineIds
+    );
+    await saveTrackData(currentTrack.trackId, updatedTrack);
+    setCurrentTrack(updatedTrack);
+    loadUserCards();
+  };
+
   const [analysisCustomFocus, setAnalysisCustomFocus] = useState("");
   const [analysisSelectedPresets, setAnalysisSelectedPresets] = useState<string[]>([]);
   const [trackSearchQuery, setTrackSearchQuery] = useState("");
@@ -883,6 +811,18 @@ export default function App() {
       // Leave selectedLineIdsForAnalysis intact so user doesn't lose selection on error
     }
   };
+
+  const handleOpenAssistantForPhrase = useCallback((phrase: { text: string; translation?: string; explanation?: string; lineIds?: string[] }) => {
+    setAssistantContextType("phrase");
+    setAssistantPhraseContext({
+      text: phrase.text,
+      translation: phrase.translation,
+      explanation: phrase.explanation,
+      lineIds: phrase.lineIds
+    });
+    setAssistantLineContext(undefined);
+    setIsAssistantOpen(true);
+  }, []);
 
   // Derived memoized progress View Models
   const nextStepState = useMemo(() => {
@@ -980,10 +920,6 @@ export default function App() {
 
   const handleRegenerateAnalysis = async () => {
     await handleRegenerateAnalysisRaw(targetLanguage, { loadCommunityTracks });
-  };
-
-  const handleAnalyzeStarredLines = async () => {
-    await handleAnalyzeStarredLinesRaw(targetLanguage, { loadCommunityTracks });
   };
 
   const handleSelectLyricOption = async (option: LyricOption) => {
@@ -1167,8 +1103,18 @@ export default function App() {
         shadowingAttempts={shadowingAttempts}
         handleToggleStarLine={handleToggleStarLine}
         onOpenLineDrawer={(index) => {
-          setSelectedLineIndexForDrawer(index);
-          setIsPhraseDrawerOpen(true);
+          if (!currentTrack) return;
+          const targetLine = currentTrack.lines?.[index];
+          if (!targetLine) return;
+
+          setAssistantContextType("line");
+          setAssistantLineContext({
+            original: targetLine.original,
+            translation: targetLine.translation,
+            lineId: targetLine.lineId
+          });
+          setAssistantPhraseContext(undefined);
+          setIsAssistantOpen(true);
         }}
         isSelectionMode={isAnalysisSelectionMode}
         isSelectedForAnalysis={selectedLineIdsForAnalysis.includes(currentTrack?.lines?.[i]?.lineId || "")}
@@ -1891,7 +1837,7 @@ export default function App() {
                           {searchResults.map((item) => (
                             <div
                               key={item.id}
-                              onClick={(e) => {
+                              onClick={() => {
                                 if (searchEntityType === "musicTrack") {
                                   navigateToTrack(item);
                                 } else if (searchEntityType === "album") {
@@ -2402,6 +2348,24 @@ export default function App() {
                                   <button
                                     onClick={handleRunAnalyzeSelectedLines}
                                     disabled={selectedLineIdsForAnalysis.length === 0 || isGeneratingAnalysis}
+                                    title="Bulk-generate study cards automatically from the selected lines"
+                                    className={cn(
+                                      "px-3 py-1.5 rounded-xl font-black transition-all text-[10px] uppercase tracking-wider flex items-center gap-1.5 shrink-0",
+                                      selectedLineIdsForAnalysis.length === 0
+                                        ? "bg-app-card border border-app-card-border/60 text-app-fg opacity-40 cursor-not-allowed"
+                                        : "bg-teal-600 hover:bg-teal-500 text-white shadow-lg shadow-teal-600/20 hover:scale-105 active:scale-95"
+                                    )}
+                                  >
+                                    <Brain size={12} className={isGeneratingAnalysis ? "animate-spin" : ""} />
+                                    <span>Extract Study Cards</span>
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      setAssistantContextType("selection");
+                                      setIsAssistantOpen(true);
+                                    }}
+                                    disabled={selectedLineIdsForAnalysis.length === 0}
+                                    title="Open conversational tutor panel on the selected sequence"
                                     className={cn(
                                       "px-3 py-1.5 rounded-xl font-black transition-all text-[10px] uppercase tracking-wider flex items-center gap-1.5 shrink-0",
                                       selectedLineIdsForAnalysis.length === 0
@@ -2409,8 +2373,8 @@ export default function App() {
                                         : "bg-orange-500 text-white shadow-lg shadow-orange-500/20 hover:scale-105 active:scale-95"
                                     )}
                                   >
-                                    <Brain size={12} className={isGeneratingAnalysis ? "animate-spin" : ""} />
-                                    <span>Analyze Selected</span>
+                                    <Sparkles size={12} />
+                                    <span>Discuss Sequence</span>
                                   </button>
                                   <button
                                     onClick={() => {
@@ -2777,15 +2741,9 @@ export default function App() {
                             await saveTrackData(updatedTrack.trackId, updatedTrack);
                             loadCommunityTracks();
                           }}
-                          targetLanguage={targetLanguage}
-                          onGoToLine={(original, index) => {
-                            setActiveTab("lyrics");
-                            setTimeout(() => {
-                              handleLineClick(original, index);
-                            }, 100);
-                          }}
                           isGeneratingAnalysis={isGeneratingAnalysis}
                           handleRegenerateAnalysis={handleRegenerateAnalysis}
+                          onOpenAssistantForPhrase={handleOpenAssistantForPhrase}
                         />
                       </motion.div>
                     ) : (
@@ -4006,6 +3964,24 @@ export default function App() {
               </div>
             </motion.div>
           </>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {isAssistantOpen && currentTrack && (
+          <LearningAssistantPanel
+            isOpen={isAssistantOpen}
+            onClose={() => setIsAssistantOpen(false)}
+            track={currentTrack}
+            contextType={assistantContextType}
+            lineContext={assistantLineContext}
+            phraseContext={assistantPhraseContext}
+            selectedLineIds={selectedLineIdsForAnalysis}
+            targetLanguage={targetLanguage}
+            onAcceptPhrase={handleAcceptSuggestedPhraseInApp}
+            existingPhrases={currentTrack.lines ? currentTrack.lines.flatMap((l: any) => l.phrases || []) : []}
+            speak={speak}
+          />
         )}
       </AnimatePresence>
 

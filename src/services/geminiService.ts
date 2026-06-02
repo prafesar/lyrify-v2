@@ -980,6 +980,158 @@ SELECTION RULES:
   }
 }
 
+export interface LearningAssistantResponse {
+  explanation: string;
+  suggestedPhrases: Array<{
+    text: string;
+    translation: string;
+    explanation?: string;
+    type?: string;
+    lineIds?: string[];
+  }>;
+}
+
+export async function generateLearningAssistantResponse(
+  title: string,
+  artist: string,
+  contextType: "line" | "phrase" | "selection",
+  lineContext: { original: string; translation?: string; lineId?: string } | undefined,
+  phraseContext: { text: string; translation?: string; explanation?: string; lineIds?: string[] } | undefined,
+  targetLanguage: string,
+  existingPhrases: any[] = [],
+  userQuestion?: string,
+  selectedPreset?: string,
+  selectedLines?: Array<{ original: string; translation?: string; lineId?: string }>
+): Promise<LearningAssistantResponse> {
+  const existingPhrasesStr = existingPhrases
+    .map(p => `- Text: "${p.text || ''}", Type: "${p.type || ''}", Translation: "${p.translation || ''}"`)
+    .join("\n");
+
+  let prompt = `Role: Expert linguistic analyst and music teacher.
+Act as a personal learning assistant for mastering foreign languages through song lyrics.
+You are helping a learner analyze the song "${title}" by "${artist}".
+Your explanation must be written in the targeted learning language: "${targetLanguage}".
+
+CONTEXT TYPE: "${contextType}"\n`;
+
+  if (contextType === "line" && lineContext) {
+    prompt += `Target Line: "${lineContext.original}"\n`;
+    if (lineContext.translation) {
+      prompt += `Line translation: "${lineContext.translation}"\n`;
+    }
+    if (lineContext.lineId) {
+      prompt += `Line ID: "${lineContext.lineId}"\n`;
+    }
+    prompt += `
+CONTEXT-SPECIFIC INSTRUCTIONS FOR LINE:
+- Explain this specific line of lyrics.
+- Break down unique words, grammar patterns, slang, or figurative language in this specific line.
+- Suggest 1 to 3 key phrases/words from this specific line for the student's study cards. Ensure their 'lineIds' matches exactly: ["${lineContext.lineId || ''}"].
+`;
+  } else if (contextType === "phrase" && phraseContext) {
+    prompt += `Target Phrase/Word of Interest: "${phraseContext.text}"\n`;
+    if (phraseContext.translation) {
+      prompt += `Phrase translation: "${phraseContext.translation}"\n`;
+    }
+    if (phraseContext.explanation) {
+      prompt += `Current phrase description/explanation: "${phraseContext.explanation}"\n`;
+    }
+    prompt += `
+CONTEXT-SPECIFIC INSTRUCTIONS FOR PHRASE:
+- Focus intensely on the NUANCES, GRAMMAR, GRAMMATICAL STRUCTURE, USAGE, SYNONYMS, and REGISTER (slang vs formal vs poetic status) of this precise phrase: "${phraseContext.text}".
+- Do not just define it, but explain exactly how it behaves in active conversation vs inside this song's lyrics.
+- If the user asks a follow-up question, answer it meticulously using detailed examples.
+- For suggested phrases, if the user requested follow-up clarification, you can suggest 1-2 closely related synonyms, or idioms that contain this phrase from the surrounding lyrics, or leave 'suggestedPhrases' empty [] if there are no new ones.
+`;
+  } else if (contextType === "selection" && selectedLines && selectedLines.length > 0) {
+    prompt += `Selected Lyrics Sequence:\n`;
+    selectedLines.forEach((line, idx) => {
+      prompt += `[Line ${idx + 1}] ID: "${line.lineId || ''}", Original: "${line.original}" ${line.translation ? `, Translation: "${line.translation}"` : ''}\n`;
+    });
+    prompt += `
+CONTEXT-SPECIFIC INSTRUCTIONS FOR SELECTION:
+- Break down the linguistic connection between these selected lines.
+- Explain the overall theme, grammatical patterns, idioms, structure and story connecting this sequence of lines.
+- Suggest 1 to 3 highly useful vocabulary study chunks (2-5 words each) that directly appear in this selected text block. Ensure each suggestion maps to its correct line IDs from the selected sequence.
+`;
+  }
+
+  if (existingPhrasesStr) {
+    prompt += `\nAlready saved/known phrases of this song:\n${existingPhrasesStr}\n`;
+  }
+
+  prompt += `\nACTION / TASK:\n`;
+  if (selectedPreset) {
+    prompt += `Perform the following focus task: ${selectedPreset}\n`;
+  }
+  if (userQuestion && userQuestion.trim()) {
+    prompt += `Answer the learner's specific question: "${userQuestion.trim()}"\n`;
+  }
+
+  prompt += `
+EXPLANATION REQUIREMENTS:
+1. Provide a friendly, comprehensive yet highly insightful explanation (in ${targetLanguage}). Write it naturally, as a professional tutor would.
+2. Ensure you address the linguistic nuances, slang, idiomatic uses, grammar intricacies, or pronunciation cues if relevant.
+
+SUGGESTED PHRASES REQUIREMENTS:
+If the context contains useful collocations, idioms, phrasal verbs, or vocabulary items (preferably chunks of 2-5 words) that can be studied as separate cards, suggest them.
+- Do NOT suggest any phrase that is already in the "Already saved/known phrases" list.
+- Each suggested phrase must be an exact substring of the song lyrics or line context.
+- Keep the number of suggested phrases focused (usually 1-3 highly matching chunks). If there are no good new chunks to recommend, leave 'suggestedPhrases' as an empty array [].
+- Associate the correct 'lineIds' with each suggestion (For 'line' context, use ${lineContext?.lineId ? JSON.stringify([lineContext.lineId]) : "[]"}).
+
+Return a valid JSON object with the following structure exactly:
+{
+  "explanation": "Markdown-formatted explanation response covering the requested question, preset, and linguistic analysis.",
+  "suggestedPhrases": [
+    {
+      "text": "Exact lyric substring",
+      "translation": "Translation of the phrase into ${targetLanguage}",
+      "explanation": "A very brief 1-sentence reminder of what this phrase means or how it is used.",
+      "type": "collocation|idiom|phrasal_verb|cultural_ref|vocabulary|phrase",
+      "lineIds": ["associated-line-id"]
+    }
+  ]
+}`;
+
+  try {
+    const response = await callGeminiApi({
+      model: "gemini-2.5-flash",
+      contents: prompt,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            explanation: { type: Type.STRING },
+            suggestedPhrases: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  text: { type: Type.STRING },
+                  translation: { type: Type.STRING },
+                  explanation: { type: Type.STRING },
+                  type: { type: Type.STRING },
+                  lineIds: { type: Type.ARRAY, items: { type: Type.STRING } }
+                },
+                required: ["text", "translation"]
+              }
+            }
+          },
+          required: ["explanation", "suggestedPhrases"]
+        }
+      }
+    });
+
+    const parsed = JSON.parse(response.text);
+    return parsed;
+  } catch (error) {
+    console.error("Learning Assistant API error:", error);
+    throw error;
+  }
+}
+
 
 export async function getLatestAnalyzedTracks(maxCount: number = 10): Promise<TrackMeaningEntry[]> {
   console.log("[geminiService] getLatestAnalyzedTracks called, maxCount:", maxCount);

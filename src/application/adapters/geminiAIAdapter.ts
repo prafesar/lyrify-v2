@@ -98,6 +98,41 @@ export class GeminiAIAdapter implements AiPort {
     return originalGeminiService.generateTargetedAnalysis(title, artist, targetLanguage, starredLines, existingPhrases, instruction);
   }
 
+  async generateLearningAssistantResponse(
+    title: string,
+    artist: string,
+    contextType: "line" | "phrase" | "selection",
+    lineContext: { original: string; translation?: string; lineId?: string } | undefined,
+    phraseContext: { text: string; translation?: string; explanation?: string; lineIds?: string[] } | undefined,
+    targetLanguage: string,
+    existingPhrases: any[],
+    userQuestion?: string,
+    selectedPreset?: string,
+    selectedLines?: Array<{ original: string; translation?: string; lineId?: string }>
+  ): Promise<{
+    explanation: string;
+    suggestedPhrases: Array<{
+      text: string;
+      translation: string;
+      explanation?: string;
+      type?: string;
+      lineIds?: string[];
+    }>;
+  }> {
+    return originalGeminiService.generateLearningAssistantResponse(
+      title,
+      artist,
+      contextType,
+      lineContext,
+      phraseContext,
+      targetLanguage,
+      existingPhrases,
+      userQuestion,
+      selectedPreset,
+      selectedLines
+    );
+  }
+
 
   async getLatestAnalyzedTracks(maxCount?: number): Promise<TrackMeaningEntry[]> {
     return originalGeminiService.getLatestAnalyzedTracks(maxCount);

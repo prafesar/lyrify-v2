@@ -3,6 +3,7 @@ import { generateLineId, normalizeLineText, TrackLyricsData } from "../services/
 import { 
   linkPhrasesToLines, 
   addUserPhrase, 
+  acceptSuggestedPhrase,
   editPhrase, 
   deletePhrase,
   buildStarredLinesAnalysisInput,
@@ -128,6 +129,34 @@ describe("lyricsAnalysisService and Line linking tests", () => {
     const lineWithAddedPhrase = updated.lines[0];
     expect(lineWithAddedPhrase.phrases?.length).toBe(1);
     expect(lineWithAddedPhrase.phrases?.[0].text).toBe("regrette");
+  });
+
+  it("adds accepted AI-suggested phrases correctly with tags and metadata", () => {
+    const initialTrack = createTrackMock({
+      trackId: "track-ai-sugg",
+      lines: [
+        { id: "line1", index: 0, original: "Je ne regrette rien", lineId: "je-ne-regrette-rien", phrases: [] }
+      ],
+      phrases: []
+    });
+
+    const updated = acceptSuggestedPhrase(
+      initialTrack,
+      "regrette",
+      "regret",
+      "special verb explanation",
+      "idiom",
+      ["je-ne-regrette-rien"],
+      "remember this"
+    );
+
+    expect(updated.phrases?.length).toBe(1);
+    expect(updated.phrases?.[0].text).toBe("regrette");
+    expect(updated.phrases?.[0].translation).toBe("regret");
+    expect(updated.phrases?.[0].explanation).toBe("special verb explanation");
+    expect(updated.phrases?.[0].type).toBe("idiom");
+    expect(updated.phrases?.[0].source).toBe("user");
+    expect(updated.phrases?.[0].note).toBe("remember this");
   });
 
   it("allows editing existing phrases correctly", () => {

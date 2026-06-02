@@ -5,20 +5,15 @@ import {
   Edit2, 
   Trash2, 
   Volume2, 
-  Lock, 
   CheckCircle2, 
-  BookOpen, 
   Tag, 
   HelpCircle, 
   Sparkles, 
   User, 
   X, 
-  ArrowRight,
   MessageSquare,
   RefreshCw,
-  MoreVertical,
-  ChevronDown,
-  ChevronUp
+  MoreVertical
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { Phrase, LyricsLine, TrackLyricsData } from "../services/musicService";
@@ -38,10 +33,9 @@ interface AnalysisPhraseWorkspaceProps {
   ) => void;
   speak: (text: string, onEnd?: () => void, lang?: string) => void;
   onUpdateTrack: (updatedTrack: TrackLyricsData) => Promise<void>;
-  targetLanguage: string;
-  onGoToLine: (lineOriginal: string, lineIndex: number) => void;
   isGeneratingAnalysis?: boolean;
   handleRegenerateAnalysis?: () => void;
+  onOpenAssistantForPhrase?: (phrase: Phrase) => void;
 }
 
 export const AnalysisPhraseWorkspace: React.FC<AnalysisPhraseWorkspaceProps> = ({
@@ -52,14 +46,14 @@ export const AnalysisPhraseWorkspace: React.FC<AnalysisPhraseWorkspaceProps> = (
   handleSetAnalysisPhraseStatus,
   speak,
   onUpdateTrack,
-  targetLanguage,
-  onGoToLine,
   isGeneratingAnalysis = false,
-  handleRegenerateAnalysis
+  handleRegenerateAnalysis,
+  onOpenAssistantForPhrase
 }) => {
   // Local state for Modals
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingPhrase, setEditingPhrase] = useState<Phrase | null>(null);
+  const [inlineEditId, setInlineEditId] = useState<string | null>(null);
 
   // Expanded cards state
   const [expandedPhraseKeys, setExpandedPhraseKeys] = useState<Set<string>>(new Set());
@@ -77,6 +71,34 @@ export const AnalysisPhraseWorkspace: React.FC<AnalysisPhraseWorkspaceProps> = (
 
   // Speech Playing Tracker
   const [currentlySpeakingId, setCurrentlySpeakingId] = useState<string | null>(null);
+
+  // Filter state
+  const [activeFilter, setActiveFilter] = useState<"all" | "new" | "learning" | "known" | "user" | "ai" | "has_note">("all");
+
+  const filtersList = useMemo(() => [
+    { id: "all", label: "All" },
+    { id: "new", label: "New" },
+    { id: "learning", label: "Learning" },
+    { id: "known", label: "Known" },
+    { id: "user", label: "User-added" },
+    { id: "ai", label: "AI-generated" },
+    { id: "has_note", label: "Has note" }
+  ] as const, []);
+
+  // Helper to highlight matched query in textual content
+  const highlightMatch = (text: string, query: string) => {
+    if (!query.trim() || !text) return <>{text}</>;
+    const index = text.toLowerCase().indexOf(query.toLowerCase());
+    if (index === -1) return <>{text}</>;
+    const length = query.length;
+    return (
+      <>
+        {text.substring(0, index)}
+        <mark className="bg-orange-500/20 text-orange-600 rounded-xs px-0.5">{text.substring(index, index + length)}</mark>
+        {text.substring(index + length)}
+      </>
+    );
+  };
 
   // Extract all unique phrases across both track.phrases and nested lines phrases
   const uniquePhrases = useMemo(() => {
@@ -105,10 +127,36 @@ export const AnalysisPhraseWorkspace: React.FC<AnalysisPhraseWorkspaceProps> = (
     return list;
   }, [currentTrack]);
 
-  // Filter phrases based on searched query
+  // Filter phrases based on searched query & filter states
   const filteredPhrases = useMemo(() => {
     let result = uniquePhrases;
 
+    // Apply categorical filters
+    if (activeFilter !== "all") {
+      result = result.filter(phrase => {
+        const card = phraseMetadata.get(phrase.text);
+        const currentStatus = card ? card.status : "new";
+        
+        switch (activeFilter) {
+          case "new":
+            return currentStatus === "new";
+          case "learning":
+            return currentStatus === "learning";
+          case "known":
+            return currentStatus === "known";
+          case "user":
+            return phrase.source === "user";
+          case "ai":
+            return phrase.source !== "user";
+          case "has_note":
+            return !!phrase.note && phrase.note.trim() !== "";
+          default:
+            return true;
+        }
+      });
+    }
+
+    // Apply search query
     if (trackSearchQuery.trim()) {
       const q = trackSearchQuery.toLowerCase().trim();
       result = result.filter(phrase => {
@@ -132,7 +180,7 @@ export const AnalysisPhraseWorkspace: React.FC<AnalysisPhraseWorkspaceProps> = (
     }
 
     return result;
-  }, [uniquePhrases, trackSearchQuery, currentTrack.lines]);
+  }, [uniquePhrases, trackSearchQuery, activeFilter, phraseMetadata, currentTrack.lines]);
 
   // Handle Speech trigger
   const handleVoicing = (phrase: Phrase) => {
@@ -142,19 +190,25 @@ export const AnalysisPhraseWorkspace: React.FC<AnalysisPhraseWorkspaceProps> = (
     }, currentTrack.sourceLanguage);
   };
 
-  // Open Edit Modal with prefilled values
+  // Open Edit Inline or Modal
   const handleOpenEdit = (phrase: Phrase) => {
-    setEditingPhrase(phrase);
+    setInlineEditId(phrase.id);
     setFormText(phrase.text || "");
     setFormTranslation(phrase.translation || "");
     setFormExplanation(phrase.explanation || "");
     setFormNote(phrase.note || "");
     setFormType(phrase.type || "phrase");
+
+    // Expand the card so edit form is visible immediately
+    const itemKey = phrase.id || phrase.text;
+    const updated = new Set(expandedPhraseKeys);
+    updated.add(itemKey);
+    setExpandedPhraseKeys(updated);
   };
 
   // Save the Edited Phrase
   const handleSaveEdit = async () => {
-    if (!editingPhrase) return;
+    if (!inlineEditId) return;
 
     const updates: Partial<Phrase> = {
       text: formText,
@@ -164,9 +218,9 @@ export const AnalysisPhraseWorkspace: React.FC<AnalysisPhraseWorkspaceProps> = (
       type: formType,
     };
 
-    const updatedTrack = editPhrase(currentTrack, editingPhrase.id, updates);
+    const updatedTrack = editPhrase(currentTrack, inlineEditId, updates);
     await onUpdateTrack(updatedTrack);
-    setEditingPhrase(null);
+    setInlineEditId(null);
     clearForm();
   };
 
@@ -222,53 +276,87 @@ export const AnalysisPhraseWorkspace: React.FC<AnalysisPhraseWorkspaceProps> = (
 
   return (
     <div className="space-y-8 pb-32">
-      {/* Header toolbar with search input and Add Phrase CTA */}
-      <div className="flex gap-4 items-stretch md:items-center justify-between">
-        {/* Search input field */}
-        <div className="relative flex-1">
-          <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-app-fg opacity-40">
-            <Search size={18} />
+      {/* Header toolbar with search input, filters, and Add Phrase CTA */}
+      <div className="space-y-4">
+        <div className="flex gap-4 items-stretch md:items-center justify-between">
+          {/* Search input field */}
+          <div className="relative flex-1">
+            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-app-fg opacity-40">
+              <Search size={18} />
+            </div>
+            <input
+              type="text"
+              placeholder="Search phrases, translations, notes, or lyric context..."
+              value={trackSearchQuery}
+              onChange={(e) => setTrackSearchQuery(e.target.value)}
+              className="w-full pl-12 pr-10 py-3.5 bg-app-card border border-app-card-border rounded-2xl text-lg font-medium text-app-fg placeholder-app-fg/30 focus:outline-none focus:border-app-accent/50 transition-all font-sans"
+            />
+            {trackSearchQuery && (
+              <button
+                onClick={() => setTrackSearchQuery("")}
+                className="absolute inset-y-0 right-0 pr-4 flex items-center text-app-fg opacity-45 hover:opacity-100 transition-opacity"
+              >
+                <X size={14} />
+              </button>
+            )}
           </div>
-          <input
-            type="text"
-            placeholder="Search phrases, translations, notes, or lyric context..."
-            value={trackSearchQuery}
-            onChange={(e) => setTrackSearchQuery(e.target.value)}
-            className="w-full pl-12 pr-10 py-3.5 bg-app-card border border-app-card-border rounded-2xl text-lg font-medium text-app-fg placeholder-app-fg/30 focus:outline-none focus:border-app-accent/50 transition-all font-sans"
-          />
-          {trackSearchQuery && (
+
+          {/* Action Buttons */}
+          <div className="flex items-center gap-3 shrink-0">
+            {handleRegenerateAnalysis && (
+              <button
+                onClick={handleRegenerateAnalysis}
+                disabled={isGeneratingAnalysis}
+                className="flex items-center gap-1.5 px-4 py-3.5 bg-app-card border border-app-card-border text-app-fg opacity-60 hover:opacity-100 hover:text-orange-500 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-30"
+                title="Reset and regenerate analysis"
+              >
+                <RefreshCw size={12} className={isGeneratingAnalysis ? "animate-spin" : ""} />
+                <span className="hidden sm:inline">Regenerate</span>
+              </button>
+            )}
             <button
-              onClick={() => setTrackSearchQuery("")}
-              className="absolute inset-y-0 right-0 pr-4 flex items-center text-app-fg opacity-45 hover:opacity-100 transition-opacity"
+              onClick={() => {
+                clearForm();
+                setIsAddModalOpen(true);
+              }}
+              className="flex items-center justify-center w-12 h-12 bg-orange-500 hover:bg-orange-600 transition-colors text-white rounded-full shadow-lg shrink-0 hover:scale-105 active:scale-95 duration-200"
+              title="Add Custom Phrase"
             >
-              <X size={14} />
+              <Plus size={22} className="stroke-[3]" />
             </button>
-          )}
+          </div>
         </div>
 
-        {/* Action Buttons */}
-        <div className="flex items-center gap-3 shrink-0">
-          {handleRegenerateAnalysis && (
+        {/* Filter Chips Toolbar */}
+        <div className="flex flex-wrap gap-2 items-center">
+          {filtersList.map((filter) => {
+            const isActive = activeFilter === filter.id;
+            return (
+              <button
+                key={filter.id}
+                onClick={() => setActiveFilter(filter.id)}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold font-sans tracking-tight transition-all active:scale-95 border ${
+                  isActive
+                    ? "bg-orange-500 border-orange-500 text-white shadow-md shadow-orange-500/10"
+                    : "bg-app-card border-app-card-border/60 text-app-fg opacity-70 hover:opacity-100 hover:border-app-card-border hover:bg-app-card"
+                }`}
+              >
+                {filter.label}
+              </button>
+            );
+          })}
+          {(activeFilter !== "all" || trackSearchQuery.trim() !== "") && (
             <button
-              onClick={handleRegenerateAnalysis}
-              disabled={isGeneratingAnalysis}
-              className="flex items-center gap-1.5 px-4 py-3.5 bg-app-card border border-app-card-border text-app-fg opacity-60 hover:opacity-100 hover:text-orange-500 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-30"
-              title="Reset and regenerate analysis"
+              onClick={() => {
+                setActiveFilter("all");
+                setTrackSearchQuery("");
+              }}
+              className="text-[10px] font-black uppercase tracking-widest text-orange-500 hover:text-orange-600 px-2 py-1 flex items-center gap-1 transition-colors"
             >
-              <RefreshCw size={12} className={isGeneratingAnalysis ? "animate-spin" : ""} />
-              <span className="hidden sm:inline">Regenerate</span>
+              <X size={10} strokeWidth={3} />
+              <span>Clear filters</span>
             </button>
           )}
-          <button
-            onClick={() => {
-              clearForm();
-              setIsAddModalOpen(true);
-            }}
-            className="flex items-center justify-center w-12 h-12 bg-orange-500 hover:bg-orange-600 transition-colors text-white rounded-full shadow-lg shrink-0 hover:scale-105 active:scale-95 duration-200"
-            title="Add Custom Phrase"
-          >
-            <Plus size={22} className="stroke-[3]" />
-          </button>
         </div>
       </div>
 
@@ -315,7 +403,7 @@ export const AnalysisPhraseWorkspace: React.FC<AnalysisPhraseWorkspaceProps> = (
                   {/* Top segment / Header - Always visible */}
                   <div className="p-6">
                     {/* One-line Header/Body Layout containing sequence number inline, play button, translation, status button, and vertical dots menu */}
-                    <div className="flex items-start justify-between gap-4 w-full">
+                    <div className="flex items-center justify-between gap-4 w-full">
                       {/* Left Block: Number + Phrase text + play button on 1st line, translation on 2nd line */}
                       <div className="min-w-0 flex-1">
                         {/* First line: Gray Number + Phrase Text + Play Audio Button */}
@@ -326,7 +414,7 @@ export const AnalysisPhraseWorkspace: React.FC<AnalysisPhraseWorkspaceProps> = (
                           </span>
 
                           <h3 className="text-xl font-serif text-app-fg leading-snug">
-                            {item.text}
+                            {highlightMatch(item.text, trackSearchQuery)}
                           </h3>
 
                           {/* Speech play button styled neatly right next to phrase */}
@@ -349,7 +437,7 @@ export const AnalysisPhraseWorkspace: React.FC<AnalysisPhraseWorkspaceProps> = (
                         {/* Second line: Translation with subtle horizontal indentation aligning with the text */}
                         {item.translation && (
                           <p className="text-base font-serif italic text-app-fg opacity-40 leading-snug pl-6 mt-1 transition-all">
-                            {item.translation}
+                            {highlightMatch(item.translation, trackSearchQuery)}
                           </p>
                         )}
                       </div>
@@ -433,117 +521,201 @@ export const AnalysisPhraseWorkspace: React.FC<AnalysisPhraseWorkspaceProps> = (
                     {/* Extended Content (Collapsible segment) */}
                     {isExpanded && (
                       <div 
-                        onClick={(e) => e.stopPropagation()} 
+                        onClick={(e) => {
+                          // Prevent toggling expansion when clicking inside forms
+                          e.stopPropagation();
+                        }} 
                         className="space-y-4 pt-4 mt-4 border-t border-app-card-border/40 animate-fadeIn cursor-default"
                       >
-                        {/* Explanation description */}
-                        {item.explanation && (
-                          <div className="pl-4 border-l-2 border-app-card-border">
-                            <p className="text-base text-app-fg opacity-75 leading-relaxed font-sans font-medium">
-                              {item.explanation}
-                            </p>
+                        {inlineEditId === item.id ? (
+                          /* Inline Edit Form */
+                          <div className="space-y-4 font-sans text-xs">
+                            <span className="text-[10px] font-black uppercase text-orange-500 tracking-wider block">
+                              Edit Phrase Inline
+                            </span>
+
+                            <div className="grid gap-3 sm:grid-cols-2">
+                              <div className="space-y-1">
+                                <label className="text-[9px] font-black uppercase text-app-fg opacity-40 tracking-wider block">Phrase / Word</label>
+                                <input
+                                  type="text"
+                                  value={formText}
+                                  onChange={(e) => setFormText(e.target.value)}
+                                  className="w-full px-3 py-2 bg-app-card border border-app-card-border rounded-xl text-xs text-app-fg focus:outline-none focus:border-orange-500/50 font-serif"
+                                />
+                              </div>
+
+                              <div className="space-y-1">
+                                <label className="text-[9px] font-black uppercase text-app-fg opacity-40 tracking-wider block">Translation</label>
+                                <input
+                                  type="text"
+                                  value={formTranslation}
+                                  onChange={(e) => setFormTranslation(e.target.value)}
+                                  className="w-full px-3 py-2 bg-app-card border border-app-card-border rounded-xl text-xs text-app-fg focus:outline-none focus:border-orange-500/50 font-serif"
+                                />
+                              </div>
+                            </div>
+
+                            <div className="space-y-1">
+                              <label className="text-[9px] font-black uppercase text-app-fg opacity-40 tracking-wider block">Clarification / Explanation</label>
+                              <textarea
+                                rows={2}
+                                value={formExplanation}
+                                onChange={(e) => setFormExplanation(e.target.value)}
+                                className="w-full px-3 py-2 bg-app-card border border-app-card-border rounded-xl text-xs text-app-fg focus:outline-none focus:border-orange-500/50 resize-none font-sans"
+                              />
+                            </div>
+
+                            <div className="space-y-1">
+                              <label className="text-[9px] font-black uppercase text-app-fg opacity-40 tracking-wider block">Personal Note</label>
+                              <textarea
+                                rows={2}
+                                value={formNote}
+                                onChange={(e) => setFormNote(e.target.value)}
+                                className="w-full px-3 py-2 bg-app-card border border-app-card-border rounded-xl text-xs text-app-fg focus:outline-none focus:border-orange-500/50 resize-none font-sans"
+                              />
+                            </div>
+
+                            <div className="flex gap-2.5 pt-1.5 justify-end">
+                              <button
+                                onClick={handleSaveEdit}
+                                className="px-4 py-2 bg-orange-500 hover:bg-orange-600 rounded-xl text-xxs font-black uppercase text-white tracking-wider transition-colors active:scale-95 duration-150"
+                              >
+                                Save Changes
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setInlineEditId(null);
+                                  clearForm();
+                                }}
+                                className="px-4 py-2 bg-app-card border border-app-card-border hover:bg-app-bg text-app-fg opacity-75 hover:opacity-100 rounded-xl text-xxs font-black uppercase tracking-wider transition-all"
+                              >
+                                Cancel
+                              </button>
+                            </div>
                           </div>
-                        )}
-
-                        {/* Study action controls for 'Знаю' (known) and 'Учить' (learning) states */}
-                        <div className="flex items-center gap-3 pt-1">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleSetAnalysisPhraseStatus(item.text, item.translation || "", item.explanation || "", "known");
-                            }}
-                            className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-5 py-2.5 rounded-2xl text-[10px] font-sans font-black uppercase tracking-widest transition-all ${
-                              currentStatus === "known"
-                                ? "bg-app-card border border-app-card-border/60 text-app-fg opacity-30 cursor-default"
-                                : "bg-app-bg border border-app-card-border hover:border-app-fg/20 active:scale-95 text-app-fg hover:bg-app-card shadow-xs"
-                            }`}
-                          >
-                            <CheckCircle2 size={13} className="text-app-fg opacity-40 shrink-0" />
-                            <span>Знаю</span>
-                          </button>
-
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleSetAnalysisPhraseStatus(item.text, item.translation || "", item.explanation || "", "learning");
-                            }}
-                            className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-5 py-2.5 rounded-2xl text-[10px] font-sans font-black uppercase tracking-widest transition-all ${
-                              currentStatus === "learning"
-                                ? "bg-orange-500/15 border border-orange-500/30 text-orange-500 cursor-default"
-                                : "bg-app-bg border border-app-card-border hover:border-orange-500/30 active:scale-95 text-orange-500 hover:bg-orange-500/[0.02] shadow-xs"
-                            }`}
-                          >
-                            <RefreshCw size={12} className="text-orange-500 shrink-0" />
-                            <span>Учить</span>
-                          </button>
-                        </div>
-
-                        {/* User note */}
-                        {item.note && (
-                          <div className="p-4 rounded-xl bg-orange-500/[0.03] border border-orange-500/10 text-xs space-y-1">
-                            <span className="text-[9px] font-black uppercase tracking-wider text-orange-500 opacity-80 block">Personal Note</span>
-                            <p className="text-app-fg opacity-75 leading-relaxed font-sans font-medium select-text">
-                              {item.note}
-                            </p>
-                          </div>
-                        )}
-
-                        {/* Lyrics Context (Single first non-empty distinct line as requested) */}
-                        {firstContextLine && (
-                          <div className="pt-3 border-t border-app-card-border/45 space-y-2">
-                            <span className="text-[9px] font-black uppercase tracking-wider text-app-fg opacity-40 block">Lyrics Context</span>
-                            <div className="p-4 rounded-2xl bg-app-bg border border-app-card-border text-sm">
-                              <p className="font-serif font-semibold text-app-fg leading-snug">
-                                {firstContextLine.original}
-                              </p>
-                              {firstContextLine.translation && (
-                                <p className="font-sans text-xs text-app-fg opacity-50 italic mt-1 leading-snug">
-                                  {firstContextLine.translation}
+                        ) : (
+                          /* standard Display Mode */
+                          <>
+                            {/* Explanation description */}
+                            {item.explanation && (
+                              <div className="pl-4 border-l-2 border-app-card-border">
+                                <p className="text-base text-app-fg opacity-75 leading-relaxed font-sans font-medium">
+                                  {highlightMatch(item.explanation, trackSearchQuery)}
                                 </p>
+                              </div>
+                            )}
+
+                            {/* Study action controls for 'Знаю' (known) and 'Учить' (learning) states */}
+                            <div className="flex items-center gap-3 pt-1">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleSetAnalysisPhraseStatus(item.text, item.translation || "", item.explanation || "", "known");
+                                }}
+                                className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-5 py-2.5 rounded-2xl text-[10px] font-sans font-black uppercase tracking-widest transition-all ${
+                                  currentStatus === "known"
+                                    ? "bg-app-card border border-app-card-border/60 text-app-fg opacity-30 cursor-default"
+                                    : "bg-app-bg border border-app-card-border hover:border-app-fg/20 active:scale-95 text-app-fg hover:bg-app-card shadow-xs"
+                                }`}
+                              >
+                                <CheckCircle2 size={13} className="text-app-fg opacity-40 shrink-0" />
+                                <span>Знаю</span>
+                              </button>
+
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleSetAnalysisPhraseStatus(item.text, item.translation || "", item.explanation || "", "learning");
+                                }}
+                                className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-5 py-2.5 rounded-2xl text-[10px] font-sans font-black uppercase tracking-widest transition-all ${
+                                  currentStatus === "learning"
+                                    ? "bg-orange-500/15 border border-orange-500/30 text-orange-500 cursor-default"
+                                    : "bg-app-bg border border-app-card-border hover:border-orange-500/30 active:scale-95 text-orange-500 hover:bg-orange-500/[0.02] shadow-xs"
+                                }`}
+                              >
+                                <RefreshCw size={12} className="text-orange-500 shrink-0" />
+                                <span>Учить</span>
+                              </button>
+                            </div>
+
+                            {/* User note */}
+                            {item.note && (
+                              <div className="p-4 rounded-xl bg-orange-500/[0.03] border border-orange-500/10 text-xs space-y-1">
+                                <span className="text-[9px] font-black uppercase tracking-wider text-orange-500 opacity-80 block">Personal Note</span>
+                                <p className="text-app-fg opacity-75 leading-relaxed font-sans font-medium select-text">
+                                  {highlightMatch(item.note, trackSearchQuery)}
+                                </p>
+                              </div>
+                            )}
+
+                            {/* Lyrics Context (Single first non-empty distinct line as requested) */}
+                            {firstContextLine ? (
+                              <div className="pt-3 border-t border-app-card-border/45 space-y-2">
+                                <span className="text-[9px] font-black uppercase tracking-wider text-app-fg opacity-40 block">Lyrics Context</span>
+                                <div className="p-4 rounded-2xl bg-app-bg border border-app-card-border text-sm">
+                                  <p className="font-serif font-semibold text-app-fg leading-snug">
+                                    {firstContextLine.original}
+                                  </p>
+                                  {firstContextLine.translation && (
+                                    <p className="font-sans text-xs text-app-fg opacity-50 italic mt-1 leading-snug">
+                                      {firstContextLine.translation}
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="pt-3 border-t border-app-card-border/45 space-y-1">
+                                <span className="text-[9px] font-black uppercase tracking-wider text-app-fg opacity-40 block">Lyrics Context</span>
+                                <div className="p-3.5 rounded-2xl bg-app-bg border border-app-card-border/40 text-xs">
+                                  <p className="font-sans text-app-fg opacity-35 italic">
+                                    No lyric context linked
+                                  </p>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Metadata Tag and Source Block under the fold after lyrics context */}
+                            <div className="pt-3 border-t border-app-card-border/40 flex flex-wrap items-center gap-2.5">
+                              <span className="text-[9px] font-black uppercase tracking-wider text-app-fg opacity-35 block mr-1.5">Metadata:</span>
+                              
+                              {/* Priority / Type badge */}
+                              <span className="px-2.5 py-1 rounded-lg bg-app-bg text-[9px] font-black uppercase tracking-widest text-app-fg opacity-55 border border-app-card-border flex items-center gap-1.5 shadow-xs">
+                                <Tag size={10} className="text-orange-500" />
+                                {item.type || "phrase"}
+                              </span>
+
+                              {/* Source badge */}
+                              {item.source === "user" ? (
+                                <span className="px-2 py-0.5 rounded-lg bg-orange-500/10 text-orange-500 text-[8px] font-black uppercase tracking-widest flex items-center gap-1">
+                                  <User size={8} />
+                                  User
+                                </span>
+                              ) : (
+                                <span className="px-2 py-0.5 rounded-lg bg-indigo-500/10 text-indigo-500 text-[8px] font-black uppercase tracking-widest flex items-center gap-1">
+                                  <Sparkles size={8} />
+                                  AI
+                                </span>
                               )}
                             </div>
-                          </div>
+
+                            {/* Action drawers: Ask AI */}
+                            {onOpenAssistantForPhrase && (
+                              <div className="pt-3 border-t border-app-card-border/40 flex items-center justify-end text-xs gap-3">
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onOpenAssistantForPhrase(item);
+                                  }}
+                                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-orange-500 hover:bg-orange-600 hover:scale-[1.02] text-white active:scale-[0.98] transition-all text-[9.5px] font-black uppercase tracking-widest shadow-sm shadow-orange-500/10 cursor-pointer"
+                                >
+                                  <MessageSquare size={11} />
+                                  <span>Ask Assistant</span>
+                                </button>
+                              </div>
+                            )}
+                          </>
                         )}
-
-                        {/* Metadata Tag and Source Block under the fold after lyrics context */}
-                        <div className="pt-3 border-t border-app-card-border/40 flex flex-wrap items-center gap-2.5">
-                          <span className="text-[9px] font-black uppercase tracking-wider text-app-fg opacity-35 block mr-1.5">Metadata:</span>
-                          
-                          {/* Priority / Type badge */}
-                          <span className="px-2.5 py-1 rounded-lg bg-app-bg text-[9px] font-black uppercase tracking-widest text-app-fg opacity-55 border border-app-card-border flex items-center gap-1.5 shadow-xs">
-                            <Tag size={10} className="text-orange-500" />
-                            {item.type || "phrase"}
-                          </span>
-
-                          {/* Source badge */}
-                          {item.source === "user" ? (
-                            <span className="px-2 py-0.5 rounded-lg bg-orange-500/10 text-orange-500 text-[8px] font-black uppercase tracking-widest flex items-center gap-1">
-                              <User size={8} />
-                              User
-                            </span>
-                          ) : (
-                            <span className="px-2 py-0.5 rounded-lg bg-indigo-500/10 text-indigo-500 text-[8px] font-black uppercase tracking-widest flex items-center gap-1">
-                              <Sparkles size={8} />
-                              AI
-                            </span>
-                          )}
-                        </div>
-
-                        {/* Action drawers: Ask AI placeholder */}
-                        <div className="pt-3 border-t border-app-card-border/40 flex items-center justify-end text-xs gap-3">
-                          <div className="group/ask relative">
-                            <button
-                              disabled
-                              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-app-bg text-app-fg/40 text-[9px] font-black uppercase tracking-widest opacity-65 border border-app-card-border cursor-not-allowed"
-                            >
-                              <MessageSquare size={10} />
-                              <span>Ask AI</span>
-                            </button>
-                            <div className="absolute bottom-full right-0 mb-2 opacity-0 group-hover/ask:opacity-100 transition-opacity pointer-events-none z-50 bg-app-fg text-app-bg text-[8px] font-black uppercase tracking-widest px-2.5 py-1.5 rounded-lg whitespace-nowrap shadow-md border border-app-card-border/10">
-                              Coming Next — Deep Dive Q&A
-                            </div>
-                          </div>
-                        </div>
                       </div>
                     )}
                   </div>
@@ -551,14 +723,35 @@ export const AnalysisPhraseWorkspace: React.FC<AnalysisPhraseWorkspaceProps> = (
               );
             })}
           </div>
-        ) : (
-          <div className="py-20 text-center space-y-4">
+        ) : uniquePhrases.length > 0 ? (
+          <div className="py-20 text-center space-y-4 rounded-[2rem] bg-app-card/25 border border-dashed border-app-card-border/60">
             <HelpCircle size={40} className="mx-auto text-app-fg opacity-15" />
             <p className="text-sm font-black text-app-fg opacity-40 uppercase tracking-widest">
               No matching phrases
             </p>
+            <p className="text-xs text-app-fg opacity-30 font-medium max-w-sm mx-auto">
+              We couldn't find any phrases matching your current filters and search query. Try clearing them to see all phrases.
+            </p>
+            <div className="pt-2">
+              <button
+                onClick={() => {
+                  setActiveFilter("all");
+                  setTrackSearchQuery("");
+                }}
+                className="px-5 py-2.5 bg-orange-500 hover:bg-orange-600 text-white rounded-2xl text-xs font-bold transition-all shadow-md active:scale-95 duration-150"
+              >
+                Clear filters & search
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="py-20 text-center space-y-4 rounded-[2rem] bg-app-card/25 border border-dashed border-app-card-border/60">
+            <Sparkles size={40} className="mx-auto text-orange-500 opacity-20" />
+            <p className="text-sm font-black text-app-fg opacity-40 uppercase tracking-widest">
+              No vocabulary analysis yet
+            </p>
             <p className="text-xs text-app-fg opacity-30 font-medium max-w-xs mx-auto">
-              Try adjusting your query or click the circular button above to create a custom study word.
+              This track has no generated or custom phrases yet. Add your first custom phrase or click Regenerate to start analyzing!
             </p>
           </div>
         )}

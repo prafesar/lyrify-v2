@@ -695,3 +695,54 @@ export function mergeGeneratedPhrasesForSelectedLines(
   return syncTrackPhrasesFromLines(updatedTrack);
 }
 
+/**
+ * Accepts a suggested phrase from AI learning panel and adds it to the track's lists.
+ */
+export function acceptSuggestedPhrase(
+  track: TrackLyricsData,
+  phraseText: string,
+  translation: string,
+  explanation?: string,
+  type?: any,
+  lineIds?: string[],
+  note?: string
+): TrackLyricsData {
+  const normText = normalizePhraseText(phraseText);
+  const newPhrase: Phrase = {
+    id: generatePhraseId(track.trackId, phraseText),
+    text: phraseText,
+    lemmas: [],
+    type: type || 'phrase',
+    translation,
+    explanation: explanation || '',
+    normalizedText: normText,
+    lineIds: lineIds && lineIds.length > 0 ? lineIds : findMatchingLineIds(track.lines, phraseText),
+    source: 'user', // user-added / user-accepted
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+    note
+  };
+
+  const updatedLines = track.lines.map((line) => {
+    const isTarget = newPhrase.lineIds?.includes(line.lineId || '');
+      
+    if (isTarget) {
+      const currentPhrases = line.phrases || [];
+      if (!currentPhrases.some(p => normalizePhraseText(p.text || (p as any).phrase || '') === normText)) {
+        return {
+          ...line,
+          phrases: [...currentPhrases, newPhrase]
+        };
+      }
+    }
+    return line;
+  });
+
+  const updatedTrack = {
+    ...track,
+    lines: updatedLines
+  };
+
+  return syncTrackPhrasesFromLines(updatedTrack);
+}
+
