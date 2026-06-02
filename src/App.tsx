@@ -2348,15 +2348,16 @@ export default function App() {
                                   <button
                                     onClick={handleRunAnalyzeSelectedLines}
                                     disabled={selectedLineIdsForAnalysis.length === 0 || isGeneratingAnalysis}
+                                    title="Bulk-generate study cards automatically from the selected lines"
                                     className={cn(
                                       "px-3 py-1.5 rounded-xl font-black transition-all text-[10px] uppercase tracking-wider flex items-center gap-1.5 shrink-0",
                                       selectedLineIdsForAnalysis.length === 0
                                         ? "bg-app-card border border-app-card-border/60 text-app-fg opacity-40 cursor-not-allowed"
-                                        : "bg-orange-500 text-white shadow-lg shadow-orange-500/20 hover:scale-105 active:scale-95"
+                                        : "bg-teal-600 hover:bg-teal-500 text-white shadow-lg shadow-teal-600/20 hover:scale-105 active:scale-95"
                                     )}
                                   >
                                     <Brain size={12} className={isGeneratingAnalysis ? "animate-spin" : ""} />
-                                    <span>Analyze Selected</span>
+                                    <span>Extract Study Cards</span>
                                   </button>
                                   <button
                                     onClick={() => {
@@ -2364,6 +2365,7 @@ export default function App() {
                                       setIsAssistantOpen(true);
                                     }}
                                     disabled={selectedLineIdsForAnalysis.length === 0}
+                                    title="Open conversational tutor panel on the selected sequence"
                                     className={cn(
                                       "px-3 py-1.5 rounded-xl font-black transition-all text-[10px] uppercase tracking-wider flex items-center gap-1.5 shrink-0",
                                       selectedLineIdsForAnalysis.length === 0
@@ -2372,7 +2374,7 @@ export default function App() {
                                     )}
                                   >
                                     <Sparkles size={12} />
-                                    <span>Ask Assistant</span>
+                                    <span>Discuss Sequence</span>
                                   </button>
                                   <button
                                     onClick={() => {

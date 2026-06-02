@@ -998,9 +998,10 @@ export async function generateLearningAssistantResponse(
   lineContext: { original: string; translation?: string; lineId?: string } | undefined,
   phraseContext: { text: string; translation?: string; explanation?: string; lineIds?: string[] } | undefined,
   targetLanguage: string,
+  existingPhrases: any[] = [],
   userQuestion?: string,
   selectedPreset?: string,
-  existingPhrases: any[] = []
+  selectedLines?: Array<{ original: string; translation?: string; lineId?: string }>
 ): Promise<LearningAssistantResponse> {
   const existingPhrasesStr = existingPhrases
     .map(p => `- Text: "${p.text || ''}", Type: "${p.type || ''}", Translation: "${p.translation || ''}"`)
@@ -1021,17 +1022,38 @@ CONTEXT TYPE: "${contextType}"\n`;
     if (lineContext.lineId) {
       prompt += `Line ID: "${lineContext.lineId}"\n`;
     }
+    prompt += `
+CONTEXT-SPECIFIC INSTRUCTIONS FOR LINE:
+- Explain this specific line of lyrics.
+- Break down unique words, grammar patterns, slang, or figurative language in this specific line.
+- Suggest 1 to 3 key phrases/words from this specific line for the student's study cards. Ensure their 'lineIds' matches exactly: ["${lineContext.lineId || ''}"].
+`;
   } else if (contextType === "phrase" && phraseContext) {
-    prompt += `Target Phrase/Word: "${phraseContext.text}"\n`;
+    prompt += `Target Phrase/Word of Interest: "${phraseContext.text}"\n`;
     if (phraseContext.translation) {
       prompt += `Phrase translation: "${phraseContext.translation}"\n`;
     }
     if (phraseContext.explanation) {
-      prompt += `Phrase description: "${phraseContext.explanation}"\n`;
+      prompt += `Current phrase description/explanation: "${phraseContext.explanation}"\n`;
     }
-    if (phraseContext.lineIds && phraseContext.lineIds.length > 0) {
-      prompt += `Extracted from Line IDs: ${JSON.stringify(phraseContext.lineIds)}\n`;
-    }
+    prompt += `
+CONTEXT-SPECIFIC INSTRUCTIONS FOR PHRASE:
+- Focus intensely on the NUANCES, GRAMMAR, GRAMMATICAL STRUCTURE, USAGE, SYNONYMS, and REGISTER (slang vs formal vs poetic status) of this precise phrase: "${phraseContext.text}".
+- Do not just define it, but explain exactly how it behaves in active conversation vs inside this song's lyrics.
+- If the user asks a follow-up question, answer it meticulously using detailed examples.
+- For suggested phrases, if the user requested follow-up clarification, you can suggest 1-2 closely related synonyms, or idioms that contain this phrase from the surrounding lyrics, or leave 'suggestedPhrases' empty [] if there are no new ones.
+`;
+  } else if (contextType === "selection" && selectedLines && selectedLines.length > 0) {
+    prompt += `Selected Lyrics Sequence:\n`;
+    selectedLines.forEach((line, idx) => {
+      prompt += `[Line ${idx + 1}] ID: "${line.lineId || ''}", Original: "${line.original}" ${line.translation ? `, Translation: "${line.translation}"` : ''}\n`;
+    });
+    prompt += `
+CONTEXT-SPECIFIC INSTRUCTIONS FOR SELECTION:
+- Break down the linguistic connection between these selected lines.
+- Explain the overall theme, grammatical patterns, idioms, structure and story connecting this sequence of lines.
+- Suggest 1 to 3 highly useful vocabulary study chunks (2-5 words each) that directly appear in this selected text block. Ensure each suggestion maps to its correct line IDs from the selected sequence.
+`;
   }
 
   if (existingPhrasesStr) {

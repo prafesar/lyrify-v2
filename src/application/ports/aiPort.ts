@@ -125,9 +125,10 @@ export interface AiPort {
     lineContext: { original: string; translation?: string; lineId?: string } | undefined,
     phraseContext: { text: string; translation?: string; explanation?: string; lineIds?: string[] } | undefined,
     targetLanguage: string,
+    existingPhrases: any[],
     userQuestion?: string,
     selectedPreset?: string,
-    existingPhrases: any[]
+    selectedLines?: Array<{ original: string; translation?: string; lineId?: string }>
   ): Promise<{
     explanation: string;
     suggestedPhrases: Array<{

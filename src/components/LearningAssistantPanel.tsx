@@ -119,6 +119,12 @@ export const LearningAssistantPanel: React.FC<LearningAssistantPanelProps> = ({
 
     const questionText = overrideQuestion || userQuestion;
 
+    const selectedLines = track.lines && selectedLineIds
+      ? track.lines
+          .filter(l => selectedLineIds.includes(l.lineId || ""))
+          .map(l => ({ original: l.original, translation: l.translation, lineId: l.lineId }))
+      : undefined;
+
     try {
       const response = await aiClient.generateLearningAssistantResponse(
         track.title,
@@ -127,9 +133,10 @@ export const LearningAssistantPanel: React.FC<LearningAssistantPanelProps> = ({
         lineContext,
         phraseContext,
         targetLanguage,
+        existingPhrases,
         questionText,
         presetLabel,
-        existingPhrases
+        selectedLines
       );
 
       setExplanation(response.explanation);
@@ -200,6 +207,14 @@ export const LearningAssistantPanel: React.FC<LearningAssistantPanelProps> = ({
     setRejectedPhraseTexts(updated);
   };
 
+  const pendingSuggestions = suggestedPhrases.filter(
+    p => !acceptedPhraseTexts.has(p.text) && !rejectedPhraseTexts.has(p.text)
+  );
+
+  const acceptedSuggestions = suggestedPhrases.filter(
+    p => acceptedPhraseTexts.has(p.text)
+  );
+
   return (
     <div className="fixed inset-0 z-50 overflow-hidden flex justify-end font-sans">
       {/* Backdrop overlay */}
@@ -227,8 +242,8 @@ export const LearningAssistantPanel: React.FC<LearningAssistantPanelProps> = ({
             </div>
             <div>
               <h2 className="text-base font-bold text-app-fg tracking-tight">CantoLex Assistant</h2>
-              <span className="text-[10px] uppercase font-black tracking-widest text-app-fg opacity-35">
-                Active Context: {contextType}
+              <span className="text-[10px] font-black tracking-widest text-orange-500 font-bold block uppercase">
+                {contextType === "phrase" ? "Study Phrase / Follow-up" : contextType === "line" ? "Line Analysis" : "Sequence Breakdown"}
               </span>
             </div>
           </div>
@@ -244,7 +259,7 @@ export const LearningAssistantPanel: React.FC<LearningAssistantPanelProps> = ({
         <div className="flex-1 overflow-y-auto p-6 space-y-6 scrollbar-thin select-none">
           
           {/* 1. Context Preview card */}
-          <div className="p-5 rounded-2xl bg-app-bg/50 border border-app-card-border/55 space-y-3">
+          <div className="p-5 rounded-2xl bg-app-bg/50 border border-border space-y-3">
             <span className="text-[9px] uppercase font-black tracking-widest text-app-fg opacity-30 block">
               Linguistic Anchor
             </span>
@@ -255,7 +270,7 @@ export const LearningAssistantPanel: React.FC<LearningAssistantPanelProps> = ({
                   "{lineContext.original}"
                 </p>
                 {lineContext.translation && (
-                  <p className="text-sm text-app-fg opacity-45">
+                  <p className="text-sm text-app-fg opacity-45 font-sans">
                     {lineContext.translation}
                   </p>
                 )}
@@ -268,7 +283,7 @@ export const LearningAssistantPanel: React.FC<LearningAssistantPanelProps> = ({
                   {phraseContext.text}
                 </p>
                 {phraseContext.translation && (
-                  <p className="text-sm text-app-fg opacity-55">
+                  <p className="text-sm text-app-fg opacity-55 font-sans">
                     {phraseContext.translation}
                   </p>
                 )}
@@ -276,7 +291,7 @@ export const LearningAssistantPanel: React.FC<LearningAssistantPanelProps> = ({
                 {/* Search for line context in track if missing */}
                 {track.lines && (
                   <div className="pt-2 border-t border-app-card-border/30">
-                    <span className="text-[8px] uppercase tracking-wider text-app-fg opacity-35 block mb-1">
+                    <span className="text-[8px] uppercase tracking-wider text-app-fg opacity-35 block mb-1 font-sans">
                       Lyrics Context
                     </span>
                     <p className="text-xs font-sans text-app-fg opacity-45 leading-relaxed">
@@ -334,7 +349,13 @@ export const LearningAssistantPanel: React.FC<LearningAssistantPanelProps> = ({
                 <textarea
                   rows={2}
                   maxLength={300}
-                  placeholder={`Ask a custom questions like grammatical cases, pronunciation hints, slang meaning...`}
+                  placeholder={
+                    contextType === "phrase"
+                      ? "Ask about nuances, grammar, synonyms, register, or usage of this phrase..."
+                      : contextType === "line"
+                      ? "Ask about specific grammar, slang, pronunciation tags or line context..."
+                      : "Ask about overall connections, linguistic patterns, or story in this sequence..."
+                  }
                   value={userQuestion}
                   onChange={(e) => setUserQuestion(e.target.value)}
                   disabled={isLoading}
@@ -436,101 +457,166 @@ export const LearningAssistantPanel: React.FC<LearningAssistantPanelProps> = ({
 
               {/* 5. Suggested Vocabulary block */}
               {suggestedPhrases.length > 0 && (
-                <div className="space-y-4 pt-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[9px] uppercase font-black tracking-widest text-app-fg opacity-35 block">
-                     Suggested vocabulary chunks ({suggestedPhrases.filter(p => !rejectedPhraseTexts.has(p.text)).length})
-                    </span>
-                    <span className="text-[8px] font-medium text-app-fg opacity-30">
-                      Click Accept to add to your study list
-                    </span>
-                  </div>
+                <div className="space-y-6 pt-2">
+                  {/* Category A: Pending AI Suggestions */}
+                  {pendingSuggestions.length > 0 && (
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] uppercase font-black tracking-widest text-[#f97316] font-bold block">
+                          Suggested Vocabulary Chunks ({pendingSuggestions.length})
+                        </span>
+                        <span className="text-[8px] font-medium text-app-fg opacity-30 font-sans">
+                          Click Accept to add to your study list
+                        </span>
+                      </div>
 
-                  <div className="space-y-3 select-none">
-                    {suggestedPhrases.map((item, index) => {
-                      const isAccepted = acceptedPhraseTexts.has(item.text);
-                      const isRejected = rejectedPhraseTexts.has(item.text);
-                      const isEditing = editingIndex === index;
+                      <div className="space-y-3 select-none">
+                        {pendingSuggestions.map((item) => {
+                          const originalIndex = suggestedPhrases.findIndex(p => p.text === item.text);
+                          const isEditing = editingIndex === originalIndex;
 
-                      if (isRejected) return null;
+                          return (
+                            <div 
+                              key={item.text}
+                              className="p-4 rounded-3xl bg-app-bg border border-app-card-border/55 hover:border-app-card-border transition-all"
+                            >
+                              {isEditing ? (
+                                /* Inline Edit Mode interface */
+                                <div className="space-y-3 font-sans">
+                                  <span className="text-[8px] font-black uppercase text-orange-500 tracking-wider">
+                                    Edit block detail
+                                  </span>
+                                  
+                                  <div className="space-y-2.5">
+                                    <div>
+                                      <label className="text-[9px] font-bold text-app-fg opacity-40 block mb-1">
+                                        Vocabulary chunk
+                                      </label>
+                                      <input
+                                        type="text"
+                                        value={editText}
+                                        onChange={(e) => setEditText(e.target.value)}
+                                        className="w-full px-3 py-2 bg-app-card border border-app-card-border/60 rounded-xl text-xs font-semibold text-app-fg"
+                                      />
+                                    </div>
 
-                      return (
-                        <div 
-                          key={index}
-                          className={`p-4 rounded-3xl bg-app-bg border transition-all ${
-                            isAccepted
-                              ? "border-green-500/25 bg-green-500/[0.015]"
-                              : "border-app-card-border/55 hover:border-app-card-border"
-                          }`}
-                        >
-                          {isEditing ? (
-                            /* Inline Edit Mode interface */
-                            <div className="space-y-3 font-sans">
-                              <span className="text-[8px] font-black uppercase text-orange-500 tracking-wider">
-                                Edit block detail
-                              </span>
-                              
-                              <div className="space-y-2.5">
-                                <div>
-                                  <label className="text-[9px] font-bold text-app-fg opacity-40 block mb-1">
-                                    Vocabulary chunk
-                                  </label>
-                                  <input
-                                    type="text"
-                                    value={editText}
-                                    onChange={(e) => setEditText(e.target.value)}
-                                    className="w-full px-3 py-2 bg-app-card border border-app-card-border/60 rounded-xl text-xs font-semibold text-app-fg"
-                                  />
+                                    <div>
+                                      <label className="text-[9px] font-bold text-app-fg opacity-40 block mb-1">
+                                        Target language translation
+                                      </label>
+                                      <input
+                                        type="text"
+                                        value={editTranslation}
+                                        onChange={(e) => setEditTranslation(e.target.value)}
+                                        className="w-full px-3 py-2 bg-app-card border border-app-card-border/60 rounded-xl text-xs font-semibold text-app-fg"
+                                      />
+                                    </div>
+
+                                    <div>
+                                      <label className="text-[9px] font-bold text-app-fg opacity-40 block mb-1">
+                                        Clarification / Notes
+                                      </label>
+                                      <textarea
+                                        rows={2}
+                                        value={editExplanation}
+                                        onChange={(e) => setEditExplanation(e.target.value)}
+                                        className="w-full px-3 py-2 bg-app-card border border-app-card-border/60 rounded-xl text-xs font-serif text-app-fg resize-none"
+                                      />
+                                    </div>
+
+                                    <div className="flex gap-2">
+                                      <button
+                                        onClick={() => saveEditedPhrase(originalIndex)}
+                                        className="px-3.5 py-1.5 bg-orange-500 text-white rounded-xl text-[xxs] font-bold uppercase tracking-wider hover:bg-orange-600 transition-colors"
+                                      >
+                                        Save
+                                      </button>
+                                      <button
+                                        onClick={() => setEditingIndex(null)}
+                                        className="px-3.5 py-1.5 bg-app-card border border-app-card-border text-app-fg opacity-70 hover:opacity-100 rounded-xl text-[xxs] font-bold uppercase tracking-wider transition-all"
+                                      >
+                                        Cancel
+                                      </button>
+                                    </div>
+                                  </div>
                                 </div>
+                              ) : (
+                                /* Regular Suggestion Display Mode */
+                                <div className="flex gap-4 items-start justify-between font-serif font-sans">
+                                  <div className="space-y-1.5 flex-1 pr-2 select-text">
+                                    <h4 className="text-base font-bold text-app-fg leading-tight">
+                                      {item.text}
+                                    </h4>
+                                    <p className="text-sm text-app-fg opacity-55 italic font-serif">
+                                      {item.translation}
+                                    </p>
+                                    {item.explanation && (
+                                      <p className="text-xs text-app-fg opacity-40 font-sans leading-relaxed pt-1 select-text">
+                                        {item.explanation}
+                                      </p>
+                                    )}
+                                    {item.type && (
+                                      <span className="inline-block mt-1 px-2 py-0.5 rounded-md bg-app-card border border-app-card-border/40 text-[9px] font-bold text-orange-500 select-none uppercase tracking-wider font-sans">
+                                        {item.type.replace("_", " ")}
+                                      </span>
+                                    )}
+                                  </div>
 
-                                <div>
-                                  <label className="text-[9px] font-bold text-app-fg opacity-40 block mb-1">
-                                    Target language translation
-                                  </label>
-                                  <input
-                                    type="text"
-                                    value={editTranslation}
-                                    onChange={(e) => setEditTranslation(e.target.value)}
-                                    className="w-full px-3 py-2 bg-app-card border border-app-card-border/60 rounded-xl text-xs font-semibold text-app-fg"
-                                  />
+                                  <div className="flex items-center gap-1.5 shrink-0 self-center">
+                                    <button
+                                      onClick={() => startEditingPhrase(originalIndex, item)}
+                                      className="w-8 h-8 rounded-lg bg-app-card border border-app-card-border/50 hover:border-app-card-border text-app-fg opacity-60 hover:opacity-100 transition-all flex items-center justify-center font-sans"
+                                      title="Inline edit before accept"
+                                    >
+                                      <Edit2 size={12} />
+                                    </button>
+                                    <button
+                                      onClick={() => handleAcceptSuggested(item, originalIndex)}
+                                      className="px-3 py-1.5 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-[10px] font-black uppercase tracking-wider transition-all flex items-center gap-1 shadow-sm active:scale-95 duration-150 font-sans"
+                                      title="Accept suggested phrase"
+                                    >
+                                      <Plus size={12} className="stroke-[3]" />
+                                      <span>Accept</span>
+                                    </button>
+                                    <button
+                                      onClick={() => handleRejectSuggested(item.text)}
+                                      className="w-8 h-8 rounded-lg hover:bg-red-500/5 hover:border-red-500/15 border border-app-card-border/30 text-app-fg opacity-35 hover:opacity-100 hover:text-red-500 transition-all flex items-center justify-center font-sans"
+                                      title="Dismiss suggestion"
+                                    >
+                                      <X size={12} />
+                                    </button>
+                                  </div>
                                 </div>
-
-                                <div>
-                                  <label className="text-[9px] font-bold text-app-fg opacity-40 block mb-1">
-                                    Clarification / Notes
-                                  </label>
-                                  <textarea
-                                    rows={2}
-                                    value={editExplanation}
-                                    onChange={(e) => setEditExplanation(e.target.value)}
-                                    className="w-full px-3 py-2 bg-app-card border border-app-card-border/60 rounded-xl text-xs font-serif text-app-fg resize-none"
-                                  />
-                                </div>
-
-                                <div className="flex gap-2">
-                                  <button
-                                    onClick={() => saveEditedPhrase(index)}
-                                    className="px-3.5 py-1.5 bg-orange-500 text-white rounded-xl text-xxs font-bold uppercase tracking-wider hover:bg-orange-600 transition-colors"
-                                  >
-                                    Save
-                                  </button>
-                                  <button
-                                    onClick={() => setEditingIndex(null)}
-                                    className="px-3.5 py-1.5 bg-app-card border border-app-card-border text-app-fg opacity-70 hover:opacity-100 rounded-xl text-xxs font-bold uppercase tracking-wider transition-all"
-                                  >
-                                    Cancel
-                                  </button>
-                                </div>
-                              </div>
+                              )}
                             </div>
-                          ) : (
-                            /* Regular Suggestion Display Mode */
-                            <div className="flex gap-4 items-start justify-between font-serif">
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Category B: Accepted study phrases */}
+                  {acceptedSuggestions.length > 0 && (
+                    <div className="space-y-4 pt-1.5 border-t border-app-card-border/30">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] uppercase font-black tracking-widest text-green-600 font-bold block flex items-center gap-1 font-sans">
+                          <CheckCircle2 size={12} className="text-green-500" />
+                          Saved to Study List ({acceptedSuggestions.length})
+                        </span>
+                      </div>
+
+                      <div className="space-y-3 select-none">
+                        {acceptedSuggestions.map((item) => (
+                          <div 
+                            key={item.text}
+                            className="p-4 rounded-3xl border border-green-500/20 bg-green-500/[0.015] transition-all"
+                          >
+                            <div className="flex gap-4 items-start justify-between font-serif font-sans">
                               <div className="space-y-1.5 flex-1 pr-2 select-text">
-                                <h4 className="text-base font-bold text-app-fg leading-tight">
+                                <h4 className="text-base font-bold text-green-700 dark:text-green-300 leading-tight">
                                   {item.text}
                                 </h4>
-                                <p className="text-sm text-app-fg opacity-50 italic">
+                                <p className="text-sm text-app-fg opacity-55 italic font-serif">
                                   {item.translation}
                                 </p>
                                 {item.explanation && (
@@ -539,51 +625,24 @@ export const LearningAssistantPanel: React.FC<LearningAssistantPanelProps> = ({
                                   </p>
                                 )}
                                 {item.type && (
-                                  <span className="inline-block mt-1 px-2 py-0.5 rounded-md bg-app-card border border-app-card-border/40 text-[9px] font-bold text-orange-500 select-none uppercase tracking-wider font-sans">
+                                  <span className="inline-block mt-1 px-2 py-0.5 rounded-md bg-green-500/15 border border-green-500/10 text-[9px] font-bold text-green-600 select-none uppercase tracking-wider font-sans font-sans">
                                     {item.type.replace("_", " ")}
                                   </span>
                                 )}
                               </div>
 
                               <div className="flex items-center gap-1.5 shrink-0 self-center">
-                                {isAccepted ? (
-                                  <div className="px-2.5 py-1.5 rounded-xl border border-green-500/10 bg-green-500/5 text-green-600 flex items-center gap-1 text-[10px] uppercase tracking-wider font-sans font-black">
-                                    <Check size={11} className="stroke-[3]" />
-                                    <span>Added</span>
-                                  </div>
-                                ) : (
-                                  <>
-                                    <button
-                                      onClick={() => startEditingPhrase(index, item)}
-                                      className="w-8 h-8 rounded-lg bg-app-card border border-app-card-border/50 hover:border-app-card-border text-app-fg opacity-60 hover:opacity-100 transition-all flex items-center justify-center"
-                                      title="Inline edit before accept"
-                                    >
-                                      <Edit2 size={12} />
-                                    </button>
-                                    <button
-                                      onClick={() => handleAcceptSuggested(item, index)}
-                                      className="px-3 py-1.5 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-[10px] font-black uppercase tracking-wider transition-all flex items-center gap-1 shadow-sm active:scale-95 duration-150"
-                                      title="Accept suggested phrase"
-                                    >
-                                      <Plus size={12} className="stroke-[3]" />
-                                      <span>Accept</span>
-                                    </button>
-                                    <button
-                                      onClick={() => handleRejectSuggested(item.text)}
-                                      className="w-8 h-8 rounded-lg hover:bg-red-500/5 hover:border-red-500/15 border border-app-card-border/30 text-app-fg opacity-35 hover:opacity-100 hover:text-red-500 transition-all flex items-center justify-center"
-                                      title="Dismiss suggestion"
-                                    >
-                                      <X size={12} />
-                                    </button>
-                                  </>
-                                )}
+                                <div className="px-2.5 py-1.5 rounded-xl border border-green-500/10 bg-green-500/5 text-green-600 flex items-center gap-1 text-[10px] uppercase tracking-wider font-sans font-black">
+                                  <Check size={11} className="stroke-[3]" />
+                                  <span>Added</span>
+                                </div>
                               </div>
                             </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </motion.div>

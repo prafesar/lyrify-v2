@@ -105,9 +105,10 @@ export class GeminiAIAdapter implements AiPort {
     lineContext: { original: string; translation?: string; lineId?: string } | undefined,
     phraseContext: { text: string; translation?: string; explanation?: string; lineIds?: string[] } | undefined,
     targetLanguage: string,
+    existingPhrases: any[],
     userQuestion?: string,
     selectedPreset?: string,
-    existingPhrases: any[]
+    selectedLines?: Array<{ original: string; translation?: string; lineId?: string }>
   ): Promise<{
     explanation: string;
     suggestedPhrases: Array<{
@@ -125,9 +126,10 @@ export class GeminiAIAdapter implements AiPort {
       lineContext,
       phraseContext,
       targetLanguage,
+      existingPhrases,
       userQuestion,
       selectedPreset,
-      existingPhrases
+      selectedLines
     );
   }
 
