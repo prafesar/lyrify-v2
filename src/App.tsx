@@ -77,6 +77,7 @@ import {
   type Phrase,
   saveTrackData,
   getTrackDetails,
+  getCachedTrackData,
 } from "./services/musicService";
 import { sqliteService } from "./services/sqliteService";
 import { useAppNavigation } from "./hooks/useAppNavigation";
@@ -1256,9 +1257,17 @@ export default function App() {
           if (transient) {
             await handleTrackSelect(transient);
           } else {
-            const trackData = await getTrackDetails(currentRoute.id);
-            if (trackData && active) {
-              await handleTrackSelect(trackData);
+            // Local Cache First Lookup
+            const cachedTrack = getCachedTrackData(currentRoute.id);
+            if (cachedTrack) {
+              console.log("[RouteLoaderSync] Found track in local cache/SQLite, opening instantly:", currentRoute.id);
+              await handleTrackSelect(cachedTrack);
+            } else {
+              // Fallback to external lookup if not in cache
+              const trackData = await getTrackDetails(currentRoute.id);
+              if (trackData && active) {
+                await handleTrackSelect(trackData);
+              }
             }
           }
         }
@@ -2420,14 +2429,14 @@ export default function App() {
                         {/* Search Input Section */}
                         <div className="relative flex-1 flex items-center min-w-0">
                           <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-app-fg opacity-40">
-                            <Search size={16} />
+                            <Search size={18} />
                           </div>
                           <input
                             type="text"
                             placeholder="Search original text, translations, or phrases in lyrics..."
                             value={trackSearchQuery}
                             onChange={(e) => setTrackSearchQuery(e.target.value)}
-                            className="w-full pl-10 pr-8 py-2 bg-transparent text-sm font-medium text-app-fg placeholder-app-fg/30 focus:outline-none font-sans"
+                            className="w-full pl-10 pr-8 py-2 bg-transparent text-base md:text-lg font-medium text-app-fg placeholder-app-fg/30 focus:outline-none font-sans"
                           />
                           {trackSearchQuery && (
                             <button
