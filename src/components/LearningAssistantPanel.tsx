@@ -11,10 +11,9 @@ export interface LearningAssistantPanelProps {
   isOpen: boolean;
   onClose: () => void;
   track: TrackLyricsData;
-  contextType: "line" | "phrase" | "selection";
+  contextType: "line" | "phrase";
   lineContext?: { original: string; translation?: string; lineId?: string };
   phraseContext?: { text: string; translation?: string; explanation?: string; lineIds?: string[] };
-  selectedLineIds?: string[];
   targetLanguage: string;
   onAcceptPhrase: (
     phraseText: string, 
@@ -42,7 +41,6 @@ export const LearningAssistantPanel: React.FC<LearningAssistantPanelProps> = ({
   contextType,
   lineContext,
   phraseContext,
-  selectedLineIds = [],
   targetLanguage,
   onAcceptPhrase,
   existingPhrases,
@@ -119,12 +117,6 @@ export const LearningAssistantPanel: React.FC<LearningAssistantPanelProps> = ({
 
     const questionText = overrideQuestion || userQuestion;
 
-    const selectedLines = track.lines && selectedLineIds
-      ? track.lines
-          .filter(l => selectedLineIds.includes(l.lineId || ""))
-          .map(l => ({ original: l.original, translation: l.translation, lineId: l.lineId }))
-      : undefined;
-
     try {
       const response = await aiClient.generateLearningAssistantResponse(
         track.title,
@@ -135,8 +127,7 @@ export const LearningAssistantPanel: React.FC<LearningAssistantPanelProps> = ({
         targetLanguage,
         existingPhrases,
         questionText,
-        presetLabel,
-        selectedLines
+        presetLabel
       );
 
       setExplanation(response.explanation);
@@ -304,16 +295,7 @@ export const LearningAssistantPanel: React.FC<LearningAssistantPanelProps> = ({
               </div>
             )}
 
-            {contextType === "selection" && (
-              <div className="space-y-1 font-sans">
-                <p className="text-sm font-semibold text-app-fg">
-                  Selected Multi-Line Sequence
-                </p>
-                <p className="text-xs text-app-fg opacity-45">
-                  ({selectedLineIds.length} lines highlighted for bulk breakdown & analysis)
-                </p>
-              </div>
-            )}
+
           </div>
 
           {/* 2. Interactive user inputs/presets when not loading */}

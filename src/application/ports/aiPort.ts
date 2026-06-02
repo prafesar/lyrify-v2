@@ -121,14 +121,13 @@ export interface AiPort {
   generateLearningAssistantResponse(
     title: string,
     artist: string,
-    contextType: "line" | "phrase" | "selection",
+    contextType: "line" | "phrase",
     lineContext: { original: string; translation?: string; lineId?: string } | undefined,
     phraseContext: { text: string; translation?: string; explanation?: string; lineIds?: string[] } | undefined,
     targetLanguage: string,
     existingPhrases: any[],
     userQuestion?: string,
-    selectedPreset?: string,
-    selectedLines?: Array<{ original: string; translation?: string; lineId?: string }>
+    selectedPreset?: string
   ): Promise<{
     explanation: string;
     suggestedPhrases: Array<{

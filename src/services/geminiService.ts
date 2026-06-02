@@ -994,14 +994,13 @@ export interface LearningAssistantResponse {
 export async function generateLearningAssistantResponse(
   title: string,
   artist: string,
-  contextType: "line" | "phrase" | "selection",
+  contextType: "line" | "phrase",
   lineContext: { original: string; translation?: string; lineId?: string } | undefined,
   phraseContext: { text: string; translation?: string; explanation?: string; lineIds?: string[] } | undefined,
   targetLanguage: string,
   existingPhrases: any[] = [],
   userQuestion?: string,
-  selectedPreset?: string,
-  selectedLines?: Array<{ original: string; translation?: string; lineId?: string }>
+  selectedPreset?: string
 ): Promise<LearningAssistantResponse> {
   const existingPhrasesStr = existingPhrases
     .map(p => `- Text: "${p.text || ''}", Type: "${p.type || ''}", Translation: "${p.translation || ''}"`)
@@ -1042,17 +1041,6 @@ CONTEXT-SPECIFIC INSTRUCTIONS FOR PHRASE:
 - Do not just define it, but explain exactly how it behaves in active conversation vs inside this song's lyrics.
 - If the user asks a follow-up question, answer it meticulously using detailed examples.
 - For suggested phrases, if the user requested follow-up clarification, you can suggest 1-2 closely related synonyms, or idioms that contain this phrase from the surrounding lyrics, or leave 'suggestedPhrases' empty [] if there are no new ones.
-`;
-  } else if (contextType === "selection" && selectedLines && selectedLines.length > 0) {
-    prompt += `Selected Lyrics Sequence:\n`;
-    selectedLines.forEach((line, idx) => {
-      prompt += `[Line ${idx + 1}] ID: "${line.lineId || ''}", Original: "${line.original}" ${line.translation ? `, Translation: "${line.translation}"` : ''}\n`;
-    });
-    prompt += `
-CONTEXT-SPECIFIC INSTRUCTIONS FOR SELECTION:
-- Break down the linguistic connection between these selected lines.
-- Explain the overall theme, grammatical patterns, idioms, structure and story connecting this sequence of lines.
-- Suggest 1 to 3 highly useful vocabulary study chunks (2-5 words each) that directly appear in this selected text block. Ensure each suggestion maps to its correct line IDs from the selected sequence.
 `;
   }
 
