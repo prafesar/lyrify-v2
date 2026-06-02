@@ -1132,6 +1132,173 @@ Return a valid JSON object with the following structure exactly:
   }
 }
 
+async function callGeminiApiStream(
+  params: { model: string; contents: any; config?: any },
+  onChunk: (textChunk: string) => void
+): Promise<string> {
+  const modelToUse = params.model === "gemini-2.5-flash" ? "gemini-3.5-flash" : params.model;
+  
+  const response = await fetch("/api/gemini/generate-content-stream", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ ...params, model: modelToUse })
+  });
+
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(errText || `Streaming failed: ${response.status}`);
+  }
+
+  const reader = response.body?.getReader();
+  if (!reader) {
+    throw new Error("No readable stream response");
+  }
+
+  const decoder = new TextDecoder("utf-8");
+  let fullText = "";
+  
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) {
+      break;
+    }
+    const chunkStr = decoder.decode(value, { stream: true });
+    fullText += chunkStr;
+    onChunk(chunkStr);
+  }
+  
+  return fullText;
+}
+
+export async function generateLineExplanation(
+  metadata: TrackMetadata,
+  currentLine: { lineId?: string; original: string; translation?: string },
+  prevLine?: { lineId?: string; original: string; translation?: string },
+  nextLine?: { lineId?: string; original: string; translation?: string },
+  targetLanguage: string = "english",
+  sourceLanguage?: string,
+  onStreamChunk?: (partialSummary: string) => void
+): Promise<{
+  summary: string;
+  notes: Array<{
+    type: "idiom" | "cultural" | "collocation" | "grammar" | "nuance";
+    text: string;
+  }>;
+}> {
+  let prompt = `Role: Expert linguistic analyst and music teacher.
+Act as a personal learning assistant for mastering foreign languages through song lyrics.
+You are helping a learner analyze a specific line of the song "${metadata.title}" by "${metadata.artists.join(", ")}".
+
+Target learning language (the explanation must be in this language): "${targetLanguage || "English"}"
+Source song language (if known): "${sourceLanguage || "Auto-detect"}"
+
+CONTEXT:
+`;
+
+  if (prevLine) {
+    prompt += `Previous Line: "${prevLine.original}"${prevLine.translation ? ` (Translation: "${prevLine.translation}")` : ""}\n`;
+  }
+  prompt += `CURRENT LINE TO EXPLAIN (CRITICAL): "${currentLine.original}"\n`;
+  if (currentLine.translation) {
+    prompt += `Current Line Translation: "${currentLine.translation}"\n`;
+  }
+  if (nextLine) {
+    prompt += `Next Line: "${nextLine.original}"${nextLine.translation ? ` (Translation: "${nextLine.translation}")` : ""}\n`;
+  }
+
+  prompt += `
+INSTRUCTIONS:
+1. Provide a very concise summary (1-3 sentences) in "${targetLanguage || "English"}" explaining what this current line means, its emotional undertone, or how it fits into the song.
+2. Provide a list of 1-3 highly notable linguistic aspects (notes) from the current line. Each note must target an interesting part of this line.
+3. For each note, assign one of these exact types: "idiom", "cultural", "collocation", "grammar", "nuance".
+4. Do NOT suggest list of phrases/words or return suggestions.
+5. Provide a short, direct explanation for each note.
+6. The entire output must be valid JSON matching the schema precisely.
+
+Return a valid JSON object with the following structure exactly:
+{
+  "summary": "1-3 sentences explaining this line in the context of the song.",
+  "notes": [
+    {
+      "type": "idiom" | "cultural" | "collocation" | "grammar" | "nuance",
+      "text": "short clear explanation focusing on a specific part of the line"
+    }
+  ]
+}
+`;
+
+  try {
+    let accumulatedText = "";
+    
+    const config = {
+      responseMimeType: "application/json",
+      responseSchema: {
+        type: Type.OBJECT,
+        properties: {
+          summary: { type: Type.STRING },
+          notes: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                type: { type: Type.STRING },
+                text: { type: Type.STRING }
+              },
+              required: ["type", "text"]
+            }
+          }
+        },
+        required: ["summary", "notes"]
+      }
+    };
+
+    if (onStreamChunk) {
+      await callGeminiApiStream(
+        {
+          model: "gemini-2.5-flash",
+          contents: prompt,
+          config
+        },
+        (chunk) => {
+          accumulatedText += chunk;
+          // Try to extract summary on-the-fly using regex on the accumulated JSON
+          const summaryRegex = /"summary"\s*:\s*"([^"]*)"?/i;
+          const match = accumulatedText.match(summaryRegex);
+          if (match && match[1]) {
+            let rawSummary = match[1];
+            rawSummary = rawSummary
+              .replace(/\\n/g, "\n")
+              .replace(/\\"/g, '"')
+              .replace(/\\r/g, "\r")
+              .replace(/\\t/g, "\t")
+              .replace(/\\/g, "");
+            onStreamChunk(rawSummary);
+          }
+        }
+      );
+    } else {
+      const response = await callGeminiApi({
+        model: "gemini-2.5-flash",
+        contents: prompt,
+        config
+      });
+      accumulatedText = response.text;
+    }
+
+    // Parse the final gathered text
+    const parsed = JSON.parse(accumulatedText);
+    return {
+      summary: parsed.summary || "",
+      notes: parsed.notes || []
+    };
+  } catch (err) {
+    console.error("Error in generateLineExplanation:", err);
+    throw err;
+  }
+}
+
 
 export async function getLatestAnalyzedTracks(maxCount: number = 10): Promise<TrackMeaningEntry[]> {
   console.log("[geminiService] getLatestAnalyzedTracks called, maxCount:", maxCount);

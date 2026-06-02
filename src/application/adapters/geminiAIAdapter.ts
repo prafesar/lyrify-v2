@@ -133,6 +133,32 @@ export class GeminiAIAdapter implements AiPort {
     );
   }
 
+  async generateLineExplanation(
+    metadata: TrackMetadata,
+    currentLine: { lineId?: string; original: string; translation?: string },
+    prevLine?: { lineId?: string; original: string; translation?: string },
+    nextLine?: { lineId?: string; original: string; translation?: string },
+    targetLanguage?: string,
+    sourceLanguage?: string,
+    onStreamChunk?: (partialSummary: string) => void
+  ): Promise<{
+    summary: string;
+    notes: Array<{
+      type: "idiom" | "cultural" | "collocation" | "grammar" | "nuance";
+      text: string;
+    }>;
+  }> {
+    return originalGeminiService.generateLineExplanation(
+      metadata,
+      currentLine,
+      prevLine,
+      nextLine,
+      targetLanguage,
+      sourceLanguage,
+      onStreamChunk
+    );
+  }
+
 
   async getLatestAnalyzedTracks(maxCount?: number): Promise<TrackMeaningEntry[]> {
     return originalGeminiService.getLatestAnalyzedTracks(maxCount);

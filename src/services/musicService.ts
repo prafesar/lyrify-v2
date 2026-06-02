@@ -506,6 +506,13 @@ export interface LyricsLine {
   language?: string;
   phrases: Phrase[];
   isStarred?: boolean;
+  explanation?: {
+    summary: string;
+    notes: Array<{
+      type: "idiom" | "cultural" | "collocation" | "grammar" | "nuance";
+      text: string;
+    }>;
+  };
 }
 
 export interface TrackLyricsData {
