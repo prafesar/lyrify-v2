@@ -2414,112 +2414,114 @@ export default function App() {
 
                 {activeTab === "lyrics" && (
                   <div className="flex flex-col gap-1 pb-32">
-                    {/* Search Input in Lyrics Tab */}
+                    {/* Unified Search and Language Selection Toolbar */}
                     {currentTrack.rawLyrics && (
-                      <div className="relative mb-4 px-1">
-                        <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-app-fg opacity-40">
-                          <Search size={18} />
+                      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 bg-app-card border border-app-card-border rounded-[1.25rem] p-1.5 focus-within:border-app-accent/50 transition-all mb-4 mx-1">
+                        {/* Search Input Section */}
+                        <div className="relative flex-1 flex items-center min-w-0">
+                          <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-app-fg opacity-40">
+                            <Search size={16} />
+                          </div>
+                          <input
+                            type="text"
+                            placeholder="Search original text, translations, or phrases in lyrics..."
+                            value={trackSearchQuery}
+                            onChange={(e) => setTrackSearchQuery(e.target.value)}
+                            className="w-full pl-10 pr-8 py-2 bg-transparent text-sm font-medium text-app-fg placeholder-app-fg/30 focus:outline-none font-sans"
+                          />
+                          {trackSearchQuery && (
+                            <button
+                              onClick={() => setTrackSearchQuery("")}
+                              className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-app-fg opacity-45 hover:opacity-100 transition-opacity"
+                            >
+                              <X size={14} />
+                            </button>
+                          )}
                         </div>
-                        <input
-                          type="text"
-                          placeholder="Search original text, translations, or phrases in lyrics..."
-                          value={trackSearchQuery}
-                          onChange={(e) => setTrackSearchQuery(e.target.value)}
-                          className="w-full pl-12 pr-10 py-3.5 bg-app-card border border-app-card-border rounded-2xl text-lg font-medium text-app-fg placeholder-app-fg/30 focus:outline-none focus:border-app-accent/50 transition-all font-sans"
-                        />
-                        {trackSearchQuery && (
-                          <button
-                            onClick={() => setTrackSearchQuery("")}
-                            className="absolute inset-y-0 right-0 pr-4 flex items-center text-app-fg opacity-45 hover:opacity-100 transition-opacity"
-                          >
-                            <X size={14} />
-                          </button>
-                        )}
+
+                        {/* Divider Line */}
+                        <div className="hidden sm:block w-[1px] h-5 bg-app-card-border/60 self-center" />
+
+                        {/* Language Selection Buttons Capsule */}
+                        <div className="flex items-center gap-1 justify-end shrink-0 bg-app-card/30 dark:bg-app-bg/20 rounded-xl p-0.5 border border-app-card-border/30">
+                          {(() => {
+                            const srcLangObj = SUPPORTED_LANGUAGES.find(l => 
+                              l.name.toLowerCase() === (currentTrack?.sourceLanguage || "English").toLowerCase() ||
+                              l.code.toLowerCase() === (currentTrack?.sourceLanguage || "English").toLowerCase()
+                            );
+                            const srcLangCode = srcLangObj ? srcLangObj.code : "EN";
+
+                            const targetLangObj = SUPPORTED_LANGUAGES.find(l => 
+                              l.name.toLowerCase() === (targetLanguage || "Russian").toLowerCase() ||
+                              l.code.toLowerCase() === (targetLanguage || "Russian").toLowerCase()
+                            );
+                            const targetLangCode = targetLangObj ? targetLangObj.code : "RU";
+
+                            const isSrcActive = lyricsDisplayMode === "lyrics" || lyricsDisplayMode === "both";
+                            const isTargetActive = lyricsDisplayMode === "translation" || lyricsDisplayMode === "both";
+
+                            return (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (isSrcActive) {
+                                      if (!isTargetActive) return; // cannot turn off both
+                                      handleSetLyricsDisplayMode("translation");
+                                    } else {
+                                      handleSetLyricsDisplayMode("both");
+                                    }
+                                  }}
+                                  title={`Toggle ${currentTrack?.sourceLanguage || "Original"} Lyrics`}
+                                  className={cn(
+                                    "px-2.5 py-1 rounded-lg font-black transition-all uppercase tracking-wider text-[9px] flex items-center gap-1",
+                                    isSrcActive
+                                      ? "bg-app-accent text-white shadow-sm"
+                                      : "text-app-fg opacity-65 hover:opacity-100"
+                                  )}
+                                >
+                                  {isSrcActive && <Check size={8} />}
+                                  <span>{srcLangCode}</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (isTargetActive) {
+                                      if (!isSrcActive) return; // cannot turn off both
+                                      handleSetLyricsDisplayMode("lyrics");
+                                    } else {
+                                      handleSetLyricsDisplayMode("both");
+                                    }
+                                  }}
+                                  title={`Toggle ${targetLanguage || "Target"} Translation`}
+                                  className={cn(
+                                    "px-2.5 py-1 rounded-lg font-black transition-all uppercase tracking-wider text-[9px] flex items-center gap-1",
+                                    isTargetActive
+                                      ? "bg-app-accent text-white shadow-sm"
+                                      : "text-app-fg opacity-65 hover:opacity-100"
+                                  )}
+                                >
+                                  {isTargetActive && <Check size={8} />}
+                                  <span>{targetLangCode}</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRegenerateTranslations(targetLanguage)}
+                                  disabled={isTranslating}
+                                  title="Regenerate Translation"
+                                  className={cn(
+                                    "p-1.5 rounded-lg transition-all text-app-fg hover:bg-app-fg/5 flex items-center justify-center outline-none",
+                                    isTranslating ? "opacity-50 cursor-not-allowed" : "opacity-60 hover:opacity-100"
+                                  )}
+                                >
+                                  <RefreshCw size={10} className={cn("transition-transform duration-500", isTranslating ? "animate-spin" : "")} />
+                                </button>
+                              </>
+                            );
+                          })()}
+                        </div>
                       </div>
                     )}
-
-                    <div className="flex justify-end px-1 pb-4">
-                      {(currentTrack.rawLyrics || lyricsFetchError) && (
-                        <div className="flex flex-wrap gap-2 items-center justify-end w-full">
-                          {currentTrack.rawLyrics && (
-                            <>
-                              <div className="flex bg-app-card/80 backdrop-blur-md border border-app-card-border p-1 rounded-2xl shadow-sm text-xs gap-1.5 items-center">
-                              {(() => {
-                                const srcLangObj = SUPPORTED_LANGUAGES.find(l => 
-                                  l.name.toLowerCase() === (currentTrack?.sourceLanguage || "English").toLowerCase() ||
-                                  l.code.toLowerCase() === (currentTrack?.sourceLanguage || "English").toLowerCase()
-                                );
-                                const srcLangCode = srcLangObj ? srcLangObj.code : "EN";
-
-                                const targetLangObj = SUPPORTED_LANGUAGES.find(l => 
-                                  l.name.toLowerCase() === (targetLanguage || "Russian").toLowerCase() ||
-                                  l.code.toLowerCase() === (targetLanguage || "Russian").toLowerCase()
-                                );
-                                const targetLangCode = targetLangObj ? targetLangObj.code : "RU";
-
-                                const isSrcActive = lyricsDisplayMode === "lyrics" || lyricsDisplayMode === "both";
-                                const isTargetActive = lyricsDisplayMode === "translation" || lyricsDisplayMode === "both";
-
-                                return (
-                                  <>
-                                    <button
-                                      onClick={() => {
-                                        if (isSrcActive) {
-                                          if (!isTargetActive) return; // cannot turn off both
-                                          handleSetLyricsDisplayMode("translation");
-                                        } else {
-                                          handleSetLyricsDisplayMode("both");
-                                        }
-                                      }}
-                                      className={cn(
-                                        "px-3 py-1.5 rounded-xl font-black transition-all uppercase tracking-wider text-[10px] flex items-center gap-1",
-                                        isSrcActive
-                                          ? "bg-app-accent text-white shadow-md scale-105"
-                                          : "text-app-fg opacity-65 hover:opacity-100"
-                                      )}
-                                    >
-                                      {isSrcActive && <Check size={10} />}
-                                      <span>{srcLangCode}</span>
-                                    </button>
-                                    <button
-                                      onClick={() => {
-                                        if (isTargetActive) {
-                                          if (!isSrcActive) return; // cannot turn off both
-                                          handleSetLyricsDisplayMode("lyrics");
-                                        } else {
-                                          handleSetLyricsDisplayMode("both");
-                                        }
-                                      }}
-                                      className={cn(
-                                        "px-3 py-1.5 rounded-xl font-black transition-all uppercase tracking-wider text-[10px] flex items-center gap-1",
-                                        isTargetActive
-                                          ? "bg-app-accent text-white shadow-md scale-105"
-                                          : "text-app-fg opacity-65 hover:opacity-100"
-                                      )}
-                                    >
-                                      {isTargetActive && <Check size={10} />}
-                                      <span>{targetLangCode}</span>
-                                    </button>
-                                    <button
-                                      onClick={() => handleRegenerateTranslations(targetLanguage)}
-                                      disabled={isTranslating}
-                                      title="Regenerate Translation"
-                                      className={cn(
-                                        "p-2 rounded-xl transition-all text-app-fg hover:bg-app-fg/5 flex items-center justify-center outline-none",
-                                        isTranslating ? "opacity-50 cursor-not-allowed" : "opacity-60 hover:opacity-100"
-                                      )}
-                                    >
-                                      <RefreshCw size={12} className={cn("transition-transform duration-500", isTranslating ? "animate-spin" : "")} />
-                                    </button>
-                                  </>
-                                );
-                              })()}
-                            </div>
-                          </>
-                        )}
-                      </div>
-                    )}
-                    </div>
                     {currentTrack.rawLyrics ? (() => {
                       let linesToRender = currentTrack.lines || [];
                       if (isStarFilterActive) {
