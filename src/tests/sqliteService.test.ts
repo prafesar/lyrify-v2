@@ -265,4 +265,58 @@ describe("SQLite Service Integration Smoke Tests", () => {
     expect(await activeService.isFavoriteArtist("artist_123")).toBe(false);
     expect(await activeService.isFavoriteAlbum("album_456")).toBe(false);
   });
+
+  it("should cache, restore, merge, and retain track cache metrics like isStarred and line.explanation across reload", async () => {
+    // Ensure starting clean
+    localStorage.removeItem("cantolex_track_cache_backup");
+
+    const activeService = new SqliteService();
+    await activeService.init();
+
+    const trackId = "reload_track_xyz";
+    const initialData = {
+      id: trackId,
+      trackId: trackId,
+      rawLyrics: "Line 1\nLine 2",
+      lines: [
+        { index: 0, original: "Line 1", translation: "Translated 1", isStarred: true },
+        { index: 1, original: "Line 2", translation: "Translated 2" }
+      ]
+    };
+
+    // Save initial data which also updates state & synchronizes to localStorage backup
+    activeService.saveTrackData(trackId, initialData);
+
+    const cachedBefore = activeService.getCachedTrack(trackId);
+    expect(cachedBefore).not.toBeNull();
+    expect(cachedBefore?.lines?.[0].isStarred).toBe(true);
+    expect(cachedBefore?.lines?.[1].isStarred).toBeUndefined();
+
+    // Now update segment with explanation
+    const explanationUpdate = {
+      lines: [
+        { index: 0, original: "Line 1", translation: "Translated 1", isStarred: true },
+        { index: 1, original: "Line 2", translation: "Translated 2", explanation: { summary: "Insight for 2" } }
+      ]
+    };
+    activeService.saveTrackData(trackId, explanationUpdate);
+
+    // Create fresh service to simulate browser page refresh / reload route hydration
+    const freshService = new SqliteService();
+    
+    // Test synchronous load (instant before worker INIT_OK executes)
+    const cachedInstantly = freshService.getCachedTrack(trackId);
+    expect(cachedInstantly).not.toBeNull();
+    expect(cachedInstantly?.lines?.[0].isStarred).toBe(true);
+    expect(cachedInstantly?.lines?.[1].explanation?.summary).toBe("Insight for 2");
+
+    // Resolve initialization
+    await freshService.init();
+
+    // Test after initialization merge
+    const cachedAfterInit = freshService.getCachedTrack(trackId);
+    expect(cachedAfterInit).not.toBeNull();
+    expect(cachedAfterInit?.lines?.[0].isStarred).toBe(true);
+    expect(cachedAfterInit?.lines?.[1].explanation?.summary).toBe("Insight for 2");
+  });
 });

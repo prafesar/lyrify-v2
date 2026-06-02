@@ -218,9 +218,6 @@ interface LyricLineProps {
   shadowingAttempts: number;
   handleToggleStarLine: (index: number) => void;
   onOpenLineDrawer?: (i: number) => void;
-  isSelectionMode?: boolean;
-  isSelectedForAnalysis?: boolean;
-  onToggleSelection?: (lineId: string) => void;
   lineId?: string;
   targetLanguage?: string;
   onSaveLineExplanation?: (index: number, explanation: any) => void;
@@ -245,9 +242,6 @@ const LyricLine = ({
   shadowingAttempts,
   handleToggleStarLine,
   onOpenLineDrawer,
-  isSelectionMode = false,
-  isSelectedForAnalysis = false,
-  onToggleSelection,
   lineId,
   targetLanguage,
   onSaveLineExplanation,
@@ -354,37 +348,16 @@ const LyricLine = ({
         className={cn(
           "group relative flex flex-col gap-1 rounded-[1.5rem] border cursor-pointer z-10 transition-all duration-300",
           isCompact ? "px-4 py-1" : "px-6 py-1.5",
-          isSelectionMode
-            ? isSelectedForAnalysis
-              ? "bg-orange-500/10 border-orange-500/30 scale-[1.005] opacity-100 shadow-sm"
-              : "border-app-card-border/40 bg-transparent opacity-80 hover:opacity-100 hover:bg-app-card/5"
-            : activeLineIndex === i
-              ? "scale-[1.01] bg-app-card/60 border-app-card-border shadow-xl z-20 brightness-110"
-              : "border-transparent bg-transparent opacity-65 hover:opacity-100 hover:bg-app-card/5",
+          activeLineIndex === i
+            ? "scale-[1.01] bg-app-card/60 border-app-card-border shadow-xl z-20 brightness-110"
+            : "border-transparent bg-transparent opacity-65 hover:opacity-100 hover:bg-app-card/5",
         )}
         onClick={() => {
           if (!trimmedLine) return;
-          if (isSelectionMode) {
-            onToggleSelection?.(lineId || "");
-          } else {
-            handleLineClick(line, i);
-          }
+          handleLineClick(line, i);
         }}
       >
         <div className="flex items-center gap-4 w-full relative z-10">
-          {isSelectionMode && (
-            <div className="shrink-0 flex items-center justify-center">
-              <div className={cn(
-                "w-5 h-5 rounded-md border flex items-center justify-center transition-all",
-                isSelectedForAnalysis 
-                  ? "bg-orange-500 border-orange-500 text-white" 
-                  : "border-app-fg/20 bg-app-card"
-              )}>
-                {isSelectedForAnalysis && <Check size={12} strokeWidth={3} />}
-              </div>
-            </div>
-          )}
-
           <div className="flex-1 min-w-0">
             <p
               className={cn(
@@ -398,40 +371,23 @@ const LyricLine = ({
             </p>
           </div>
 
-          {trimmedLine && !isSelectionMode && (
+          {trimmedLine && (
             <div className="flex items-center gap-2 shrink-0">
-              {onOpenLineDrawer && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onOpenLineDrawer(i);
-                  }}
-                  className={cn(
-                    "p-1 px-1.5 rounded-lg border border-transparent transition-all hover:scale-110 hover:border-app-card-border hover:bg-app-card/80",
-                    phrasesInLine && phrasesInLine.length > 0
-                      ? "text-[var(--accent)]"
-                      : "text-app-fg opacity-30 hover:opacity-100 hover:text-app-fg"
-                  )}
-                  title={phrasesInLine && phrasesInLine.length > 0 ? "Line Vocabulary & Phrases Analysis" : "Analyze this line..."}
-                >
-                  <Sparkles size={16} />
-                </button>
-              )}
               <button
                 onClick={(e) => {
                   e.stopPropagation();
                   handleToggleExplanation();
                 }}
-                className={cn(
-                  "flex items-center gap-1 p-1 px-2.5 rounded-xl border transition-all text-[10px] font-bold uppercase tracking-widest leading-none shrink-0",
-                  isExplaining 
-                    ? "bg-[var(--accent)]/15 border-[var(--accent)]/30 text-app-fg"
-                    : "border-app-card-border/60 bg-app-card/40 hover:bg-app-card text-app-fg/40 hover:text-app-fg hover:border-app-card-border"
-                )}
-                title="Explain line with AI"
+                className="p-2 rounded-xl transition-all hover:scale-120 active:scale-90"
+                title={cachedExpl ? "Show AI explanation" : "Explain line with AI"}
               >
-                <Brain size={12} className={cn(isLoadingExplanation ? "animate-spin text-[var(--accent)]" : "text-[var(--accent)]")} />
-                <span>Explain</span>
+                {isLoadingExplanation ? (
+                  <Brain size={20} className="animate-spin text-[var(--accent)]" />
+                ) : cachedExpl ? (
+                  <Brain size={20} className="fill-[var(--accent)]/15 text-[var(--accent)] drop-shadow-sm" />
+                ) : (
+                  <Brain size={20} className="text-app-fg/20 hover:text-[var(--accent)]/80 transition-all" />
+                )}
               </button>
               <button
                 onClick={(e) => {
@@ -867,8 +823,7 @@ export default function App() {
     handleGenerateAnalysis: handleGenerateAnalysisRaw,
     handleRegenerateAnalysis: handleRegenerateAnalysisRaw,
     handleManualLyricsSearch,
-    handleSelectLyricOption: handleSelectLyricOptionRaw,
-    handleAnalyzeSelectedLines: handleAnalyzeSelectedLinesRaw
+    handleSelectLyricOption: handleSelectLyricOptionRaw
   } = useTrackSession();
 
   const {
@@ -916,13 +871,9 @@ export default function App() {
     handleLineClick
   } = usePlayback(currentTrack, phraseMetadata, targetLanguage);
 
-  const [isAnalysisSelectionMode, setIsAnalysisSelectionMode] = useState(false);
-  const [selectedLineIdsForAnalysis, setSelectedLineIdsForAnalysis] = useState<string[]>([]);
-  const [isAnalysisModalOpen, setIsAnalysisModalOpen] = useState(false);
-
   // Learning Assistant Panel States
   const [isAssistantOpen, setIsAssistantOpen] = useState(false);
-  const [assistantContextType, setAssistantContextType] = useState<"line" | "phrase" | "selection">("line");
+  const [assistantContextType, setAssistantContextType] = useState<"line" | "phrase">("line");
   const [assistantLineContext, setAssistantLineContext] = useState<{ original: string; translation?: string; lineId?: string } | undefined>(undefined);
   const [assistantPhraseContext, setAssistantPhraseContext] = useState<{ text: string; translation?: string; explanation?: string; lineIds?: string[] } | undefined>(undefined);
 
@@ -947,57 +898,7 @@ export default function App() {
     loadUserCards();
   };
 
-  const [analysisCustomFocus, setAnalysisCustomFocus] = useState("");
-  const [analysisSelectedPresets, setAnalysisSelectedPresets] = useState<string[]>([]);
   const [trackSearchQuery, setTrackSearchQuery] = useState("");
-
-  const handleToggleLineSelection = useCallback((lineId: string) => {
-    setSelectedLineIdsForAnalysis(prev => {
-      if (prev.includes(lineId)) {
-        return prev.filter(id => id !== lineId);
-      } else {
-        return [...prev, lineId];
-      }
-    });
-  }, []);
-
-  const handleRunAnalyzeSelectedLines = () => {
-    if (selectedLineIdsForAnalysis.length === 0) return;
-    setIsAnalysisModalOpen(true);
-  };
-
-  const handleConfirmAnalyzeSelectedLines = async () => {
-    if (selectedLineIdsForAnalysis.length === 0) return;
-
-    // Construct final instruction for AI
-    let finalInstruction = "";
-    if (analysisSelectedPresets.length > 0) {
-      finalInstruction += `Selected focus filters:\n${analysisSelectedPresets.map(preset => `- ${preset}`).join("\n")}`;
-    }
-    if (analysisCustomFocus.trim()) {
-      if (finalInstruction) finalInstruction += "\n\n";
-      finalInstruction += `User focus requests:\n${analysisCustomFocus.trim()}`;
-    }
-
-    setIsAnalysisModalOpen(false);
-
-    try {
-      await handleAnalyzeSelectedLinesRaw(
-        selectedLineIdsForAnalysis,
-        targetLanguage,
-        { loadCommunityTracks },
-        finalInstruction
-      );
-      // Clean states only upon successful completion/submission of the call
-      setSelectedLineIdsForAnalysis([]);
-      setIsAnalysisSelectionMode(false);
-      setAnalysisCustomFocus("");
-      setAnalysisSelectedPresets([]);
-    } catch (err) {
-      console.error("Analysis execution failed:", err);
-      // Leave selectedLineIdsForAnalysis intact so user doesn't lose selection on error
-    }
-  };
 
   const handleOpenAssistantForPhrase = useCallback((phrase: { text: string; translation?: string; explanation?: string; lineIds?: string[] }) => {
     setAssistantContextType("phrase");
@@ -1322,10 +1223,6 @@ export default function App() {
           setAssistantPhraseContext(undefined);
           setIsAssistantOpen(true);
         }}
-        isSelectionMode={isAnalysisSelectionMode}
-        isSelectedForAnalysis={selectedLineIdsForAnalysis.includes(currentTrack?.lines?.[i]?.lineId || "")}
-        onToggleSelection={handleToggleLineSelection}
-        lineId={currentTrack?.lines?.[i]?.lineId}
       />
     );
   };
@@ -1860,7 +1757,7 @@ export default function App() {
                       {albumDetails.tracks.length > 0 ? (
                         albumDetails.tracks.map((track, idx) => (
                           <button
-                            key={track.id}
+                            key={`${track.id || 'track'}_${idx}`}
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
@@ -1943,9 +1840,9 @@ export default function App() {
                       <div>
                         <h3 className="text-xs font-black uppercase tracking-[0.3em] text-app-fg opacity-40 mb-4 px-2">Top Tracks</h3>
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                          {artistDetails.topTracks.map(track => (
+                          {artistDetails.topTracks.map((track, idx) => (
                             <button
-                              key={track.id}
+                              key={`${track.id || 'track'}_${idx}`}
                               type="button"
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -1974,9 +1871,9 @@ export default function App() {
                       <div>
                         <h3 className="text-xs font-black uppercase tracking-[0.3em] text-app-fg opacity-40 mb-4 px-2">Albums</h3>
                         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                          {artistDetails.albums.map(album => (
+                          {artistDetails.albums.map((album, idx) => (
                             <button
-                              key={album.id}
+                              key={`${album.id || 'album'}_${idx}`}
                               type="button"
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -2040,9 +1937,9 @@ export default function App() {
                           Results
                         </h2>
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                          {searchResults.map((item) => (
+                          {searchResults.map((item, idx) => (
                             <div
-                              key={item.id}
+                              key={`${item.id || 'search'}_${idx}`}
                               onClick={() => {
                                 if (searchEntityType === "musicTrack") {
                                   navigateToTrack(item);
@@ -2517,172 +2414,114 @@ export default function App() {
 
                 {activeTab === "lyrics" && (
                   <div className="flex flex-col gap-1 pb-32">
-                    {/* Search Input in Lyrics Tab */}
+                    {/* Unified Search and Language Selection Toolbar */}
                     {currentTrack.rawLyrics && (
-                      <div className="relative mb-4 px-1">
-                        <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-app-fg opacity-40">
-                          <Search size={18} />
+                      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 bg-app-card border border-app-card-border rounded-[1.25rem] p-1.5 focus-within:border-app-accent/50 transition-all mb-4 mx-1">
+                        {/* Search Input Section */}
+                        <div className="relative flex-1 flex items-center min-w-0">
+                          <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-app-fg opacity-40">
+                            <Search size={16} />
+                          </div>
+                          <input
+                            type="text"
+                            placeholder="Search original text, translations, or phrases in lyrics..."
+                            value={trackSearchQuery}
+                            onChange={(e) => setTrackSearchQuery(e.target.value)}
+                            className="w-full pl-10 pr-8 py-2 bg-transparent text-sm font-medium text-app-fg placeholder-app-fg/30 focus:outline-none font-sans"
+                          />
+                          {trackSearchQuery && (
+                            <button
+                              onClick={() => setTrackSearchQuery("")}
+                              className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-app-fg opacity-45 hover:opacity-100 transition-opacity"
+                            >
+                              <X size={14} />
+                            </button>
+                          )}
                         </div>
-                        <input
-                          type="text"
-                          placeholder="Search original text, translations, or phrases in lyrics..."
-                          value={trackSearchQuery}
-                          onChange={(e) => setTrackSearchQuery(e.target.value)}
-                          className="w-full pl-12 pr-10 py-3.5 bg-app-card border border-app-card-border rounded-2xl text-lg font-medium text-app-fg placeholder-app-fg/30 focus:outline-none focus:border-app-accent/50 transition-all font-sans"
-                        />
-                        {trackSearchQuery && (
-                          <button
-                            onClick={() => setTrackSearchQuery("")}
-                            className="absolute inset-y-0 right-0 pr-4 flex items-center text-app-fg opacity-45 hover:opacity-100 transition-opacity"
-                          >
-                            <X size={14} />
-                          </button>
-                        )}
-                      </div>
-                    )}
 
-                    <div className="flex justify-end px-1 pb-4">
-                      {(currentTrack.rawLyrics || lyricsFetchError) && (
-                        <div className="flex flex-wrap gap-2 items-center justify-end w-full">
-                          {currentTrack.rawLyrics && (
-                            <>
-                              {isAnalysisSelectionMode ? (
-                                <div className="flex bg-app-card/90 backdrop-blur-md border border-orange-500/30 p-1.5 rounded-2xl shadow-lg text-xs gap-2 items-center pr-2 pl-3">
-                                  <span className="text-[10px] font-bold text-orange-500 uppercase tracking-widest animate-pulse shrink-0">
-                                    Selecting ({selectedLineIdsForAnalysis.length})
-                                  </span>
-                                  <button
-                                    onClick={handleRunAnalyzeSelectedLines}
-                                    disabled={selectedLineIdsForAnalysis.length === 0 || isGeneratingAnalysis}
-                                    title="Bulk-generate study cards automatically from the selected lines"
-                                    className={cn(
-                                      "px-3 py-1.5 rounded-xl font-black transition-all text-[10px] uppercase tracking-wider flex items-center gap-1.5 shrink-0",
-                                      selectedLineIdsForAnalysis.length === 0
-                                        ? "bg-app-card border border-app-card-border/60 text-app-fg opacity-40 cursor-not-allowed"
-                                        : "bg-teal-600 hover:bg-teal-500 text-white shadow-lg shadow-teal-600/20 hover:scale-105 active:scale-95"
-                                    )}
-                                  >
-                                    <Brain size={12} className={isGeneratingAnalysis ? "animate-spin" : ""} />
-                                    <span>Extract Study Cards</span>
-                                  </button>
-                                  <button
-                                    onClick={() => {
-                                      setAssistantContextType("selection");
-                                      setIsAssistantOpen(true);
-                                    }}
-                                    disabled={selectedLineIdsForAnalysis.length === 0}
-                                    title="Open conversational tutor panel on the selected sequence"
-                                    className={cn(
-                                      "px-3 py-1.5 rounded-xl font-black transition-all text-[10px] uppercase tracking-wider flex items-center gap-1.5 shrink-0",
-                                      selectedLineIdsForAnalysis.length === 0
-                                        ? "bg-app-card border border-app-card-border/60 text-app-fg opacity-40 cursor-not-allowed"
-                                        : "bg-orange-500 text-white shadow-lg shadow-orange-500/20 hover:scale-105 active:scale-95"
-                                    )}
-                                  >
-                                    <Sparkles size={12} />
-                                    <span>Discuss Sequence</span>
-                                  </button>
-                                  <button
-                                    onClick={() => {
-                                      setIsAnalysisSelectionMode(false);
-                                      setSelectedLineIdsForAnalysis([]);
-                                    }}
-                                    className="px-2.5 py-1.5 rounded-xl hover:bg-app-fg/5 text-app-fg opacity-65 hover:opacity-100 font-bold uppercase text-[10px] tracking-wider shrink-0"
-                                  >
-                                    Cancel
-                                  </button>
-                                </div>
-                              ) : (
+                        {/* Divider Line */}
+                        <div className="hidden sm:block w-[1px] h-5 bg-app-card-border/60 self-center" />
+
+                        {/* Language Selection Buttons Capsule */}
+                        <div className="flex items-center gap-1 justify-end shrink-0 bg-app-card/30 dark:bg-app-bg/20 rounded-xl p-0.5 border border-app-card-border/30">
+                          {(() => {
+                            const srcLangObj = SUPPORTED_LANGUAGES.find(l => 
+                              l.name.toLowerCase() === (currentTrack?.sourceLanguage || "English").toLowerCase() ||
+                              l.code.toLowerCase() === (currentTrack?.sourceLanguage || "English").toLowerCase()
+                            );
+                            const srcLangCode = srcLangObj ? srcLangObj.code : "EN";
+
+                            const targetLangObj = SUPPORTED_LANGUAGES.find(l => 
+                              l.name.toLowerCase() === (targetLanguage || "Russian").toLowerCase() ||
+                              l.code.toLowerCase() === (targetLanguage || "Russian").toLowerCase()
+                            );
+                            const targetLangCode = targetLangObj ? targetLangObj.code : "RU";
+
+                            const isSrcActive = lyricsDisplayMode === "lyrics" || lyricsDisplayMode === "both";
+                            const isTargetActive = lyricsDisplayMode === "translation" || lyricsDisplayMode === "both";
+
+                            return (
+                              <>
                                 <button
+                                  type="button"
                                   onClick={() => {
-                                    setIsAnalysisSelectionMode(true);
-                                    setSelectedLineIdsForAnalysis([]);
+                                    if (isSrcActive) {
+                                      if (!isTargetActive) return; // cannot turn off both
+                                      handleSetLyricsDisplayMode("translation");
+                                    } else {
+                                      handleSetLyricsDisplayMode("both");
+                                    }
                                   }}
-                                  className="px-3.5 py-2 bg-app-card border border-app-card-border hover:border-app-fg/20 rounded-2xl text-[10px] font-bold uppercase tracking-widest text-app-fg flex items-center gap-1.5 shadow-sm hover:scale-102 transition-all active:scale-98"
-                                  title="Select specific lyric lines for precise targeted AI analysis and collocations"
+                                  title={`Toggle ${currentTrack?.sourceLanguage || "Original"} Lyrics`}
+                                  className={cn(
+                                    "px-2.5 py-1 rounded-lg font-black transition-all uppercase tracking-wider text-[9px] flex items-center gap-1",
+                                    isSrcActive
+                                      ? "bg-app-accent text-white shadow-sm"
+                                      : "text-app-fg opacity-65 hover:opacity-100"
+                                  )}
                                 >
-                                  <ListFilter size={12} className="text-orange-500" />
-                                  <span>Select lines for analysis</span>
+                                  {isSrcActive && <Check size={8} />}
+                                  <span>{srcLangCode}</span>
                                 </button>
-                              )}
-
-                              <div className="flex bg-app-card/80 backdrop-blur-md border border-app-card-border p-1 rounded-2xl shadow-sm text-xs gap-1.5 items-center">
-                              {(() => {
-                                const srcLangObj = SUPPORTED_LANGUAGES.find(l => 
-                                  l.name.toLowerCase() === (currentTrack?.sourceLanguage || "English").toLowerCase() ||
-                                  l.code.toLowerCase() === (currentTrack?.sourceLanguage || "English").toLowerCase()
-                                );
-                                const srcLangCode = srcLangObj ? srcLangObj.code : "EN";
-
-                                const targetLangObj = SUPPORTED_LANGUAGES.find(l => 
-                                  l.name.toLowerCase() === (targetLanguage || "Russian").toLowerCase() ||
-                                  l.code.toLowerCase() === (targetLanguage || "Russian").toLowerCase()
-                                );
-                                const targetLangCode = targetLangObj ? targetLangObj.code : "RU";
-
-                                const isSrcActive = lyricsDisplayMode === "lyrics" || lyricsDisplayMode === "both";
-                                const isTargetActive = lyricsDisplayMode === "translation" || lyricsDisplayMode === "both";
-
-                                return (
-                                  <>
-                                    <button
-                                      onClick={() => {
-                                        if (isSrcActive) {
-                                          if (!isTargetActive) return; // cannot turn off both
-                                          handleSetLyricsDisplayMode("translation");
-                                        } else {
-                                          handleSetLyricsDisplayMode("both");
-                                        }
-                                      }}
-                                      className={cn(
-                                        "px-3 py-1.5 rounded-xl font-black transition-all uppercase tracking-wider text-[10px] flex items-center gap-1",
-                                        isSrcActive
-                                          ? "bg-app-accent text-white shadow-md scale-105"
-                                          : "text-app-fg opacity-65 hover:opacity-100"
-                                      )}
-                                    >
-                                      {isSrcActive && <Check size={10} />}
-                                      <span>{srcLangCode}</span>
-                                    </button>
-                                    <button
-                                      onClick={() => {
-                                        if (isTargetActive) {
-                                          if (!isSrcActive) return; // cannot turn off both
-                                          handleSetLyricsDisplayMode("lyrics");
-                                        } else {
-                                          handleSetLyricsDisplayMode("both");
-                                        }
-                                      }}
-                                      className={cn(
-                                        "px-3 py-1.5 rounded-xl font-black transition-all uppercase tracking-wider text-[10px] flex items-center gap-1",
-                                        isTargetActive
-                                          ? "bg-app-accent text-white shadow-md scale-105"
-                                          : "text-app-fg opacity-65 hover:opacity-100"
-                                      )}
-                                    >
-                                      {isTargetActive && <Check size={10} />}
-                                      <span>{targetLangCode}</span>
-                                    </button>
-                                    <button
-                                      onClick={() => handleRegenerateTranslations(targetLanguage)}
-                                      disabled={isTranslating}
-                                      title="Regenerate Translation"
-                                      className={cn(
-                                        "p-2 rounded-xl transition-all text-app-fg hover:bg-app-fg/5 flex items-center justify-center outline-none",
-                                        isTranslating ? "opacity-50 cursor-not-allowed" : "opacity-60 hover:opacity-100"
-                                      )}
-                                    >
-                                      <RefreshCw size={12} className={cn("transition-transform duration-500", isTranslating ? "animate-spin" : "")} />
-                                    </button>
-                                  </>
-                                );
-                              })()}
-                            </div>
-                          </>
-                        )}
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (isTargetActive) {
+                                      if (!isSrcActive) return; // cannot turn off both
+                                      handleSetLyricsDisplayMode("lyrics");
+                                    } else {
+                                      handleSetLyricsDisplayMode("both");
+                                    }
+                                  }}
+                                  title={`Toggle ${targetLanguage || "Target"} Translation`}
+                                  className={cn(
+                                    "px-2.5 py-1 rounded-lg font-black transition-all uppercase tracking-wider text-[9px] flex items-center gap-1",
+                                    isTargetActive
+                                      ? "bg-app-accent text-white shadow-sm"
+                                      : "text-app-fg opacity-65 hover:opacity-100"
+                                  )}
+                                >
+                                  {isTargetActive && <Check size={8} />}
+                                  <span>{targetLangCode}</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRegenerateTranslations(targetLanguage)}
+                                  disabled={isTranslating}
+                                  title="Regenerate Translation"
+                                  className={cn(
+                                    "p-1.5 rounded-lg transition-all text-app-fg hover:bg-app-fg/5 flex items-center justify-center outline-none",
+                                    isTranslating ? "opacity-50 cursor-not-allowed" : "opacity-60 hover:opacity-100"
+                                  )}
+                                >
+                                  <RefreshCw size={10} className={cn("transition-transform duration-500", isTranslating ? "animate-spin" : "")} />
+                                </button>
+                              </>
+                            );
+                          })()}
+                        </div>
                       </div>
                     )}
-                    </div>
                     {currentTrack.rawLyrics ? (() => {
                       let linesToRender = currentTrack.lines || [];
                       if (isStarFilterActive) {
@@ -3425,11 +3264,11 @@ export default function App() {
 
                   {playlistsInApp.length > 0 ? (
                     <div className="max-h-60 overflow-y-auto space-y-2 pr-1 scrollbar-hide">
-                      {playlistsInApp.map((playlist) => {
+                      {playlistsInApp.map((playlist, idx) => {
                         const hasTrack = playlist.tracks?.some((t: any) => (t.id || t.trackId) === activeMenuTrack.id);
                         return (
                           <button
-                            key={playlist.id}
+                            key={`${playlist.id || 'playlist'}_${idx}`}
                             type="button"
                             onClick={() => handleAddTrackToPlaylistInApp(playlist.id, activeMenuTrack)}
                             className="w-full flex items-center justify-between p-4 rounded-2xl hover:bg-app-fg/5 active:scale-[0.99] transition-all text-left"
@@ -3798,124 +3637,6 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* Targeted Analysis Configuration Modal */}
-      <AnimatePresence>
-        {isAnalysisModalOpen && currentTrack && (
-          <div className="fixed inset-0 z-[110] flex items-end sm:items-center justify-center p-0 sm:p-12 overflow-y-auto">
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setIsAnalysisModalOpen(false)}
-              className="fixed inset-0 bg-app-bg/60 backdrop-blur-md"
-            />
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 100 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 100 }}
-              className="relative w-full max-w-lg bg-app-bg border border-app-card-border rounded-t-[2.5rem] sm:rounded-[2.5rem] overflow-hidden shadow-2xl z-10"
-            >
-              <div className="p-8 space-y-6">
-                <div className="flex items-center justify-between">
-                  <div className="space-y-1">
-                    <span
-                      className="text-[10px] font-black uppercase tracking-[0.4em] text-orange-500"
-                    >
-                      Targeted Analysis
-                    </span>
-                    <h3 className="text-xl font-black text-app-fg leading-tight">
-                      Configure AI Focus
-                    </h3>
-                  </div>
-                  <button
-                    onClick={() => setIsAnalysisModalOpen(false)}
-                    className="text-app-fg opacity-20 hover:opacity-100 transition-colors p-1"
-                  >
-                    <X size={20} />
-                  </button>
-                </div>
-
-                <div className="p-4 rounded-2xl bg-app-card border border-app-card-border flex items-center justify-between animate-fadeIn">
-                  <span className="text-xs font-bold text-app-fg">Selected Lyric Lines</span>
-                  <span className="px-3 py-1 bg-orange-500/10 text-orange-600 rounded-full font-black text-xs">
-                    {selectedLineIdsForAnalysis.length} lines
-                  </span>
-                </div>
-
-                <div className="space-y-3">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-app-fg opacity-50 block">
-                    Preset focus areas (Multi-select)
-                  </label>
-                  <div className="flex flex-wrap gap-2">
-                    {[
-                      "Explain grammar",
-                      "Break into useful phrases",
-                      "Explain at B2 level",
-                      "Focus on idioms/collocations",
-                      "Explain cultural context"
-                    ].map((preset) => {
-                      const isSelected = analysisSelectedPresets.includes(preset);
-                      return (
-                        <button
-                          key={preset}
-                          type="button"
-                          onClick={() => {
-                            setAnalysisSelectedPresets(prev =>
-                              prev.includes(preset)
-                                ? prev.filter(p => p !== preset)
-                                : [...prev, preset]
-                            );
-                          }}
-                          className={cn(
-                            "px-3.5 py-2 rounded-xl text-xs font-semibold transition-all shadow-sm border",
-                            isSelected
-                              ? "bg-orange-500 border-orange-500 text-white"
-                              : "bg-app-card border-app-card-border text-app-fg hover:bg-app-card/80"
-                          )}
-                        >
-                          {preset}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <label htmlFor="custom-ai-focus" className="text-[10px] font-black uppercase tracking-widest text-app-fg opacity-50 block">
-                    What should AI focus on? (Additional custom instructions)
-                  </label>
-                  <textarea
-                    id="custom-ai-focus"
-                    placeholder="e.g. Focus on slang verbs, parse metaphorical translations, or explain usage of particle words..."
-                    value={analysisCustomFocus}
-                    onChange={(e) => setAnalysisCustomFocus(e.target.value)}
-                    className="w-full h-24 p-3.5 bg-app-card border border-app-card-border rounded-2xl text-sm text-app-fg placeholder-app-fg/30 focus:outline-none focus:border-orange-500/50 resize-none transition-all"
-                  />
-                </div>
-
-                <div className="flex gap-3 pt-2">
-                  <button
-                    onClick={() => {
-                      setIsAnalysisModalOpen(false);
-                    }}
-                    className="flex-1 py-3.5 rounded-2xl bg-app-card border border-app-card-border hover:bg-app-card/80 text-app-fg text-xs font-black uppercase tracking-widest transition-all"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleConfirmAnalyzeSelectedLines}
-                    disabled={selectedLineIdsForAnalysis.length === 0}
-                    className="flex-1 py-3.5 rounded-2xl bg-orange-500 hover:bg-orange-600 text-white text-xs font-black uppercase tracking-widest hover:scale-102 transition-all disabled:opacity-40"
-                  >
-                    Analyze
-                  </button>
-                </div>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
       {/* Phrase Action Modal (Know, Study, Explain) */}
       <AnimatePresence>
         {isEditModalOpen && (
@@ -4182,7 +3903,6 @@ export default function App() {
             contextType={assistantContextType}
             lineContext={assistantLineContext}
             phraseContext={assistantPhraseContext}
-            selectedLineIds={selectedLineIdsForAnalysis}
             targetLanguage={targetLanguage}
             onAcceptPhrase={handleAcceptSuggestedPhraseInApp}
             existingPhrases={currentTrack.lines ? currentTrack.lines.flatMap((l: any) => l.phrases || []) : []}

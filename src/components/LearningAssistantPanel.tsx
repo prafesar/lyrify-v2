@@ -11,10 +11,9 @@ export interface LearningAssistantPanelProps {
   isOpen: boolean;
   onClose: () => void;
   track: TrackLyricsData;
-  contextType: "line" | "phrase" | "selection";
+  contextType: "line" | "phrase";
   lineContext?: { original: string; translation?: string; lineId?: string };
   phraseContext?: { text: string; translation?: string; explanation?: string; lineIds?: string[] };
-  selectedLineIds?: string[];
   targetLanguage: string;
   onAcceptPhrase: (
     phraseText: string, 
@@ -42,7 +41,6 @@ export const LearningAssistantPanel: React.FC<LearningAssistantPanelProps> = ({
   contextType,
   lineContext,
   phraseContext,
-  selectedLineIds = [],
   targetLanguage,
   onAcceptPhrase,
   existingPhrases,
@@ -119,12 +117,6 @@ export const LearningAssistantPanel: React.FC<LearningAssistantPanelProps> = ({
 
     const questionText = overrideQuestion || userQuestion;
 
-    const selectedLines = track.lines && selectedLineIds
-      ? track.lines
-          .filter(l => selectedLineIds.includes(l.lineId || ""))
-          .map(l => ({ original: l.original, translation: l.translation, lineId: l.lineId }))
-      : undefined;
-
     try {
       const response = await aiClient.generateLearningAssistantResponse(
         track.title,
@@ -135,8 +127,7 @@ export const LearningAssistantPanel: React.FC<LearningAssistantPanelProps> = ({
         targetLanguage,
         existingPhrases,
         questionText,
-        presetLabel,
-        selectedLines
+        presetLabel
       );
 
       setExplanation(response.explanation);
@@ -304,16 +295,7 @@ export const LearningAssistantPanel: React.FC<LearningAssistantPanelProps> = ({
               </div>
             )}
 
-            {contextType === "selection" && (
-              <div className="space-y-1 font-sans">
-                <p className="text-sm font-semibold text-app-fg">
-                  Selected Multi-Line Sequence
-                </p>
-                <p className="text-xs text-app-fg opacity-45">
-                  ({selectedLineIds.length} lines highlighted for bulk breakdown & analysis)
-                </p>
-              </div>
-            )}
+
           </div>
 
           {/* 2. Interactive user inputs/presets when not loading */}
@@ -471,13 +453,13 @@ export const LearningAssistantPanel: React.FC<LearningAssistantPanelProps> = ({
                       </div>
 
                       <div className="space-y-3 select-none">
-                        {pendingSuggestions.map((item) => {
+                        {pendingSuggestions.map((item, idx) => {
                           const originalIndex = suggestedPhrases.findIndex(p => p.text === item.text);
                           const isEditing = editingIndex === originalIndex;
 
                           return (
                             <div 
-                              key={item.text}
+                              key={`${item.text}_${idx}`}
                               className="p-4 rounded-3xl bg-app-bg border border-app-card-border/55 hover:border-app-card-border transition-all"
                             >
                               {isEditing ? (
@@ -606,9 +588,9 @@ export const LearningAssistantPanel: React.FC<LearningAssistantPanelProps> = ({
                       </div>
 
                       <div className="space-y-3 select-none">
-                        {acceptedSuggestions.map((item) => (
+                        {acceptedSuggestions.map((item, idx) => (
                           <div 
-                            key={item.text}
+                            key={`${item.text}_${idx}`}
                             className="p-4 rounded-3xl border border-green-500/20 bg-green-500/[0.015] transition-all"
                           >
                             <div className="flex gap-4 items-start justify-between font-serif font-sans">
