@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { 
-  X, Sparkles, Send, Check, CheckCircle2, Bookmark, Plus, Edit2, Volume2, HelpCircle, ArrowRight, BookOpen, Brain, Loader2, ArrowRightLeft, Smile, Trash2
+  X, Send, Check, CheckCircle2, Plus, Edit2, Volume2, HelpCircle, Brain, Loader2
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { TrackLyricsData, Phrase } from "../services/musicService";
@@ -158,7 +158,7 @@ export const LearningAssistantPanel: React.FC<LearningAssistantPanelProps> = ({
   };
 
   // Accepts dynamic phrase suggestions
-  const handleAcceptSuggested = async (item: SuggestedPhraseItem, index: number) => {
+  const handleAcceptSuggested = async (item: SuggestedPhraseItem, _index: number) => {
     try {
       // Line IDs default alignment
       let lIds = item.lineIds;
@@ -388,7 +388,7 @@ export const LearningAssistantPanel: React.FC<LearningAssistantPanelProps> = ({
                   </span>
                   {speak && (
                     <button
-                      onClick={() => handleVoiceOver(explanation.replace(/[*#`_\[\]()]/g, ""))}
+                      onClick={() => handleVoiceOver(explanation.replace(/[*#`_[\]()]/g, ""))}
                       disabled={isSpeaking}
                       className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-[10px] font-black uppercase tracking-wider transition-all select-none ${
                         isSpeaking 

@@ -37,7 +37,6 @@ import {
   Heart,
   MoreVertical,
   FolderHeart,
-  ListFilter,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { Track, Artist, Album } from "./constants";
@@ -267,7 +266,7 @@ const LyricLine = ({
     }
   };
 
-  const handleFetchExplanation = async (force: boolean = false) => {
+  const handleFetchExplanation = async (_force: boolean = false) => {
     if (isLoadingExplanation) return;
     setIsLoadingExplanation(true);
     setExplanationError(null);
@@ -759,7 +758,6 @@ export default function App() {
     isPhraseDrawerOpen,
     setIsPhraseDrawerOpen,
     selectedLineIndexForDrawer,
-    setSelectedLineIndexForDrawer,
     
     handleSetLyricsDisplayMode,
     handleToggleStarFilter,
