@@ -56,6 +56,11 @@ export class SqliteService {
         if (playlistsBackup) {
           this.playlists = JSON.parse(playlistsBackup) || [];
         }
+
+        const trackCacheBackup = localStorage.getItem("cantolex_track_cache_backup");
+        if (trackCacheBackup) {
+          this.trackCache = JSON.parse(trackCacheBackup) || {};
+        }
       }
     } catch (e) {
       console.warn("[SqliteService] Failed to read sync backups from localStorage under construction:", e);
@@ -268,6 +273,21 @@ export class SqliteService {
     }
   }
 
+  private async seedTrackCacheToWorker() {
+    try {
+      console.log("[SqliteService] Seeding track cache backup to SQLite worker...");
+      const trackIds = Object.keys(this.trackCache);
+      if (trackIds.length > 0) {
+        for (const trackId of trackIds) {
+          const data = this.trackCache[trackId];
+          await this.sendWorkerMsgInternal("SAVE_TRACK_DATA", { trackId, data });
+        }
+      }
+    } catch (err) {
+      console.warn("[SqliteService] Failed to seed track cache to worker:", err);
+    }
+  }
+
   // --- Change Listener Subscription System ---
   public subscribe(listener: (event: string) => void): () => void {
     this.changeListeners.add(listener);
@@ -320,7 +340,57 @@ export class SqliteService {
             };
             this.savePrefsToLocal();
 
-            this.trackCache = trackCache || {};
+            // Perform robust line-level track cache merging to keep translations andStarred/explanations
+            const dbTrackCache = trackCache || {};
+            const localCacheKeys = Object.keys(this.trackCache);
+            const mergedTrackCache = { ...dbTrackCache };
+
+            for (const key of localCacheKeys) {
+              const localTrack = this.trackCache[key];
+              const dbTrack = dbTrackCache[key];
+              if (dbTrack) {
+                const linesMap = new Map<string, any>();
+                if (localTrack.lines) {
+                  localTrack.lines.forEach((l) => {
+                    const lkey = l.lineId || `${l.index}`;
+                    linesMap.set(lkey, l);
+                  });
+                }
+                if (dbTrack.lines) {
+                  dbTrack.lines.forEach((l) => {
+                    const lkey = l.lineId || `${l.index}`;
+                    const existing = linesMap.get(lkey);
+                    if (existing) {
+                      linesMap.set(lkey, {
+                        ...existing,
+                        ...l,
+                        translation: l.translation || existing.translation,
+                        isStarred: l.isStarred ?? existing.isStarred,
+                        explanation: l.explanation || existing.explanation,
+                        language: l.language || existing.language
+                      });
+                    } else {
+                      linesMap.set(lkey, l);
+                    }
+                  });
+                }
+                const mergedLines = Array.from(linesMap.values()).sort((a, b) => (a.index ?? 0) - (b.index ?? 0));
+                mergedTrackCache[key] = {
+                  ...dbTrack,
+                  ...localTrack,
+                  processingStatus: {
+                    ...(dbTrack.processingStatus || {}),
+                    ...(localTrack.processingStatus || {}),
+                  },
+                  lines: mergedLines
+                };
+              } else {
+                mergedTrackCache[key] = localTrack;
+              }
+            }
+
+            this.trackCache = mergedTrackCache;
+            this.saveTrackCacheBackup(this.trackCache);
 
             if (this.storageMode === "transient" || this.storageMode === "error") {
               // Load from local localStorage backups first
@@ -336,6 +406,7 @@ export class SqliteService {
               await this.seedFavoriteArtistsToWorker();
               await this.seedFavoriteAlbumsToWorker();
               await this.seedPlaylistsToWorker();
+              await this.seedTrackCacheToWorker();
             } else {
               // OPFS Mode: Check if worker has populated collections on a per-domain basis
 
@@ -391,6 +462,14 @@ export class SqliteService {
                 this.playlists = this.getPlaylistsBackup();
                 if (this.playlists.length > 0) {
                   await this.seedPlaylistsToWorker();
+                }
+              }
+
+              // 4. Track Cache seeding fallback for OPFS
+              if (!trackCache || Object.keys(trackCache).length === 0) {
+                const trackIds = Object.keys(this.trackCache);
+                if (trackIds.length > 0) {
+                  await this.seedTrackCacheToWorker();
                 }
               }
             }
@@ -539,6 +618,16 @@ export class SqliteService {
     return this.trackCache[trackId] || null;
   }
 
+  private saveTrackCacheBackup(cache: Record<string, TrackLyricsData>) {
+    try {
+      if (typeof window !== "undefined" && window.localStorage) {
+        localStorage.setItem("cantolex_track_cache_backup", JSON.stringify(cache));
+      }
+    } catch (e) {
+      console.warn("[SqliteService] Failed to write track cache backup to localStorage:", e);
+    }
+  }
+
   public saveTrackData(trackId: string, data: any): TrackLyricsData {
     const existing = (this.trackCache[trackId] || { id: trackId }) as any;
     const updated = {
@@ -550,6 +639,7 @@ export class SqliteService {
       },
     };
     this.trackCache[trackId] = updated;
+    this.saveTrackCacheBackup(this.trackCache);
 
     this.sendWorkerMsg("SAVE_TRACK_DATA", { trackId, data: updated }).catch((err) =>
       console.warn("[SqliteService] Failed to cache track data into SQLite storage:", err)
@@ -575,6 +665,7 @@ export class SqliteService {
         localStorage.removeItem("cantolex_favorite_artists_backup");
         localStorage.removeItem("cantolex_favorite_albums_backup");
         localStorage.removeItem("cantolex_playlists_backup");
+        localStorage.removeItem("cantolex_track_cache_backup");
       }
     } catch (e) {
       console.warn("[SqliteService] Failed to clear local sync cache:", e);
