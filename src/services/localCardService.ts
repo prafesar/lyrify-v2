@@ -30,6 +30,17 @@ export interface Flashcard {
   learning_steps?: any;
   createdAt: Date;
   updatedAt: Date;
+
+  // Shared study item / line explanation note properties
+  originType?: string;
+  originKey?: string;
+  lineTextHash?: string;
+  noteKey?: string;
+  entryType?: string;
+  userNote?: string;
+  rawText?: string;
+  rawTranslation?: string;
+  rawExplanation?: string;
 }
 
 const STORAGE_KEY = 'lyrify_flashcards';
@@ -60,11 +71,21 @@ export async function addPhraseToStudy(
     artist?: string;
     sourceLanguage?: string;
     lemmas?: string[];
+    id?: string;
+    originType?: string;
+    originKey?: string;
+    lineTextHash?: string;
+    noteKey?: string;
+    entryType?: string;
+    userNote?: string;
+    rawText?: string;
+    rawTranslation?: string;
+    rawExplanation?: string;
   },
   status: PhraseStatus = 'learning'
 ): Promise<string> {
   const emptyCard = createEmptyCard();
-  const id = crypto.randomUUID();
+  const id = phraseData.id || crypto.randomUUID();
 
   const newCard: Flashcard = {
     id,
@@ -92,12 +113,36 @@ export async function addPhraseToStudy(
     learning_steps: emptyCard.learning_steps,
     createdAt: new Date(),
     updatedAt: new Date(),
+
+    // Extra properties
+    originType: phraseData.originType,
+    originKey: phraseData.originKey,
+    lineTextHash: phraseData.lineTextHash,
+    noteKey: phraseData.noteKey,
+    entryType: phraseData.entryType,
+    userNote: phraseData.userNote,
+    rawText: phraseData.rawText,
+    rawTranslation: phraseData.rawTranslation,
+    rawExplanation: phraseData.rawExplanation,
   };
 
   const cardsMap = await getAllCards();
   cardsMap.set(id, newCard);
   await saveAllCards(cardsMap);
   return id;
+}
+
+export async function updateCardFields(
+  cardId: string,
+  fields: Partial<Pick<Flashcard, 'text' | 'translation' | 'explanation' | 'type' | 'entryType' | 'userNote'>>
+): Promise<void> {
+  const cardsMap = await getAllCards();
+  const card = cardsMap.get(cardId);
+  if (card) {
+    Object.assign(card, fields);
+    card.updatedAt = new Date();
+    await saveAllCards(cardsMap);
+  }
 }
 
 export async function updatePhraseStatus(cardId: string, status: PhraseStatus) {

@@ -38,6 +38,7 @@ import {
   Heart,
   MoreVertical,
   FolderHeart,
+  Edit3,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { Track, Artist, Album } from "./constants";
@@ -201,6 +202,11 @@ const RESOURCE_TYPES = [
   },
 ];
 
+const generateNoteOriginKey = (trackId: string, lineId: string | undefined, noteText: string, noteSourceText?: string) => {
+  const normSource = ((noteSourceText || noteText) || "").toLowerCase().trim().replace(/[^a-z0-9]/gi, "").slice(0, 32);
+  return `note_${trackId}_${lineId || "line"}_${normSource}`;
+};
+
 interface LyricLineProps {
   line: string;
   i: number;
@@ -223,6 +229,8 @@ interface LyricLineProps {
   targetLanguage?: string;
   onSaveLineExplanation?: (index: number, explanation: any) => void;
   onAddNoteToDictionary?: (lineIndex: number, note: any) => void;
+  originKeyMetadata?: Map<string, any>;
+  onEditCardFields?: (cardId: string, fields: Partial<any>) => Promise<void>;
 }
 
 const LyricLine = ({
@@ -247,6 +255,8 @@ const LyricLine = ({
   targetLanguage,
   onSaveLineExplanation,
   onAddNoteToDictionary,
+  originKeyMetadata,
+  onEditCardFields,
 }: LyricLineProps) => {
   const trimmedLine = line.trim();
 
@@ -254,6 +264,16 @@ const LyricLine = ({
   const [streamedSummary, setStreamedSummary] = useState("");
   const [isLoadingExplanation, setIsLoadingExplanation] = useState(false);
   const [explanationError, setExplanationError] = useState<string | null>(null);
+
+  // States for inline editing of saved notes in lyrics view
+  const [editingNoteIdx, setEditingNoteIdx] = useState<number | null>(null);
+  const [editNoteFields, setEditNoteFields] = useState({
+    text: "",
+    translation: "",
+    explanation: "",
+    type: "",
+    userNote: "",
+  });
 
   const cachedExpl = currentTrack?.lines?.[i]?.explanation;
   const summary = cachedExpl?.summary || "";
@@ -564,66 +584,214 @@ const LyricLine = ({
                     >
                       {notes.map((note: any, nIdx: number) => {
                         const bgTypeMap: Record<string, string> = {
+                          phrase: "bg-blue-500/10 border-blue-500/20 text-blue-600 dark:text-blue-400",
+                          vocabulary: "bg-teal-500/10 border-teal-500/20 text-teal-600 dark:text-teal-400",
                           idiom: "bg-purple-500/10 border-purple-500/20 text-purple-600 dark:text-purple-400",
                           cultural: "bg-pink-500/10 border-pink-500/20 text-pink-600 dark:text-pink-400",
-                          collocation: "bg-blue-500/10 border-blue-500/20 text-blue-600 dark:text-blue-400",
+                          collocation: "bg-indigo-500/10 border-indigo-500/20 text-indigo-600 dark:text-indigo-400",
                           grammar: "bg-amber-500/10 border-amber-500/20 text-amber-600 dark:text-amber-400",
                           nuance: "bg-teal-500/10 border-teal-500/20 text-teal-600 dark:text-teal-400"
                         };
-                        const typeClass = bgTypeMap[note.type] || "bg-app-fg/5 border-app-card-border text-app-fg/70";
-                        const phraseText = note.sourceText || line;
-                        const isAlreadyAdded = currentTrack?.lines?.some((l: any) =>
-                          l.phrases?.some((p: any) => p.text.toLowerCase().trim() === phraseText.toLowerCase().trim())
-                        );
+
+                        const noteOriginKey = currentTrack ? generateNoteOriginKey(currentTrack.trackId, currentTrack.lines[i]?.lineId, note.text, note.sourceText) : "";
+                        const existingCard = noteOriginKey ? originKeyMetadata?.get(noteOriginKey) : undefined;
+                        const isAlreadyAdded = !!existingCard;
+
+                        const displayType = existingCard?.type || existingCard?.entryType || note.type || "phrase";
+                        const displaySourceText = existingCard?.text || note.sourceText || line;
+                        const displayTranslation = existingCard?.translation || note.translation || "";
+                        const displayExplanation = existingCard?.explanation || note.text || "";
+                        const displayUserNote = existingCard?.userNote || "";
+
+                        const typeClass = bgTypeMap[displayType] || bgTypeMap[note.type] || "bg-app-fg/5 border-app-card-border text-app-fg/70";
+                        const isEditing = editingNoteIdx === nIdx;
 
                         return (
-                          <div key={nIdx} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-2.5 rounded-xl bg-app-card/30 border border-app-card-border/30 hover:border-app-card-border/65 transition-all">
-                            <div className="flex gap-2.5 items-start flex-1 min-w-0">
-                              <span className={cn(
-                                "text-[8px] font-black uppercase tracking-widest px-2 py-0.5 mt-0.5 rounded-md border shrink-0",
-                                typeClass
-                              )}>
-                                {note.type}
-                              </span>
-                              <div className="flex flex-col gap-0.5 min-w-0">
-                                {note.sourceText && (
-                                  <span className="text-xs font-semibold text-app-fg tracking-tight">
-                                    {note.sourceText} {note.translation && <span className="text-[10px] font-normal text-app-fg/50 font-mono ml-1">({note.translation})</span>}
-                                  </span>
-                                )}
-                                <span className="text-xs font-sans text-app-fg/75 leading-normal">
-                                  {note.text}
-                                </span>
+                          <div key={nIdx} className="p-3 rounded-xl bg-app-card/30 border border-app-card-border/30 hover:border-app-card-border/65 transition-all">
+                            {isEditing ? (
+                              <div className="space-y-2.5 w-full">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                  <div className="flex flex-col gap-0.5">
+                                    <label className="text-[9px] font-black uppercase tracking-widest opacity-40">Original term</label>
+                                    <input
+                                      type="text"
+                                      value={editNoteFields.text}
+                                      onChange={(e) => setEditNoteFields({ ...editNoteFields, text: e.target.value })}
+                                      className="w-full px-2.5 py-1.5 text-xs rounded-lg bg-app-bg border border-app-card-border focus:border-indigo-500 focus:outline-none"
+                                    />
+                                  </div>
+                                  <div className="flex flex-col gap-0.5">
+                                    <label className="text-[9px] font-black uppercase tracking-widest opacity-40">Translation</label>
+                                    <input
+                                      type="text"
+                                      value={editNoteFields.translation}
+                                      onChange={(e) => setEditNoteFields({ ...editNoteFields, translation: e.target.value })}
+                                      className="w-full px-2.5 py-1.5 text-xs rounded-lg bg-app-bg border border-app-card-border focus:border-indigo-500 focus:outline-none"
+                                    />
+                                  </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                  <div className="flex flex-col gap-0.5">
+                                    <label className="text-[9px] font-black uppercase tracking-widest opacity-40">Type</label>
+                                    <select
+                                      value={editNoteFields.type}
+                                      onChange={(e) => setEditNoteFields({ ...editNoteFields, type: e.target.value })}
+                                      className="w-full px-2.5 py-1 text-xs rounded-lg bg-app-bg border border-app-card-border focus:border-indigo-500 focus:outline-none"
+                                    >
+                                      <option value="phrase">Phrase</option>
+                                      <option value="vocabulary">Vocabulary</option>
+                                      <option value="idiom">Idiom</option>
+                                      <option value="collocation">Collocation</option>
+                                      <option value="grammar">Grammar</option>
+                                      <option value="nuance">Nuance</option>
+                                      <option value="cultural">Cultural</option>
+                                    </select>
+                                  </div>
+                                  <div className="flex flex-col gap-0.5">
+                                    <label className="text-[9px] font-black uppercase tracking-widest opacity-40">Memory Note (Optional)</label>
+                                    <input
+                                      type="text"
+                                      value={editNoteFields.userNote}
+                                      placeholder="Mnemonic helper..."
+                                      onChange={(e) => setEditNoteFields({ ...editNoteFields, userNote: e.target.value })}
+                                      className="w-full px-2.5 py-1.5 text-xs rounded-lg bg-app-bg border border-app-card-border focus:border-indigo-500 focus:outline-none"
+                                    />
+                                  </div>
+                                </div>
+
+                                <div className="flex flex-col gap-0.5">
+                                  <label className="text-[9px] font-black uppercase tracking-widest opacity-40">Explanation</label>
+                                  <textarea
+                                    value={editNoteFields.explanation}
+                                    rows={2}
+                                    onChange={(e) => setEditNoteFields({ ...editNoteFields, explanation: e.target.value })}
+                                    className="w-full px-2.5 py-1.5 text-xs rounded-lg bg-app-bg border border-app-card-border focus:border-indigo-500 focus:outline-none resize-none"
+                                  />
+                                </div>
+
+                                <div className="flex items-center justify-end gap-2 pt-1 border-t border-app-card-border/20">
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setEditingNoteIdx(null);
+                                    }}
+                                    className="px-2.5 py-1 text-[9px] font-extrabold uppercase tracking-widest rounded-lg border border-app-card-border hover:bg-app-fg/5 transition-all"
+                                  >
+                                    Cancel
+                                  </button>
+                                  <button
+                                    onClick={async (e) => {
+                                      e.stopPropagation();
+                                      if (existingCard && onEditCardFields) {
+                                        await onEditCardFields(existingCard.id, {
+                                          text: editNoteFields.text,
+                                          translation: editNoteFields.translation,
+                                          explanation: editNoteFields.explanation,
+                                          type: editNoteFields.type,
+                                          entryType: editNoteFields.type,
+                                          userNote: editNoteFields.userNote,
+                                        });
+                                      }
+                                      setEditingNoteIdx(null);
+                                    }}
+                                    className="px-2.5 py-1 text-[9px] font-extrabold uppercase tracking-widest rounded-lg bg-app-fg text-app-bg hover:scale-105 active:scale-95 transition-all"
+                                  >
+                                    Save
+                                  </button>
+                                </div>
                               </div>
-                            </div>
-                            {onAddNoteToDictionary && (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  if (!isAlreadyAdded) {
-                                    onAddNoteToDictionary(i, note);
-                                  }
-                                }}
-                                disabled={isAlreadyAdded}
-                                className={cn(
-                                  "text-[10px] h-7 px-2.5 rounded-lg font-bold flex items-center justify-center gap-1 transition-all shrink-0 w-full sm:w-auto mt-1 sm:mt-0",
-                                  isAlreadyAdded 
-                                    ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20"
-                                    : "bg-app-fg/10 hover:bg-[var(--accent)] hover:text-white border border-transparent cursor-pointer"
-                                )}
-                              >
-                                {isAlreadyAdded ? (
-                                  <>
-                                    <Check size={10} className="stroke-[3px]" />
-                                    <span>Saved</span>
-                                  </>
-                                ) : (
-                                  <>
-                                    <Plus size={10} className="stroke-[3px]" />
-                                    <span>Add to Dictionary</span>
-                                  </>
-                                )}
-                              </button>
+                            ) : (
+                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 w-full">
+                                <div className="flex gap-2.5 items-start flex-1 min-w-0">
+                                  <span className={cn(
+                                    "text-[8px] font-black uppercase tracking-widest px-2 py-0.5 mt-0.5 rounded-md border shrink-0",
+                                    typeClass
+                                  )}>
+                                    {displayType}
+                                  </span>
+                                  <div className="flex flex-col gap-0.5 min-w-0">
+                                    <span className="text-xs font-semibold text-app-fg tracking-tight flex flex-wrap items-center gap-1.5">
+                                      {displaySourceText}
+                                      {displayTranslation && (
+                                        <span className="text-[10px] font-normal text-app-fg/50 font-mono">
+                                          ({displayTranslation})
+                                        </span>
+                                      )}
+                                      {displayUserNote && (
+                                        <span className="text-[9px] font-bold text-teal-600 dark:text-teal-400 bg-teal-500/10 px-1.5 py-0.5 rounded-md">
+                                          Note: {displayUserNote}
+                                        </span>
+                                      )}
+                                      {existingCard && (
+                                        <span className={cn(
+                                          "text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded",
+                                          existingCard.status === "known" 
+                                            ? "bg-emerald-500/10 text-emerald-600" 
+                                            : "bg-orange-500/10 text-orange-600"
+                                        )}>
+                                          {existingCard.status === "known" ? "known" : "learning"}
+                                        </span>
+                                      )}
+                                    </span>
+                                    <span className="text-xs font-sans text-app-fg/75 leading-normal">
+                                      {displayExplanation}
+                                    </span>
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-2 mt-1 sm:mt-0 shrink-0 self-end sm:self-center">
+                                  {isAlreadyAdded && onEditCardFields && (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setEditingNoteIdx(nIdx);
+                                        setEditNoteFields({
+                                          text: displaySourceText,
+                                          translation: displayTranslation,
+                                          explanation: displayExplanation,
+                                          type: displayType,
+                                          userNote: displayUserNote,
+                                        });
+                                      }}
+                                      className="text-[10px] h-7 px-2.5 rounded-lg font-bold flex items-center justify-center gap-1 transition-all border border-transparent bg-app-fg/5 hover:bg-app-fg/10 cursor-pointer"
+                                    >
+                                      <Edit3 size={10} />
+                                      <span>Edit</span>
+                                    </button>
+                                  )}
+
+                                  {onAddNoteToDictionary && (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (!isAlreadyAdded) {
+                                          onAddNoteToDictionary(i, note);
+                                        }
+                                      }}
+                                      disabled={isAlreadyAdded}
+                                      className={cn(
+                                        "text-[10px] h-7 px-2.5 rounded-lg font-bold flex items-center justify-center gap-1 transition-all",
+                                        isAlreadyAdded 
+                                          ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20"
+                                          : "bg-app-fg/10 hover:bg-[var(--accent)] hover:text-white border border-transparent cursor-pointer"
+                                      )}
+                                    >
+                                      {isAlreadyAdded ? (
+                                        <>
+                                          <Check size={10} className="stroke-[3px]" />
+                                          <span>Saved</span>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <Plus size={10} className="stroke-[3px]" />
+                                          <span>Add to Study</span>
+                                        </>
+                                      )}
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
                             )}
                           </div>
                         );
@@ -892,6 +1060,7 @@ export default function App() {
   const {
     phraseMetadata,
     setPhraseMetadata,
+    originKeyMetadata,
     isSaving,
     dueCardsCount,
     dailyProgressSummary,
@@ -1027,7 +1196,7 @@ export default function App() {
     saveTrackData(currentTrack.trackId, updatedTrack);
   };
 
-  const handleAddNoteToDictionary = (lineIndex: number, note: any) => {
+  const handleAddNoteToDictionary = async (lineIndex: number, note: any) => {
     if (!currentTrack) return;
     const line = currentTrack.lines[lineIndex];
     if (!line) return;
@@ -1036,25 +1205,52 @@ export default function App() {
     const translation = note.translation || note.text || "";
     const explanation = note.text || "";
     const targetLineId = line.lineId;
-    const noteType = note.entryType || note.type || "phrase";
+    const noteType = note.type || "phrase";
 
-    const isDuplicate = currentTrack.lines.some((l: any) => 
-      l.phrases?.some((p: any) => p.text.toLowerCase().trim() === phraseText.toLowerCase().trim())
-    );
+    const noteOriginKey = generateNoteOriginKey(currentTrack.trackId, targetLineId, note.text, note.sourceText);
 
-    if (isDuplicate) return;
+    try {
+      await studyCardsRepository.addPhraseToStudy({
+        id: noteOriginKey,
+        text: phraseText,
+        translation: translation,
+        trackId: currentTrack.trackId,
+        trackTitle: currentTrack.title,
+        artist: currentTrack.artist,
+        sourceLanguage: currentTrack.sourceLanguage,
+        lineId: targetLineId,
+        explanation: explanation,
+        type: noteType,
+        originType: "line_explanation_note",
+        originKey: noteOriginKey,
+        entryType: noteType,
+        rawText: phraseText,
+        rawTranslation: translation,
+        rawExplanation: explanation,
+        userNote: ""
+      }, "learning");
 
-    const updatedTrack = addUserPhrase(
-      currentTrack,
-      phraseText,
-      translation,
-      explanation,
-      targetLineId,
-      noteType
-    );
+      const isDuplicate = currentTrack.lines.some((l: any) => 
+        l.phrases?.some((p: any) => p.text.toLowerCase().trim() === phraseText.toLowerCase().trim())
+      );
 
-    saveTrackData(currentTrack.trackId, updatedTrack);
-    setCurrentTrack(updatedTrack);
+      if (!isDuplicate) {
+        const updatedTrack = addUserPhrase(
+          currentTrack,
+          phraseText,
+          translation,
+          explanation,
+          targetLineId,
+          noteType
+        );
+        saveTrackData(currentTrack.trackId, updatedTrack);
+        setCurrentTrack(updatedTrack);
+      }
+
+      await loadUserCards();
+    } catch (err) {
+      console.error("Failed to save note to dictionary:", err);
+    }
   };
 
   // Synchronized callback action delegates
@@ -1269,6 +1465,15 @@ export default function App() {
     });
   };
 
+  const handleEditCardFields = async (cardId: string, fields: Partial<any>) => {
+    try {
+      await studyCardsRepository.updateCardFields(cardId, fields);
+      await loadUserCards();
+    } catch (err) {
+      console.error("Failed to edit card from lyrics:", err);
+    }
+  };
+
   const renderLyricLine = (
     line: string,
     i: number,
@@ -1299,6 +1504,8 @@ export default function App() {
         targetLanguage={targetLanguage}
         onSaveLineExplanation={handleSaveLineExplanation}
         onAddNoteToDictionary={handleAddNoteToDictionary}
+        originKeyMetadata={originKeyMetadata}
+        onEditCardFields={handleEditCardFields}
       />
     );
   };
@@ -2933,6 +3140,7 @@ export default function App() {
                   setDailyActivity(recordReviewCompleted());
                   loadUserCards();
                 }}
+                onCardUpdated={loadUserCards}
               />
             </motion.div>
           )}

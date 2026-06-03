@@ -13,6 +13,7 @@ export interface UseUserCardsResult {
   phraseMetadata: Map<string, Flashcard>;
   setPhraseMetadata: React.Dispatch<React.SetStateAction<Map<string, Flashcard>>>;
   childCardsMap: Map<string, Flashcard[]>;
+  originKeyMetadata: Map<string, Flashcard>;
   isSaving: boolean;
   dailyActivity: DailyActivity;
   dueCardsCount: number;
@@ -33,6 +34,7 @@ export interface UseUserCardsResult {
 export function useUserCards(recentTracks: any[]): UseUserCardsResult {
   const [phraseMetadata, setPhraseMetadata] = useState<Map<string, Flashcard>>(new Map());
   const [childCardsMap, setChildCardsMap] = useState<Map<string, Flashcard[]>>(new Map());
+  const [originKeyMetadata, setOriginKeyMetadata] = useState<Map<string, Flashcard>>(new Map());
   const [isSaving, setIsSaving] = useState(false);
   const [dailyActivity, setDailyActivity] = useState<DailyActivity>(() => dailyTrackerRepository.getDailyActivity());
 
@@ -59,9 +61,13 @@ export function useUserCards(recentTracks: any[]): UseUserCardsResult {
       const cards = await studyCardsRepository.getCards();
       const meta = new Map<string, Flashcard>();
       const children = new Map<string, Flashcard[]>();
+      const originKeyMeta = new Map<string, Flashcard>();
 
       cards.forEach((card) => {
         meta.set(card.text, card);
+        if (card.originKey) {
+          originKeyMeta.set(card.originKey, card);
+        }
         if (card.lineId) {
           const list = children.get(card.lineId) || [];
           list.push(card);
@@ -71,6 +77,7 @@ export function useUserCards(recentTracks: any[]): UseUserCardsResult {
 
       setPhraseMetadata(meta);
       setChildCardsMap(children);
+      setOriginKeyMetadata(originKeyMeta);
     } catch (err) {
       console.error("Failed to load cards:", err);
     }
@@ -231,6 +238,7 @@ export function useUserCards(recentTracks: any[]): UseUserCardsResult {
     phraseMetadata,
     setPhraseMetadata,
     childCardsMap,
+    originKeyMetadata,
     isSaving,
     dailyActivity,
     dueCardsCount,

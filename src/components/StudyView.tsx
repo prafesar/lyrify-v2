@@ -6,7 +6,7 @@ import { studyCardsRepository, userPreferencesRepository, Flashcard, PhraseStatu
 const getCards = () => studyCardsRepository.getCards();
 const reviewCard = (cardId: string, rating: Rating) => studyCardsRepository.reviewCard(cardId, rating);
 const deleteFlashcard = (cardId: string) => studyCardsRepository.deleteFlashcard(cardId);
-import { Check, X, ArrowRight, Brain, Trash2, ChevronLeft, Clock, Music, User, LayoutGrid, PlayCircle, Library, Globe, ChevronDown, ChevronUp, Volume2 } from 'lucide-react';
+import { Check, X, ArrowRight, Brain, Trash2, ChevronLeft, Clock, Music, User, LayoutGrid, PlayCircle, Library, Globe, ChevronDown, ChevronUp, Volume2, Edit3, Save } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { getLocaleByName } from '../lib/languages';
 
@@ -14,11 +14,12 @@ interface StudyViewProps {
   onBack: () => void;
   initialTrackId?: string;
   onReviewCompleted?: () => void;
+  onCardUpdated?: () => void;
 }
 
 type GroupMode = 'recent' | 'track' | 'artist';
 
-export default function StudyView({ onBack, initialTrackId, onReviewCompleted }: StudyViewProps) {
+export default function StudyView({ onBack, initialTrackId, onReviewCompleted, onCardUpdated }: StudyViewProps) {
   const [allCards, setAllCards] = useState<Flashcard[]>([]);
   const [sessionCards, setSessionCards] = useState<Flashcard[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -34,6 +35,16 @@ export default function StudyView({ onBack, initialTrackId, onReviewCompleted }:
   const [selectedTrack, setSelectedTrack] = useState<string>(initialTrackId || 'all');
   const [selectedType, setSelectedType] = useState<string>('all');
   const [expandedParents, setExpandedParents] = useState<Set<string>>(new Set());
+
+  // Editing state for cards
+  const [editingCardId, setEditingCardId] = useState<string | null>(null);
+  const [editFields, setEditFields] = useState({
+    text: '',
+    translation: '',
+    explanation: '',
+    type: '',
+    userNote: '',
+  });
 
   const typeLabels: Record<string, string> = {
     idiom: 'Idioms',
@@ -463,40 +474,163 @@ export default function StudyView({ onBack, initialTrackId, onReviewCompleted }:
                           className="overflow-hidden border-t border-app-card-border bg-app-fg/[0.01]"
                         >
                           <div className="p-4 space-y-3">
-                            {group.phrases.map(child => (
-                              <div key={child.id} className="p-4 rounded-2xl border border-app-card-border/40 bg-app-card/30 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-app-fg/[0.02] transition-all">
-                                <div className="space-y-1.5 flex-1 min-w-0">
-                                  {/* Phrase and Type Tag */}
-                                  <div className="flex flex-wrap items-center gap-2">
-                                    <span className="text-base font-serif font-medium text-app-fg">{child.text}</span>
-                                    {child.type && child.type !== 'phrase' && (
-                                      <span className="text-[9px] font-black uppercase tracking-widest text-[var(--accent)] bg-[var(--accent)]/10 px-2 py-0.5 rounded-md">
-                                        {typeLabels[child.type] || child.type}
-                                      </span>
-                                    )}
-                                  </div>
-                                  
-                                  {/* Translation */}
-                                  <p className="text-sm text-app-fg opacity-60 font-sans">{child.translation}</p>
-                                  
-                                  {/* Original Lyric Line if available */}
-                                  {child.lineId && (
-                                    <div className="text-xs text-app-fg/40 italic flex items-center gap-1.5 mt-1">
-                                      <span className="inline-block w-1.5 h-1.5 rounded-full bg-app-card-border" />
-                                      Context: «{child.lineId}»
+                            {group.phrases.map(child => {
+                              const isEditing = editingCardId === child.id;
+                              return (
+                                <div key={child.id} className="p-4 rounded-2xl border border-app-card-border/40 bg-app-card/30 flex flex-col hover:bg-app-fg/[0.02] transition-all">
+                                  {isEditing ? (
+                                    <div className="space-y-3 w-full">
+                                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                        <div className="flex flex-col gap-1">
+                                          <label className="text-[10px] font-black uppercase tracking-widest opacity-40">Original Text</label>
+                                          <input
+                                            type="text"
+                                            value={editFields.text}
+                                            onChange={(e) => setEditFields({ ...editFields, text: e.target.value })}
+                                            className="w-full px-3 py-2 text-sm rounded-xl bg-app-bg border border-app-card-border focus:border-indigo-500 focus:outline-none"
+                                          />
+                                        </div>
+                                        <div className="flex flex-col gap-1">
+                                          <label className="text-[10px] font-black uppercase tracking-widest opacity-40">Translation</label>
+                                          <input
+                                            type="text"
+                                            value={editFields.translation}
+                                            onChange={(e) => setEditFields({ ...editFields, translation: e.target.value })}
+                                            className="w-full px-3 py-2 text-sm rounded-xl bg-app-bg border border-app-card-border focus:border-indigo-500 focus:outline-none"
+                                          />
+                                        </div>
+                                      </div>
+
+                                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                        <div className="flex flex-col gap-1">
+                                          <label className="text-[10px] font-black uppercase tracking-widest opacity-40">Type</label>
+                                          <select
+                                            value={editFields.type}
+                                            onChange={(e) => setEditFields({ ...editFields, type: e.target.value })}
+                                            className="w-full px-3 py-2 text-sm rounded-xl bg-app-bg border border-app-card-border focus:border-indigo-500 focus:outline-none"
+                                          >
+                                            {Object.entries(typeLabels).map(([val, label]) => (
+                                              <option key={val} value={val}>{label}</option>
+                                            ))}
+                                          </select>
+                                        </div>
+                                        <div className="flex flex-col gap-1">
+                                          <label className="text-[10px] font-black uppercase tracking-widest opacity-40">User Note (Optional)</label>
+                                          <input
+                                            type="text"
+                                            value={editFields.userNote}
+                                            onChange={(e) => setEditFields({ ...editFields, userNote: e.target.value })}
+                                            placeholder="Add private mnemonics helper..."
+                                            className="w-full px-3 py-2 text-sm rounded-xl bg-app-bg border border-app-card-border focus:border-indigo-500 focus:outline-none"
+                                          />
+                                        </div>
+                                      </div>
+
+                                      <div className="flex flex-col gap-1">
+                                        <label className="text-[10px] font-black uppercase tracking-widest opacity-40">Explanation</label>
+                                        <textarea
+                                          value={editFields.explanation}
+                                          rows={3}
+                                          onChange={(e) => setEditFields({ ...editFields, explanation: e.target.value })}
+                                          className="w-full px-3 py-2 text-sm rounded-xl bg-app-bg border border-app-card-border focus:border-indigo-500 focus:outline-none resize-none"
+                                        />
+                                      </div>
+
+                                      <div className="flex items-center justify-end gap-2.5 pt-1.5 border-t border-app-card-border/30">
+                                        <button
+                                          onClick={() => setEditingCardId(null)}
+                                          className="px-3.5 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-xl border border-app-card-border hover:bg-app-fg/5 transition-all"
+                                        >
+                                          Cancel
+                                        </button>
+                                        <button
+                                          onClick={async () => {
+                                            await studyCardsRepository.updateCardFields(child.id, {
+                                              text: editFields.text,
+                                              translation: editFields.translation,
+                                              explanation: editFields.explanation,
+                                              type: editFields.type,
+                                              entryType: editFields.type,
+                                              userNote: editFields.userNote,
+                                            });
+                                            setEditingCardId(null);
+                                            loadCards();
+                                            onCardUpdated?.();
+                                          }}
+                                          className="px-3.5 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-xl bg-[var(--accent)] text-white hover:scale-105 active:scale-95 transition-all"
+                                        >
+                                          Save
+                                        </button>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 w-full">
+                                      <div className="space-y-1.5 flex-1 min-w-0">
+                                        {/* Phrase and Type Tag */}
+                                        <div className="flex flex-wrap items-center gap-2">
+                                          <span className="text-base font-serif font-medium text-app-fg">{child.text}</span>
+                                          {child.type && child.type !== 'phrase' && (
+                                            <span className="text-[9px] font-black uppercase tracking-widest text-[var(--accent)] bg-[var(--accent)]/10 px-2 py-0.5 rounded-md">
+                                              {typeLabels[child.type] || child.type}
+                                            </span>
+                                          )}
+                                          {child.userNote && (
+                                            <span className="text-[9px] font-bold text-teal-600 dark:text-teal-400 bg-teal-500/10 px-2 py-0.5 rounded-md">
+                                              Note: {child.userNote}
+                                            </span>
+                                          )}
+                                        </div>
+                                        
+                                        {/* Translation */}
+                                        <p className="text-sm text-app-fg opacity-60 font-sans">{child.translation}</p>
+
+                                        {/* Explanation */}
+                                        {child.explanation && (
+                                          <div className="text-xs text-app-fg/75 font-sans mt-1 max-w-xl">
+                                            <ReactMarkdown>{child.explanation}</ReactMarkdown>
+                                          </div>
+                                        )}
+                                        
+                                        {/* Original Lyric Line if available */}
+                                        {child.lineId && (
+                                          <div className="text-xs text-app-fg/40 italic flex items-center gap-1.5 mt-1">
+                                            <span className="inline-block w-1.5 h-1.5 rounded-full bg-app-card-border" />
+                                            Context: «{child.lineId}»
+                                          </div>
+                                        )}
+                                      </div>
+                                      
+                                      <div className="flex items-center gap-2 self-end md:self-center shrink-0">
+                                        <button
+                                          onClick={() => {
+                                            setEditingCardId(child.id);
+                                            setEditFields({
+                                              text: child.text || '',
+                                              translation: child.translation || '',
+                                              explanation: child.explanation || '',
+                                              type: child.type || 'phrase',
+                                              userNote: child.userNote || '',
+                                            });
+                                          }}
+                                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-app-fg/5 text-app-fg text-[10px] font-black uppercase tracking-widest hover:bg-app-fg/10 transition-all border border-transparent"
+                                          title="Edit card"
+                                        >
+                                          <Edit3 size={11} />
+                                          <span>Edit</span>
+                                        </button>
+                                        <button 
+                                          onClick={() => startSession([child])}
+                                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-app-fg/5 text-app-fg text-[10px] font-black uppercase tracking-widest hover:bg-[var(--accent)] hover:text-white hover:opacity-100 transition-all"
+                                        >
+                                          <PlayCircle size={14} />
+                                          Study
+                                        </button>
+                                      </div>
                                     </div>
                                   )}
                                 </div>
-                                
-                                <button 
-                                  onClick={() => startSession([child])}
-                                  className="self-end md:self-center shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-app-fg/5 text-app-fg text-[10px] font-black uppercase tracking-widest hover:bg-[var(--accent)] hover:text-white hover:opacity-100 transition-all"
-                                >
-                                  <PlayCircle size={14} />
-                                  Study
-                                </button>
-                              </div>
-                            ))}
+                              );
+                            })}
                           </div>
                         </motion.div>
                       )}
