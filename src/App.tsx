@@ -69,7 +69,7 @@ import StudyView from "./components/StudyView";
 import SettingsView from "./components/SettingsView";
 import PhraseDrawer from "./components/PhraseDrawer";
 import { LearningAssistantPanel } from "./components/LearningAssistantPanel";
-import { acceptSuggestedPhrase, addUserPhrase } from "./services/lyricsAnalysisService";
+import { acceptSuggestedPhrase, addUserPhrase, editPhrase } from "./services/lyricsAnalysisService";
 import { LibraryView } from "./components/LibraryView";
 import LanguageSelector from "./components/LanguageSelector";
 import {
@@ -202,9 +202,29 @@ const RESOURCE_TYPES = [
   },
 ];
 
-const generateNoteOriginKey = (trackId: string, lineId: string | undefined, noteText: string, noteSourceText?: string) => {
-  const normSource = ((noteSourceText || noteText) || "").toLowerCase().trim().replace(/[^a-z0-9]/gi, "").slice(0, 32);
-  return `note_${trackId}_${lineId || "line"}_${normSource}`;
+const generateNoteOriginKey = (
+  trackId: string,
+  lineId: string | undefined,
+  noteText: string,
+  noteSourceText: string | undefined,
+  indexOrNoteKey: number | string
+) => {
+  const source = (noteSourceText || noteText || "").trim();
+  const textVal = (noteText || "").trim();
+  const rawCombined = `${source}_${textVal}_${indexOrNoteKey}`;
+  
+  let hash = 0;
+  for (let i = 0; i < rawCombined.length; i++) {
+    const char = rawCombined.charCodeAt(i);
+    hash = (hash << 5) - hash + char;
+    hash |= 0;
+  }
+  const hexHash = (hash >>> 0).toString(16);
+  
+  const cleanAscii = source.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 16);
+  const suffix = cleanAscii ? `_${cleanAscii}` : "";
+  
+  return `note_${trackId}_${lineId || "line"}_k${indexOrNoteKey}${suffix}_${hexHash}`;
 };
 
 interface LyricLineProps {
@@ -228,7 +248,7 @@ interface LyricLineProps {
   lineId?: string;
   targetLanguage?: string;
   onSaveLineExplanation?: (index: number, explanation: any) => void;
-  onAddNoteToDictionary?: (lineIndex: number, note: any) => void;
+  onAddNoteToDictionary?: (lineIndex: number, note: any, noteIndex: number) => void;
   originKeyMetadata?: Map<string, any>;
   onEditCardFields?: (cardId: string, fields: Partial<any>) => Promise<void>;
 }
@@ -593,7 +613,7 @@ const LyricLine = ({
                           nuance: "bg-teal-500/10 border-teal-500/20 text-teal-600 dark:text-teal-400"
                         };
 
-                        const noteOriginKey = currentTrack ? generateNoteOriginKey(currentTrack.trackId, currentTrack.lines[i]?.lineId, note.text, note.sourceText) : "";
+                        const noteOriginKey = currentTrack ? generateNoteOriginKey(currentTrack.trackId, currentTrack.lines[i]?.lineId, note.text, note.sourceText, nIdx) : "";
                         const existingCard = noteOriginKey ? originKeyMetadata?.get(noteOriginKey) : undefined;
                         const isAlreadyAdded = !!existingCard;
 
@@ -607,7 +627,7 @@ const LyricLine = ({
                         const isEditing = editingNoteIdx === nIdx;
 
                         return (
-                          <div key={nIdx} className="p-3 rounded-xl bg-app-card/30 border border-app-card-border/30 hover:border-app-card-border/65 transition-all">
+                          <div key={noteOriginKey || nIdx} className="p-3 rounded-xl bg-app-card/30 border border-app-card-border/30 hover:border-app-card-border/65 transition-all">
                             {isEditing ? (
                               <div className="space-y-2.5 w-full">
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -766,7 +786,7 @@ const LyricLine = ({
                                       onClick={(e) => {
                                         e.stopPropagation();
                                         if (!isAlreadyAdded) {
-                                          onAddNoteToDictionary(i, note);
+                                          onAddNoteToDictionary(i, note, nIdx);
                                         }
                                       }}
                                       disabled={isAlreadyAdded}
@@ -1196,7 +1216,7 @@ export default function App() {
     saveTrackData(currentTrack.trackId, updatedTrack);
   };
 
-  const handleAddNoteToDictionary = async (lineIndex: number, note: any) => {
+  const handleAddNoteToDictionary = async (lineIndex: number, note: any, noteIndex: number) => {
     if (!currentTrack) return;
     const line = currentTrack.lines[lineIndex];
     if (!line) return;
@@ -1207,11 +1227,49 @@ export default function App() {
     const targetLineId = line.lineId;
     const noteType = note.type || "phrase";
 
-    const noteOriginKey = generateNoteOriginKey(currentTrack.trackId, targetLineId, note.text, note.sourceText);
+    const noteOriginKey = generateNoteOriginKey(currentTrack.trackId, targetLineId, note.text, note.sourceText, noteIndex);
 
     try {
+      let connectedPhraseId = "";
+      let existingPhrase: any = null;
+      for (const l of currentTrack.lines) {
+        if (l.phrases) {
+          existingPhrase = l.phrases.find((p: any) => p.text.toLowerCase().trim() === phraseText.toLowerCase().trim());
+          if (existingPhrase) break;
+        }
+      }
+
+      let updatedTrack = currentTrack;
+      if (!existingPhrase) {
+        updatedTrack = addUserPhrase(
+          currentTrack,
+          phraseText,
+          translation,
+          explanation,
+          targetLineId,
+          undefined,
+          noteType
+        );
+
+        for (const l of updatedTrack.lines) {
+          if (l.lineId === targetLineId && l.phrases) {
+            const newlyAdded = l.phrases.find((p: any) => p.text.toLowerCase().trim() === phraseText.toLowerCase().trim());
+            if (newlyAdded) {
+              connectedPhraseId = newlyAdded.id;
+              break;
+            }
+          }
+        }
+        
+        saveTrackData(currentTrack.trackId, updatedTrack);
+        setCurrentTrack(updatedTrack);
+      } else {
+        connectedPhraseId = existingPhrase.id;
+      }
+
       await studyCardsRepository.addPhraseToStudy({
         id: noteOriginKey,
+        phraseId: connectedPhraseId,
         text: phraseText,
         translation: translation,
         trackId: currentTrack.trackId,
@@ -1228,24 +1286,7 @@ export default function App() {
         rawTranslation: translation,
         rawExplanation: explanation,
         userNote: ""
-      }, "learning");
-
-      const isDuplicate = currentTrack.lines.some((l: any) => 
-        l.phrases?.some((p: any) => p.text.toLowerCase().trim() === phraseText.toLowerCase().trim())
-      );
-
-      if (!isDuplicate) {
-        const updatedTrack = addUserPhrase(
-          currentTrack,
-          phraseText,
-          translation,
-          explanation,
-          targetLineId,
-          noteType
-        );
-        saveTrackData(currentTrack.trackId, updatedTrack);
-        setCurrentTrack(updatedTrack);
-      }
+      } as any, "learning");
 
       await loadUserCards();
     } catch (err) {
@@ -1468,9 +1509,85 @@ export default function App() {
   const handleEditCardFields = async (cardId: string, fields: Partial<any>) => {
     try {
       await studyCardsRepository.updateCardFields(cardId, fields);
+      
+      if (currentTrack) {
+        const cardInMeta = [...(originKeyMetadata?.values() || [])].find(c => c.id === cardId) as any;
+        const targetPhraseId = cardInMeta?.phraseId || cardInMeta?.phraseMetadata?.id;
+        
+        let foundPhraseId = targetPhraseId;
+        if (!foundPhraseId) {
+          const textToMatching = cardInMeta?.text || fields.text;
+          if (textToMatching) {
+            for (const l of currentTrack.lines) {
+              if (l.phrases) {
+                const matched = l.phrases.find((p: any) => p.text.toLowerCase().trim() === textToMatching.toLowerCase().trim());
+                if (matched) {
+                  foundPhraseId = matched.id;
+                  break;
+                }
+              }
+            }
+          }
+        }
+        
+        if (foundPhraseId) {
+          const phraseUpdates: any = {};
+          if (fields.text !== undefined) phraseUpdates.text = fields.text;
+          if (fields.translation !== undefined) phraseUpdates.translation = fields.translation;
+          if (fields.explanation !== undefined) phraseUpdates.explanation = fields.explanation;
+          if (fields.type !== undefined) phraseUpdates.type = fields.type;
+          
+          const updatedTrack = editPhrase(currentTrack, foundPhraseId, phraseUpdates);
+          saveTrackData(currentTrack.trackId, updatedTrack);
+          setCurrentTrack(updatedTrack);
+        }
+      }
+      
       await loadUserCards();
     } catch (err) {
       console.error("Failed to edit card from lyrics:", err);
+    }
+  };
+
+  const handleStudyCardUpdated = async (cardId?: string) => {
+    await loadUserCards();
+    
+    if (cardId && currentTrack) {
+      try {
+        const allCards = await studyCardsRepository.getCards();
+        const updatedCard = allCards.find(c => c.id === cardId);
+        if (updatedCard) {
+          const targetPhraseId = updatedCard.phraseId || (updatedCard as any).phraseMetadata?.id;
+          
+          let foundPhraseId = targetPhraseId;
+          if (!foundPhraseId) {
+            const textToMatching = updatedCard.text;
+            for (const l of currentTrack.lines) {
+              if (l.phrases) {
+                const matched = l.phrases.find((p: any) => p.text.toLowerCase().trim() === textToMatching.toLowerCase().trim());
+                if (matched) {
+                  foundPhraseId = matched.id;
+                  break;
+                }
+              }
+            }
+          }
+          
+          if (foundPhraseId) {
+            const phraseUpdates: any = {};
+            if (updatedCard.text !== undefined) phraseUpdates.text = updatedCard.text;
+            if (updatedCard.translation !== undefined) phraseUpdates.translation = updatedCard.translation;
+            if (updatedCard.explanation !== undefined) phraseUpdates.explanation = updatedCard.explanation;
+            if (updatedCard.type !== undefined) phraseUpdates.type = updatedCard.type;
+            
+            const updatedTrack = editPhrase(currentTrack, foundPhraseId, phraseUpdates);
+            saveTrackData(currentTrack.trackId, updatedTrack);
+            setCurrentTrack(updatedTrack);
+          }
+        }
+      } catch (err) {
+        console.error("Failed to sync study edit to track model:", err);
+      }
     }
   };
 
@@ -3140,7 +3257,7 @@ export default function App() {
                   setDailyActivity(recordReviewCompleted());
                   loadUserCards();
                 }}
-                onCardUpdated={loadUserCards}
+                onCardUpdated={handleStudyCardUpdated}
               />
             </motion.div>
           )}

@@ -14,7 +14,7 @@ interface StudyViewProps {
   onBack: () => void;
   initialTrackId?: string;
   onReviewCompleted?: () => void;
-  onCardUpdated?: () => void;
+  onCardUpdated?: (cardId?: string) => void;
 }
 
 type GroupMode = 'recent' | 'track' | 'artist';
@@ -555,7 +555,7 @@ export default function StudyView({ onBack, initialTrackId, onReviewCompleted, o
                                             });
                                             setEditingCardId(null);
                                             loadCards();
-                                            onCardUpdated?.();
+                                            onCardUpdated?.(child.id);
                                           }}
                                           className="px-3.5 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-xl bg-[var(--accent)] text-white hover:scale-105 active:scale-95 transition-all"
                                         >

@@ -174,13 +174,14 @@ export function addUserPhrase(
   translation: string,
   explanation: string,
   targetLineId?: string,
-  note?: string
+  note?: string,
+  type?: string
 ): TrackLyricsData {
   const newPhrase: Phrase = {
     id: generatePhraseId(track.trackId, phraseText),
     text: phraseText,
     lemmas: [],
-    type: 'phrase',
+    type: type || 'phrase',
     translation,
     explanation,
     normalizedText: normalizePhraseText(phraseText),

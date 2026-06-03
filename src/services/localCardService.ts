@@ -67,6 +67,7 @@ export async function addPhraseToStudy(
     lineId: string;
     explanation: string;
     type: string;
+    phraseId?: string;
     trackTitle?: string;
     artist?: string;
     sourceLanguage?: string;
@@ -89,7 +90,7 @@ export async function addPhraseToStudy(
 
   const newCard: Flashcard = {
     id,
-    phraseId: id,
+    phraseId: phraseData.phraseId || id,
     text: phraseData.text,
     lemmas: phraseData.lemmas,
     translation: phraseData.translation,
