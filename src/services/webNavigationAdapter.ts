@@ -7,7 +7,11 @@ export function setTransientTrack(track: any) {
 }
 
 export function popTransientTrack(id: string): any | null {
-  if (transientTrackCache && (String(transientTrackCache.id) === id || String(transientTrackCache.trackId) === id)) {
+  if (transientTrackCache && (
+    String(transientTrackCache.id) === id || 
+    String(transientTrackCache.trackId) === id || 
+    String(transientTrackCache.itunesTrackId) === id
+  )) {
     const t = transientTrackCache;
     transientTrackCache = null;
     return t;

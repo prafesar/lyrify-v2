@@ -403,6 +403,7 @@ const LyricLine = ({
       }}
     >
       <motion.div
+        key={`lyric-line-wrapper-${i}`}
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: Math.min(i * 0.01, 1) }}
@@ -492,6 +493,7 @@ const LyricLine = ({
 
                 {activeLineIndex === i && isListeningForSpeech && (
                   <motion.div
+                    key={`speech-animation-${i}`}
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     className="flex items-center gap-3 mt-4 ml-1 bg-[var(--accent)]/5 border border-[var(--accent)]/10 px-4 py-3 rounded-3xl w-fit shadow-lg shadow-[var(--accent)]/5"
@@ -631,7 +633,7 @@ const LyricLine = ({
                         const isEditing = editingNoteIdx === nIdx;
 
                         return (
-                          <div key={noteOriginKey || nIdx} className="p-3 rounded-xl bg-app-card/30 border border-app-card-border/30 hover:border-app-card-border/65 transition-all">
+                          <div key={noteOriginKey ? `note-${noteOriginKey}` : `note-idx-${nIdx}`} className="p-3 rounded-xl bg-app-card/30 border border-app-card-border/30 hover:border-app-card-border/65 transition-all">
                             {isEditing ? (
                               <div className="space-y-2.5 w-full">
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -1669,7 +1671,89 @@ export default function App() {
               // Fallback to external lookup if not in cache
               const trackData = await getTrackDetails(currentRoute.id);
               if (trackData && active) {
-                await handleTrackSelect(trackData);
+                // Check shared/server cache
+                try {
+                  const sharedCacheResult = await aiClient.getTrackMeaningFromCache(
+                    trackData.title,
+                    [trackData.artist],
+                    targetLanguage
+                  );
+                  if (sharedCacheResult && (sharedCacheResult.meanings || sharedCacheResult.rawLyrics)) {
+                    const langKey = targetLanguage.toLowerCase().trim();
+                    let meaning = sharedCacheResult.meanings?.en || "";
+                    if (langKey === 'spanish') meaning = sharedCacheResult.meanings?.es || "";
+                    if (langKey === 'russian') meaning = sharedCacheResult.meanings?.ru || "";
+                    if (langKey === 'polish') meaning = sharedCacheResult.meanings?.pl || "";
+
+                    const hasLyricsAndLinesCache = !!(sharedCacheResult.rawLyrics && sharedCacheResult.lines && sharedCacheResult.lines.length > 0);
+
+                    const fullTrack: TrackLyricsData = {
+                      trackId: String(trackData.id),
+                      itunesTrackId: String(trackData.id),
+                      title: trackData.title,
+                      artist: trackData.artist,
+                      artistId: trackData.artistId,
+                      album: trackData.album,
+                      albumId: trackData.albumId,
+                      coverUrl: trackData.coverUrl,
+                      audioUrl: trackData.audioUrl,
+                      appleMusicUrl: trackData.appleMusicUrl,
+                      rawLyrics: hasLyricsAndLinesCache ? sharedCacheResult.rawLyrics : "",
+                      source: hasLyricsAndLinesCache ? (sharedCacheResult.source as any || "LRCLib") : null,
+                      sourceLanguage: sharedCacheResult.originalLanguage || "English",
+                      meaning,
+                      meanings: sharedCacheResult.meanings,
+                      difficulty: sharedCacheResult.difficulty,
+                      promptVersion: sharedCacheResult.promptVersion,
+                      lines: hasLyricsAndLinesCache ? sharedCacheResult.lines : [],
+                      processingStatus: {
+                        stage1_completed: hasLyricsAndLinesCache,
+                        stage2_completed: true,
+                        stage3_completed: hasLyricsAndLinesCache ? sharedCacheResult.lines.some((l: any) => l.phrases && l.phrases.length > 0) : false
+                      },
+                      lastUpdated: Date.now()
+                    };
+
+                    if (active) {
+                      saveTrackData(fullTrack.trackId, fullTrack);
+                      await handleTrackSelect(fullTrack);
+                    }
+                  } else {
+                    // Shared cache not found: fallback to initialTrack creation
+                    const initialTrack: TrackLyricsData = {
+                      trackId: String(trackData.id),
+                      itunesTrackId: String(trackData.id),
+                      artist: trackData.artist,
+                      artistId: trackData.artistId,
+                      title: trackData.title,
+                      album: trackData.album,
+                      albumId: trackData.albumId,
+                      coverUrl: trackData.coverUrl,
+                      audioUrl: trackData.audioUrl,
+                      appleMusicUrl: trackData.appleMusicUrl,
+                      rawLyrics: "",
+                      source: null,
+                      sourceLanguage: "English",
+                      lines: [],
+                      processingStatus: {
+                        stage1_completed: false,
+                        stage2_completed: false,
+                        stage3_completed: false,
+                      },
+                      lastUpdated: Date.now(),
+                    };
+
+                    if (active) {
+                      await saveTrackData(initialTrack.trackId, initialTrack);
+                      await handleTrackSelect(initialTrack);
+                    }
+                  }
+                } catch (cacheErr) {
+                  console.error("[RouteLoaderSync] Shared cache read/setup fallback:", cacheErr);
+                  if (active) {
+                    await handleTrackSelect(trackData);
+                  }
+                }
               }
             }
           }

@@ -139,6 +139,7 @@ export interface TrackMeaningResult {
   promptVersion?: number;
   translationPromptVersion?: number;
   rawLyrics?: string;
+  source?: string | null;
   lines?: any[];
 }
 
@@ -1141,6 +1142,185 @@ async function callGeminiApiStream(
   return fullText;
 }
 
+export function repairAndParseJSON(text: string): any {
+  let cleaned = text.trim();
+
+  // 1. Remove markdown json code block fences if present
+  if (cleaned.startsWith("```")) {
+    cleaned = cleaned.replace(/^```(?:json)?/i, "");
+    if (cleaned.endsWith("```")) {
+      cleaned = cleaned.substring(0, cleaned.length - 3);
+    }
+    cleaned = cleaned.trim();
+  }
+
+  // 2. Handle known API error outputs appended or returned
+  if (cleaned.includes('{"error":') && !cleaned.startsWith('{"error":')) {
+    const parts = cleaned.split('{"error":');
+    cleaned = parts[0].trim();
+  }
+
+  // First let's try direct parse
+  try {
+    return JSON.parse(cleaned);
+  } catch (initialError) {
+    console.warn("[repairAndParseJSON] Direct parse failed, attempting repairs. Output length:", cleaned.length, "Error:", initialError);
+  }
+
+  // Let's do a state-machine scan to escape raw newlines inside strings,
+  // handle unescaped quotes, and close any unterminated strings / brackets.
+  let inString = false;
+  let escaped = false;
+  let repaired = "";
+
+  for (let i = 0; i < cleaned.length; i++) {
+    const char = cleaned[i];
+    
+    if (char === '\\' && !escaped) {
+      escaped = true;
+      repaired += char;
+      continue;
+    }
+
+    if (char === '"' && !escaped) {
+      inString = !inString;
+      repaired += char;
+      continue;
+    }
+
+    if (inString) {
+      // If we are inside a string, replace raw newlines with escaped '\n'
+      if (char === '\n') {
+        repaired += '\\n';
+      } else if (char === '\r') {
+        repaired += '\\r';
+      } else {
+        repaired += char;
+      }
+    } else {
+      repaired += char;
+    }
+
+    escaped = false;
+  }
+
+  // If we are still "inString", let's close it
+  if (inString) {
+    repaired += '"';
+  }
+
+  // Now, let's balance brackets and braces
+  const stack: string[] = [];
+  inString = false;
+  escaped = false;
+
+  for (let i = 0; i < repaired.length; i++) {
+    const char = repaired[i];
+
+    if (char === '\\' && !escaped) {
+      escaped = true;
+      continue;
+    }
+
+    if (char === '"' && !escaped) {
+      inString = !inString;
+      escaped = false;
+      continue;
+    }
+
+    if (!inString) {
+      if (char === '{' || char === '[') {
+        stack.push(char === '{' ? '}' : ']');
+      } else if (char === '}' || char === ']') {
+        if (stack.length > 0 && stack[stack.length - 1] === char) {
+          stack.pop();
+        }
+      }
+    }
+    escaped = false;
+  }
+
+  // Remove trailing commas before balancing
+  let finalRepaired = repaired.trim();
+  while (finalRepaired.endsWith(',') || finalRepaired.endsWith(',}') || finalRepaired.endsWith(',]')) {
+    if (finalRepaired.endsWith(',')) {
+      finalRepaired = finalRepaired.slice(0, -1).trim();
+    } else {
+      break;
+    }
+  }
+
+  // Close open brackets/braces
+  while (stack.length > 0) {
+    const closeSymbol = stack.pop();
+    finalRepaired += closeSymbol;
+  }
+
+  try {
+    return JSON.parse(finalRepaired);
+  } catch (repairError) {
+    console.error("[repairAndParseJSON] Repair attempt failed:", repairError, "Repaired string was:", finalRepaired);
+  }
+
+  // Fallback: regex extraction of expected fields if JSON parsing completely fails.
+  const fallbackResult: any = {
+    summary: "",
+    notes: []
+  };
+
+  // Extract "summary" string
+  const summaryMatch = text.match(/"summary"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"/);
+  if (summaryMatch) {
+    try {
+      fallbackResult.summary = JSON.parse(`"${summaryMatch[1]}"`);
+    } catch {
+      fallbackResult.summary = summaryMatch[1];
+    }
+  } else {
+    const simpleSummaryMatch = text.match(/"summary"\s*:\s*"([^"]*)/);
+    if (simpleSummaryMatch) {
+      fallbackResult.summary = simpleSummaryMatch[1];
+    }
+  }
+
+  // Extract note blocks
+  const noteBlocks = text.match(/\{\s*"type"[^}]*\}/gi) || [];
+  for (const block of noteBlocks) {
+    try {
+      let cleanedBlock = block.trim();
+      if (!cleanedBlock.startsWith('{')) cleanedBlock = '{' + cleanedBlock;
+      if (!cleanedBlock.endsWith('}')) cleanedBlock = cleanedBlock + '}';
+      const parsedNote = JSON.parse(cleanedBlock);
+      if (parsedNote.type && parsedNote.text) {
+        fallbackResult.notes.push(parsedNote);
+      }
+    } catch {
+      const typeMatch = block.match(/"type"\s*:\s*"([^"]+)"/);
+      const textMatch = block.match(/"text"\s*:\s*"([^"]+)"/);
+      const sourceTextMatch = block.match(/"sourceText"\s*:\s*"([^"]+)"/);
+      const translationMatch = block.match(/"translation"\s*:\s*"([^"]+)"/);
+      const entryTypeMatch = block.match(/"entryType"\s*:\s*"([^"]+)"/);
+
+      if (typeMatch && textMatch) {
+        fallbackResult.notes.push({
+          type: typeMatch[1] as any,
+          text: textMatch[1],
+          sourceText: sourceTextMatch ? sourceTextMatch[1] : undefined,
+          translation: translationMatch ? translationMatch[1] : undefined,
+          entryType: entryTypeMatch ? entryTypeMatch[1] as any : undefined
+        });
+      }
+    }
+  }
+
+  if (fallbackResult.summary || fallbackResult.notes.length > 0) {
+    console.log("[repairAndParseJSON] Extracted structured fields via fallback parsing:", fallbackResult);
+    return fallbackResult;
+  }
+
+  throw new Error("Unable to parse, repair or extract data from: " + text);
+}
+
 export async function generateLineExplanation(
   metadata: TrackMetadata,
   currentLine: { lineId?: string; original: string; translation?: string },
@@ -1270,7 +1450,7 @@ Return a valid JSON object with the following structure exactly:
     }
 
     // Parse the final gathered text
-    const parsed = JSON.parse(accumulatedText);
+    const parsed = repairAndParseJSON(accumulatedText);
     return {
       summary: parsed.summary || "",
       notes: parsed.notes || []
@@ -1643,6 +1823,8 @@ export async function saveTrackToSharedCache(track: TrackLyricsData): Promise<vo
       coverUrl: track.coverUrl || existing.coverUrl || null,
       audioUrl: track.audioUrl || existing.audioUrl || null,
       appleMusicUrl: track.appleMusicUrl || existing.appleMusicUrl || null,
+      itunesTrackId: track.itunesTrackId || track.trackId || existing.itunesTrackId || null,
+      itunesId: track.itunesTrackId ? Number(track.itunesTrackId) : (track.trackId ? Number(track.trackId) : (existing.itunesId || null)),
       originalLanguage: track.sourceLanguage || existing.originalLanguage || "English",
       difficulty: track.difficulty || existing.difficulty || "intermediate",
       promptVersion: ANALYSIS_PROMPT_VERSION,
