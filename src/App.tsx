@@ -8,6 +8,7 @@ import {
   Search,
   Brain,
   Check,
+  Plus,
   ChevronLeft,
   ChevronRight,
   ArrowUpLeft,
@@ -37,7 +38,7 @@ import {
   Heart,
   MoreVertical,
   FolderHeart,
-  ListFilter,
+  Edit3,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { Track, Artist, Album } from "./constants";
@@ -68,7 +69,7 @@ import StudyView from "./components/StudyView";
 import SettingsView from "./components/SettingsView";
 import PhraseDrawer from "./components/PhraseDrawer";
 import { LearningAssistantPanel } from "./components/LearningAssistantPanel";
-import { acceptSuggestedPhrase } from "./services/lyricsAnalysisService";
+import { acceptSuggestedPhrase, addUserPhrase, editPhrase } from "./services/lyricsAnalysisService";
 import { LibraryView } from "./components/LibraryView";
 import LanguageSelector from "./components/LanguageSelector";
 import {
@@ -77,6 +78,8 @@ import {
   type Phrase,
   saveTrackData,
   getTrackDetails,
+  getCachedTrackData,
+  generateLineId,
 } from "./services/musicService";
 import { sqliteService } from "./services/sqliteService";
 import { useAppNavigation } from "./hooks/useAppNavigation";
@@ -199,6 +202,31 @@ const RESOURCE_TYPES = [
   },
 ];
 
+const generateNoteOriginKey = (
+  trackId: string,
+  lineId: string | undefined,
+  noteText: string,
+  noteSourceText: string | undefined,
+  indexOrNoteKey: number | string
+) => {
+  const source = (noteSourceText || noteText || "").trim();
+  const textVal = (noteText || "").trim();
+  const rawCombined = `${source}_${textVal}_${indexOrNoteKey}`;
+  
+  let hash = 0;
+  for (let i = 0; i < rawCombined.length; i++) {
+    const char = rawCombined.charCodeAt(i);
+    hash = (hash << 5) - hash + char;
+    hash |= 0;
+  }
+  const hexHash = (hash >>> 0).toString(16);
+  
+  const cleanAscii = source.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 16);
+  const suffix = cleanAscii ? `_${cleanAscii}` : "";
+  
+  return `note_${trackId}_${lineId || "line"}_k${indexOrNoteKey}${suffix}_${hexHash}`;
+};
+
 interface LyricLineProps {
   line: string;
   i: number;
@@ -217,10 +245,12 @@ interface LyricLineProps {
   shadowingFeedback: "none" | "correct" | "incorrect";
   shadowingAttempts: number;
   handleToggleStarLine: (index: number) => void;
-  onOpenLineDrawer?: (i: number) => void;
   lineId?: string;
   targetLanguage?: string;
   onSaveLineExplanation?: (index: number, explanation: any) => void;
+  onAddNoteToDictionary?: (lineIndex: number, note: any, noteIndex: number) => void;
+  originKeyMetadata?: Map<string, any>;
+  onEditCardFields?: (cardId: string, fields: Partial<any>) => Promise<void>;
 }
 
 const LyricLine = ({
@@ -241,10 +271,12 @@ const LyricLine = ({
   shadowingFeedback,
   shadowingAttempts,
   handleToggleStarLine,
-  onOpenLineDrawer,
   lineId,
   targetLanguage,
   onSaveLineExplanation,
+  onAddNoteToDictionary,
+  originKeyMetadata,
+  onEditCardFields,
 }: LyricLineProps) => {
   const trimmedLine = line.trim();
 
@@ -252,6 +284,16 @@ const LyricLine = ({
   const [streamedSummary, setStreamedSummary] = useState("");
   const [isLoadingExplanation, setIsLoadingExplanation] = useState(false);
   const [explanationError, setExplanationError] = useState<string | null>(null);
+
+  // States for inline editing of saved notes in lyrics view
+  const [editingNoteIdx, setEditingNoteIdx] = useState<number | null>(null);
+  const [editNoteFields, setEditNoteFields] = useState({
+    text: "",
+    translation: "",
+    explanation: "",
+    type: "",
+    userNote: "",
+  });
 
   const cachedExpl = currentTrack?.lines?.[i]?.explanation;
   const summary = cachedExpl?.summary || "";
@@ -268,13 +310,32 @@ const LyricLine = ({
     }
   };
 
-  const handleFetchExplanation = async (force: boolean = false) => {
+  const handleFetchExplanation = async (_force: boolean = false) => {
     if (isLoadingExplanation) return;
     setIsLoadingExplanation(true);
     setExplanationError(null);
     setStreamedSummary("");
     
     try {
+      const currentHash = generateLineId(line);
+      
+      // Look for another line in the same track with the same normalized text hash that already has an explanation
+      const sameLineWithExplanation = currentTrack?.lines?.find((l: any, idx: number) => {
+        if (idx === i) return false;
+        const h = l.lineTextHash || generateLineId(l.original);
+        return h === currentHash && l.explanation && (l.explanation.summary || l.explanation.notes?.length > 0);
+      });
+
+      if (sameLineWithExplanation) {
+        // Reuse from other line occurrence:
+        const result = sameLineWithExplanation.explanation;
+        if (onSaveLineExplanation) {
+          onSaveLineExplanation(i, result);
+        }
+        setIsLoadingExplanation(false);
+        return;
+      }
+
       const prevLine = i > 0 ? currentTrack.lines[i - 1] : undefined;
       const nextLine = i < currentTrack.lines.length - 1 ? currentTrack.lines[i + 1] : undefined;
       const targetLang = targetLanguage || currentTrack.targetLanguage || "English";
@@ -407,9 +468,10 @@ const LyricLine = ({
         </div>
 
         <div className="pl-1 relative z-10">
-          <AnimatePresence>
+          <AnimatePresence initial={false}>
             {(activeLineIndex === i || alwaysShowTranslation || isBoth) && (
               <motion.div
+                key={`translation-block-${i}`}
                 initial={{ opacity: 0, height: 0 }}
                 animate={{ opacity: 1, height: "auto" }}
                 exit={{ opacity: 0, height: 0 }}
@@ -485,9 +547,12 @@ const LyricLine = ({
                 )}
               </motion.div>
             )}
+          </AnimatePresence>
 
+          <AnimatePresence initial={false}>
             {isExplaining && (
               <motion.div
+                key={`explanation-block-${i}`}
                 initial={{ opacity: 0, height: 0, y: -5 }}
                 animate={{ opacity: 1, height: "auto", y: 0 }}
                 exit={{ opacity: 0, height: 0, y: -5 }}
@@ -543,24 +608,215 @@ const LyricLine = ({
                     >
                       {notes.map((note: any, nIdx: number) => {
                         const bgTypeMap: Record<string, string> = {
+                          phrase: "bg-blue-500/10 border-blue-500/20 text-blue-600 dark:text-blue-400",
+                          vocabulary: "bg-teal-500/10 border-teal-500/20 text-teal-600 dark:text-teal-400",
                           idiom: "bg-purple-500/10 border-purple-500/20 text-purple-600 dark:text-purple-400",
                           cultural: "bg-pink-500/10 border-pink-500/20 text-pink-600 dark:text-pink-400",
-                          collocation: "bg-blue-500/10 border-blue-500/20 text-blue-600 dark:text-blue-400",
+                          collocation: "bg-indigo-500/10 border-indigo-500/20 text-indigo-600 dark:text-indigo-400",
                           grammar: "bg-amber-500/10 border-amber-500/20 text-amber-600 dark:text-amber-400",
                           nuance: "bg-teal-500/10 border-teal-500/20 text-teal-600 dark:text-teal-400"
                         };
-                        const typeClass = bgTypeMap[note.type] || "bg-app-fg/5 border-app-card-border text-app-fg/70";
+
+                        const noteOriginKey = currentTrack ? generateNoteOriginKey(currentTrack.trackId, currentTrack.lines[i]?.lineId, note.text, note.sourceText, nIdx) : "";
+                        const existingCard = noteOriginKey ? originKeyMetadata?.get(noteOriginKey) : undefined;
+                        const isAlreadyAdded = !!existingCard;
+
+                        const displayType = existingCard?.type || existingCard?.entryType || note.type || "phrase";
+                        const displaySourceText = existingCard?.text || note.sourceText || line;
+                        const displayTranslation = existingCard?.translation || note.translation || "";
+                        const displayExplanation = existingCard?.explanation || note.text || "";
+                        const displayUserNote = existingCard?.userNote || "";
+
+                        const typeClass = bgTypeMap[displayType] || bgTypeMap[note.type] || "bg-app-fg/5 border-app-card-border text-app-fg/70";
+                        const isEditing = editingNoteIdx === nIdx;
+
                         return (
-                          <div key={nIdx} className="flex gap-2.5 items-start">
-                            <span className={cn(
-                              "text-[8px] font-black uppercase tracking-widest px-2 py-0.5 mt-0.5 rounded-md border shrink-0",
-                              typeClass
-                            )}>
-                              {note.type}
-                            </span>
-                            <span className="text-xs font-sans text-app-fg/70 leading-normal">
-                              {note.text}
-                            </span>
+                          <div key={noteOriginKey || nIdx} className="p-3 rounded-xl bg-app-card/30 border border-app-card-border/30 hover:border-app-card-border/65 transition-all">
+                            {isEditing ? (
+                              <div className="space-y-2.5 w-full">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                  <div className="flex flex-col gap-0.5">
+                                    <label className="text-[9px] font-black uppercase tracking-widest opacity-40">Original term</label>
+                                    <input
+                                      type="text"
+                                      value={editNoteFields.text}
+                                      onChange={(e) => setEditNoteFields({ ...editNoteFields, text: e.target.value })}
+                                      className="w-full px-2.5 py-1.5 text-xs rounded-lg bg-app-bg border border-app-card-border focus:border-indigo-500 focus:outline-none"
+                                    />
+                                  </div>
+                                  <div className="flex flex-col gap-0.5">
+                                    <label className="text-[9px] font-black uppercase tracking-widest opacity-40">Translation</label>
+                                    <input
+                                      type="text"
+                                      value={editNoteFields.translation}
+                                      onChange={(e) => setEditNoteFields({ ...editNoteFields, translation: e.target.value })}
+                                      className="w-full px-2.5 py-1.5 text-xs rounded-lg bg-app-bg border border-app-card-border focus:border-indigo-500 focus:outline-none"
+                                    />
+                                  </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                  <div className="flex flex-col gap-0.5">
+                                    <label className="text-[9px] font-black uppercase tracking-widest opacity-40">Type</label>
+                                    <select
+                                      value={editNoteFields.type}
+                                      onChange={(e) => setEditNoteFields({ ...editNoteFields, type: e.target.value })}
+                                      className="w-full px-2.5 py-1 text-xs rounded-lg bg-app-bg border border-app-card-border focus:border-indigo-500 focus:outline-none"
+                                    >
+                                      <option value="phrase">Phrase</option>
+                                      <option value="vocabulary">Vocabulary</option>
+                                      <option value="idiom">Idiom</option>
+                                      <option value="collocation">Collocation</option>
+                                      <option value="grammar">Grammar</option>
+                                      <option value="nuance">Nuance</option>
+                                      <option value="cultural">Cultural</option>
+                                    </select>
+                                  </div>
+                                  <div className="flex flex-col gap-0.5">
+                                    <label className="text-[9px] font-black uppercase tracking-widest opacity-40">Memory Note (Optional)</label>
+                                    <input
+                                      type="text"
+                                      value={editNoteFields.userNote}
+                                      placeholder="Mnemonic helper..."
+                                      onChange={(e) => setEditNoteFields({ ...editNoteFields, userNote: e.target.value })}
+                                      className="w-full px-2.5 py-1.5 text-xs rounded-lg bg-app-bg border border-app-card-border focus:border-indigo-500 focus:outline-none"
+                                    />
+                                  </div>
+                                </div>
+
+                                <div className="flex flex-col gap-0.5">
+                                  <label className="text-[9px] font-black uppercase tracking-widest opacity-40">Explanation</label>
+                                  <textarea
+                                    value={editNoteFields.explanation}
+                                    rows={2}
+                                    onChange={(e) => setEditNoteFields({ ...editNoteFields, explanation: e.target.value })}
+                                    className="w-full px-2.5 py-1.5 text-xs rounded-lg bg-app-bg border border-app-card-border focus:border-indigo-500 focus:outline-none resize-none"
+                                  />
+                                </div>
+
+                                <div className="flex items-center justify-end gap-2 pt-1 border-t border-app-card-border/20">
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setEditingNoteIdx(null);
+                                    }}
+                                    className="px-2.5 py-1 text-[9px] font-extrabold uppercase tracking-widest rounded-lg border border-app-card-border hover:bg-app-fg/5 transition-all"
+                                  >
+                                    Cancel
+                                  </button>
+                                  <button
+                                    onClick={async (e) => {
+                                      e.stopPropagation();
+                                      if (existingCard && onEditCardFields) {
+                                        await onEditCardFields(existingCard.id, {
+                                          text: editNoteFields.text,
+                                          translation: editNoteFields.translation,
+                                          explanation: editNoteFields.explanation,
+                                          type: editNoteFields.type,
+                                          entryType: editNoteFields.type,
+                                          userNote: editNoteFields.userNote,
+                                        });
+                                      }
+                                      setEditingNoteIdx(null);
+                                    }}
+                                    className="px-2.5 py-1 text-[9px] font-extrabold uppercase tracking-widest rounded-lg bg-app-fg text-app-bg hover:scale-105 active:scale-95 transition-all"
+                                  >
+                                    Save
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 w-full">
+                                <div className="flex gap-2.5 items-start flex-1 min-w-0">
+                                  <span className={cn(
+                                    "text-[8px] font-black uppercase tracking-widest px-2 py-0.5 mt-0.5 rounded-md border shrink-0",
+                                    typeClass
+                                  )}>
+                                    {displayType}
+                                  </span>
+                                  <div className="flex flex-col gap-0.5 min-w-0">
+                                    <span className="text-xs font-semibold text-app-fg tracking-tight flex flex-wrap items-center gap-1.5">
+                                      {displaySourceText}
+                                      {displayTranslation && (
+                                        <span className="text-[10px] font-normal text-app-fg/50 font-mono">
+                                          ({displayTranslation})
+                                        </span>
+                                      )}
+                                      {displayUserNote && (
+                                        <span className="text-[9px] font-bold text-teal-600 dark:text-teal-400 bg-teal-500/10 px-1.5 py-0.5 rounded-md">
+                                          Note: {displayUserNote}
+                                        </span>
+                                      )}
+                                      {existingCard && (
+                                        <span className={cn(
+                                          "text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded",
+                                          existingCard.status === "known" 
+                                            ? "bg-emerald-500/10 text-emerald-600" 
+                                            : "bg-orange-500/10 text-orange-600"
+                                        )}>
+                                          {existingCard.status === "known" ? "known" : "learning"}
+                                        </span>
+                                      )}
+                                    </span>
+                                    <span className="text-xs font-sans text-app-fg/75 leading-normal">
+                                      {displayExplanation}
+                                    </span>
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-2 mt-1 sm:mt-0 shrink-0 self-end sm:self-center">
+                                  {isAlreadyAdded && onEditCardFields && (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setEditingNoteIdx(nIdx);
+                                        setEditNoteFields({
+                                          text: displaySourceText,
+                                          translation: displayTranslation,
+                                          explanation: displayExplanation,
+                                          type: displayType,
+                                          userNote: displayUserNote,
+                                        });
+                                      }}
+                                      className="text-[10px] h-7 px-2.5 rounded-lg font-bold flex items-center justify-center gap-1 transition-all border border-transparent bg-app-fg/5 hover:bg-app-fg/10 cursor-pointer"
+                                    >
+                                      <Edit3 size={10} />
+                                      <span>Edit</span>
+                                    </button>
+                                  )}
+
+                                  {onAddNoteToDictionary && (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (!isAlreadyAdded) {
+                                          onAddNoteToDictionary(i, note, nIdx);
+                                        }
+                                      }}
+                                      disabled={isAlreadyAdded}
+                                      className={cn(
+                                        "text-[10px] h-7 px-2.5 rounded-lg font-bold flex items-center justify-center gap-1 transition-all",
+                                        isAlreadyAdded 
+                                          ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20"
+                                          : "bg-app-fg/10 hover:bg-[var(--accent)] hover:text-white border border-transparent cursor-pointer"
+                                      )}
+                                    >
+                                      {isAlreadyAdded ? (
+                                        <>
+                                          <Check size={10} className="stroke-[3px]" />
+                                          <span>Saved</span>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <Plus size={10} className="stroke-[3px]" />
+                                          <span>Add to Study</span>
+                                        </>
+                                      )}
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            )}
                           </div>
                         );
                       })}
@@ -760,7 +1016,6 @@ export default function App() {
     isPhraseDrawerOpen,
     setIsPhraseDrawerOpen,
     selectedLineIndexForDrawer,
-    setSelectedLineIndexForDrawer,
     
     handleSetLyricsDisplayMode,
     handleToggleStarFilter,
@@ -829,6 +1084,7 @@ export default function App() {
   const {
     phraseMetadata,
     setPhraseMetadata,
+    originKeyMetadata,
     isSaving,
     dueCardsCount,
     dailyProgressSummary,
@@ -873,8 +1129,6 @@ export default function App() {
 
   // Learning Assistant Panel States
   const [isAssistantOpen, setIsAssistantOpen] = useState(false);
-  const [assistantContextType, setAssistantContextType] = useState<"line" | "phrase">("line");
-  const [assistantLineContext, setAssistantLineContext] = useState<{ original: string; translation?: string; lineId?: string } | undefined>(undefined);
   const [assistantPhraseContext, setAssistantPhraseContext] = useState<{ text: string; translation?: string; explanation?: string; lineIds?: string[] } | undefined>(undefined);
 
   const handleAcceptSuggestedPhraseInApp = async (
@@ -901,14 +1155,12 @@ export default function App() {
   const [trackSearchQuery, setTrackSearchQuery] = useState("");
 
   const handleOpenAssistantForPhrase = useCallback((phrase: { text: string; translation?: string; explanation?: string; lineIds?: string[] }) => {
-    setAssistantContextType("phrase");
     setAssistantPhraseContext({
       text: phrase.text,
       translation: phrase.translation,
       explanation: phrase.explanation,
       lineIds: phrase.lineIds
     });
-    setAssistantLineContext(undefined);
     setIsAssistantOpen(true);
   }, []);
 
@@ -966,6 +1218,84 @@ export default function App() {
     };
     setCurrentTrack(updatedTrack);
     saveTrackData(currentTrack.trackId, updatedTrack);
+  };
+
+  const handleAddNoteToDictionary = async (lineIndex: number, note: any, noteIndex: number) => {
+    if (!currentTrack) return;
+    const line = currentTrack.lines[lineIndex];
+    if (!line) return;
+
+    const phraseText = note.sourceText || line.original;
+    const translation = note.translation || note.text || "";
+    const explanation = note.text || "";
+    const targetLineId = line.lineId;
+    const noteType = note.type || "phrase";
+
+    const noteOriginKey = generateNoteOriginKey(currentTrack.trackId, targetLineId, note.text, note.sourceText, noteIndex);
+
+    try {
+      let connectedPhraseId = "";
+      let existingPhrase: any = null;
+      for (const l of currentTrack.lines) {
+        if (l.phrases) {
+          existingPhrase = l.phrases.find((p: any) => p.text.toLowerCase().trim() === phraseText.toLowerCase().trim());
+          if (existingPhrase) break;
+        }
+      }
+
+      let updatedTrack = currentTrack;
+      if (!existingPhrase) {
+        updatedTrack = addUserPhrase(
+          currentTrack,
+          phraseText,
+          translation,
+          explanation,
+          targetLineId,
+          undefined,
+          noteType
+        );
+
+        for (const l of updatedTrack.lines) {
+          if (l.lineId === targetLineId && l.phrases) {
+            const newlyAdded = l.phrases.find((p: any) => p.text.toLowerCase().trim() === phraseText.toLowerCase().trim());
+            if (newlyAdded) {
+              connectedPhraseId = newlyAdded.id;
+              break;
+            }
+          }
+        }
+        
+        saveTrackData(currentTrack.trackId, updatedTrack);
+        setCurrentTrack(updatedTrack);
+      } else {
+        connectedPhraseId = existingPhrase.id;
+      }
+
+      await studyCardsRepository.addPhraseToStudy({
+        id: noteOriginKey,
+        phraseId: connectedPhraseId,
+        text: phraseText,
+        translation: translation,
+        trackId: currentTrack.trackId,
+        trackTitle: currentTrack.title,
+        artist: currentTrack.artist,
+        sourceLanguage: currentTrack.sourceLanguage,
+        lineId: targetLineId,
+        explanation: explanation,
+        type: noteType,
+        originType: "line_explanation_note",
+        originKey: noteOriginKey,
+        entryType: noteType,
+        rawText: phraseText,
+        rawTranslation: translation,
+        rawExplanation: explanation,
+        userNote: ""
+      } as any, "learning");
+
+      await loadUserCards();
+    } catch (err) {
+      console.error("Failed to save note to dictionary:", err);
+    }
   };
 
   // Synchronized callback action delegates
@@ -1180,6 +1510,91 @@ export default function App() {
     });
   };
 
+  const handleEditCardFields = async (cardId: string, fields: Partial<any>) => {
+    try {
+      await studyCardsRepository.updateCardFields(cardId, fields);
+      
+      if (currentTrack) {
+        const cardInMeta = [...(originKeyMetadata?.values() || [])].find(c => c.id === cardId) as any;
+        const targetPhraseId = cardInMeta?.phraseId || cardInMeta?.phraseMetadata?.id;
+        
+        let foundPhraseId = targetPhraseId;
+        if (!foundPhraseId) {
+          const textToMatching = cardInMeta?.text || fields.text;
+          if (textToMatching) {
+            for (const l of currentTrack.lines) {
+              if (l.phrases) {
+                const matched = l.phrases.find((p: any) => p.text.toLowerCase().trim() === textToMatching.toLowerCase().trim());
+                if (matched) {
+                  foundPhraseId = matched.id;
+                  break;
+                }
+              }
+            }
+          }
+        }
+        
+        if (foundPhraseId) {
+          const phraseUpdates: any = {};
+          if (fields.text !== undefined) phraseUpdates.text = fields.text;
+          if (fields.translation !== undefined) phraseUpdates.translation = fields.translation;
+          if (fields.explanation !== undefined) phraseUpdates.explanation = fields.explanation;
+          if (fields.type !== undefined) phraseUpdates.type = fields.type;
+          
+          const updatedTrack = editPhrase(currentTrack, foundPhraseId, phraseUpdates);
+          saveTrackData(currentTrack.trackId, updatedTrack);
+          setCurrentTrack(updatedTrack);
+        }
+      }
+      
+      await loadUserCards();
+    } catch (err) {
+      console.error("Failed to edit card from lyrics:", err);
+    }
+  };
+
+  const handleStudyCardUpdated = async (cardId?: string) => {
+    await loadUserCards();
+    
+    if (cardId && currentTrack) {
+      try {
+        const allCards = await studyCardsRepository.getCards();
+        const updatedCard = allCards.find(c => c.id === cardId);
+        if (updatedCard) {
+          const targetPhraseId = updatedCard.phraseId || (updatedCard as any).phraseMetadata?.id;
+          
+          let foundPhraseId = targetPhraseId;
+          if (!foundPhraseId) {
+            const textToMatching = updatedCard.text;
+            for (const l of currentTrack.lines) {
+              if (l.phrases) {
+                const matched = l.phrases.find((p: any) => p.text.toLowerCase().trim() === textToMatching.toLowerCase().trim());
+                if (matched) {
+                  foundPhraseId = matched.id;
+                  break;
+                }
+              }
+            }
+          }
+          
+          if (foundPhraseId) {
+            const phraseUpdates: any = {};
+            if (updatedCard.text !== undefined) phraseUpdates.text = updatedCard.text;
+            if (updatedCard.translation !== undefined) phraseUpdates.translation = updatedCard.translation;
+            if (updatedCard.explanation !== undefined) phraseUpdates.explanation = updatedCard.explanation;
+            if (updatedCard.type !== undefined) phraseUpdates.type = updatedCard.type;
+            
+            const updatedTrack = editPhrase(currentTrack, foundPhraseId, phraseUpdates);
+            saveTrackData(currentTrack.trackId, updatedTrack);
+            setCurrentTrack(updatedTrack);
+          }
+        }
+      } catch (err) {
+        console.error("Failed to sync study edit to track model:", err);
+      }
+    }
+  };
+
   const renderLyricLine = (
     line: string,
     i: number,
@@ -1209,20 +1624,9 @@ export default function App() {
         handleToggleStarLine={handleToggleStarLine}
         targetLanguage={targetLanguage}
         onSaveLineExplanation={handleSaveLineExplanation}
-        onOpenLineDrawer={(index) => {
-          if (!currentTrack) return;
-          const targetLine = currentTrack.lines?.[index];
-          if (!targetLine) return;
-
-          setAssistantContextType("line");
-          setAssistantLineContext({
-            original: targetLine.original,
-            translation: targetLine.translation,
-            lineId: targetLine.lineId
-          });
-          setAssistantPhraseContext(undefined);
-          setIsAssistantOpen(true);
-        }}
+        onAddNoteToDictionary={handleAddNoteToDictionary}
+        originKeyMetadata={originKeyMetadata}
+        onEditCardFields={handleEditCardFields}
       />
     );
   };
@@ -1256,9 +1660,17 @@ export default function App() {
           if (transient) {
             await handleTrackSelect(transient);
           } else {
-            const trackData = await getTrackDetails(currentRoute.id);
-            if (trackData && active) {
-              await handleTrackSelect(trackData);
+            // Local Cache First Lookup
+            const cachedTrack = getCachedTrackData(currentRoute.id);
+            if (cachedTrack) {
+              console.log("[RouteLoaderSync] Found track in local cache/SQLite, opening instantly:", currentRoute.id);
+              await handleTrackSelect(cachedTrack);
+            } else {
+              // Fallback to external lookup if not in cache
+              const trackData = await getTrackDetails(currentRoute.id);
+              if (trackData && active) {
+                await handleTrackSelect(trackData);
+              }
             }
           }
         }
@@ -2420,14 +2832,14 @@ export default function App() {
                         {/* Search Input Section */}
                         <div className="relative flex-1 flex items-center min-w-0">
                           <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-app-fg opacity-40">
-                            <Search size={16} />
+                            <Search size={18} />
                           </div>
                           <input
                             type="text"
                             placeholder="Search original text, translations, or phrases in lyrics..."
                             value={trackSearchQuery}
                             onChange={(e) => setTrackSearchQuery(e.target.value)}
-                            className="w-full pl-10 pr-8 py-2 bg-transparent text-sm font-medium text-app-fg placeholder-app-fg/30 focus:outline-none font-sans"
+                            className="w-full pl-10 pr-8 py-2 bg-transparent text-base md:text-lg font-medium text-app-fg placeholder-app-fg/30 focus:outline-none font-sans"
                           />
                           {trackSearchQuery && (
                             <button
@@ -2849,6 +3261,7 @@ export default function App() {
                   setDailyActivity(recordReviewCompleted());
                   loadUserCards();
                 }}
+                onCardUpdated={handleStudyCardUpdated}
               />
             </motion.div>
           )}
@@ -3895,13 +4308,11 @@ export default function App() {
       </AnimatePresence>
 
       <AnimatePresence>
-        {isAssistantOpen && currentTrack && (
+        {isAssistantOpen && currentTrack && assistantPhraseContext && (
           <LearningAssistantPanel
             isOpen={isAssistantOpen}
             onClose={() => setIsAssistantOpen(false)}
             track={currentTrack}
-            contextType={assistantContextType}
-            lineContext={assistantLineContext}
             phraseContext={assistantPhraseContext}
             targetLanguage={targetLanguage}
             onAcceptPhrase={handleAcceptSuggestedPhraseInApp}

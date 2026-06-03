@@ -101,9 +101,7 @@ export class GeminiAIAdapter implements AiPort {
   async generateLearningAssistantResponse(
     title: string,
     artist: string,
-    contextType: "line" | "phrase",
-    lineContext: { original: string; translation?: string; lineId?: string } | undefined,
-    phraseContext: { text: string; translation?: string; explanation?: string; lineIds?: string[] } | undefined,
+    phraseContext: { text: string; translation?: string; explanation?: string; lineIds?: string[] },
     targetLanguage: string,
     existingPhrases: any[],
     userQuestion?: string,
@@ -121,8 +119,6 @@ export class GeminiAIAdapter implements AiPort {
     return originalGeminiService.generateLearningAssistantResponse(
       title,
       artist,
-      contextType,
-      lineContext,
       phraseContext,
       targetLanguage,
       existingPhrases,
@@ -144,6 +140,9 @@ export class GeminiAIAdapter implements AiPort {
     notes: Array<{
       type: "idiom" | "cultural" | "collocation" | "grammar" | "nuance";
       text: string;
+      sourceText?: string;
+      translation?: string;
+      entryType?: "word" | "expression";
     }>;
   }> {
     return originalGeminiService.generateLineExplanation(

@@ -994,9 +994,7 @@ export interface LearningAssistantResponse {
 export async function generateLearningAssistantResponse(
   title: string,
   artist: string,
-  contextType: "line" | "phrase",
-  lineContext: { original: string; translation?: string; lineId?: string } | undefined,
-  phraseContext: { text: string; translation?: string; explanation?: string; lineIds?: string[] } | undefined,
+  phraseContext: { text: string; translation?: string; explanation?: string; lineIds?: string[] },
   targetLanguage: string,
   existingPhrases: any[] = [],
   userQuestion?: string,
@@ -1011,38 +1009,21 @@ Act as a personal learning assistant for mastering foreign languages through son
 You are helping a learner analyze the song "${title}" by "${artist}".
 Your explanation must be written in the targeted learning language: "${targetLanguage}".
 
-CONTEXT TYPE: "${contextType}"\n`;
+Target Phrase/Word of Interest: "${phraseContext.text}"\n`;
 
-  if (contextType === "line" && lineContext) {
-    prompt += `Target Line: "${lineContext.original}"\n`;
-    if (lineContext.translation) {
-      prompt += `Line translation: "${lineContext.translation}"\n`;
-    }
-    if (lineContext.lineId) {
-      prompt += `Line ID: "${lineContext.lineId}"\n`;
-    }
-    prompt += `
-CONTEXT-SPECIFIC INSTRUCTIONS FOR LINE:
-- Explain this specific line of lyrics.
-- Break down unique words, grammar patterns, slang, or figurative language in this specific line.
-- Suggest 1 to 3 key phrases/words from this specific line for the student's study cards. Ensure their 'lineIds' matches exactly: ["${lineContext.lineId || ''}"].
-`;
-  } else if (contextType === "phrase" && phraseContext) {
-    prompt += `Target Phrase/Word of Interest: "${phraseContext.text}"\n`;
-    if (phraseContext.translation) {
-      prompt += `Phrase translation: "${phraseContext.translation}"\n`;
-    }
-    if (phraseContext.explanation) {
-      prompt += `Current phrase description/explanation: "${phraseContext.explanation}"\n`;
-    }
-    prompt += `
+  if (phraseContext.translation) {
+    prompt += `Phrase translation: "${phraseContext.translation}"\n`;
+  }
+  if (phraseContext.explanation) {
+    prompt += `Current phrase description/explanation: "${phraseContext.explanation}"\n`;
+  }
+  prompt += `
 CONTEXT-SPECIFIC INSTRUCTIONS FOR PHRASE:
 - Focus intensely on the NUANCES, GRAMMAR, GRAMMATICAL STRUCTURE, USAGE, SYNONYMS, and REGISTER (slang vs formal vs poetic status) of this precise phrase: "${phraseContext.text}".
 - Do not just define it, but explain exactly how it behaves in active conversation vs inside this song's lyrics.
 - If the user asks a follow-up question, answer it meticulously using detailed examples.
 - For suggested phrases, if the user requested follow-up clarification, you can suggest 1-2 closely related synonyms, or idioms that contain this phrase from the surrounding lyrics, or leave 'suggestedPhrases' empty [] if there are no new ones.
 `;
-  }
 
   if (existingPhrasesStr) {
     prompt += `\nAlready saved/known phrases of this song:\n${existingPhrasesStr}\n`;
@@ -1064,9 +1045,9 @@ EXPLANATION REQUIREMENTS:
 SUGGESTED PHRASES REQUIREMENTS:
 If the context contains useful collocations, idioms, phrasal verbs, or vocabulary items (preferably chunks of 2-5 words) that can be studied as separate cards, suggest them.
 - Do NOT suggest any phrase that is already in the "Already saved/known phrases" list.
-- Each suggested phrase must be an exact substring of the song lyrics or line context.
+- Each suggested phrase must be an exact substring of the song lyrics.
 - Keep the number of suggested phrases focused (usually 1-3 highly matching chunks). If there are no good new chunks to recommend, leave 'suggestedPhrases' as an empty array [].
-- Associate the correct 'lineIds' with each suggestion (For 'line' context, use ${lineContext?.lineId ? JSON.stringify([lineContext.lineId]) : "[]"}).
+- Associate the correct 'lineIds' with each suggestion (use ${phraseContext.lineIds ? JSON.stringify(phraseContext.lineIds) : "[]"}).
 
 Return a valid JSON object with the following structure exactly:
 {
@@ -1173,6 +1154,9 @@ export async function generateLineExplanation(
   notes: Array<{
     type: "idiom" | "cultural" | "collocation" | "grammar" | "nuance";
     text: string;
+    sourceText?: string;
+    translation?: string;
+    entryType?: "word" | "expression";
   }>;
 }> {
   let prompt = `Role: Expert linguistic analyst and music teacher.
@@ -1201,9 +1185,13 @@ INSTRUCTIONS:
 1. Provide a very concise summary (1-3 sentences) in "${targetLanguage || "English"}" explaining what this current line means, its emotional undertone, or how it fits into the song.
 2. Provide a list of 1-3 highly notable linguistic aspects (notes) from the current line. Each note must target an interesting part of this line.
 3. For each note, assign one of these exact types: "idiom", "cultural", "collocation", "grammar", "nuance".
-4. Do NOT suggest list of phrases/words or return suggestions.
-5. Provide a short, direct explanation for each note.
-6. The entire output must be valid JSON matching the schema precisely.
+4. For each note, try to extract:
+   - "sourceText": the specific substring/word/phrase from the current line that the note refers to (e.g. "hold on", "love").
+   - "translation": a short precise meaning or translation of the sourceText in "${targetLanguage || "English"}".
+   - "entryType": whether the sourceText acts as a single "word" or an "expression".
+5. Do NOT suggest list of phrases/words or return suggestions.
+6. Provide a short, direct explanation for each note in "text".
+7. The entire output must be valid JSON matching the schema precisely.
 
 Return a valid JSON object with the following structure exactly:
 {
@@ -1211,7 +1199,10 @@ Return a valid JSON object with the following structure exactly:
   "notes": [
     {
       "type": "idiom" | "cultural" | "collocation" | "grammar" | "nuance",
-      "text": "short clear explanation focusing on a specific part of the line"
+      "text": "short clear explanation focusing on a specific part of the line",
+      "sourceText": "the raw fragment/word from the original current line (optional)",
+      "translation": "brief meaning or translation of the sourceText (optional)",
+      "entryType": "word" | "expression" (optional)
     }
   ]
 }
@@ -1232,7 +1223,10 @@ Return a valid JSON object with the following structure exactly:
               type: Type.OBJECT,
               properties: {
                 type: { type: Type.STRING },
-                text: { type: Type.STRING }
+                text: { type: Type.STRING },
+                sourceText: { type: Type.STRING },
+                translation: { type: Type.STRING },
+                entryType: { type: Type.STRING }
               },
               required: ["type", "text"]
             }

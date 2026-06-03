@@ -20,6 +20,16 @@ export class BrowserStudyCardsRepository implements StudyCardsRepositoryPort {
       artist?: string;
       sourceLanguage?: string;
       lemmas?: string[];
+      id?: string;
+      originType?: string;
+      originKey?: string;
+      lineTextHash?: string;
+      noteKey?: string;
+      entryType?: string;
+      userNote?: string;
+      rawText?: string;
+      rawTranslation?: string;
+      rawExplanation?: string;
     },
     status?: PhraseStatus
   ): Promise<string> {
@@ -28,6 +38,13 @@ export class BrowserStudyCardsRepository implements StudyCardsRepositoryPort {
 
   async updatePhraseStatus(cardId: string, status: PhraseStatus): Promise<void> {
     return originalCardService.updatePhraseStatus(cardId, status);
+  }
+
+  async updateCardFields(
+    cardId: string,
+    fields: Partial<Pick<Flashcard, 'text' | 'translation' | 'explanation' | 'type' | 'entryType' | 'userNote'>>
+  ): Promise<void> {
+    return originalCardService.updateCardFields(cardId, fields);
   }
 
   async deleteFlashcard(cardId: string): Promise<void> {

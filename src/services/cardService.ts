@@ -53,19 +53,47 @@ export interface UserPhraseCard extends DocumentData {
   text: string;
   translation: string;
   explanation?: string;
+
+  // Shared study item / line explanation note properties
+  originType?: string;
+  originKey?: string;
+  lineTextHash?: string;
+  noteKey?: string;
+  entryType?: string;
+  userNote?: string;
+  rawText?: string;
+  rawTranslation?: string;
+  rawExplanation?: string;
 }
 
 // Keep Flashcard as alias for backward compatibility if needed, but update it
 export type Flashcard = UserPhraseCard;
 
 export async function addPhraseToStudy(
-  phraseData: Omit<Phrase, 'id'>,
+  phraseData: {
+    text: string;
+    translation: string;
+    trackId: string;
+    lineId: string;
+    explanation: string;
+    type: string;
+    id?: string;
+    originType?: string;
+    originKey?: string;
+    lineTextHash?: string;
+    noteKey?: string;
+    entryType?: string;
+    userNote?: string;
+    rawText?: string;
+    rawTranslation?: string;
+    rawExplanation?: string;
+  },
   status: PhraseStatus = 'learning'
 ) {
   if (!auth.currentUser) throw new Error("User not authenticated");
   const emptyCard = createEmptyCard();
   
-  const id = doc(collection(db, CARDS_COLLECTION)).id;
+  const id = phraseData.id || doc(collection(db, CARDS_COLLECTION)).id;
   const path = `${CARDS_COLLECTION}/${id}`;
 
   const newCard: any = {
@@ -87,6 +115,17 @@ export async function addPhraseToStudy(
     lapses: emptyCard.lapses,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
+
+    // Extra properties
+    originType: phraseData.originType || null,
+    originKey: phraseData.originKey || null,
+    lineTextHash: phraseData.lineTextHash || null,
+    noteKey: phraseData.noteKey || null,
+    entryType: phraseData.entryType || null,
+    userNote: phraseData.userNote || null,
+    rawText: phraseData.rawText || null,
+    rawTranslation: phraseData.rawTranslation || null,
+    rawExplanation: phraseData.rawExplanation || null,
   };
 
   if (emptyCard.learning_steps !== undefined) {
@@ -98,6 +137,21 @@ export async function addPhraseToStudy(
     return id;
   } catch (error) {
     handleFirestoreError(error, OperationType.CREATE, path);
+  }
+}
+
+export async function updateCardFields(
+  cardId: string,
+  fields: Partial<Pick<Flashcard, 'text' | 'translation' | 'explanation' | 'entryType' | 'userNote'>>
+): Promise<void> {
+  const path = `${CARDS_COLLECTION}/${cardId}`;
+  try {
+    await updateDoc(doc(db, CARDS_COLLECTION, cardId), {
+      ...fields,
+      updatedAt: serverTimestamp(),
+    });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, path);
   }
 }
 
