@@ -150,6 +150,9 @@ export interface AiPort {
     notes: Array<{
       type: "idiom" | "cultural" | "collocation" | "grammar" | "nuance";
       text: string;
+      sourceText?: string;
+      translation?: string;
+      entryType?: "word" | "expression";
     }>;
   }>;
 

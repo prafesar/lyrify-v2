@@ -500,6 +500,7 @@ export interface Phrase {
 export interface LyricsLine {
   id: string;
   lineId?: string;
+  lineTextHash?: string;
   index: number;
   original: string;
   translation?: string;
@@ -511,6 +512,9 @@ export interface LyricsLine {
     notes: Array<{
       type: "idiom" | "cultural" | "collocation" | "grammar" | "nuance";
       text: string;
+      sourceText?: string;
+      translation?: string;
+      entryType?: "word" | "expression";
     }>;
   };
 }
@@ -578,6 +582,7 @@ export function getCachedTrackData(trackId: string): TrackLyricsData | null {
       if (!line.lineId) {
         line.lineId = generateLineId(line.original);
       }
+      line.lineTextHash = generateLineId(line.original);
       return line;
     });
   }
@@ -593,6 +598,7 @@ export function saveTrackData(trackId: string, data: TrackLyricsDataPatch) {
       if (!line.lineId) {
         line.lineId = generateLineId(line.original);
       }
+      line.lineTextHash = generateLineId(line.original);
       return line;
     });
   }
@@ -604,9 +610,11 @@ export function splitLyricsIntoLines(trackId: string, lyrics: string): LyricsLin
     .split('\n')
     .map((line, idx) => {
       const trimmed = line.trim();
+      const textHash = generateLineId(trimmed);
       return {
         id: `${trackId}:line:${idx}`,
-        lineId: generateLineId(trimmed),
+        lineId: textHash,
+        lineTextHash: textHash,
         index: idx,
         original: trimmed,
         phrases: []

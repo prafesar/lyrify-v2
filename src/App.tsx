@@ -8,6 +8,7 @@ import {
   Search,
   Brain,
   Check,
+  Plus,
   ChevronLeft,
   ChevronRight,
   ArrowUpLeft,
@@ -67,7 +68,7 @@ import StudyView from "./components/StudyView";
 import SettingsView from "./components/SettingsView";
 import PhraseDrawer from "./components/PhraseDrawer";
 import { LearningAssistantPanel } from "./components/LearningAssistantPanel";
-import { acceptSuggestedPhrase } from "./services/lyricsAnalysisService";
+import { acceptSuggestedPhrase, addUserPhrase } from "./services/lyricsAnalysisService";
 import { LibraryView } from "./components/LibraryView";
 import LanguageSelector from "./components/LanguageSelector";
 import {
@@ -77,6 +78,7 @@ import {
   saveTrackData,
   getTrackDetails,
   getCachedTrackData,
+  generateLineId,
 } from "./services/musicService";
 import { sqliteService } from "./services/sqliteService";
 import { useAppNavigation } from "./hooks/useAppNavigation";
@@ -220,6 +222,7 @@ interface LyricLineProps {
   lineId?: string;
   targetLanguage?: string;
   onSaveLineExplanation?: (index: number, explanation: any) => void;
+  onAddNoteToDictionary?: (lineIndex: number, note: any) => void;
 }
 
 const LyricLine = ({
@@ -243,6 +246,7 @@ const LyricLine = ({
   lineId,
   targetLanguage,
   onSaveLineExplanation,
+  onAddNoteToDictionary,
 }: LyricLineProps) => {
   const trimmedLine = line.trim();
 
@@ -273,6 +277,25 @@ const LyricLine = ({
     setStreamedSummary("");
     
     try {
+      const currentHash = generateLineId(line);
+      
+      // Look for another line in the same track with the same normalized text hash that already has an explanation
+      const sameLineWithExplanation = currentTrack?.lines?.find((l: any, idx: number) => {
+        if (idx === i) return false;
+        const h = l.lineTextHash || generateLineId(l.original);
+        return h === currentHash && l.explanation && (l.explanation.summary || l.explanation.notes?.length > 0);
+      });
+
+      if (sameLineWithExplanation) {
+        // Reuse from other line occurrence:
+        const result = sameLineWithExplanation.explanation;
+        if (onSaveLineExplanation) {
+          onSaveLineExplanation(i, result);
+        }
+        setIsLoadingExplanation(false);
+        return;
+      }
+
       const prevLine = i > 0 ? currentTrack.lines[i - 1] : undefined;
       const nextLine = i < currentTrack.lines.length - 1 ? currentTrack.lines[i + 1] : undefined;
       const targetLang = targetLanguage || currentTrack.targetLanguage || "English";
@@ -548,17 +571,60 @@ const LyricLine = ({
                           nuance: "bg-teal-500/10 border-teal-500/20 text-teal-600 dark:text-teal-400"
                         };
                         const typeClass = bgTypeMap[note.type] || "bg-app-fg/5 border-app-card-border text-app-fg/70";
+                        const phraseText = note.sourceText || line;
+                        const isAlreadyAdded = currentTrack?.lines?.some((l: any) =>
+                          l.phrases?.some((p: any) => p.text.toLowerCase().trim() === phraseText.toLowerCase().trim())
+                        );
+
                         return (
-                          <div key={nIdx} className="flex gap-2.5 items-start">
-                            <span className={cn(
-                              "text-[8px] font-black uppercase tracking-widest px-2 py-0.5 mt-0.5 rounded-md border shrink-0",
-                              typeClass
-                            )}>
-                              {note.type}
-                            </span>
-                            <span className="text-xs font-sans text-app-fg/70 leading-normal">
-                              {note.text}
-                            </span>
+                          <div key={nIdx} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-2.5 rounded-xl bg-app-card/30 border border-app-card-border/30 hover:border-app-card-border/65 transition-all">
+                            <div className="flex gap-2.5 items-start flex-1 min-w-0">
+                              <span className={cn(
+                                "text-[8px] font-black uppercase tracking-widest px-2 py-0.5 mt-0.5 rounded-md border shrink-0",
+                                typeClass
+                              )}>
+                                {note.type}
+                              </span>
+                              <div className="flex flex-col gap-0.5 min-w-0">
+                                {note.sourceText && (
+                                  <span className="text-xs font-semibold text-app-fg tracking-tight">
+                                    {note.sourceText} {note.translation && <span className="text-[10px] font-normal text-app-fg/50 font-mono ml-1">({note.translation})</span>}
+                                  </span>
+                                )}
+                                <span className="text-xs font-sans text-app-fg/75 leading-normal">
+                                  {note.text}
+                                </span>
+                              </div>
+                            </div>
+                            {onAddNoteToDictionary && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (!isAlreadyAdded) {
+                                    onAddNoteToDictionary(i, note);
+                                  }
+                                }}
+                                disabled={isAlreadyAdded}
+                                className={cn(
+                                  "text-[10px] h-7 px-2.5 rounded-lg font-bold flex items-center justify-center gap-1 transition-all shrink-0 w-full sm:w-auto mt-1 sm:mt-0",
+                                  isAlreadyAdded 
+                                    ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20"
+                                    : "bg-app-fg/10 hover:bg-[var(--accent)] hover:text-white border border-transparent cursor-pointer"
+                                )}
+                              >
+                                {isAlreadyAdded ? (
+                                  <>
+                                    <Check size={10} className="stroke-[3px]" />
+                                    <span>Saved</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Plus size={10} className="stroke-[3px]" />
+                                    <span>Add to Dictionary</span>
+                                  </>
+                                )}
+                              </button>
+                            )}
                           </div>
                         );
                       })}
@@ -961,6 +1027,36 @@ export default function App() {
     saveTrackData(currentTrack.trackId, updatedTrack);
   };
 
+  const handleAddNoteToDictionary = (lineIndex: number, note: any) => {
+    if (!currentTrack) return;
+    const line = currentTrack.lines[lineIndex];
+    if (!line) return;
+
+    const phraseText = note.sourceText || line.original;
+    const translation = note.translation || note.text || "";
+    const explanation = note.text || "";
+    const targetLineId = line.lineId;
+    const noteType = note.entryType || note.type || "phrase";
+
+    const isDuplicate = currentTrack.lines.some((l: any) => 
+      l.phrases?.some((p: any) => p.text.toLowerCase().trim() === phraseText.toLowerCase().trim())
+    );
+
+    if (isDuplicate) return;
+
+    const updatedTrack = addUserPhrase(
+      currentTrack,
+      phraseText,
+      translation,
+      explanation,
+      targetLineId,
+      noteType
+    );
+
+    saveTrackData(currentTrack.trackId, updatedTrack);
+    setCurrentTrack(updatedTrack);
+  };
+
   // Synchronized callback action delegates
   const handleTrackSelect = async (track: any) => {
     await handleTrackSelectRaw(track, targetLanguage, {
@@ -1202,6 +1298,7 @@ export default function App() {
         handleToggleStarLine={handleToggleStarLine}
         targetLanguage={targetLanguage}
         onSaveLineExplanation={handleSaveLineExplanation}
+        onAddNoteToDictionary={handleAddNoteToDictionary}
       />
     );
   };

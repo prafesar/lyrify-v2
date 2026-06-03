@@ -1154,6 +1154,9 @@ export async function generateLineExplanation(
   notes: Array<{
     type: "idiom" | "cultural" | "collocation" | "grammar" | "nuance";
     text: string;
+    sourceText?: string;
+    translation?: string;
+    entryType?: "word" | "expression";
   }>;
 }> {
   let prompt = `Role: Expert linguistic analyst and music teacher.
@@ -1182,9 +1185,13 @@ INSTRUCTIONS:
 1. Provide a very concise summary (1-3 sentences) in "${targetLanguage || "English"}" explaining what this current line means, its emotional undertone, or how it fits into the song.
 2. Provide a list of 1-3 highly notable linguistic aspects (notes) from the current line. Each note must target an interesting part of this line.
 3. For each note, assign one of these exact types: "idiom", "cultural", "collocation", "grammar", "nuance".
-4. Do NOT suggest list of phrases/words or return suggestions.
-5. Provide a short, direct explanation for each note.
-6. The entire output must be valid JSON matching the schema precisely.
+4. For each note, try to extract:
+   - "sourceText": the specific substring/word/phrase from the current line that the note refers to (e.g. "hold on", "love").
+   - "translation": a short precise meaning or translation of the sourceText in "${targetLanguage || "English"}".
+   - "entryType": whether the sourceText acts as a single "word" or an "expression".
+5. Do NOT suggest list of phrases/words or return suggestions.
+6. Provide a short, direct explanation for each note in "text".
+7. The entire output must be valid JSON matching the schema precisely.
 
 Return a valid JSON object with the following structure exactly:
 {
@@ -1192,7 +1199,10 @@ Return a valid JSON object with the following structure exactly:
   "notes": [
     {
       "type": "idiom" | "cultural" | "collocation" | "grammar" | "nuance",
-      "text": "short clear explanation focusing on a specific part of the line"
+      "text": "short clear explanation focusing on a specific part of the line",
+      "sourceText": "the raw fragment/word from the original current line (optional)",
+      "translation": "brief meaning or translation of the sourceText (optional)",
+      "entryType": "word" | "expression" (optional)
     }
   ]
 }
@@ -1213,7 +1223,10 @@ Return a valid JSON object with the following structure exactly:
               type: Type.OBJECT,
               properties: {
                 type: { type: Type.STRING },
-                text: { type: Type.STRING }
+                text: { type: Type.STRING },
+                sourceText: { type: Type.STRING },
+                translation: { type: Type.STRING },
+                entryType: { type: Type.STRING }
               },
               required: ["type", "text"]
             }
