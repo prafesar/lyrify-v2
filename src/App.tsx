@@ -96,6 +96,7 @@ import { TracksHomeShell } from "./components/TracksHomeShell";
 import { DailyProgressBlock } from "./components/DailyProgressBlock";
 import { ResumeStudyBlock } from "./components/ResumeStudyBlock";
 import { AnalysisPhraseWorkspace } from "./components/AnalysisPhraseWorkspace";
+import { LineWorkspace } from "./components/LineWorkspace";
 
 
 
@@ -284,16 +285,6 @@ const LyricLine = ({
   const [streamedSummary, setStreamedSummary] = useState("");
   const [isLoadingExplanation, setIsLoadingExplanation] = useState(false);
   const [explanationError, setExplanationError] = useState<string | null>(null);
-
-  // States for inline editing of saved notes in lyrics view
-  const [editingNoteIdx, setEditingNoteIdx] = useState<number | null>(null);
-  const [editNoteFields, setEditNoteFields] = useState({
-    text: "",
-    translation: "",
-    explanation: "",
-    type: "",
-    userNote: "",
-  });
 
   const cachedExpl = currentTrack?.lines?.[i]?.explanation;
   const summary = cachedExpl?.summary || "";
@@ -553,296 +544,21 @@ const LyricLine = ({
 
           <AnimatePresence initial={false}>
             {isExplaining && (
-              <motion.div
-                key={`explanation-block-${i}`}
-                initial={{ opacity: 0, height: 0, y: -5 }}
-                animate={{ opacity: 1, height: "auto", y: 0 }}
-                exit={{ opacity: 0, height: 0, y: -5 }}
-                transition={{ duration: 0.25 }}
-                className="mt-4 mb-2 p-5 bg-app-card border border-app-card-border/70 rounded-3xl relative overflow-hidden"
-                onClick={(e) => e.stopPropagation()}
-              >
-                {/* Header with Title and Close button */}
-                <div className="flex justify-between items-center mb-3">
-                  <div className="flex items-center gap-2">
-                    <Brain size={14} className="text-[var(--accent)]" />
-                    <span className="text-[10px] font-black uppercase tracking-widest text-app-fg opacity-65">
-                      Line Insight
-                    </span>
-                  </div>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setIsExplaining(false);
-                    }}
-                    className="p-1 rounded-lg hover:bg-app-fg/5 text-app-fg opacity-40 hover:opacity-100 transition-opacity"
-                  >
-                    <X size={12} />
-                  </button>
-                </div>
-
-                {/* Content Area */}
-                <div className="space-y-4">
-                  {/* Summary section */}
-                  {(streamedSummary || summary) ? (
-                    <div className="text-sm font-sans leading-relaxed text-app-fg/80 pr-2 whitespace-pre-line">
-                      {streamedSummary || summary}
-                    </div>
-                  ) : isLoadingExplanation ? (
-                    <div className="flex items-center gap-2 py-1">
-                      <span className="flex h-2 w-2 relative">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[var(--accent)] opacity-75"></span>
-                        <span className="relative inline-flex rounded-full h-2 w-2 bg-[var(--accent)]"></span>
-                      </span>
-                      <span className="text-xs italic tracking-wide text-app-fg opacity-40">
-                        Analyzing line syntax nuances...
-                      </span>
-                    </div>
-                  ) : null}
-
-                  {/* Notes list */}
-                  {notes && notes.length > 0 && (
-                    <motion.div 
-                      initial={{ opacity: 0, y: 5 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.2 }}
-                      className="pt-3 border-t border-app-card-border/50 flex flex-col gap-2.5"
-                    >
-                      {notes.map((note: any, nIdx: number) => {
-                        const bgTypeMap: Record<string, string> = {
-                          phrase: "bg-blue-500/10 border-blue-500/20 text-blue-600 dark:text-blue-400",
-                          vocabulary: "bg-teal-500/10 border-teal-500/20 text-teal-600 dark:text-teal-400",
-                          idiom: "bg-purple-500/10 border-purple-500/20 text-purple-600 dark:text-purple-400",
-                          cultural: "bg-pink-500/10 border-pink-500/20 text-pink-600 dark:text-pink-400",
-                          collocation: "bg-indigo-500/10 border-indigo-500/20 text-indigo-600 dark:text-indigo-400",
-                          grammar: "bg-amber-500/10 border-amber-500/20 text-amber-600 dark:text-amber-400",
-                          nuance: "bg-teal-500/10 border-teal-500/20 text-teal-600 dark:text-teal-400"
-                        };
-
-                        const noteOriginKey = currentTrack ? generateNoteOriginKey(currentTrack.trackId, currentTrack.lines[i]?.lineId, note.text, note.sourceText, nIdx) : "";
-                        const existingCard = noteOriginKey ? originKeyMetadata?.get(noteOriginKey) : undefined;
-                        const isAlreadyAdded = !!existingCard;
-
-                        const displayType = existingCard?.type || existingCard?.entryType || note.type || "phrase";
-                        const displaySourceText = existingCard?.text || note.sourceText || line;
-                        const displayTranslation = existingCard?.translation || note.translation || "";
-                        const displayExplanation = existingCard?.explanation || note.text || "";
-                        const displayUserNote = existingCard?.userNote || "";
-
-                        const typeClass = bgTypeMap[displayType] || bgTypeMap[note.type] || "bg-app-fg/5 border-app-card-border text-app-fg/70";
-                        const isEditing = editingNoteIdx === nIdx;
-
-                        return (
-                          <div key={noteOriginKey ? `note-${noteOriginKey}` : `note-idx-${nIdx}`} className="p-3 rounded-xl bg-app-card/30 border border-app-card-border/30 hover:border-app-card-border/65 transition-all">
-                            {isEditing ? (
-                              <div className="space-y-2.5 w-full">
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                  <div className="flex flex-col gap-0.5">
-                                    <label className="text-[9px] font-black uppercase tracking-widest opacity-40">Original term</label>
-                                    <input
-                                      type="text"
-                                      value={editNoteFields.text}
-                                      onChange={(e) => setEditNoteFields({ ...editNoteFields, text: e.target.value })}
-                                      className="w-full px-2.5 py-1.5 text-xs rounded-lg bg-app-bg border border-app-card-border focus:border-indigo-500 focus:outline-none"
-                                    />
-                                  </div>
-                                  <div className="flex flex-col gap-0.5">
-                                    <label className="text-[9px] font-black uppercase tracking-widest opacity-40">Translation</label>
-                                    <input
-                                      type="text"
-                                      value={editNoteFields.translation}
-                                      onChange={(e) => setEditNoteFields({ ...editNoteFields, translation: e.target.value })}
-                                      className="w-full px-2.5 py-1.5 text-xs rounded-lg bg-app-bg border border-app-card-border focus:border-indigo-500 focus:outline-none"
-                                    />
-                                  </div>
-                                </div>
-
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                  <div className="flex flex-col gap-0.5">
-                                    <label className="text-[9px] font-black uppercase tracking-widest opacity-40">Type</label>
-                                    <select
-                                      value={editNoteFields.type}
-                                      onChange={(e) => setEditNoteFields({ ...editNoteFields, type: e.target.value })}
-                                      className="w-full px-2.5 py-1 text-xs rounded-lg bg-app-bg border border-app-card-border focus:border-indigo-500 focus:outline-none"
-                                    >
-                                      <option value="phrase">Phrase</option>
-                                      <option value="vocabulary">Vocabulary</option>
-                                      <option value="idiom">Idiom</option>
-                                      <option value="collocation">Collocation</option>
-                                      <option value="grammar">Grammar</option>
-                                      <option value="nuance">Nuance</option>
-                                      <option value="cultural">Cultural</option>
-                                    </select>
-                                  </div>
-                                  <div className="flex flex-col gap-0.5">
-                                    <label className="text-[9px] font-black uppercase tracking-widest opacity-40">Memory Note (Optional)</label>
-                                    <input
-                                      type="text"
-                                      value={editNoteFields.userNote}
-                                      placeholder="Mnemonic helper..."
-                                      onChange={(e) => setEditNoteFields({ ...editNoteFields, userNote: e.target.value })}
-                                      className="w-full px-2.5 py-1.5 text-xs rounded-lg bg-app-bg border border-app-card-border focus:border-indigo-500 focus:outline-none"
-                                    />
-                                  </div>
-                                </div>
-
-                                <div className="flex flex-col gap-0.5">
-                                  <label className="text-[9px] font-black uppercase tracking-widest opacity-40">Explanation</label>
-                                  <textarea
-                                    value={editNoteFields.explanation}
-                                    rows={2}
-                                    onChange={(e) => setEditNoteFields({ ...editNoteFields, explanation: e.target.value })}
-                                    className="w-full px-2.5 py-1.5 text-xs rounded-lg bg-app-bg border border-app-card-border focus:border-indigo-500 focus:outline-none resize-none"
-                                  />
-                                </div>
-
-                                <div className="flex items-center justify-end gap-2 pt-1 border-t border-app-card-border/20">
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setEditingNoteIdx(null);
-                                    }}
-                                    className="px-2.5 py-1 text-[9px] font-extrabold uppercase tracking-widest rounded-lg border border-app-card-border hover:bg-app-fg/5 transition-all"
-                                  >
-                                    Cancel
-                                  </button>
-                                  <button
-                                    onClick={async (e) => {
-                                      e.stopPropagation();
-                                      if (existingCard && onEditCardFields) {
-                                        await onEditCardFields(existingCard.id, {
-                                          text: editNoteFields.text,
-                                          translation: editNoteFields.translation,
-                                          explanation: editNoteFields.explanation,
-                                          type: editNoteFields.type,
-                                          entryType: editNoteFields.type,
-                                          userNote: editNoteFields.userNote,
-                                        });
-                                      }
-                                      setEditingNoteIdx(null);
-                                    }}
-                                    className="px-2.5 py-1 text-[9px] font-extrabold uppercase tracking-widest rounded-lg bg-app-fg text-app-bg hover:scale-105 active:scale-95 transition-all"
-                                  >
-                                    Save
-                                  </button>
-                                </div>
-                              </div>
-                            ) : (
-                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 w-full">
-                                <div className="flex gap-2.5 items-start flex-1 min-w-0">
-                                  <span className={cn(
-                                    "text-[8px] font-black uppercase tracking-widest px-2 py-0.5 mt-0.5 rounded-md border shrink-0",
-                                    typeClass
-                                  )}>
-                                    {displayType}
-                                  </span>
-                                  <div className="flex flex-col gap-0.5 min-w-0">
-                                    <span className="text-xs font-semibold text-app-fg tracking-tight flex flex-wrap items-center gap-1.5">
-                                      {displaySourceText}
-                                      {displayTranslation && (
-                                        <span className="text-[10px] font-normal text-app-fg/50 font-mono">
-                                          ({displayTranslation})
-                                        </span>
-                                      )}
-                                      {displayUserNote && (
-                                        <span className="text-[9px] font-bold text-teal-600 dark:text-teal-400 bg-teal-500/10 px-1.5 py-0.5 rounded-md">
-                                          Note: {displayUserNote}
-                                        </span>
-                                      )}
-                                      {existingCard && (
-                                        <span className={cn(
-                                          "text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded",
-                                          existingCard.status === "known" 
-                                            ? "bg-emerald-500/10 text-emerald-600" 
-                                            : "bg-orange-500/10 text-orange-600"
-                                        )}>
-                                          {existingCard.status === "known" ? "known" : "learning"}
-                                        </span>
-                                      )}
-                                    </span>
-                                    <span className="text-xs font-sans text-app-fg/75 leading-normal">
-                                      {displayExplanation}
-                                    </span>
-                                  </div>
-                                </div>
-
-                                <div className="flex items-center gap-2 mt-1 sm:mt-0 shrink-0 self-end sm:self-center">
-                                  {isAlreadyAdded && onEditCardFields && (
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setEditingNoteIdx(nIdx);
-                                        setEditNoteFields({
-                                          text: displaySourceText,
-                                          translation: displayTranslation,
-                                          explanation: displayExplanation,
-                                          type: displayType,
-                                          userNote: displayUserNote,
-                                        });
-                                      }}
-                                      className="text-[10px] h-7 px-2.5 rounded-lg font-bold flex items-center justify-center gap-1 transition-all border border-transparent bg-app-fg/5 hover:bg-app-fg/10 cursor-pointer"
-                                    >
-                                      <Edit3 size={10} />
-                                      <span>Edit</span>
-                                    </button>
-                                  )}
-
-                                  {onAddNoteToDictionary && (
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        if (!isAlreadyAdded) {
-                                          onAddNoteToDictionary(i, note, nIdx);
-                                        }
-                                      }}
-                                      disabled={isAlreadyAdded}
-                                      className={cn(
-                                        "text-[10px] h-7 px-2.5 rounded-lg font-bold flex items-center justify-center gap-1 transition-all",
-                                        isAlreadyAdded 
-                                          ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20"
-                                          : "bg-app-fg/10 hover:bg-[var(--accent)] hover:text-white border border-transparent cursor-pointer"
-                                      )}
-                                    >
-                                      {isAlreadyAdded ? (
-                                        <>
-                                          <Check size={10} className="stroke-[3px]" />
-                                          <span>Saved</span>
-                                        </>
-                                      ) : (
-                                        <>
-                                          <Plus size={10} className="stroke-[3px]" />
-                                          <span>Add to Study</span>
-                                        </>
-                                      )}
-                                    </button>
-                                  )}
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </motion.div>
-                  )}
-
-                  {/* Error display */}
-                  {explanationError && (
-                    <div className="flex gap-2 items-center text-xs text-orange-500 pt-2 border-t border-app-card-border/30">
-                      <AlertTriangle size={14} className="shrink-0" />
-                      <span>{explanationError}</span>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleFetchExplanation(true);
-                        }}
-                        className="ml-auto text-[10px] uppercase tracking-wider font-extrabold underline hover:text-orange-400"
-                      >
-                        Retry
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </motion.div>
+              <LineWorkspace
+                line={line}
+                i={i}
+                currentTrack={currentTrack}
+                targetLanguage={targetLanguage}
+                onSaveLineExplanation={onSaveLineExplanation}
+                onAddNoteToDictionary={onAddNoteToDictionary}
+                originKeyMetadata={originKeyMetadata}
+                onEditCardFields={onEditCardFields}
+                isLoadingExplanation={isLoadingExplanation}
+                explanationError={explanationError}
+                streamedSummary={streamedSummary}
+                handleFetchExplanation={handleFetchExplanation}
+                onClose={() => setIsExplaining(false)}
+              />
             )}
           </AnimatePresence>
         </div>
