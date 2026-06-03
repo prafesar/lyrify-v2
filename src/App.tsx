@@ -468,9 +468,10 @@ const LyricLine = ({
         </div>
 
         <div className="pl-1 relative z-10">
-          <AnimatePresence>
+          <AnimatePresence initial={false}>
             {(activeLineIndex === i || alwaysShowTranslation || isBoth) && (
               <motion.div
+                key={`translation-block-${i}`}
                 initial={{ opacity: 0, height: 0 }}
                 animate={{ opacity: 1, height: "auto" }}
                 exit={{ opacity: 0, height: 0 }}
@@ -546,9 +547,12 @@ const LyricLine = ({
                 )}
               </motion.div>
             )}
+          </AnimatePresence>
 
+          <AnimatePresence initial={false}>
             {isExplaining && (
               <motion.div
+                key={`explanation-block-${i}`}
                 initial={{ opacity: 0, height: 0, y: -5 }}
                 animate={{ opacity: 1, height: "auto", y: 0 }}
                 exit={{ opacity: 0, height: 0, y: -5 }}
