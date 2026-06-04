@@ -273,7 +273,10 @@ export const LineWorkspace = ({
   };
 
   return (
-    <div className="mt-4 mb-2 p-5 bg-app-card border border-app-card-border/70 rounded-3xl relative overflow-hidden shadow-sm">
+    <div 
+      onClick={(e) => e.stopPropagation()}
+      className="mt-4 mb-2 p-5 bg-app-card border border-app-card-border/70 rounded-3xl relative overflow-hidden shadow-sm"
+    >
       {/* Header */}
       <div className="flex justify-between items-center mb-4 pb-2.5 border-b border-app-card-border/30">
         <div className="flex items-center gap-2">
@@ -380,86 +383,231 @@ export const LineWorkspace = ({
             )}
           </div>
 
-          {/* New Note Form */}
-          <AnimatePresence>
-            {isAddingNote && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: "auto" }}
-                exit={{ opacity: 0, height: 0 }}
-                className="p-4 rounded-2xl bg-app-bg border border-[var(--accent)]/15 space-y-3 shadow-md"
-              >
-                <div className="flex items-center justify-between border-b border-app-card-border/10 pb-1.5">
-                  <span className="text-[9.5px] font-black uppercase tracking-widest text-[var(--accent)] flex items-center gap-1">
-                    <Plus size={10} /> Add Phrase / Word
-                  </span>
-                  <button 
-                    onClick={() => {
-                      setIsAddingNote(false);
-                      setNewNoteError("");
-                    }} 
-                    className="p-1 rounded hover:bg-app-fg/5 opacity-50"
+          {/* Notes items & Inline Add note card */}
+          <div className="flex flex-col gap-2.5">
+            {notes.map((note, nIdx) => {
+              const noteOriginKey = currentTrack ? generateNoteOriginKey(currentTrack.trackId, currentTrack.lines[i]?.lineId, note.text, note.sourceText, nIdx) : "";
+              const existingCard = noteOriginKey && originKeyMetadata ? originKeyMetadata.get(noteOriginKey) : undefined;
+              const isAlreadyAdded = !!existingCard;
+
+              const displayType = existingCard?.type || existingCard?.entryType || note.type || "phrase";
+              const displaySourceText = existingCard?.text || note.sourceText || line;
+              const displayTranslation = existingCard?.translation || note.translation || "";
+              const displayExplanation = existingCard?.explanation || note.text || "";
+              const displayUserNote = existingCard?.userNote || note.userNote || "";
+
+              const typeClass = bgTypeMap[displayType] || bgTypeMap[note.type] || "bg-app-fg/5 border-app-card-border text-app-fg/70";
+              const isEditing = editingNoteIdx === nIdx;
+
+              if (isEditing) {
+                return (
+                  <div 
+                    key={`edit-note-idx-${nIdx}`} 
+                    className="p-4 rounded-2xl bg-app-card/60 border border-emerald-500/30 shadow-md space-y-3"
                   >
-                    <X size={10} />
-                  </button>
-                </div>
+                    <div className="flex items-center justify-between border-b border-app-card-border/10 pb-1.5">
+                      <span className="text-[9px] font-black uppercase tracking-widest text-emerald-500 flex items-center gap-1">
+                        <Edit3 size={10} /> Edit Phrase
+                      </span>
+                      <button 
+                        onClick={() => setEditingNoteIdx(null)} 
+                        className="p-1 rounded hover:bg-app-fg/5 opacity-50"
+                      >
+                        <X size={10} />
+                      </button>
+                    </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                  <div className="flex flex-col gap-0.5">
-                    <label className="text-[9px] font-black uppercase tracking-widest opacity-40">Original fragment *</label>
-                    <input
-                      type="text"
-                      placeholder="e.g. word, idiom"
-                      value={newNoteFields.sourceText}
-                      onChange={(e) => setNewNoteFields({ ...newNoteFields, sourceText: e.target.value })}
-                      className="w-full px-2.5 py-1.5 text-xs rounded-xl bg-app-bg border border-app-card-border focus:border-indigo-500 focus:outline-none"
-                    />
-                  </div>
-                  <div className="flex flex-col gap-0.5">
-                    <label className="text-[9px] font-black uppercase tracking-widest opacity-40">Translation *</label>
-                    <input
-                      type="text"
-                      placeholder="Literal translation"
-                      value={newNoteFields.translation}
-                      onChange={(e) => setNewNoteFields({ ...newNoteFields, translation: e.target.value })}
-                      className="w-full px-2.5 py-1.5 text-xs rounded-xl bg-app-bg border border-app-card-border focus:border-indigo-500 focus:outline-none"
-                    />
-                  </div>
-                </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <div className="flex flex-col gap-0.5">
+                        <label className="text-[9px] font-black uppercase tracking-widest opacity-40">Original fragment</label>
+                        <input
+                          type="text"
+                          value={editNoteFields.sourceText}
+                          onChange={(e) => setEditNoteFields({ ...editNoteFields, sourceText: e.target.value })}
+                          className="w-full px-2.5 py-1.5 text-xs rounded-xl bg-app-bg border border-app-card-border focus:border-indigo-500 focus:outline-none"
+                        />
+                      </div>
+                      <div className="flex flex-col gap-0.5">
+                        <label className="text-[9px] font-black uppercase tracking-widest opacity-40">Translation</label>
+                        <input
+                          type="text"
+                          value={editNoteFields.translation}
+                          onChange={(e) => setEditNoteFields({ ...editNoteFields, translation: e.target.value })}
+                          className="w-full px-2.5 py-1.5 text-xs rounded-xl bg-app-bg border border-app-card-border focus:border-indigo-500 focus:outline-none"
+                        />
+                      </div>
+                    </div>
 
-                <div className="flex flex-col gap-0.5">
-                  <label className="text-[9px] font-black uppercase tracking-widest opacity-40">Linguistic Explanation / Usage *</label>
-                  <textarea
-                    placeholder="Short grammar, usage notes, or word meaning details..."
-                    value={newNoteFields.text}
-                    rows={2}
-                    onChange={(e) => setNewNoteFields({ ...newNoteFields, text: e.target.value })}
-                    className="w-full px-2.5 py-1.5 text-xs rounded-xl bg-app-bg border border-app-card-border focus:border-indigo-500 focus:outline-none resize-none"
-                  />
-                </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <div className="flex flex-col gap-0.5">
+                        <label className="text-[9px] font-black uppercase tracking-widest opacity-40">Type</label>
+                        <select
+                          value={editNoteFields.type}
+                          onChange={(e) => setEditNoteFields({ ...editNoteFields, type: e.target.value as any })}
+                          className="w-full px-2.5 py-1 text-xs rounded-xl bg-app-bg border border-app-card-border focus:border-indigo-500 focus:outline-none"
+                        >
+                          <option value="phrase">Phrase</option>
+                          <option value="vocabulary">Vocabulary</option>
+                          <option value="idiom">Idiom</option>
+                          <option value="collocation">Collocation</option>
+                          <option value="grammar">Grammar</option>
+                          <option value="nuance">Nuance</option>
+                          <option value="cultural">Cultural</option>
+                        </select>
+                      </div>
+                      <div className="flex flex-col gap-0.5">
+                        <label className="text-[9px] font-black uppercase tracking-widest opacity-40">Memory Note / Helper</label>
+                        <input
+                          type="text"
+                          placeholder="Mnemonic helper..."
+                          value={editNoteFields.userNote}
+                          onChange={(e) => setEditNoteFields({ ...editNoteFields, userNote: e.target.value })}
+                          className="w-full px-2.5 py-1.5 text-xs rounded-xl bg-app-bg border border-app-card-border focus:border-indigo-500 focus:outline-none"
+                        />
+                      </div>
+                    </div>
 
-                {/* Advanced parameters trigger */}
-                <button
-                  type="button"
-                  onClick={() => setShowAdvancedNewNote(!showAdvancedNewNote)}
-                  className="text-[9px] font-black uppercase tracking-widest text-app-fg opacity-40 hover:opacity-100 flex items-center gap-1 pb-1"
-                >
-                  <span>More options</span>
-                  {showAdvancedNewNote ? <ChevronUp size={10} /> : <ChevronDown size={10} />}
-                </button>
-
-                {showAdvancedNewNote && (
-                  <motion.div
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: "auto" }}
-                    className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1.5 border-t border-app-card-border/10"
-                  >
                     <div className="flex flex-col gap-0.5">
-                      <label className="text-[9px] font-black uppercase tracking-widest opacity-40">Type</label>
+                      <label className="text-[9px] font-black uppercase tracking-widest opacity-40">Linguistic Explanation</label>
+                      <textarea
+                        value={editNoteFields.text}
+                        rows={2}
+                        onChange={(e) => setEditNoteFields({ ...editNoteFields, text: e.target.value })}
+                        className="w-full px-2.5 py-1.5 text-xs rounded-xl bg-app-bg border border-app-card-border focus:border-indigo-500 focus:outline-none resize-none"
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between pt-1 border-t border-app-card-border/20">
+                      <button
+                        onClick={() => handleDeleteNote(nIdx)}
+                        className="px-2.5 py-1 text-[9px] font-extrabold uppercase tracking-widest rounded-xl text-red-500 border border-transparent hover:bg-red-500/10 hover:border-red-500/20 transition-all flex items-center gap-1 cursor-pointer"
+                      >
+                        <Trash2 size={10} /> Delete Note
+                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => setEditingNoteIdx(null)}
+                          className="px-2.5 py-1 text-[9px] font-extrabold uppercase tracking-widest rounded-xl border border-app-card-border hover:bg-app-fg/5 transition-all text-app-fg/70"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          onClick={() => handleSaveEditedNote(nIdx, existingCard)}
+                          className="px-2.5 py-1 text-[9px] font-extrabold uppercase tracking-widest rounded-xl bg-emerald-500 text-white hover:scale-103 transition-all cursor-pointer"
+                        >
+                          Save
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
+
+              return (
+                <div 
+                  key={noteOriginKey ? `note-${noteOriginKey}` : `note-idx-${nIdx}`} 
+                  className="p-3.5 rounded-2xl bg-app-card/45 border border-app-card-border/30 hover:border-app-card-border/75 transition-all flex flex-col gap-3 group/note"
+                >
+                  <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 w-full">
+                    <div className="flex gap-2.5 items-start flex-1 min-w-0">
+                      <span className={cn(
+                        "text-[8px] font-black uppercase tracking-widest px-2 py-0.5 mt-0.5 rounded-md border shrink-0",
+                        typeClass
+                      )}>
+                        {displayType}
+                      </span>
+                      <div className="flex flex-col gap-0.5 min-w-0">
+                        <span className="text-xs font-semibold text-app-fg tracking-tight flex flex-wrap items-center gap-1.5">
+                          {displaySourceText}
+                          {displayTranslation && (
+                            <span className="text-[10px] font-normal text-app-fg/50 font-mono">
+                              ({displayTranslation})
+                            </span>
+                          )}
+                          {displayUserNote && (
+                            <span className="text-[9px] font-bold text-teal-600 dark:text-teal-400 bg-teal-500/10 px-1.5 py-0.5 rounded-md">
+                              Note: {displayUserNote}
+                            </span>
+                          )}
+                          {isAlreadyAdded && existingCard && (
+                            <span className={cn(
+                              "text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded",
+                              existingCard.status === "known" 
+                                ? "bg-emerald-500/10 text-emerald-600" 
+                                : "bg-orange-500/10 text-orange-600"
+                            )}>
+                              {existingCard.status === "known" ? "known" : "learning"}
+                            </span>
+                          )}
+                        </span>
+                        <span className="text-xs font-sans text-app-fg/75 leading-normal">
+                          {displayExplanation}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Note Actions */}
+                    <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-center opacity-70 group-hover/note:opacity-100 transition-opacity">
+                      <button
+                        onClick={() => handleStartEditNote(nIdx, note)}
+                        className="p-1 px-2 rounded-lg text-[9px] font-bold border border-app-card-border/40 hover:bg-app-fg/5 transition-all flex items-center gap-1 cursor-pointer"
+                      >
+                        <Edit3 size={10} />
+                        <span>Edit</span>
+                      </button>
+
+                      {onAddNoteToDictionary && (
+                        <button
+                          onClick={() => {
+                            if (!isAlreadyAdded) {
+                              onAddNoteToDictionary(i, note, nIdx);
+                            }
+                          }}
+                          disabled={isAlreadyAdded}
+                          className={cn(
+                            "text-[9px] h-6 px-2.5 rounded-lg font-bold flex items-center justify-center gap-1 transition-all",
+                            isAlreadyAdded 
+                              ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20"
+                              : "bg-app-fg/10 hover:bg-[var(--accent)] hover:text-white border border-transparent cursor-pointer"
+                          )}
+                        >
+                          {isAlreadyAdded ? (
+                            <>
+                              <Check size={10} className="stroke-[3px]" />
+                              <span>Saved</span>
+                            </>
+                          ) : (
+                            <>
+                              <Plus size={10} className="stroke-[3px]" />
+                              <span>Add to Study</span>
+                            </>
+                          )}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+
+            <AnimatePresence>
+              {isAddingNote && (
+                <motion.div
+                  initial={{ opacity: 0, y: 5 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 5 }}
+                  className="p-3.5 rounded-2xl bg-app-card/75 border border-dashed border-[var(--accent)]/30 hover:border-[var(--accent)]/50 transition-all flex flex-col gap-2.5 shadow-sm"
+                >
+                  {/* Visual badge selector row + dismiss */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
                       <select
                         value={newNoteFields.type}
                         onChange={(e) => setNewNoteFields({ ...newNoteFields, type: e.target.value as any })}
-                        className="w-full px-2.5 py-1 text-xs rounded-xl bg-app-bg border border-app-card-border focus:border-indigo-500 focus:outline-none"
+                        className={cn(
+                          "text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md border bg-app-bg text-[var(--accent)] cursor-pointer select-none outline-none focus:ring-1 focus:ring-[var(--accent)]/20",
+                          bgTypeMap[newNoteFields.type] || "border-app-card-border"
+                        )}
                       >
                         <option value="phrase">Phrase</option>
                         <option value="vocabulary">Vocabulary</option>
@@ -469,48 +617,107 @@ export const LineWorkspace = ({
                         <option value="nuance">Nuance</option>
                         <option value="cultural">Cultural</option>
                       </select>
+                      <span className="text-[9px] font-bold text-[var(--accent)] opacity-60">New Card Mode</span>
                     </div>
-                    <div className="flex flex-col gap-0.5">
-                      <label className="text-[9px] font-black uppercase tracking-widest opacity-40">Personal Mnemonics (Mnemonic note)</label>
+                    <button 
+                      onClick={() => {
+                        setIsAddingNote(false);
+                        setNewNoteError("");
+                      }} 
+                      className="p-1 rounded-md hover:bg-app-fg/5 text-app-fg opacity-40 hover:opacity-100 transition-opacity"
+                      title="Dismiss"
+                    >
+                      <X size={12} />
+                    </button>
+                  </div>
+
+                  {/* Main input content imitating a phrase card text structure */}
+                  <div className="space-y-2">
+                    <div className="flex flex-col sm:flex-row gap-2 w-full">
                       <input
                         type="text"
-                        placeholder="Mnemonic helper..."
-                        value={newNoteFields.userNote}
-                        onChange={(e) => setNewNoteFields({ ...newNoteFields, userNote: e.target.value })}
-                        className="w-full px-2.5 py-1.5 text-xs rounded-xl bg-app-bg border border-app-card-border focus:border-indigo-500 focus:outline-none"
+                        placeholder="Original fragment... *"
+                        value={newNoteFields.sourceText}
+                        onChange={(e) => setNewNoteFields({ ...newNoteFields, sourceText: e.target.value })}
+                        className="flex-1 px-3 py-1.5 text-xs font-semibold rounded-xl bg-app-bg border border-app-card-border/60 focus:border-[var(--accent)]/60 focus:outline-none placeholder:font-normal placeholder:opacity-55 opacity-90"
+                        autoFocus
+                      />
+                      <input
+                        type="text"
+                        placeholder="Translation... *"
+                        value={newNoteFields.translation}
+                        onChange={(e) => setNewNoteFields({ ...newNoteFields, translation: e.target.value })}
+                        className="flex-1 px-3 py-1.5 text-xs rounded-xl bg-app-bg border border-app-card-border/60 focus:border-[var(--accent)]/60 focus:outline-none placeholder:opacity-55 opacity-90"
                       />
                     </div>
-                  </motion.div>
-                )}
 
-                {newNoteError && (
-                  <p className="text-[10px] text-orange-500 font-bold">{newNoteError}</p>
-                )}
+                    <input
+                      type="text"
+                      placeholder="Linguistic Explanation / Usage / Details... *"
+                      value={newNoteFields.text}
+                      onChange={(e) => setNewNoteFields({ ...newNoteFields, text: e.target.value })}
+                      className="w-full px-3 py-1.5 text-xs rounded-xl bg-app-bg border border-app-card-border/60 focus:border-[var(--accent)]/60 focus:outline-none placeholder:opacity-55 opacity-90"
+                    />
+                  </div>
 
-                <div className="flex items-center justify-end gap-2 pt-1 border-t border-app-card-border/15">
-                  <button
-                    onClick={() => {
-                      setIsAddingNote(false);
-                      setNewNoteError("");
-                    }}
-                    className="px-3 py-1 text-[9px] font-black uppercase tracking-widest rounded-xl border border-app-card-border hover:bg-app-fg/5 text-app-fg/70"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleCreateNote}
-                    className="px-3 py-1 text-[9px] font-black uppercase tracking-widest rounded-xl bg-[var(--accent)] text-white hover:scale-103 transition-all cursor-pointer"
-                  >
-                    Save Phrase
-                  </button>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
+                  {/* Minimal Advanced Toggle */}
+                  <div className="flex items-center justify-between mt-0.5">
+                    <button
+                      type="button"
+                      onClick={() => setShowAdvancedNewNote(!showAdvancedNewNote)}
+                      className="text-[8px] font-black uppercase tracking-widest text-app-fg opacity-45 hover:opacity-100 flex items-center gap-0.5 select-none"
+                    >
+                      <span>{showAdvancedNewNote ? "Less" : "More Options"}</span>
+                      {showAdvancedNewNote ? <ChevronUp size={8} /> : <ChevronDown size={8} />}
+                    </button>
 
-          {/* Notes items */}
-          <div className="flex flex-col gap-2.5">
-            {notes.length === 0 ? (
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button
+                        onClick={() => {
+                          setIsAddingNote(false);
+                          setNewNoteError("");
+                        }}
+                        className="px-2.5 py-1 text-[9px] font-extrabold uppercase tracking-widest rounded-lg border border-app-card-border hover:bg-app-fg/5 text-app-fg/60 transition-all cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={handleCreateNote}
+                        className="px-2.5 py-1 text-[9px] font-extrabold uppercase tracking-widest rounded-lg bg-[var(--accent)] text-white hover:opacity-90 transition-all flex items-center gap-1 cursor-pointer"
+                      >
+                        <Plus size={8} />
+                        <span>Add</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {showAdvancedNewNote && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: "auto" }}
+                      className="pt-1.5 border-t border-app-card-border/10 flex flex-col gap-1.5"
+                    >
+                      <div className="flex flex-col gap-0.5">
+                        <label className="text-[8px] font-black uppercase tracking-widest opacity-40">Mnemonic helpful hint / comment</label>
+                        <input
+                          type="text"
+                          placeholder="Mnemonic helper info..."
+                          value={newNoteFields.userNote}
+                          onChange={(e) => setNewNoteFields({ ...newNoteFields, userNote: e.target.value })}
+                          className="w-full px-2.5 py-1 text-[10px] rounded-lg bg-app-bg border border-app-card-border/60 focus:border-[var(--accent)]/60 focus:outline-none placeholder:opacity-55"
+                        />
+                      </div>
+                    </motion.div>
+                  )}
+
+                  {newNoteError && (
+                    <p className="text-[10px] text-orange-500 font-bold mt-1">{newNoteError}</p>
+                  )}
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {notes.length === 0 && !isAddingNote && (
               <div className="text-center p-6 rounded-2xl bg-app-bg/15 border border-dashed border-app-card-border/30">
                 <p className="text-xs text-app-fg opacity-40 font-serif">
                   No vocabulary notes added for this line.
@@ -523,211 +730,6 @@ export const LineWorkspace = ({
                   Create manual entry
                 </button>
               </div>
-            ) : (
-              notes.map((note, nIdx) => {
-                const noteOriginKey = currentTrack ? generateNoteOriginKey(currentTrack.trackId, currentTrack.lines[i]?.lineId, note.text, note.sourceText, nIdx) : "";
-                const existingCard = noteOriginKey && originKeyMetadata ? originKeyMetadata.get(noteOriginKey) : undefined;
-                const isAlreadyAdded = !!existingCard;
-
-                const displayType = existingCard?.type || existingCard?.entryType || note.type || "phrase";
-                const displaySourceText = existingCard?.text || note.sourceText || line;
-                const displayTranslation = existingCard?.translation || note.translation || "";
-                const displayExplanation = existingCard?.explanation || note.text || "";
-                const displayUserNote = existingCard?.userNote || note.userNote || "";
-
-                const typeClass = bgTypeMap[displayType] || bgTypeMap[note.type] || "bg-app-fg/5 border-app-card-border text-app-fg/70";
-                const isEditing = editingNoteIdx === nIdx;
-
-                if (isEditing) {
-                  return (
-                    <div 
-                      key={`edit-note-idx-${nIdx}`} 
-                      className="p-4 rounded-2xl bg-app-card/60 border border-emerald-500/30 shadow-md space-y-3"
-                    >
-                      <div className="flex items-center justify-between border-b border-app-card-border/10 pb-1.5">
-                        <span className="text-[9px] font-black uppercase tracking-widest text-emerald-500 flex items-center gap-1">
-                          <Edit3 size={10} /> Edit Phrase
-                        </span>
-                        <button 
-                          onClick={() => setEditingNoteIdx(null)} 
-                          className="p-1 rounded hover:bg-app-fg/5 opacity-50"
-                        >
-                          <X size={10} />
-                        </button>
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                        <div className="flex flex-col gap-0.5">
-                          <label className="text-[9px] font-black uppercase tracking-widest opacity-40">Original fragment</label>
-                          <input
-                            type="text"
-                            value={editNoteFields.sourceText}
-                            onChange={(e) => setEditNoteFields({ ...editNoteFields, sourceText: e.target.value })}
-                            className="w-full px-2.5 py-1.5 text-xs rounded-xl bg-app-bg border border-app-card-border focus:border-indigo-500 focus:outline-none"
-                          />
-                        </div>
-                        <div className="flex flex-col gap-0.5">
-                          <label className="text-[9px] font-black uppercase tracking-widest opacity-40">Translation</label>
-                          <input
-                            type="text"
-                            value={editNoteFields.translation}
-                            onChange={(e) => setEditNoteFields({ ...editNoteFields, translation: e.target.value })}
-                            className="w-full px-2.5 py-1.5 text-xs rounded-xl bg-app-bg border border-app-card-border focus:border-indigo-500 focus:outline-none"
-                          />
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                        <div className="flex flex-col gap-0.5">
-                          <label className="text-[9px] font-black uppercase tracking-widest opacity-40">Type</label>
-                          <select
-                            value={editNoteFields.type}
-                            onChange={(e) => setEditNoteFields({ ...editNoteFields, type: e.target.value as any })}
-                            className="w-full px-2.5 py-1 text-xs rounded-xl bg-app-bg border border-app-card-border focus:border-indigo-500 focus:outline-none"
-                          >
-                            <option value="phrase">Phrase</option>
-                            <option value="vocabulary">Vocabulary</option>
-                            <option value="idiom">Idiom</option>
-                            <option value="collocation">Collocation</option>
-                            <option value="grammar">Grammar</option>
-                            <option value="nuance">Nuance</option>
-                            <option value="cultural">Cultural</option>
-                          </select>
-                        </div>
-                        <div className="flex flex-col gap-0.5">
-                          <label className="text-[9px] font-black uppercase tracking-widest opacity-40">Memory Note / Helper</label>
-                          <input
-                            type="text"
-                            placeholder="Mnemonic helper..."
-                            value={editNoteFields.userNote}
-                            onChange={(e) => setEditNoteFields({ ...editNoteFields, userNote: e.target.value })}
-                            className="w-full px-2.5 py-1.5 text-xs rounded-xl bg-app-bg border border-app-card-border focus:border-indigo-500 focus:outline-none"
-                          />
-                        </div>
-                      </div>
-
-                      <div className="flex flex-col gap-0.5">
-                        <label className="text-[9px] font-black uppercase tracking-widest opacity-40">Linguistic Explanation</label>
-                        <textarea
-                          value={editNoteFields.text}
-                          rows={2}
-                          onChange={(e) => setEditNoteFields({ ...editNoteFields, text: e.target.value })}
-                          className="w-full px-2.5 py-1.5 text-xs rounded-xl bg-app-bg border border-app-card-border focus:border-indigo-500 focus:outline-none resize-none"
-                        />
-                      </div>
-
-                      <div className="flex items-center justify-between pt-1 border-t border-app-card-border/20">
-                        <button
-                          onClick={() => handleDeleteNote(nIdx)}
-                          className="px-2.5 py-1 text-[9px] font-extrabold uppercase tracking-widest rounded-xl text-red-500 border border-transparent hover:bg-red-500/10 hover:border-red-500/20 transition-all flex items-center gap-1 cursor-pointer"
-                        >
-                          <Trash2 size={10} /> Delete Note
-                        </button>
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => setEditingNoteIdx(null)}
-                            className="px-2.5 py-1 text-[9px] font-extrabold uppercase tracking-widest rounded-xl border border-app-card-border hover:bg-app-fg/5 transition-all text-app-fg/70"
-                          >
-                            Cancel
-                          </button>
-                          <button
-                            onClick={() => handleSaveEditedNote(nIdx, existingCard)}
-                            className="px-2.5 py-1 text-[9px] font-extrabold uppercase tracking-widest rounded-xl bg-emerald-500 text-white hover:scale-103 transition-all cursor-pointer"
-                          >
-                            Save
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                }
-
-                return (
-                  <div 
-                    key={noteOriginKey ? `note-${noteOriginKey}` : `note-idx-${nIdx}`} 
-                    className="p-3.5 rounded-2xl bg-app-card/45 border border-app-card-border/30 hover:border-app-card-border/75 transition-all flex flex-col gap-3 group/note"
-                  >
-                    <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 w-full">
-                      <div className="flex gap-2.5 items-start flex-1 min-w-0">
-                        <span className={cn(
-                          "text-[8px] font-black uppercase tracking-widest px-2 py-0.5 mt-0.5 rounded-md border shrink-0",
-                          typeClass
-                        )}>
-                          {displayType}
-                        </span>
-                        <div className="flex flex-col gap-0.5 min-w-0">
-                          <span className="text-xs font-semibold text-app-fg tracking-tight flex flex-wrap items-center gap-1.5">
-                            {displaySourceText}
-                            {displayTranslation && (
-                              <span className="text-[10px] font-normal text-app-fg/50 font-mono">
-                                ({displayTranslation})
-                              </span>
-                            )}
-                            {displayUserNote && (
-                              <span className="text-[9px] font-bold text-teal-600 dark:text-teal-400 bg-teal-500/10 px-1.5 py-0.5 rounded-md">
-                                Note: {displayUserNote}
-                              </span>
-                            )}
-                            {isAlreadyAdded && existingCard && (
-                              <span className={cn(
-                                "text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded",
-                                existingCard.status === "known" 
-                                  ? "bg-emerald-500/10 text-emerald-600" 
-                                  : "bg-orange-500/10 text-orange-600"
-                              )}>
-                                {existingCard.status === "known" ? "known" : "learning"}
-                              </span>
-                            )}
-                          </span>
-                          <span className="text-xs font-sans text-app-fg/75 leading-normal">
-                            {displayExplanation}
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Note Actions */}
-                      <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-center opacity-70 group-hover/note:opacity-100 transition-opacity">
-                        <button
-                          onClick={() => handleStartEditNote(nIdx, note)}
-                          className="p-1 px-2 rounded-lg text-[9px] font-bold border border-app-card-border/40 hover:bg-app-fg/5 transition-all flex items-center gap-1 cursor-pointer"
-                        >
-                          <Edit3 size={10} />
-                          <span>Edit</span>
-                        </button>
-
-                        {onAddNoteToDictionary && (
-                          <button
-                            onClick={() => {
-                              if (!isAlreadyAdded) {
-                                onAddNoteToDictionary(i, note, nIdx);
-                              }
-                            }}
-                            disabled={isAlreadyAdded}
-                            className={cn(
-                              "text-[9px] h-6 px-2.5 rounded-lg font-bold flex items-center justify-center gap-1 transition-all",
-                              isAlreadyAdded 
-                                ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20"
-                                : "bg-app-fg/10 hover:bg-[var(--accent)] hover:text-white border border-transparent cursor-pointer"
-                            )}
-                          >
-                            {isAlreadyAdded ? (
-                              <>
-                                <Check size={10} className="stroke-[3px]" />
-                                <span>Saved</span>
-                              </>
-                            ) : (
-                              <>
-                                <Plus size={10} className="stroke-[3px]" />
-                                <span>Add to Study</span>
-                              </>
-                            )}
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })
             )}
           </div>
         </div>
