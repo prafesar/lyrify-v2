@@ -407,7 +407,27 @@ const LyricLine = ({
           handleLineClick(line, i);
         }}
       >
-        <div className="flex items-center gap-4 w-full relative z-10">
+        <div className="flex items-center gap-2.5 w-full relative z-10">
+          {trimmedLine && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleToggleExplanation();
+              }}
+              className="p-1 -ml-1 rounded hover:bg-app-fg/5 text-app-fg/40 hover:text-app-fg transition-all shrink-0 select-none cursor-pointer"
+              title={isExplaining ? "Collapse Outline" : "Expand Outline"}
+            >
+              <ChevronRight
+                size={14}
+                className={cn(
+                  "transition-transform duration-200 stroke-[2.5]",
+                  isExplaining && "rotate-90 text-[var(--accent)]"
+                )}
+              />
+            </button>
+          )}
+
           <div className="flex-1 min-w-0">
             <p
               className={cn(
@@ -464,12 +484,12 @@ const LyricLine = ({
                 initial={{ opacity: 0, height: 0 }}
                 animate={{ opacity: 1, height: "auto" }}
                 exit={{ opacity: 0, height: 0 }}
-                className="space-y-4"
+                className="space-y-1.5"
               >
                 {displayTranslation && showUnderTranslation && (
                   <p
                     className={cn(
-                      "font-serif italic text-app-fg opacity-40 transition-all duration-300 ml-1 mt-1",
+                      "font-serif italic text-app-fg opacity-40 transition-all duration-300 ml-1 mt-0.5",
                       activeLineIndex === i
                         ? isCompact ? "text-sm" : "text-lg"
                         : isCompact ? "text-xs" : "text-base",
