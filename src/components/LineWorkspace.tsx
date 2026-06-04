@@ -323,12 +323,12 @@ export const LineWorkspace = ({
   return (
     <div 
       onClick={(e) => e.stopPropagation()}
-      className="mt-1 mb-2 pl-3 ml-1 border-l-2 border-[var(--accent)]/15 focus-within:border-[var(--accent)]/45 relative font-sans space-y-1 select-text"
+      className="mt-1.5 mb-2 pl-6 sm:pl-7 relative font-sans space-y-1 select-text"
     >
       <div className="space-y-1">
-        {/* Child Level 1: My Custom Line Note Bullet */}
-        <div className="flex items-start gap-2 text-xs py-0.5 pl-1 rounded-md transition-colors">
-          <span className="text-teal-500/80 font-black shrink-0 mt-1 select-none">•</span>
+        {/* Child Level 1: Lyric Line Note */}
+        <div className="flex items-start gap-2 text-xs py-0.5 rounded-md transition-colors">
+          <span className="text-teal-500/50 font-black shrink-0 mt-1 select-none">•</span>
           <div className="flex-1 min-w-0">
             {(!isEditingMyExpl) ? (
               <div 
@@ -337,12 +337,9 @@ export const LineWorkspace = ({
                 title="Click to edit line note"
               >
                 {myExpl.trim() ? (
-                  <div className="flex items-baseline gap-1.5 text-app-fg/85">
-                    <span className="text-[10px] font-bold text-teal-600 dark:text-teal-400 select-none">note:</span>
-                    <span className="font-sans text-app-fg/75">{myExpl}</span>
-                  </div>
+                  <span className="font-sans text-app-fg/75">{myExpl}</span>
                 ) : (
-                  <span className="text-[10px] sm:text-xs font-sans text-app-fg/35 hover:text-app-fg/60 transition-colors flex items-center gap-1 select-none">
+                  <span className="text-[10px] sm:text-xs font-sans text-app-fg/30 hover:text-app-fg/50 transition-colors flex items-center gap-1 select-none">
                     <span>+ add line note...</span>
                   </span>
                 )}
@@ -396,205 +393,197 @@ export const LineWorkspace = ({
           </div>
         </div>
 
-        {/* Child Level 2: Phrases & Vocabulary List with Inline Quick Add */}
-        {notes.map((note, nIdx) => {
-          const noteOriginKey = currentTrack ? generateNoteOriginKey(currentTrack.trackId, currentTrack.lines[i]?.lineId, note.text, note.sourceText, nIdx) : "";
-          const existingCard = noteOriginKey && originKeyMetadata ? originKeyMetadata.get(noteOriginKey) : undefined;
-          const isAlreadyAdded = !!existingCard;
+        {/* Child Level 2 Container: Indented & Connected Phrases Block */}
+        <div className="pl-5 ml-1.5 border-l border-app-card-border/10 space-y-1">
+          {notes.map((note, nIdx) => {
+            const noteOriginKey = currentTrack ? generateNoteOriginKey(currentTrack.trackId, currentTrack.lines[i]?.lineId, note.text, note.sourceText, nIdx) : "";
+            const existingCard = noteOriginKey && originKeyMetadata ? originKeyMetadata.get(noteOriginKey) : undefined;
+            const isAlreadyAdded = !!existingCard;
 
-          const displayType = existingCard?.type || existingCard?.entryType || note.type || "phrase";
-          const displaySourceText = existingCard?.text || note.sourceText || line;
-          const displayTranslation = existingCard?.translation || note.translation || "";
-          const displayExplanation = existingCard?.explanation || note.text || "";
-          const noteSource = note.source || (noteOriginKey?.includes("manual") ? "manual" : "ai");
+            const displayType = existingCard?.type || existingCard?.entryType || note.type || "phrase";
+            const displaySourceText = existingCard?.text || note.sourceText || line;
+            const displayTranslation = existingCard?.translation || note.translation || "";
+            const noteSource = note.source || (noteOriginKey?.includes("manual") ? "manual" : "ai");
 
-          const isEditing = editingNoteIdx === nIdx;
+            const isEditing = editingNoteIdx === nIdx;
 
-          if (isEditing) {
-            return (
-              <div 
-                key={`edit-note-idx-${nIdx}`}
-                className="flex items-start gap-2 pl-1 py-1"
-              >
-                <span className="text-[var(--accent)]/80 font-black shrink-0 mt-1 select-none">•</span>
-                <div className="flex-1 bg-app-fg/[0.015] border border-app-card-border/30 rounded-lg p-2 flex flex-col gap-2">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    <input
-                      type="text"
-                      value={editNoteFields.sourceText}
-                      onChange={(e) => setEditNoteFields({ ...editNoteFields, sourceText: e.target.value })}
-                      placeholder="Word / Fragment"
-                      className="w-full bg-transparent border-b border-app-card-border/50 text-xs py-0.5 focus:outline-none focus:border-[var(--accent)]/40 text-app-fg font-medium"
-                    />
-                    <input
-                      type="text"
-                      value={editNoteFields.translation}
-                      onChange={(e) => setEditNoteFields({ ...editNoteFields, translation: e.target.value })}
-                      placeholder="Translation"
-                      className="w-full bg-transparent border-b border-app-card-border/50 text-xs py-0.5 focus:outline-none focus:border-[var(--accent)]/40 text-app-fg/80"
-                    />
-                  </div>
-                  
-                  <div className="flex flex-col sm:flex-row gap-2 items-center text-xs">
-                    <select
-                      value={editNoteFields.type}
-                      onChange={(e) => setEditNoteFields({ ...editNoteFields, type: e.target.value as any })}
-                      className="text-[10px] bg-transparent border-0 text-app-fg/60 outline-none cursor-pointer"
-                    >
-                      <option value="phrase">phrase</option>
-                      <option value="vocabulary">vocabulary</option>
-                      <option value="idiom">idiom</option>
-                      <option value="collocation">collocation</option>
-                      <option value="grammar">grammar</option>
-                      <option value="nuance">nuance</option>
-                      <option value="cultural">cultural</option>
-                    </select>
+            if (isEditing) {
+              return (
+                <div 
+                  key={`edit-note-idx-${nIdx}`}
+                  className="flex items-start gap-2 py-1"
+                >
+                  <span className="text-[var(--accent)]/50 font-black shrink-0 mt-1 select-none">•</span>
+                  <div className="flex-1 bg-app-fg/[0.01] border border-app-card-border/20 rounded-lg p-2 flex flex-col gap-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <input
+                        type="text"
+                        value={editNoteFields.sourceText}
+                        onChange={(e) => setEditNoteFields({ ...editNoteFields, sourceText: e.target.value })}
+                        placeholder="Word / Fragment"
+                        className="w-full bg-transparent border-b border-app-card-border/50 text-xs py-0.5 focus:outline-none focus:border-[var(--accent)]/40 text-app-fg font-medium"
+                      />
+                      <input
+                        type="text"
+                        value={editNoteFields.translation}
+                        onChange={(e) => setEditNoteFields({ ...editNoteFields, translation: e.target.value })}
+                        placeholder="Translation"
+                        className="w-full bg-transparent border-b border-app-card-border/50 text-xs py-0.5 focus:outline-none focus:border-[var(--accent)]/40 text-app-fg/80"
+                      />
+                    </div>
+                    
+                    <div className="flex flex-col sm:flex-row gap-2 items-center text-xs">
+                      <select
+                        value={editNoteFields.type}
+                        onChange={(e) => setEditNoteFields({ ...editNoteFields, type: e.target.value as any })}
+                        className="text-[10px] bg-transparent border-0 text-app-fg/60 outline-none cursor-pointer"
+                      >
+                        <option value="phrase">phrase</option>
+                        <option value="vocabulary">vocabulary</option>
+                        <option value="idiom">idiom</option>
+                        <option value="collocation">collocation</option>
+                        <option value="grammar">grammar</option>
+                        <option value="nuance">nuance</option>
+                        <option value="cultural">cultural</option>
+                      </select>
 
-                    <input
-                      type="text"
-                      value={editNoteFields.text}
-                      onChange={(e) => setEditNoteFields({ ...editNoteFields, text: e.target.value })}
-                      placeholder="Explanation (optional)..."
-                      className="flex-1 bg-transparent border-b border-app-card-border/50 text-[11px] py-0.5 focus:outline-none focus:border-[var(--accent)]/40 text-app-fg/70"
-                    />
-                  </div>
+                      <input
+                        type="text"
+                        value={editNoteFields.text}
+                        onChange={(e) => setEditNoteFields({ ...editNoteFields, text: e.target.value })}
+                        placeholder="Explanation (optional)..."
+                        className="flex-1 bg-transparent border-b border-app-card-border/50 text-[11px] py-0.5 focus:outline-none focus:border-[var(--accent)]/40 text-app-fg/70"
+                      />
+                    </div>
 
-                  <div className="flex items-center justify-between pt-1 text-[9px] text-app-fg/50 select-none">
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteNote(nIdx)}
-                      className="text-red-500/80 hover:text-red-500 font-bold flex items-center gap-1 cursor-pointer"
-                    >
-                      <Trash2 size={9} /> Delete
-                    </button>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center justify-between pt-1 text-[9px] text-app-fg/50 select-none">
                       <button
                         type="button"
-                        onClick={() => setEditingNoteIdx(null)}
-                        className="hover:underline text-app-fg/40"
+                        onClick={() => handleDeleteNote(nIdx)}
+                        className="text-red-500/80 hover:text-red-500 font-bold flex items-center gap-1 cursor-pointer"
                       >
-                        Cancel
+                        <Trash2 size={9} /> Delete
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => handleSaveEditedNote(nIdx, existingCard)}
-                        className="font-bold text-[var(--accent)] hover:underline"
-                      >
-                        Save
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setEditingNoteIdx(null)}
+                          className="hover:underline text-app-fg/40"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleSaveEditedNote(nIdx, existingCard)}
+                          className="font-bold text-[var(--accent)] hover:underline"
+                        >
+                          Save
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            );
-          }
+              );
+            }
 
-          return (
-            <div 
-              key={noteOriginKey ? `note-${noteOriginKey}` : `note-idx-${nIdx}`}
-              className="group/item flex items-baseline gap-2 pl-1 py-0.5 hover:bg-app-fg/[0.015] rounded transition-all text-xs"
-            >
-              <span className="text-app-fg/30 font-black shrink-0 mt-1 select-none">•</span>
-              <div className="flex-1 min-w-0 pr-1">
-                <div className="flex items-baseline gap-1.5 flex-wrap leading-relaxed">
-                  <span className="font-semibold text-app-fg">{displaySourceText}</span>
-                  {displayTranslation && (
-                    <span className="text-app-fg/60 font-medium">
-                      — {displayTranslation}
-                    </span>
-                  )}
-                  
-                  {/* Inline list tags */}
-                  <span className="inline-flex items-center gap-1 ml-1 flex-wrap select-none">
-                    <span className="text-[9px] text-app-fg/35 lowercase">
-                      #{displayType}
-                    </span>
-
-                    <span className={cn(
-                      "text-[8px] font-mono lowercase",
-                      noteSource === "ai" ? "text-purple-500/60" : "text-blue-500/60"
-                    )}>
-                      #{noteSource}
-                    </span>
-
-                    {isAlreadyAdded && existingCard && (
-                      <span className={cn(
-                        "text-[8px] font-semibold uppercase tracking-wider",
-                        existingCard.status === "known" ? "text-emerald-500" : "text-orange-500"
-                      )}>
-                        #{existingCard.status === "known" ? "known" : "learning"}
+            return (
+              <div 
+                key={noteOriginKey ? `note-${noteOriginKey}` : `note-idx-${nIdx}`}
+                className="group/item flex items-baseline gap-2 py-0.5 hover:bg-app-fg/[0.015] rounded transition-all text-xs"
+              >
+                <span className="text-app-fg/20 font-black shrink-0 mt-1 select-none">•</span>
+                <div className="flex-1 min-w-0 pr-1">
+                  <div className="flex items-baseline gap-1.5 flex-wrap leading-relaxed">
+                    <span className="font-semibold text-app-fg">{displaySourceText}</span>
+                    {displayTranslation && (
+                      <span className="text-app-fg/60 font-medium">
+                        — {displayTranslation}
                       </span>
                     )}
-                  </span>
-                </div>
-                
-                {displayExplanation && (
-                  <div className="text-[10px] text-app-fg/50 font-normal pl-2.5 border-l border-app-card-border/40 mt-0.5 leading-snug">
-                    {displayExplanation}
-                  </div>
-                )}
-              </div>
+                    
+                    {/* Inline list tags */}
+                    <span className="inline-flex items-center gap-1 ml-1 flex-wrap select-none">
+                      <span className="text-[10px] text-app-fg/30 lowercase font-normal italic">
+                        #{displayType}
+                      </span>
 
-              <div className="flex items-center gap-1.5 opacity-0 group-hover/item:opacity-100 focus-within:opacity-100 transition-opacity shrink-0 ml-2 self-baseline select-none">
-                <button
-                  type="button"
-                  onClick={() => handleStartEditNote(nIdx, note)}
-                  title="Edit entry"
-                  className="p-1 rounded hover:bg-app-fg/5 text-app-fg/40 hover:text-app-fg transition-colors cursor-pointer"
-                >
-                  <Edit3 size={11} />
-                </button>
-                {onAddNoteToDictionary && (
+                      <span className="text-[10px] text-app-fg/30 lowercase font-normal italic">
+                        #{noteSource}
+                      </span>
+
+                      {isAlreadyAdded && existingCard && (
+                        <span className={cn(
+                          "text-[10px] font-medium lowercase italic",
+                          existingCard.status === "known" ? "text-emerald-500/50" : "text-orange-500/50"
+                        )}>
+                          #{existingCard.status === "known" ? "known" : "learning"}
+                        </span>
+                      )}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1.5 opacity-0 group-hover/item:opacity-100 focus-within:opacity-100 transition-opacity shrink-0 ml-2 self-baseline select-none">
                   <button
                     type="button"
-                    onClick={() => {
-                      if (!isAlreadyAdded) {
-                        onAddNoteToDictionary(i, note, nIdx);
-                      }
-                    }}
-                    disabled={isAlreadyAdded}
-                    className={cn(
-                      "p-1 rounded transition-colors cursor-pointer",
-                      isAlreadyAdded 
-                        ? "text-emerald-500 bg-emerald-500/5"
-                        : "hover:bg-app-fg/5 text-app-fg/40 hover:text-[var(--accent)]"
-                    )}
-                    title={isAlreadyAdded ? "Saved to Dictionary" : "Add to Study Cards"}
+                    onClick={() => handleStartEditNote(nIdx, note)}
+                    title="Edit entry"
+                    className="p-1 rounded hover:bg-app-fg/5 text-app-fg/40 hover:text-app-fg transition-colors cursor-pointer"
                   >
-                    {isAlreadyAdded ? <Check size={11} className="stroke-[3px]" /> : <Plus size={11} />}
+                    <Edit3 size={11} />
                   </button>
-                )}
+                  {onAddNoteToDictionary && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!isAlreadyAdded) {
+                          onAddNoteToDictionary(i, note, nIdx);
+                        }
+                      }}
+                      disabled={isAlreadyAdded}
+                      className={cn(
+                        "p-1 rounded transition-colors cursor-pointer",
+                        isAlreadyAdded 
+                          ? "text-emerald-500 bg-emerald-500/5"
+                          : "hover:bg-app-fg/5 text-app-fg/40 hover:text-[var(--accent)]"
+                      )}
+                      title={isAlreadyAdded ? "Saved to Dictionary" : "Add to Study Cards"}
+                    >
+                      {isAlreadyAdded ? <Check size={11} className="stroke-[3px]" /> : <Plus size={11} />}
+                    </button>
+                  )}
+                </div>
               </div>
-            </div>
-          );
-        })}
+            );
+          })}
 
-        {/* Inline Quick Add bullet row */}
-        <form 
-          onSubmit={handleQuickAddSubmit} 
-          className="flex items-center gap-2 pl-1 py-0.5 hover:bg-app-fg/[0.005] focus-within:bg-app-fg/[0.008] text-xs transition-all"
-        >
-          <span className="text-app-fg/20 select-none">•</span>
-          <input
-            type="text"
-            value={quickAddVal}
-            onChange={(e) => setQuickAddVal(e.target.value)}
-            placeholder="Add phrase (e.g. phrase - translation)..."
-            className="flex-1 min-w-0 bg-transparent text-xs text-app-fg focus:outline-none placeholder:text-app-fg/25 py-0.5 border-b border-dashed border-app-card-border/45"
-          />
-          {quickAddVal.trim() && (
-            <button
-              type="submit"
-              className="text-[10px] font-bold text-[var(--accent)] hover:underline mr-1 select-none cursor-pointer hover:bg-transparent"
-            >
-              Add
-            </button>
-          )}
-        </form>
+          {/* Connected Inline Quick Add bullet row */}
+          <form 
+            onSubmit={handleQuickAddSubmit} 
+            className="flex items-center gap-2 py-0.5 hover:bg-app-fg/[0.005] focus-within:bg-app-fg/[0.008] text-xs transition-all"
+          >
+            <span className="text-app-fg/15 select-none">•</span>
+            <input
+              type="text"
+              value={quickAddVal}
+              onChange={(e) => setQuickAddVal(e.target.value)}
+              placeholder="Add phrase (e.g. phrase - translation)..."
+              className="flex-1 min-w-0 bg-transparent text-xs text-app-fg focus:outline-none placeholder:text-app-fg/25 py-0.5 border-b border-dashed border-app-card-border/45"
+            />
+            {quickAddVal.trim() && (
+              <button
+                type="submit"
+                className="text-[10px] font-bold text-[var(--accent)] hover:underline mr-1 select-none cursor-pointer hover:bg-transparent"
+              >
+                Add
+              </button>
+            )}
+          </form>
+        </div>
 
-        {/* AI Translation Draft Bullet */}
+        {/* Child Level 1 Sibling: AI Translation Draft Bullet */}
         {!(streamedSummary || initialSummary) ? (
-          <div className="flex items-start gap-2 pl-1 py-0.5 text-[10px] text-app-fg/40 select-none">
+          <div className="flex items-start gap-2 py-0.5 text-[10px] text-app-fg/40 select-none">
             <span>•</span>
             <button
               type="button"
@@ -616,7 +605,7 @@ export const LineWorkspace = ({
             </button>
           </div>
         ) : (
-          <div className="flex flex-col gap-1 pl-1 py-0.5 text-xs">
+          <div className="flex flex-col gap-1 py-0.5 text-xs">
             <div className="flex items-center justify-between text-[10px] text-app-fg/40 select-none">
               <span className="flex items-center gap-2">
                 <span>•</span>
