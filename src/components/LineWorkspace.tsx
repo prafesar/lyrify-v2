@@ -107,9 +107,11 @@ export const LineWorkspace = ({
     userNote: "",
   });
   const [newNoteError, setNewNoteError] = useState("");
+  const [quickAddVal, setQuickAddVal] = useState("");
+  const [isEditingMyExpl, setIsEditingMyExpl] = useState(false);
 
   // AI accordion state
-  const [isAISummaryExpanded, setIsAISummaryExpanded] = useState(false);
+  const [isAISummaryExpanded, setIsAISummaryExpanded] = useState(true);
 
   // Keep internal states in sync with external updates (e.g. after AI generation)
   useEffect(() => {
@@ -131,6 +133,7 @@ export const LineWorkspace = ({
       };
       await onSaveLineExplanation(i, updatedExpl);
       setIsExplModified(false);
+      setIsEditingMyExpl(false);
     } catch (err) {
       console.error("[LineWorkspace] Failed to save line explanation:", err);
     } finally {
@@ -272,119 +275,158 @@ export const LineWorkspace = ({
     nuance: "bg-teal-500/10 border-teal-500/20 text-teal-600 dark:text-teal-400"
   };
 
+  const handleQuickAddSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const text = quickAddVal.trim();
+    if (!text) return;
+
+    let sourceText = text;
+    let translation = "";
+
+    // Split by hyphens/dashes: " - ", " – ", " — ", "-", "–", "—"
+    const splitRegex = /\s*[-\u2013\u2014]\s*/;
+    const parts = text.split(splitRegex);
+    if (parts.length > 1) {
+      sourceText = parts[0].trim();
+      translation = parts.slice(1).join(" - ").trim();
+    }
+
+    if (!sourceText) return;
+
+    const generatedId = `manual_${Date.now()}`;
+    const newNoteItem: Note = {
+      id: generatedId,
+      type: "phrase",
+      sourceText: sourceText,
+      translation: translation,
+      text: "", // explanation/details are optional
+      userNote: "",
+      source: "manual",
+    };
+
+    const updatedNotes = [...notes, newNoteItem];
+    setNotes(updatedNotes);
+
+    if (onSaveLineExplanation) {
+      const updatedExpl = {
+        ...(cachedExpl || {}),
+        myExplanation: myExpl.trim(),
+        summary: initialSummary,
+        notes: updatedNotes,
+      };
+      await onSaveLineExplanation(i, updatedExpl);
+    }
+
+    setQuickAddVal("");
+  };
+
   return (
     <div 
       onClick={(e) => e.stopPropagation()}
-      className="mt-4 mb-2 p-5 bg-app-card border border-app-card-border/70 rounded-3xl relative overflow-hidden shadow-sm"
+      className="mt-4 mb-2 p-4 bg-app-card border border-app-card-border/70 rounded-2xl relative overflow-hidden shadow-sm"
     >
       {/* Header */}
-      <div className="flex justify-between items-center mb-4 pb-2.5 border-b border-app-card-border/30">
-        <div className="flex items-center gap-2">
-          <BookOpen size={14} className="text-[var(--accent)]" />
+      <div className="flex justify-between items-center mb-3 pb-2 border-b border-app-card-border/30">
+        <div className="flex items-center gap-1.5 font-sans">
+          <BookOpen size={13} className="text-[var(--accent)]" />
           <span className="text-[10px] font-black uppercase tracking-widest text-app-fg opacity-65">
-            Line Workspace
+            Line {i + 1} Workspace
           </span>
         </div>
         <button
           onClick={onClose}
-          className="p-1 rounded-lg hover:bg-app-fg/5 text-app-fg opacity-40 hover:opacity-100 transition-opacity"
+          className="p-1 rounded hover:bg-app-fg/5 text-app-fg opacity-40 hover:opacity-100 transition-opacity"
         >
-          <X size={14} />
+          <X size={13} />
         </button>
       </div>
 
-      <div className="space-y-5">
-        {/* original & auto translation preview */}
-        <div className="bg-app-bg/40 p-3 rounded-2xl border border-app-card-border/25">
-          <p className="font-serif text-lg font-bold text-app-fg leading-tight">
-            {line}
-          </p>
-          {(currentTrack?.lines?.[i]?.translation) && (
-            <p className="font-serif italic text-sm text-app-fg opacity-45 mt-1">
-              {currentTrack.lines[i].translation}
-            </p>
-          )}
-        </div>
-
-        {/* 1. My Custom Explanation/Note (Manual-first & top priority) */}
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <label className="text-[10px] font-black uppercase tracking-widest opacity-60 text-app-fg flex items-center gap-1.5">
-              <span>My Line Note</span>
-              <span className="h-1 w-1 rounded-full bg-emerald-500"></span>
-            </label>
-            {isExplModified && (
-              <span className="text-[9px] text-amber-500 font-bold uppercase tracking-wider">
-                Unsaved changes
-              </span>
-            )}
-          </div>
-          <div className="relative">
-            <textarea
-              value={myExpl}
-              onChange={(e) => {
-                setMyExpl(e.target.value);
-                setIsExplModified(true);
-              }}
-              placeholder="Write your explanation or translation helper for this line..."
-              rows={3}
-              className="w-full text-sm rounded-2xl bg-app-bg border border-app-card-border focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 focus:outline-none p-3.5 pr-10 resize-none transition-all placeholder:text-app-fg/20"
-            />
-            {myExpl.trim() && (
-              <button
-                onClick={() => {
-                  setMyExpl("");
+      <div className="space-y-4">
+        {/* 1. My Custom Line Note */}
+        <div className="border-b border-app-card-border/30 pb-3">
+          {(!isEditingMyExpl) ? (
+            <div 
+              onClick={() => setIsEditingMyExpl(true)}
+              className="group/note cursor-pointer hover:bg-app-fg/[0.02] p-1.5 -mx-1.5 rounded-xl transition-all"
+            >
+              <div className="flex items-center gap-1.5 mb-1.5">
+                <span className="text-[9px] font-black uppercase tracking-widest opacity-50 text-app-fg">My Line Note</span>
+                <span className="h-1 w-1 rounded-full bg-teal-500"></span>
+                <Edit3 size={10} className="opacity-0 group-hover/note:opacity-50 transition-opacity ml-1 text-app-fg/50" />
+              </div>
+              {myExpl.trim() ? (
+                <p className="text-xs font-sans text-app-fg/80 leading-relaxed pl-1.5 border-l-2 border-teal-500/30">
+                  {myExpl}
+                </p>
+              ) : (
+                <span className="text-xs font-sans text-app-fg/35 italic pl-1.5 hover:text-app-fg/65 transition-colors">
+                  + Add private note or translation helper...
+                </span>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="text-[9px] font-black uppercase tracking-widest opacity-55 text-app-fg flex items-center gap-1">
+                  Editing Line Note
+                </span>
+              </div>
+              <textarea
+                value={myExpl}
+                onChange={(e) => {
+                  setMyExpl(e.target.value);
                   setIsExplModified(true);
                 }}
-                className="absolute top-3.5 right-3.5 p-1 rounded-full hover:bg-app-fg/5 text-app-fg opacity-30 hover:opacity-100"
-                title="Clear text"
-              >
-                <X size={12} />
-              </button>
-            )}
-          </div>
-          {isExplModified && (
-            <div className="flex justify-end gap-2">
-              <button
-                onClick={() => {
-                  setMyExpl(initialMyExpl);
-                  setIsExplModified(false);
+                placeholder="Write private notes, grammar tips, or memory mnemonics..."
+                rows={1.5}
+                className="w-full text-xs font-sans rounded-xl bg-app-bg border border-app-card-border focus:border-[var(--accent)]/50 focus:outline-none p-2.5 resize-none placeholder:opacity-40"
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSaveLineNote();
+                  } else if (e.key === "Escape") {
+                    setMyExpl(initialMyExpl);
+                    setIsExplModified(false);
+                    setIsEditingMyExpl(false);
+                  }
                 }}
-                className="px-3 py-1.5 text-[9px] font-extrabold uppercase tracking-widest rounded-xl border border-app-card-border hover:bg-app-fg/5 transition-all text-app-fg/70"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSaveLineNote}
-                disabled={isSavingExpl}
-                className="px-3 py-1.5 text-[9px] font-extrabold uppercase tracking-widest rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white flex items-center gap-1 hover:scale-103 active:scale-97 transition-all shadow-sm shadow-emerald-500/10 cursor-pointer"
-              >
-                <Save size={10} />
-                <span>{isSavingExpl ? "Saving..." : "Save Note"}</span>
-              </button>
+              />
+              <div className="flex justify-end gap-1.5 text-[9px]">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMyExpl(initialMyExpl);
+                    setIsExplModified(false);
+                    setIsEditingMyExpl(false);
+                  }}
+                  className="px-2 py-0.5 rounded border border-app-card-border hover:bg-app-fg/5 text-app-fg/60 transition-all cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveLineNote}
+                  disabled={isSavingExpl}
+                  className="px-2.5 py-0.5 rounded bg-teal-500 text-white font-semibold flex items-center gap-1 transition-all cursor-pointer"
+                >
+                  <Check size={9} />
+                  <span>{isSavingExpl ? "Saving..." : "Save"}</span>
+                </button>
+              </div>
             </div>
           )}
         </div>
 
-        {/* 2. Compact Notes List with Add Note functionality */}
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <label className="text-[10px] font-black uppercase tracking-widest opacity-60 text-app-fg">
-              Phrases & Vocabulary ({notes.length})
-            </label>
-            {!isAddingNote && (
-              <button
-                onClick={() => setIsAddingNote(true)}
-                className="text-[9px] font-black uppercase tracking-widest text-[var(--accent)] hover:opacity-80 transition-all flex items-center gap-1 cursor-pointer"
-              >
-                <Plus size={10} className="stroke-[3px]" />
-                <span>Add Note / Phrase</span>
-              </button>
-            )}
+        {/* 2. Phrases & Vocabulary List with Inline Quick Add */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-[10px] font-black uppercase tracking-widest opacity-50 text-app-fg">
+              Phrases & vocabulary ({notes.length})
+            </span>
           </div>
 
-          {/* Notes items & Inline Add note card */}
-          <div className="flex flex-col gap-2.5">
+          <div className="space-y-1.5 max-h-[220px] overflow-y-auto pr-1">
             {notes.map((note, nIdx) => {
               const noteOriginKey = currentTrack ? generateNoteOriginKey(currentTrack.trackId, currentTrack.lines[i]?.lineId, note.text, note.sourceText, nIdx) : "";
               const existingCard = noteOriginKey && originKeyMetadata ? originKeyMetadata.get(noteOriginKey) : undefined;
@@ -395,6 +437,7 @@ export const LineWorkspace = ({
               const displayTranslation = existingCard?.translation || note.translation || "";
               const displayExplanation = existingCard?.explanation || note.text || "";
               const displayUserNote = existingCard?.userNote || note.userNote || "";
+              const noteSource = note.source || (noteOriginKey?.includes("manual") ? "manual" : "ai");
 
               const typeClass = bgTypeMap[displayType] || bgTypeMap[note.type] || "bg-app-fg/5 border-app-card-border text-app-fg/70";
               const isEditing = editingNoteIdx === nIdx;
@@ -402,98 +445,70 @@ export const LineWorkspace = ({
               if (isEditing) {
                 return (
                   <div 
-                    key={`edit-note-idx-${nIdx}`} 
-                    className="p-4 rounded-2xl bg-app-card/60 border border-emerald-500/30 shadow-md space-y-3"
+                    key={`edit-note-idx-${nIdx}`}
+                    className="p-3 bg-app-card border border-[var(--accent)]/30 rounded-xl flex flex-col gap-2 shadow-sm"
                   >
-                    <div className="flex items-center justify-between border-b border-app-card-border/10 pb-1.5">
-                      <span className="text-[9px] font-black uppercase tracking-widest text-emerald-500 flex items-center gap-1">
-                        <Edit3 size={10} /> Edit Phrase
-                      </span>
-                      <button 
-                        onClick={() => setEditingNoteIdx(null)} 
-                        className="p-1 rounded hover:bg-app-fg/5 opacity-50"
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <input
+                        type="text"
+                        value={editNoteFields.sourceText}
+                        onChange={(e) => setEditNoteFields({ ...editNoteFields, sourceText: e.target.value })}
+                        placeholder="Snippet (e.g. word)"
+                        className="w-full px-2 py-1 text-xs rounded bg-app-bg border border-app-card-border focus:outline-none"
+                      />
+                      <input
+                        type="text"
+                        value={editNoteFields.translation}
+                        onChange={(e) => setEditNoteFields({ ...editNoteFields, translation: e.target.value })}
+                        placeholder="Translation"
+                        className="w-full px-2 py-1 text-xs rounded bg-app-bg border border-app-card-border focus:outline-none"
+                      />
+                    </div>
+                    
+                    <div className="flex flex-col sm:flex-row gap-2 items-center">
+                      <select
+                        value={editNoteFields.type}
+                        onChange={(e) => setEditNoteFields({ ...editNoteFields, type: e.target.value as any })}
+                        className="text-[10px] px-2 py-1 bg-app-bg border border-app-card-border rounded outline-none cursor-pointer"
                       >
-                        <X size={10} />
-                      </button>
-                    </div>
+                        <option value="phrase">Phrase</option>
+                        <option value="vocabulary">Vocabulary</option>
+                        <option value="idiom">Idiom</option>
+                        <option value="collocation">Collocation</option>
+                        <option value="grammar">Grammar</option>
+                        <option value="nuance">Nuance</option>
+                        <option value="cultural">Cultural</option>
+                      </select>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      <div className="flex flex-col gap-0.5">
-                        <label className="text-[9px] font-black uppercase tracking-widest opacity-40">Original fragment</label>
-                        <input
-                          type="text"
-                          value={editNoteFields.sourceText}
-                          onChange={(e) => setEditNoteFields({ ...editNoteFields, sourceText: e.target.value })}
-                          className="w-full px-2.5 py-1.5 text-xs rounded-xl bg-app-bg border border-app-card-border focus:border-indigo-500 focus:outline-none"
-                        />
-                      </div>
-                      <div className="flex flex-col gap-0.5">
-                        <label className="text-[9px] font-black uppercase tracking-widest opacity-40">Translation</label>
-                        <input
-                          type="text"
-                          value={editNoteFields.translation}
-                          onChange={(e) => setEditNoteFields({ ...editNoteFields, translation: e.target.value })}
-                          className="w-full px-2.5 py-1.5 text-xs rounded-xl bg-app-bg border border-app-card-border focus:border-indigo-500 focus:outline-none"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      <div className="flex flex-col gap-0.5">
-                        <label className="text-[9px] font-black uppercase tracking-widest opacity-40">Type</label>
-                        <select
-                          value={editNoteFields.type}
-                          onChange={(e) => setEditNoteFields({ ...editNoteFields, type: e.target.value as any })}
-                          className="w-full px-2.5 py-1 text-xs rounded-xl bg-app-bg border border-app-card-border focus:border-indigo-500 focus:outline-none"
-                        >
-                          <option value="phrase">Phrase</option>
-                          <option value="vocabulary">Vocabulary</option>
-                          <option value="idiom">Idiom</option>
-                          <option value="collocation">Collocation</option>
-                          <option value="grammar">Grammar</option>
-                          <option value="nuance">Nuance</option>
-                          <option value="cultural">Cultural</option>
-                        </select>
-                      </div>
-                      <div className="flex flex-col gap-0.5">
-                        <label className="text-[9px] font-black uppercase tracking-widest opacity-40">Memory Note / Helper</label>
-                        <input
-                          type="text"
-                          placeholder="Mnemonic helper..."
-                          value={editNoteFields.userNote}
-                          onChange={(e) => setEditNoteFields({ ...editNoteFields, userNote: e.target.value })}
-                          className="w-full px-2.5 py-1.5 text-xs rounded-xl bg-app-bg border border-app-card-border focus:border-indigo-500 focus:outline-none"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="flex flex-col gap-0.5">
-                      <label className="text-[9px] font-black uppercase tracking-widest opacity-40">Linguistic Explanation</label>
-                      <textarea
+                      <input
+                        type="text"
                         value={editNoteFields.text}
-                        rows={2}
-                        onChange={(e) => setEditNoteFields({ ...editNoteFields, text: e.target.value })}
-                        className="w-full px-2.5 py-1.5 text-xs rounded-xl bg-app-bg border border-app-card-border focus:border-indigo-500 focus:outline-none resize-none"
+                        onChange={(e) => setNewNoteFields({ ...newNoteFields, text: e.target.value })}
+                        placeholder="Explanation/Context (optional)..."
+                        className="flex-1 px-2 py-0.5 text-xs rounded bg-app-bg border border-app-card-border focus:outline-none"
                       />
                     </div>
 
-                    <div className="flex items-center justify-between pt-1 border-t border-app-card-border/20">
+                    <div className="flex items-center justify-between pt-1 border-t border-app-card-border/10 text-[9px]">
                       <button
+                        type="button"
                         onClick={() => handleDeleteNote(nIdx)}
-                        className="px-2.5 py-1 text-[9px] font-extrabold uppercase tracking-widest rounded-xl text-red-500 border border-transparent hover:bg-red-500/10 hover:border-red-500/20 transition-all flex items-center gap-1 cursor-pointer"
+                        className="text-red-500 font-extrabold flex items-center gap-1 cursor-pointer hover:bg-red-50/50 px-1 rounded"
                       >
-                        <Trash2 size={10} /> Delete Note
+                        <Trash2 size={10} /> Delete
                       </button>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1 pr-0.5">
                         <button
+                          type="button"
                           onClick={() => setEditingNoteIdx(null)}
-                          className="px-2.5 py-1 text-[9px] font-extrabold uppercase tracking-widest rounded-xl border border-app-card-border hover:bg-app-fg/5 transition-all text-app-fg/70"
+                          className="px-1.5 py-0.5 rounded border border-app-card-border text-app-fg/60"
                         >
                           Cancel
                         </button>
                         <button
+                          type="button"
                           onClick={() => handleSaveEditedNote(nIdx, existingCard)}
-                          className="px-2.5 py-1 text-[9px] font-extrabold uppercase tracking-widest rounded-xl bg-emerald-500 text-white hover:scale-103 transition-all cursor-pointer"
+                          className="px-2 py-0.5 rounded bg-[var(--accent)] text-white font-semibold"
                         >
                           Save
                         </button>
@@ -505,315 +520,190 @@ export const LineWorkspace = ({
 
               return (
                 <div 
-                  key={noteOriginKey ? `note-${noteOriginKey}` : `note-idx-${nIdx}`} 
-                  className="p-3.5 rounded-2xl bg-app-card/45 border border-app-card-border/30 hover:border-app-card-border/75 transition-all flex flex-col gap-3 group/note"
+                  key={noteOriginKey ? `note-${noteOriginKey}` : `note-idx-${nIdx}`}
+                  className="group/item flex items-start justify-between gap-2 p-1.5 bg-app-bg/20 hover:bg-app-fg/[0.02] border border-app-card-border/20 hover:border-app-card-border/50 rounded-xl transition-all"
                 >
-                  <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 w-full">
-                    <div className="flex gap-2.5 items-start flex-1 min-w-0">
-                      <span className={cn(
-                        "text-[8px] font-black uppercase tracking-widest px-2 py-0.5 mt-0.5 rounded-md border shrink-0",
-                        typeClass
-                      )}>
-                        {displayType}
-                      </span>
-                      <div className="flex flex-col gap-0.5 min-w-0">
-                        <span className="text-xs font-semibold text-app-fg tracking-tight flex flex-wrap items-center gap-1.5">
-                          {displaySourceText}
-                          {displayTranslation && (
-                            <span className="text-[10px] font-normal text-app-fg/50 font-mono">
-                              ({displayTranslation})
-                            </span>
-                          )}
-                          {displayUserNote && (
-                            <span className="text-[9px] font-bold text-teal-600 dark:text-teal-400 bg-teal-500/10 px-1.5 py-0.5 rounded-md">
-                              Note: {displayUserNote}
-                            </span>
-                          )}
+                  <div className="flex items-start gap-2 min-w-0 flex-1">
+                    <span className={cn(
+                      "text-[7px] font-black uppercase tracking-widest px-1.5 py-0.5 mt-0.5 rounded shrink-0 self-start",
+                      typeClass
+                    )}>
+                      {displayType.slice(0, 4)}
+                    </span>
+
+                    <div className="flex flex-col min-w-0 pr-1">
+                      <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-app-fg/90">
+                        <span className="font-semibold">{displaySourceText}</span>
+                        {displayTranslation && (
+                          <span className="text-[10.5px] font-mono text-app-fg/50 font-normal">
+                             — {displayTranslation}
+                          </span>
+                        )}
+                        <span className="inline-flex gap-1 items-center shrink-0">
+                          <span className={cn(
+                            "text-[7px] font-black px-1 rounded uppercase tracking-wider leading-none py-0.5",
+                            noteSource === "ai" 
+                              ? "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300" 
+                              : "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
+                          )}>
+                            {noteSource}
+                          </span>
                           {isAlreadyAdded && existingCard && (
                             <span className={cn(
-                              "text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded",
+                              "text-[7px] font-black uppercase tracking-wider px-1 rounded leading-none py-0.5",
                               existingCard.status === "known" 
-                                ? "bg-emerald-500/10 text-emerald-600" 
-                                : "bg-orange-500/10 text-orange-600"
+                                ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/20 dark:text-emerald-300" 
+                                : "bg-orange-100 text-orange-700 dark:bg-orange-950/20 dark:text-orange-300"
                             )}>
                               {existingCard.status === "known" ? "known" : "learning"}
                             </span>
                           )}
                         </span>
-                        <span className="text-xs font-sans text-app-fg/75 leading-normal">
+                      </div>
+                      
+                      {displayExplanation && (
+                        <span className="text-[10px] text-app-fg/60 block font-normal leading-normal mt-0.5">
                           {displayExplanation}
                         </span>
-                      </div>
-                    </div>
-
-                    {/* Note Actions */}
-                    <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-center opacity-70 group-hover/note:opacity-100 transition-opacity">
-                      <button
-                        onClick={() => handleStartEditNote(nIdx, note)}
-                        className="p-1 px-2 rounded-lg text-[9px] font-bold border border-app-card-border/40 hover:bg-app-fg/5 transition-all flex items-center gap-1 cursor-pointer"
-                      >
-                        <Edit3 size={10} />
-                        <span>Edit</span>
-                      </button>
-
-                      {onAddNoteToDictionary && (
-                        <button
-                          onClick={() => {
-                            if (!isAlreadyAdded) {
-                              onAddNoteToDictionary(i, note, nIdx);
-                            }
-                          }}
-                          disabled={isAlreadyAdded}
-                          className={cn(
-                            "text-[9px] h-6 px-2.5 rounded-lg font-bold flex items-center justify-center gap-1 transition-all",
-                            isAlreadyAdded 
-                              ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20"
-                              : "bg-app-fg/10 hover:bg-[var(--accent)] hover:text-white border border-transparent cursor-pointer"
-                          )}
-                        >
-                          {isAlreadyAdded ? (
-                            <>
-                              <Check size={10} className="stroke-[3px]" />
-                              <span>Saved</span>
-                            </>
-                          ) : (
-                            <>
-                              <Plus size={10} className="stroke-[3px]" />
-                              <span>Add to Study</span>
-                            </>
-                          )}
-                        </button>
                       )}
                     </div>
+                  </div>
+
+                  <div className="flex items-center gap-1 opacity-0 group-hover/item:opacity-100 transition-opacity self-center shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => handleStartEditNote(nIdx, note)}
+                      title="Edit"
+                      className="p-1 rounded hover:bg-app-fg/5 text-app-fg/40 hover:text-app-fg transition-colors"
+                    >
+                      <Edit3 size={10} />
+                    </button>
+                    {onAddNoteToDictionary && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!isAlreadyAdded) {
+                            onAddNoteToDictionary(i, note, nIdx);
+                          }
+                        }}
+                        disabled={isAlreadyAdded}
+                        className={cn(
+                          "p-1 rounded transition-colors",
+                          isAlreadyAdded 
+                            ? "text-emerald-500 bg-emerald-50 dark:bg-emerald-950/20"
+                            : "hover:bg-app-fg/5 text-app-fg/40 hover:text-[var(--accent)]"
+                        )}
+                        title={isAlreadyAdded ? "Saved to Study" : "Add to Study Cards"}
+                      >
+                        {isAlreadyAdded ? <Check size={10} className="stroke-[3px]" /> : <Plus size={10} />}
+                      </button>
+                    )}
                   </div>
                 </div>
               );
             })}
+          </div>
 
-            <AnimatePresence>
-              {isAddingNote && (
-                <motion.div
-                  initial={{ opacity: 0, y: 5 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 5 }}
-                  className="p-3.5 rounded-2xl bg-app-card/75 border border-dashed border-[var(--accent)]/30 hover:border-[var(--accent)]/50 transition-all flex flex-col gap-2.5 shadow-sm"
-                >
-                  {/* Visual badge selector row + dismiss */}
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <select
-                        value={newNoteFields.type}
-                        onChange={(e) => setNewNoteFields({ ...newNoteFields, type: e.target.value as any })}
-                        className={cn(
-                          "text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md border bg-app-bg text-[var(--accent)] cursor-pointer select-none outline-none focus:ring-1 focus:ring-[var(--accent)]/20",
-                          bgTypeMap[newNoteFields.type] || "border-app-card-border"
-                        )}
-                      >
-                        <option value="phrase">Phrase</option>
-                        <option value="vocabulary">Vocabulary</option>
-                        <option value="idiom">Idiom</option>
-                        <option value="collocation">Collocation</option>
-                        <option value="grammar">Grammar</option>
-                        <option value="nuance">Nuance</option>
-                        <option value="cultural">Cultural</option>
-                      </select>
-                      <span className="text-[9px] font-bold text-[var(--accent)] opacity-60">New Card Mode</span>
-                    </div>
-                    <button 
-                      onClick={() => {
-                        setIsAddingNote(false);
-                        setNewNoteError("");
-                      }} 
-                      className="p-1 rounded-md hover:bg-app-fg/5 text-app-fg opacity-40 hover:opacity-100 transition-opacity"
-                      title="Dismiss"
-                    >
-                      <X size={12} />
-                    </button>
-                  </div>
+          <form onSubmit={handleQuickAddSubmit} className="flex gap-1.5 items-center bg-app-bg/40 p-1 rounded-xl border border-app-card-border/20 font-sans">
+            <Plus size={11} className="text-app-fg/30 ml-2 shrink-0" />
+            <input
+              type="text"
+              value={quickAddVal}
+              onChange={(e) => setQuickAddVal(e.target.value)}
+              placeholder="Add phrase (e.g. original - translation)..."
+              className="flex-1 min-w-0 bg-transparent text-xs text-app-fg focus:outline-none placeholder:text-app-fg/20 py-1"
+            />
+            {quickAddVal.trim() && (
+              <button
+                type="submit"
+                className="px-2.5 py-0.5 text-[9px] font-black uppercase tracking-wider bg-[var(--accent)] hover:opacity-90 text-white rounded transition-all mr-0.5 font-sans"
+              >
+                Add
+              </button>
+            )}
+          </form>
+        </div>
 
-                  {/* Main input content imitating a phrase card text structure */}
-                  <div className="space-y-2">
-                    <div className="flex flex-col sm:flex-row gap-2 w-full">
-                      <input
-                        type="text"
-                        placeholder="Original fragment... *"
-                        value={newNoteFields.sourceText}
-                        onChange={(e) => setNewNoteFields({ ...newNoteFields, sourceText: e.target.value })}
-                        className="flex-1 px-3 py-1.5 text-xs font-semibold rounded-xl bg-app-bg border border-app-card-border/60 focus:border-[var(--accent)]/60 focus:outline-none placeholder:font-normal placeholder:opacity-55 opacity-90"
-                        autoFocus
-                      />
-                      <input
-                        type="text"
-                        placeholder="Translation... *"
-                        value={newNoteFields.translation}
-                        onChange={(e) => setNewNoteFields({ ...newNoteFields, translation: e.target.value })}
-                        className="flex-1 px-3 py-1.5 text-xs rounded-xl bg-app-bg border border-app-card-border/60 focus:border-[var(--accent)]/60 focus:outline-none placeholder:opacity-55 opacity-90"
-                      />
-                    </div>
-
-                    <input
-                      type="text"
-                      placeholder="Linguistic Explanation / Usage / Details... *"
-                      value={newNoteFields.text}
-                      onChange={(e) => setNewNoteFields({ ...newNoteFields, text: e.target.value })}
-                      className="w-full px-3 py-1.5 text-xs rounded-xl bg-app-bg border border-app-card-border/60 focus:border-[var(--accent)]/60 focus:outline-none placeholder:opacity-55 opacity-90"
-                    />
-                  </div>
-
-                  {/* Minimal Advanced Toggle */}
-                  <div className="flex items-center justify-between mt-0.5">
-                    <button
-                      type="button"
-                      onClick={() => setShowAdvancedNewNote(!showAdvancedNewNote)}
-                      className="text-[8px] font-black uppercase tracking-widest text-app-fg opacity-45 hover:opacity-100 flex items-center gap-0.5 select-none"
-                    >
-                      <span>{showAdvancedNewNote ? "Less" : "More Options"}</span>
-                      {showAdvancedNewNote ? <ChevronUp size={8} /> : <ChevronDown size={8} />}
-                    </button>
-
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      <button
-                        onClick={() => {
-                          setIsAddingNote(false);
-                          setNewNoteError("");
-                        }}
-                        className="px-2.5 py-1 text-[9px] font-extrabold uppercase tracking-widest rounded-lg border border-app-card-border hover:bg-app-fg/5 text-app-fg/60 transition-all cursor-pointer"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        onClick={handleCreateNote}
-                        className="px-2.5 py-1 text-[9px] font-extrabold uppercase tracking-widest rounded-lg bg-[var(--accent)] text-white hover:opacity-90 transition-all flex items-center gap-1 cursor-pointer"
-                      >
-                        <Plus size={8} />
-                        <span>Add</span>
-                      </button>
-                    </div>
-                  </div>
-
-                  {showAdvancedNewNote && (
-                    <motion.div
-                      initial={{ opacity: 0, height: 0 }}
-                      animate={{ opacity: 1, height: "auto" }}
-                      className="pt-1.5 border-t border-app-card-border/10 flex flex-col gap-1.5"
-                    >
-                      <div className="flex flex-col gap-0.5">
-                        <label className="text-[8px] font-black uppercase tracking-widest opacity-40">Mnemonic helpful hint / comment</label>
-                        <input
-                          type="text"
-                          placeholder="Mnemonic helper info..."
-                          value={newNoteFields.userNote}
-                          onChange={(e) => setNewNoteFields({ ...newNoteFields, userNote: e.target.value })}
-                          className="w-full px-2.5 py-1 text-[10px] rounded-lg bg-app-bg border border-app-card-border/60 focus:border-[var(--accent)]/60 focus:outline-none placeholder:opacity-55"
-                        />
-                      </div>
-                    </motion.div>
-                  )}
-
-                  {newNoteError && (
-                    <p className="text-[10px] text-orange-500 font-bold mt-1">{newNoteError}</p>
-                  )}
-                </motion.div>
+        {/* 3. AI Drafting / Help (Strictly optional, explicit trigger only) */}
+        {!(streamedSummary || initialSummary) ? (
+          <div className="flex items-center justify-between mt-3 pt-3 border-t border-app-card-border/20 text-xs">
+            <div className="flex items-center gap-1.5 text-app-fg/45 text-[9px] font-black uppercase tracking-widest leading-none">
+              <Brain size={12} className="text-purple-500" />
+              <span>AI Translation Helper</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => handleFetchExplanation(true)}
+              disabled={isLoadingExplanation}
+              className="text-[9px] font-black uppercase tracking-wider text-purple-600 hover:text-purple-700 bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/20 dark:text-purple-400 px-2 py-1 rounded-md transition-all flex items-center gap-1 cursor-pointer"
+            >
+              {isLoadingExplanation ? (
+                <>
+                  <Brain size={9} className="animate-spin" />
+                  <span>Drafting...</span>
+                </>
+              ) : (
+                <>
+                  <Brain size={9} />
+                  <span>Generate AI translation draft</span>
+                </>
               )}
-            </AnimatePresence>
-
-            {notes.length === 0 && !isAddingNote && (
-              <div className="text-center p-6 rounded-2xl bg-app-bg/15 border border-dashed border-app-card-border/30">
-                <p className="text-xs text-app-fg opacity-40 font-serif">
-                  No vocabulary notes added for this line.
-                </p>
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-1.5 mt-3 pt-3 border-t border-app-card-border/20">
+            <div className="flex items-center justify-between">
+              <span className="text-[9px] font-black uppercase tracking-widest text-purple-600 dark:text-purple-400 flex items-center gap-1 leading-none">
+                <Brain size={12} />
+                <span>AI Draft Analysis</span>
+              </span>
+              <div className="flex items-center gap-1.5 text-[9px]">
                 <button
                   type="button"
-                  onClick={() => setIsAddingNote(true)}
-                  className="text-[9px] font-black uppercase tracking-widest text-[var(--accent)] hover:underline mt-2 cursor-pointer"
+                  onClick={() => handleFetchExplanation(true)}
+                  disabled={isLoadingExplanation}
+                  className="text-purple-500 hover:underline flex items-center gap-0.5 cursor-pointer disabled:opacity-50"
                 >
-                  Create manual entry
+                  {isLoadingExplanation ? "Regenerating..." : "Regenerate"}
+                </button>
+                <span className="text-app-fg/20">|</span>
+                <button
+                  type="button"
+                  onClick={() => setIsAISummaryExpanded(!isAISummaryExpanded)}
+                  className="text-app-fg/40 hover:text-app-fg hover:underline cursor-pointer"
+                >
+                  {isAISummaryExpanded ? "Collapse" : "Show"}
+                </button>
+              </div>
+            </div>
+
+            {isAISummaryExpanded && (streamedSummary || initialSummary) && (
+              <div className="text-xs font-sans text-app-fg/80 leading-relaxed bg-purple-50/10 dark:bg-purple-950/10 border border-purple-500/10 p-2.5 rounded-xl whitespace-pre-line relative">
+                {streamedSummary || initialSummary}
+              </div>
+            )}
+
+            {isLoadingExplanation && !streamedSummary && (
+              <div className="text-[10px] italic text-purple-500 flex items-center gap-1 pl-1 select-none font-sans">
+                <span className="h-1 text-purple-500 animate-ping" />
+                <span>Analyzing line semantics...</span>
+              </div>
+            )}
+
+            {explanationError && (
+              <div className="text-xs text-red-500/80 bg-red-50/50 p-2 rounded-lg border border-red-500/10 flex items-center gap-1.5">
+                <span>{explanationError}</span>
+                <button
+                  type="button"
+                  onClick={() => handleFetchExplanation(true)}
+                  className="underline font-bold text-red-600 ml-auto hover:text-red-500"
+                >
+                  Retry
                 </button>
               </div>
             )}
           </div>
-        </div>
-
-        {/* 3. AI Insights section (Subordinate / Accordion) */}
-        <div className="pt-3 border-t border-app-card-border/30">
-          <button
-            onClick={() => setIsAISummaryExpanded(!isAISummaryExpanded)}
-            className="w-full flex items-center justify-between text-[10px] font-black uppercase tracking-widest text-app-fg opacity-55 hover:opacity-100 pr-1 transition-all"
-          >
-            <span className="flex items-center gap-1.5">
-              <Brain size={12} className="text-[var(--accent)]" />
-              <span>AI Translation & Insights</span>
-            </span>
-            {isAISummaryExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-          </button>
-
-          <AnimatePresence>
-            {isAISummaryExpanded && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: "auto" }}
-                exit={{ opacity: 0, height: 0 }}
-                className="pt-3.5 space-y-3.5"
-              >
-                {(streamedSummary || initialSummary) ? (
-                  <div className="text-xs font-sans leading-relaxed text-app-fg/80 pr-2 whitespace-pre-line bg-app-fg/5 p-3.5 rounded-2xl border border-app-card-border/10">
-                    {streamedSummary || initialSummary}
-                  </div>
-                ) : (
-                  <div className="flex flex-col items-center gap-3 py-4 bg-app-fg/5 rounded-2xl border border-app-card-border/5">
-                    <p className="text-xs italic tracking-wide text-app-fg opacity-40 text-center px-4">
-                      No AI Insights generated yet. Would you like the language model to analyze this line syntax nuances?
-                    </p>
-                    <button
-                      onClick={() => handleFetchExplanation(true)}
-                      disabled={isLoadingExplanation}
-                      className="px-4 py-1.5 text-[9.5px] font-extrabold uppercase tracking-widest rounded-xl bg-[var(--accent)] text-white hover:scale-103 transition-all flex items-center gap-1 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {isLoadingExplanation ? (
-                        <>
-                          <Brain size={10} className="animate-spin" />
-                          <span>Analyzing...</span>
-                        </>
-                      ) : (
-                        <>
-                          <Brain size={10} />
-                          <span>Generate AI Insight</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
-                )}
-
-                {/* Stream or generation feedback */}
-                {isLoadingExplanation && !streamedSummary && (
-                  <div className="flex items-center gap-2 py-1 select-none">
-                    <span className="flex h-2 w-2 relative">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[var(--accent)] opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-2 w-2 bg-[var(--accent)]"></span>
-                    </span>
-                    <span className="text-xs italic tracking-wide text-app-fg opacity-40">
-                      Analyzing line syntax nuances...
-                    </span>
-                  </div>
-                )}
-
-                {/* Error display */}
-                {explanationError && (
-                  <div className="flex gap-2 items-center text-xs text-orange-500 pt-2 border-t border-app-card-border/30">
-                    <AlertTriangle size={14} className="shrink-0" />
-                    <span>{explanationError}</span>
-                    <button
-                      onClick={() => handleFetchExplanation(true)}
-                      className="ml-auto text-[10px] uppercase tracking-wider font-extrabold underline hover:text-orange-400 cursor-pointer"
-                    >
-                      Retry
-                    </button>
-                  </div>
-                )}
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
+        )}
       </div>
     </div>
   );

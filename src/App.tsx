@@ -295,9 +295,6 @@ const LyricLine = ({
       setIsExplaining(false);
     } else {
       setIsExplaining(true);
-      if (!cachedExpl) {
-        await handleFetchExplanation();
-      }
     }
   };
 
