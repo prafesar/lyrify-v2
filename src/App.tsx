@@ -522,22 +522,6 @@ const LyricLine = ({
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  handleToggleExplanation();
-                }}
-                className="p-2 rounded-xl transition-all hover:scale-120 active:scale-90"
-                title={cachedExpl ? "Show AI explanation" : "Explain line with AI"}
-              >
-                {isLoadingExplanation ? (
-                  <Brain size={20} className="animate-spin text-[var(--accent)]" />
-                ) : cachedExpl ? (
-                  <Brain size={20} className="fill-[var(--accent)]/15 text-[var(--accent)] drop-shadow-sm" />
-                ) : (
-                  <Brain size={20} className="text-app-fg/20 hover:text-[var(--accent)]/80 transition-all" />
-                )}
-              </button>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
                   handleToggleStarLine(i);
                 }}
                 className="p-2 rounded-xl transition-all hover:scale-120 active:scale-90"

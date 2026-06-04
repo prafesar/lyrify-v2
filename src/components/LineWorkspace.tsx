@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { 
-  Brain, Check, Plus, Trash2, Edit2, Sparkles, X
+  Brain, Check, Plus, Trash2, Edit2, Sparkles, X, MessageSquare
 } from "lucide-react";
 import { cn } from "../lib/utils";
 
@@ -483,7 +483,10 @@ export const LineWorkspace = ({
                         }
                       }}
                       rows={1}
-                      className="w-full bg-transparent border-b border-transparent hover:border-app-card-border/30 focus:border-[var(--accent)]/40 focus:outline-none py-0.5 text-sm resize-none font-sans leading-relaxed"
+                      className={cn(
+                        "w-full bg-transparent border-b border-transparent hover:border-app-card-border/30 focus:border-[var(--accent)]/40 focus:outline-none py-0.5 resize-none font-sans leading-relaxed overflow-hidden",
+                        isCompact ? "text-sm" : "text-lg"
+                      )}
                     />
                   </div>
                 ) : (
@@ -492,11 +495,17 @@ export const LineWorkspace = ({
                     className="flex-1 min-w-0 select-text cursor-pointer hover:bg-app-fg/[0.015]"
                   >
                     {hasTextVal ? (
-                      <span className="text-sm font-sans tracking-normal leading-relaxed text-app-fg/80">
+                      <span className={cn(
+                        "font-sans tracking-normal leading-relaxed text-app-fg/80",
+                        isCompact ? "text-sm" : "text-lg"
+                      )}>
                         {item.text}
                       </span>
                     ) : (
-                      <span className="text-sm text-app-fg/30 italic font-light select-none font-sans">
+                      <span className={cn(
+                        "italic font-light select-none font-sans text-app-fg/30",
+                        isCompact ? "text-sm" : "text-lg"
+                      )}>
                         Empty note. Click to comment...
                       </span>
                     )}
@@ -546,12 +555,12 @@ export const LineWorkspace = ({
             return (
               <div 
                 key={item.id} 
-                className="relative py-1.5 px-2 bg-app-card/40 border border-app-card-border/15 rounded-xl space-y-2 select-text text-sm transition-all"
+                className="relative py-2.5 px-3 bg-app-card/45 border border-app-card-border/15 rounded-2xl space-y-3 select-text transition-all"
                 id={`phrase-edit-${item.id}`}
               >
-                {/* Compact input fields row: original phrase — translation */}
-                <div className="flex items-center gap-2 flex-wrap">
-                  <div className="flex-1 min-w-[120px] flex items-center gap-1">
+                {/* Two separate lines: original phrase and translation */}
+                <div className="flex flex-col gap-2 w-full">
+                  <div className="flex items-center gap-2">
                     <span className="text-app-fg/30 text-xs font-mono select-none">◦</span>
                     <textarea
                       id={`original-input-${item.id}`}
@@ -577,131 +586,75 @@ export const LineWorkspace = ({
                         }
                       }}
                       rows={1}
-                      className="w-full bg-transparent border-b border-app-card-border/20 focus:border-[var(--accent)]/40 focus:outline-none font-semibold text-app-fg py-0.5 placeholder:text-app-fg/20 resize-none leading-relaxed"
+                      className={cn(
+                        "w-full bg-transparent border-b border-app-card-border/25 focus:border-[var(--accent)]/45 focus:outline-none font-semibold text-app-fg py-0.5 placeholder:text-app-fg/20 resize-none overflow-hidden leading-relaxed",
+                        isCompact ? "text-sm" : "text-lg"
+                      )}
                     />
                   </div>
 
-                  <span className="text-app-fg/20 font-light select-none">—</span>
-
-                  <textarea
-                    id={`translation-input-${item.id}`}
-                    placeholder="Translation"
-                    defaultValue={item.translation || ""}
-                    onInput={(e) => {
-                      const target = e.target as HTMLTextAreaElement;
-                      target.style.height = "auto";
-                      target.style.height = `${target.scrollHeight}px`;
-                    }}
-                    onBlur={(e) => handleSaveItemEdit(item.id, { translation: e.target.value.trim() })}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        (e.target as HTMLTextAreaElement).blur();
-                      }
-                    }}
-                    ref={(el) => {
-                      if (el) {
-                        el.style.height = "auto";
-                        el.style.height = `${el.scrollHeight}px`;
-                      }
-                    }}
-                    rows={1}
-                    className="flex-1 min-w-[120px] bg-transparent border-b border-app-card-border/20 focus:border-[var(--accent)]/40 focus:outline-none text-app-fg/90 py-0.5 placeholder:text-app-fg/20 resize-none leading-relaxed"
-                  />
+                  <div className="flex items-center gap-2 pl-4">
+                    <textarea
+                      id={`translation-input-${item.id}`}
+                      placeholder="Translation"
+                      defaultValue={item.translation || ""}
+                      onInput={(e) => {
+                        const target = e.target as HTMLTextAreaElement;
+                        target.style.height = "auto";
+                        target.style.height = `${target.scrollHeight}px`;
+                      }}
+                      onBlur={(e) => handleSaveItemEdit(item.id, { translation: e.target.value.trim() })}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          (e.target as HTMLTextAreaElement).blur();
+                        }
+                      }}
+                      ref={(el) => {
+                        if (el) {
+                          el.style.height = "auto";
+                          el.style.height = `${el.scrollHeight}px`;
+                        }
+                      }}
+                      rows={1}
+                      className={cn(
+                        "w-full bg-transparent border-b border-app-card-border/25 focus:border-[var(--accent)]/45 focus:outline-none text-app-fg/90 py-0.5 placeholder:text-app-fg/20 resize-none overflow-hidden leading-relaxed",
+                        isCompact ? "text-sm" : "text-lg"
+                      )}
+                    />
+                  </div>
                 </div>
 
-                {/* Semantic single-select categorization dropdown and keyboard autocomplete tag element */}
-                <div className="flex items-center gap-3 flex-wrap text-xs select-none">
-                  {/* Select dropdown label */}
-                  <div className="flex items-center gap-1 pt-0.5">
-                    <span className="text-app-fg/35 shrink-0">type:</span>
-                    <select
-                      id={`type-selection-${item.id}`}
-                      value={item.type || "word"}
-                      onChange={(e) => handleSaveItemEdit(item.id, { type: e.target.value })}
-                      className="bg-transparent border border-app-card-border/15 hover:border-app-card-border/25 rounded px-1.5 py-0.5 text-app-fg/60 cursor-pointer focus:outline-none lowercase select-none"
-                    >
-                      {SUPPORTED_TYPES.map((typeOption) => (
-                        <option key={typeOption} value={typeOption}>
-                          {formatTypeLabel(typeOption)}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {/* Dynamic tag creator section */}
-                  <div className="flex-1 min-w-[150px] flex items-center gap-1.5 relative">
-                    <span className="text-app-fg/35 shrink-0">tags:</span>
-                    
-                    {/* Inline tag badges list */}
+                {/* Pill badges for types. Tags input completely removed. */}
+                <div className="flex flex-col gap-2 text-xs select-none">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-app-fg/35 shrink-0 text-[10px] uppercase font-bold tracking-wider font-sans">type:</span>
                     <div className="flex items-center gap-1 flex-wrap">
-                      {(item.tags || []).map((tag) => (
-                        <span 
-                          key={tag} 
-                          className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded-full bg-app-fg/[0.04] text-app-fg/50 text-[10px]"
-                        >
-                          <span>#{tag}</span>
+                      {SUPPORTED_TYPES.map((typeOption) => {
+                        const isSelected = (item.type || "word") === typeOption;
+                        return (
                           <button
+                            key={typeOption}
                             type="button"
-                            onClick={() => removeTagFromPhrase(item, tag)}
-                            className="text-app-fg/30 hover:text-red-500 cursor-pointer focus:outline-none"
+                            onClick={() => handleSaveItemEdit(item.id, { type: typeOption })}
+                            className={cn(
+                              "px-2.5 py-0.5 rounded-full text-[10px] uppercase font-bold tracking-wider transition-all duration-150 cursor-pointer border",
+                              isSelected
+                                ? "bg-[var(--accent)]/15 text-[var(--accent)] border-[var(--accent)]/20"
+                                : "bg-app-fg/[0.02] text-app-fg/40 hover:bg-app-fg/[0.05] border-transparent"
+                            )}
                           >
-                            <X size={10} />
+                            {formatTypeLabel(typeOption)}
                           </button>
-                        </span>
-                      ))}
-                    </div>
-
-                    {/* Integrated Autocomplete hashtag entry text box */}
-                    <div className="relative inline-block">
-                      <input
-                        ref={tagInputRef}
-                        type="text"
-                        value={tagInput}
-                        placeholder={item.tags?.length ? "+ tag" : "#tag..."}
-                        onChange={(e) => {
-                          setTagInput(e.target.value);
-                          setShowTagList(true);
-                          setSelectedTagIndex(0);
-                        }}
-                        onFocus={() => setShowTagList(true)}
-                        onBlur={() => {
-                          // Allow clicks on autocomplete entries to solve race conditions
-                          setTimeout(() => setShowTagList(false), 200);
-                        }}
-                        onKeyDown={(e) => handleTagInputKeyDown(e, item, suggestionsToDisplay)}
-                        className="bg-transparent text-xs text-app-fg/70 focus:outline-none py-0.5 px-1 placeholder:text-app-fg/20 border-b border-dashed border-app-card-border/30 w-[80px]"
-                      />
-
-                      {/* Controlled Dropdown matching suggestions box */}
-                      {showTagList && suggestionsToDisplay.length > 0 && (
-                        <ul className="absolute z-50 left-0 mt-1 max-h-32 w-36 overflow-y-auto rounded bg-app-card shadow-lg border border-app-card-border/20 py-0.5 pointer-events-auto">
-                          {suggestionsToDisplay.map((su, idx) => (
-                            <li 
-                              key={su}
-                              onMouseDown={() => {
-                                // Add immediately on mousedown to bypass blur timeout
-                                addTagToPhrase(item, su);
-                              }}
-                              className={cn(
-                                "px-2 py-1 text-[11px] cursor-pointer font-sans transition-colors",
-                                idx === selectedTagIndex 
-                                  ? "bg-[var(--accent)] text-white" 
-                                  : "text-app-fg/75 hover:bg-app-fg/[0.04]"
-                              )}
-                            >
-                              #{su}
-                            </li>
-                          ))}
-                        </ul>
-                      )}
+                        );
+                      })}
                     </div>
                   </div>
 
                   {/* Complete study card state tags */}
-                  <span className="text-[10px] text-app-fg/30 font-normal select-none border-l border-app-card-border/10 pl-2">
+                  <div className="text-[10px] text-app-fg/30 font-medium select-none lowercase">
                     {item.source === "ai" ? "ai recommendation" : "manual phrase"}
-                  </span>
+                  </div>
                 </div>
 
                 {/* Close editing triggers */}
@@ -712,7 +665,7 @@ export const LineWorkspace = ({
                       // Save and collapse active edits
                       setEditingId(null);
                     }}
-                    className="px-2.5 py-0.5 text-[10px] font-bold text-[var(--accent)] bg-[var(--accent)]/5 hover:bg-[var(--accent)]/10 rounded cursor-pointer transition-colors"
+                    className="px-3 py-1 text-[11px] font-bold text-[var(--accent)] bg-[var(--accent)]/5 hover:bg-[var(--accent)]/10 rounded-xl cursor-pointer transition-colors"
                   >
                     Done
                   </button>
@@ -729,23 +682,26 @@ export const LineWorkspace = ({
           return (
             <div 
               key={item.id}
-              className="group/item flex items-center justify-between gap-2 py-0.5 hover:bg-app-fg/[0.012] rounded px-1 relative transition-all text-sm text-app-fg/80"
+              className="group/item flex items-center justify-between gap-2 py-0.5 hover:bg-app-fg/[0.012] rounded px-1 relative transition-all text-app-fg/80"
               id={`phrase-read-${item.id}`}
             >
               {/* Bullet and compact literal values stack */}
               <div 
                 onClick={() => setEditingId(item.id)}
-                className="flex-1 flex items-center gap-1.5 min-w-0 overflow-hidden cursor-pointer select-text font-sans"
+                className={cn(
+                  "flex-1 flex items-center gap-1.5 min-w-0 overflow-hidden cursor-pointer select-text font-sans",
+                  isCompact ? "text-sm" : "text-lg"
+                )}
               >
                 <span className="text-app-fg/20 font-black shrink-0 mt-0.5 select-none font-mono text-base">◦</span>
                 
-                <span className="font-semibold text-app-fg shrink-0">
+                <span className={cn("font-semibold text-app-fg shrink-0", isCompact ? "text-sm" : "text-lg")}>
                   {phraseText || <span className="text-app-fg/20 lowercase italic font-normal">[unsigned word]</span>}
                 </span>
 
                 <span className="text-app-fg/20 font-light select-none shrink-0">—</span>
 
-                <span className="text-app-fg/80 truncate">
+                <span className={cn("text-app-fg/80 truncate", isCompact ? "text-sm" : "text-lg")}>
                   {translationText || <span className="text-app-fg/20 lowercase italic font-normal">[unsigned translation]</span>}
                 </span>
 
@@ -832,30 +788,30 @@ export const LineWorkspace = ({
 
       {/* 
         Action Row placed at bottom-right of the block: 
-        Фраза, Пояснение, AI разбор (clean custom designs)
+        Minimalist, icon-only buttons aligned to matching lyric line style, using ONLY English labels/tooltips.
       */}
       <div 
         id={`action-row-${i}`}
-        className="flex justify-end items-center gap-2 mt-4 text-xs select-none pr-1"
+        className="flex justify-end items-center gap-2 mt-4 select-none pr-1"
       >
         <button
           id={`btn-add-phrase-${i}`}
           type="button"
           onClick={handleAddPhrase}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-app-card-border text-[10px] font-black uppercase tracking-widest hover:bg-app-fg/[0.04] transition-all text-app-fg/70 bg-app-card cursor-pointer duration-200 active:scale-95"
+          title="Add Phrase"
+          className="p-2 rounded-xl transition-all hover:scale-120 active:scale-90 text-app-fg/30 hover:text-[var(--accent)] hover:bg-app-fg/5 cursor-pointer duration-200"
         >
-          <Plus size={11} className="stroke-[3]" />
-          <span>Фраза</span>
+          <Plus size={20} className="stroke-[2.5]" />
         </button>
 
         <button
           id={`btn-add-note-${i}`}
           type="button"
           onClick={handleAddNote}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-app-card-border text-[10px] font-black uppercase tracking-widest hover:bg-app-fg/[0.04] transition-all text-app-fg/70 bg-app-card cursor-pointer duration-200 active:scale-95"
+          title="Add Note"
+          className="p-2 rounded-xl transition-all hover:scale-120 active:scale-90 text-app-fg/30 hover:text-[var(--accent)] hover:bg-app-fg/5 cursor-pointer duration-200"
         >
-          <Plus size={11} className="stroke-[3]" />
-          <span>Пояснение</span>
+          <MessageSquare size={20} className="stroke-[2]" />
         </button>
 
         <button
@@ -863,10 +819,16 @@ export const LineWorkspace = ({
           type="button"
           onClick={handleAiComplement}
           disabled={isLoadingExplanation}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border transition-all text-[10px] font-black uppercase tracking-widest cursor-pointer disabled:opacity-50 duration-200 active:scale-95 bg-purple-500/[0.03] border-purple-500/20 hover:bg-purple-500/[0.08] text-purple-600 dark:text-purple-400 hover:border-purple-500/40"
+          title={cachedExpl ? "Regenerate AI Explanation" : "Explain with AI"}
+          className="p-2 rounded-xl transition-all hover:scale-125 active:scale-90 disabled:opacity-50 cursor-pointer duration-200 text-purple-600/40 hover:text-purple-600 dark:text-purple-400/40 dark:hover:text-purple-400 hover:bg-purple-500/5 ml-1"
         >
-          <Brain size={11} className={cn("stroke-[3]", isLoadingExplanation && "animate-spin")} />
-          <span>AI разбор</span>
+          {isLoadingExplanation ? (
+            <Brain size={20} className="animate-spin text-[var(--accent)]" />
+          ) : cachedExpl ? (
+            <Brain size={20} className="fill-[var(--accent)]/15 text-[var(--accent)] drop-shadow-sm" />
+          ) : (
+            <Brain size={20} />
+          )}
         </button>
       </div>
     </div>
