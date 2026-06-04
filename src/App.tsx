@@ -248,7 +248,7 @@ interface LyricLineProps {
   handleToggleStarLine: (index: number) => void;
   lineId?: string;
   targetLanguage?: string;
-  onSaveLineExplanation?: (index: number, explanation: any) => void;
+  onSaveLineExplanation?: (index: number, explanation: any, updatedTranslation?: string) => void;
   onAddNoteToDictionary?: (lineIndex: number, note: any, noteIndex: number) => void;
   originKeyMetadata?: Map<string, any>;
   onEditCardFields?: (cardId: string, fields: Partial<any>) => Promise<void>;
@@ -315,10 +315,27 @@ const LyricLine = ({
       });
 
       if (sameLineWithExplanation) {
-        // Reuse from other line occurrence:
-        const result = sameLineWithExplanation.explanation;
+        // Reuse from other line occurrence and merge values safely:
+        const otherExplanation = sameLineWithExplanation.explanation;
+        const mergedNotes = [...(cachedExpl?.notes || [])];
+        (otherExplanation?.notes || []).forEach((newNote: any) => {
+          const isDuplicate = mergedNotes.some(
+            (n: any) => (n.sourceText || "").toLowerCase().trim() === (newNote.sourceText || "").toLowerCase().trim()
+          );
+          if (!isDuplicate) {
+            mergedNotes.push(newNote);
+          }
+        });
+
+        const mergedExpl = {
+          ...cachedExpl,
+          myExplanation: cachedExpl?.myExplanation || otherExplanation?.myExplanation || "",
+          summary: otherExplanation?.summary || cachedExpl?.summary || "",
+          notes: mergedNotes
+        };
+
         if (onSaveLineExplanation) {
-          onSaveLineExplanation(i, result);
+          onSaveLineExplanation(i, mergedExpl);
         }
         setIsLoadingExplanation(false);
         return;
@@ -350,9 +367,68 @@ const LyricLine = ({
         }
       );
 
-      // Save to cache:
+      // Merge AI result with existing notes and custom commentary
+      const mergedNotes = [...(cachedExpl?.notes || [])];
+      
+      const mapType = (t: string) => {
+        const lower = (t || "").toLowerCase();
+        if (lower.includes("idiom")) return "idiom";
+        if (lower.includes("colloc")) return "collocation";
+        if (lower.includes("grammar")) return "grammar-pattern";
+        if (lower.includes("cultural")) return "cultural-reference";
+        if (lower.includes("slang")) return "slang";
+        if (lower.includes("phrasal")) return "phrasal-verb";
+        if (lower.includes("metaphor")) return "metaphor";
+        return "word";
+      };
+
+      if (result.summary) {
+        const isDuplicateSummary = mergedNotes.some(
+          (n: any) => n.kind === "note" && (n.text || "").toLowerCase().trim() === result.summary.toLowerCase().trim()
+        );
+        if (!isDuplicateSummary) {
+          mergedNotes.push({
+            id: `ai_summary_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
+            kind: "note",
+            text: result.summary,
+            source: "ai"
+          });
+        }
+      }
+
+      (result.notes || []).forEach((newNote: any) => {
+        const isDuplicate = mergedNotes.some(
+          (n: any) => {
+            const existingText = n.original || n.sourceText || "";
+            return existingText.toLowerCase().trim() === (newNote.sourceText || "").toLowerCase().trim();
+          }
+        );
+        if (!isDuplicate) {
+          const phraseId = `ai_phrase_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+          mergedNotes.push({
+            id: phraseId,
+            kind: "phrase",
+            original: newNote.sourceText || "",
+            translation: newNote.translation || newNote.text || "",
+            type: mapType(newNote.type || ""),
+            tags: ["ai"],
+            source: "ai",
+            // Backward compatibility
+            sourceText: newNote.sourceText || "",
+            text: newNote.text || ""
+          });
+        }
+      });
+
+      const mergedExpl = {
+        ...cachedExpl,
+        myExplanation: cachedExpl?.myExplanation || "",
+        summary: result.summary || cachedExpl?.summary || "",
+        notes: mergedNotes
+      };
+
       if (onSaveLineExplanation) {
-        onSaveLineExplanation(i, result);
+        onSaveLineExplanation(i, mergedExpl);
       }
     } catch (err: any) {
       console.error("[LyricLine] Explanation fetch error:", err);
@@ -396,11 +472,11 @@ const LyricLine = ({
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: Math.min(i * 0.01, 1) }}
         className={cn(
-          "group relative flex flex-col gap-1 rounded-[1.5rem] border cursor-pointer z-10 transition-all duration-300",
-          isCompact ? "px-4 py-1" : "px-6 py-1.5",
+          "group relative flex flex-col gap-1 rounded-2xl cursor-pointer z-10 transition-all duration-200 border border-transparent",
+          isCompact ? "px-4 py-0.5" : "px-6 py-1",
           activeLineIndex === i
-            ? "scale-[1.01] bg-app-card/60 border-app-card-border shadow-xl z-20 brightness-110"
-            : "border-transparent bg-transparent opacity-65 hover:opacity-100 hover:bg-app-card/5",
+            ? "bg-app-card/30 border-app-card-border/10"
+            : "hover:bg-app-fg/[0.02]",
         )}
         onClick={() => {
           if (!trimmedLine) return;
@@ -486,7 +562,7 @@ const LyricLine = ({
                 exit={{ opacity: 0, height: 0 }}
                 className="space-y-1 pl-6 sm:pl-7"
               >
-                {displayTranslation && showUnderTranslation && (
+                {displayTranslation && showUnderTranslation && !isExplaining && (
                   <p
                     className={cn(
                       "font-serif italic text-app-fg opacity-40 transition-all duration-300 ml-1 mt-0.5",
@@ -575,6 +651,8 @@ const LyricLine = ({
                 streamedSummary={streamedSummary}
                 handleFetchExplanation={handleFetchExplanation}
                 onClose={() => setIsExplaining(false)}
+                lineTranslation={displayTranslation}
+                isCompact={isCompact}
               />
             )}
           </AnimatePresence>
@@ -938,11 +1016,15 @@ export default function App() {
     saveTrackData(currentTrack.trackId, updatedTrack);
   };
 
-  const handleSaveLineExplanation = (index: number, explanation: any) => {
+  const handleSaveLineExplanation = (index: number, explanation: any, updatedTranslation?: string) => {
     if (!currentTrack) return;
     const updatedLines = currentTrack.lines.map((l: any) => {
       if (l.index === index) {
-        return { ...l, explanation };
+        const updated = { ...l, explanation };
+        if (updatedTranslation !== undefined) {
+          updated.translation = updatedTranslation;
+        }
+        return updated;
       }
       return l;
     });
@@ -960,13 +1042,34 @@ export default function App() {
     const line = currentTrack.lines[lineIndex];
     if (!line) return;
 
-    const phraseText = note.sourceText || line.original;
-    const translation = note.translation || note.text || "";
-    const explanation = note.text || "";
+    // Support both active/raw LineItem structure (original & translation) and saved legacy format (sourceText & text)
+    const isPhrase = note.kind === "phrase" || note.original !== undefined;
+    
+    const phraseText = isPhrase 
+      ? (note.original || note.sourceText || "").trim() || line.original
+      : "";
+    
+    const translation = isPhrase
+      ? (note.translation || note.text || "").trim()
+      : (note.text || "").trim();
+
+    const explanation = isPhrase
+      ? (note.explanation || note.text || "")
+      : (note.text || "");
+
     const targetLineId = line.lineId;
     const noteType = note.type || "phrase";
 
-    const noteOriginKey = generateNoteOriginKey(currentTrack.trackId, targetLineId, note.text, note.sourceText, noteIndex);
+    const keyTranslation = isPhrase ? translation : explanation;
+    const keyOriginal = isPhrase ? phraseText : "";
+
+    const noteOriginKey = generateNoteOriginKey(
+      currentTrack.trackId,
+      targetLineId,
+      keyTranslation,
+      keyOriginal,
+      noteIndex
+    );
 
     try {
       let connectedPhraseId = "";
