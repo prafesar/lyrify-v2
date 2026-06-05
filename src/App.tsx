@@ -2338,61 +2338,54 @@ export default function App() {
               exit={{ opacity: 0, x: -50 }}
               className="flex-1 flex flex-col overflow-hidden"
             >
-              <div className="bg-app-card/50 border-b border-app-card-border backdrop-blur-xl">
-                <div className="max-w-5xl mx-auto w-full px-6 py-4 flex items-center justify-between animate-in fade-in duration-300">
-                  <button
-                    onClick={() => goBack({ type: "explore" })}
-                    className="flex items-center gap-1 text-app-fg opacity-40 text-xs font-bold uppercase py-2 px-1 hover:opacity-100 transition-opacity"
-                  >
-                    <ChevronLeft size={18} /> Library
-                  </button>
-                  <div className="flex items-center gap-4">
+              <div
+                ref={scrollContainerRef}
+                className="flex-1 overflow-y-auto px-4 sm:px-8 pt-4 pb-12 scrollbar-hide relative w-full max-w-5xl mx-auto"
+              >
+                <div className="mb-6 px-3 sm:px-6 animate-in fade-in duration-300">
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <span
+                      className="text-[10px] font-black uppercase tracking-[0.4em] block opacity-60"
+                      style={{ color: "var(--accent)" }}
+                    >
+                      Reading Session
+                    </span>
                     {isLoadingLyrics && (
                       <div className={cn(
-                        "flex items-center gap-2 px-3 py-1 rounded-full border animate-pulse",
-                        loadingStep === "searching" ? "bg-amber-500/10 border-amber-500/20" : "bg-[var(--accent)]/10 border-[var(--accent)]/20"
+                        "flex items-center gap-2 px-2.5 py-0.5 rounded-full border text-[9px] font-bold uppercase animate-pulse leading-none shrink-0",
+                        loadingStep === "searching" ? "bg-amber-500/10 border-amber-500/20 text-amber-500" : "bg-[var(--accent)]/10 border-[var(--accent)]/20 text-[var(--accent)]"
                       )}>
                         <RefreshCw
-                          size={12}
+                          size={10}
                           className={cn(
                             "animate-spin",
                             loadingStep === "searching" ? "text-amber-500 duration-[2s]" : "text-[var(--accent)] duration-700"
                           )}
                         />
-                        <span className={cn(
-                          "text-[10px] font-black uppercase tracking-widest",
-                          loadingStep === "searching" ? "text-amber-500" : "text-[var(--accent)]"
-                        )}>
+                        <span>
                           {loadingStep === "searching" ? "Searching Lyrics" : 
                            loadingStep === "meaning" ? "Generating Preview" : "Analyzing Track"}
                         </span>
                       </div>
                     )}
                   </div>
-                </div>
-              </div>
+                  
+                  <div className="flex flex-col gap-4">
+                    {/* Compact action row: Back button on the left, mobile Heart on the right */}
+                    <div className="flex items-center justify-between w-full">
+                      <button
+                        onClick={() => goBack({ type: "explore" })}
+                        className="w-10 h-10 rounded-2xl border border-app-card-border bg-app-card/30 flex items-center justify-center text-app-fg opacity-60 hover:opacity-100 hover:bg-app-fg/5 transition-all shrink-0 cursor-pointer"
+                        title="Back"
+                      >
+                        <ChevronLeft size={20} />
+                      </button>
 
-              <div
-                ref={scrollContainerRef}
-                className="flex-1 overflow-y-auto px-2 sm:px-8 pt-4 pb-12 scrollbar-hide relative w-full max-w-5xl mx-auto"
-              >
-                <div className="mb-4">
-                  <span
-                    className="text-[10px] font-black uppercase tracking-[0.4em] mb-1 block opacity-60"
-                    style={{ color: "var(--accent)" }}
-                  >
-                    Reading Session
-                  </span>
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-3 mb-1">
-                        <h1 className="text-3xl font-bold text-app-fg leading-tight truncate">
-                          {currentTrack.title}
-                        </h1>
+                      <div className="flex sm:hidden items-center gap-2">
                         <button
                           type="button"
                           onClick={() => handleToggleFavoriteInApp(mapTrackLyricsDataToTrack(currentTrack))}
-                          className="p-1.5 hover:bg-app-fg/5 rounded-full transition-colors shrink-0"
+                          className="p-2 hover:bg-app-fg/5 rounded-full transition-colors shrink-0"
                           title={isTrackFavoriteInApp(currentTrack.trackId) ? "Remove from Favorites" : "Add to Favorites"}
                         >
                           <Heart
@@ -2406,79 +2399,108 @@ export default function App() {
                           />
                         </button>
                       </div>
-                      <div className="flex flex-col gap-0.5">
-                        <button
-                          onClick={() => {
-                            if (currentTrack.artistId && !currentTrack.artistId.startsWith("artist-") && currentTrack.artistId !== "undefined") {
-                              goToArtist(currentTrack.artistId);
-                            } else if (currentTrack.artistId) {
-                               handleArtistSelect(currentTrack.artistId);
-                               goToExplore();
-                            }
-                          }}
-                          className={cn(
-                             "text-lg text-app-fg opacity-60 font-serif italic text-left w-fit transition-all",
-                             currentTrack.artistId ? "hover:opacity-100 hover:text-app-accent cursor-pointer" : ""
-                          )}
-                        >
-                          {currentTrack.artist}
-                        </button>
-                        {currentTrack.album && (
+                    </div>
+
+                    {/* Left Column (Metadata + Title Row) & Right Column (Image Cover info) */}
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-start gap-3">
+                          <h1 className="text-2xl sm:text-3xl font-bold text-app-fg leading-tight break-words flex-1">
+                            {currentTrack.title}
+                          </h1>
+                          <button
+                            type="button"
+                            onClick={() => handleToggleFavoriteInApp(mapTrackLyricsDataToTrack(currentTrack))}
+                            className="hidden sm:block p-1.5 hover:bg-app-fg/5 rounded-full transition-colors shrink-0"
+                            title={isTrackFavoriteInApp(currentTrack.trackId) ? "Remove from Favorites" : "Add to Favorites"}
+                          >
+                            <Heart
+                              size={22}
+                              className={cn(
+                                "transition-all duration-300",
+                                isTrackFavoriteInApp(currentTrack.trackId)
+                                  ? "fill-red-500 text-red-500 scale-110"
+                                  : "text-app-fg/30 hover:text-red-500/80 hover:scale-105"
+                              )}
+                            />
+                          </button>
+                        </div>
+                        
+                        <div className="flex flex-col gap-0.5 mt-2.5">
                           <button
                             onClick={() => {
-                              if (currentTrack.albumId && !currentTrack.albumId.startsWith("album-") && currentTrack.albumId !== "undefined") {
-                                goToAlbum(currentTrack.albumId);
-                              } else if (currentTrack.albumId) {
-                                handleAlbumSelect(currentTrack.albumId);
-                                goToExplore();
+                              if (currentTrack.artistId && !currentTrack.artistId.startsWith("artist-") && currentTrack.artistId !== "undefined") {
+                                goToArtist(currentTrack.artistId);
+                              } else if (currentTrack.artistId) {
+                                 handleArtistSelect(currentTrack.artistId);
+                                 goToExplore();
                               }
                             }}
                             className={cn(
-                               "text-xs text-app-fg opacity-30 font-medium uppercase tracking-wider text-left w-fit transition-all",
-                               currentTrack.albumId ? "hover:opacity-100 hover:text-app-accent cursor-pointer" : ""
+                               "text-lg text-app-fg opacity-60 font-serif italic text-left w-fit transition-all",
+                               currentTrack.artistId ? "hover:opacity-100 hover:text-app-accent cursor-pointer" : ""
                             )}
                           >
-                            {currentTrack.album}
+                            {currentTrack.artist}
                           </button>
-                        )}
+                          {currentTrack.album && (
+                            <button
+                              onClick={() => {
+                                if (currentTrack.albumId && !currentTrack.albumId.startsWith("album-") && currentTrack.albumId !== "undefined") {
+                                  goToAlbum(currentTrack.albumId);
+                                } else if (currentTrack.albumId) {
+                                  handleAlbumSelect(currentTrack.albumId);
+                                  goToExplore();
+                                }
+                              }}
+                              className={cn(
+                                 "text-xs text-app-fg opacity-30 font-medium uppercase tracking-wider text-left w-fit transition-all",
+                                 currentTrack.albumId ? "hover:opacity-100 hover:text-app-accent cursor-pointer" : ""
+                              )}
+                            >
+                              {currentTrack.album}
+                            </button>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                    {currentTrack.coverUrl && currentTrack.coverUrl !== "" ? (
-                      <button 
-                        onClick={() => {
-                          if (currentTrack.albumId && !currentTrack.albumId.startsWith("album-") && currentTrack.albumId !== "undefined") {
-                            goToAlbum(currentTrack.albumId);
-                          } else if (currentTrack.albumId) {
-                            handleAlbumSelect(currentTrack.albumId);
-                            goToExplore();
-                          }
-                        }}
-                        className={cn(
-                          "relative group transition-transform active:scale-95",
-                          currentTrack.albumId ? "cursor-pointer" : "cursor-default"
-                        )}
-                      >
-                        <div className="absolute -inset-1 bg-gradient-to-r from-[var(--accent)] to-purple-600 rounded-[1.8rem] opacity-20 blur-xl group-hover:opacity-40 transition-opacity" />
-                        <img
-                          src={currentTrack.coverUrl}
-                          className="relative w-24 h-24 rounded-[1.5rem] object-cover shadow-2xl shrink-0 border border-app-card-border"
-                          alt={`${currentTrack.title} cover`}
-                          referrerPolicy="no-referrer"
-                          onError={(e) => {
-                            (e.target as HTMLImageElement).src = `https://ui-avatars.com/api/?name=${encodeURIComponent(currentTrack.title)}&background=random&color=fff&size=256`;
+
+                      {currentTrack.coverUrl && currentTrack.coverUrl !== "" ? (
+                        <button 
+                          onClick={() => {
+                            if (currentTrack.albumId && !currentTrack.albumId.startsWith("album-") && currentTrack.albumId !== "undefined") {
+                              goToAlbum(currentTrack.albumId);
+                            } else if (currentTrack.albumId) {
+                              handleAlbumSelect(currentTrack.albumId);
+                              goToExplore();
+                            }
                           }}
-                        />
-                      </button>
-                    ) : (
-                      <div className="w-24 h-24 rounded-[1.5rem] bg-app-card border border-app-card-border flex items-center justify-center text-app-fg opacity-20 shrink-0 shadow-2xl">
-                        <Music size={32} />
-                      </div>
-                    )}
+                          className={cn(
+                            "relative group transition-transform active:scale-95 shrink-0",
+                            currentTrack.albumId ? "cursor-pointer" : "cursor-default"
+                          )}
+                        >
+                          <div className="absolute -inset-1 bg-gradient-to-r from-[var(--accent)] to-purple-600 rounded-[1.8rem] opacity-20 blur-xl group-hover:opacity-40 transition-opacity" />
+                          <img
+                            src={currentTrack.coverUrl}
+                            className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-[1.5rem] object-cover shadow-2xl shrink-0 border border-app-card-border"
+                            alt={`${currentTrack.title} cover`}
+                            referrerPolicy="no-referrer"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).src = `https://ui-avatars.com/api/?name=${encodeURIComponent(currentTrack.title)}&background=random&color=fff&size=256`;
+                            }}
+                          />
+                        </button>
+                      ) : (
+                        <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-[1.5rem] bg-app-card border border-app-card-border flex items-center justify-center text-app-fg opacity-20 shrink-0 shadow-2xl animate-pulse">
+                          <Music size={26} />
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
 
                 {trackProgressViewModel && (
-                  <div className="mb-6">
+                  <div className="mb-6 px-3 sm:px-6">
                     <TrackProgressTracker
                       viewModel={trackProgressViewModel}
                       activeTab={activeTab}
@@ -2500,7 +2522,7 @@ export default function App() {
                 )}
 
                 {trackStudySummary && (
-                  <div className="mb-6">
+                  <div className="mb-6 px-3 sm:px-6">
                     <TrackStudyBridge
                       summary={trackStudySummary}
                       onGoToStudy={() => {
@@ -2513,7 +2535,7 @@ export default function App() {
                 )}
 
                 {activeTab === "preview" && (
-                  <div className="flex flex-col gap-8 pb-32">
+                  <div className="flex flex-col gap-8 pb-32 px-3 sm:px-6">
                     {/* Show Meaning if we have it, even if loading lyrics in background */}
                     {currentTrack.meaning ? (
                       <motion.div
@@ -2743,112 +2765,114 @@ export default function App() {
 
                 {activeTab === "lyrics" && (
                   <div className="flex flex-col gap-1 pb-32">
-                    {/* Unified Search Toolbar (Static/Non-sticky) */}
+                    {/* Unified Search and Control Toolbar */}
                     {currentTrack.rawLyrics && (
-                      <div className="mb-2 mx-1">
-                        {/* Search Input Section */}
-                        <div className="relative flex items-center min-w-0 bg-app-card border border-app-card-border rounded-[1.25rem] p-1.5 focus-within:border-app-accent/50 transition-all">
-                          <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-app-fg opacity-40">
-                            <Search size={18} />
+                      <>
+                        {/* Row 1: Search Input (Static - scrolls naturally, does not stick) */}
+                        <div className="px-3 sm:px-6 mb-3">
+                          <div className="relative flex items-center min-w-0 bg-app-card border border-app-card-border rounded-[1.25rem] p-1.5 focus-within:border-app-accent/50 transition-all">
+                            <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-app-fg opacity-40">
+                              <Search size={18} />
+                            </div>
+                            <input
+                              type="text"
+                              placeholder="Search original text, translations, or phrases in lyrics..."
+                              value={trackSearchQuery}
+                              onChange={(e) => setTrackSearchQuery(e.target.value)}
+                              className="w-full pl-10 pr-8 py-2 bg-transparent text-base md:text-lg font-medium text-app-fg placeholder-app-fg/30 focus:outline-none font-sans"
+                            />
+                            {trackSearchQuery && (
+                              <button
+                                onClick={() => setTrackSearchQuery("")}
+                                className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-app-fg opacity-45 hover:opacity-100 transition-opacity"
+                              >
+                                <X size={14} />
+                              </button>
+                            )}
                           </div>
-                          <input
-                            type="text"
-                            placeholder="Search original text, translations, or phrases in lyrics..."
-                            value={trackSearchQuery}
-                            onChange={(e) => setTrackSearchQuery(e.target.value)}
-                            className="w-full pl-10 pr-8 py-2 bg-transparent text-base md:text-lg font-medium text-app-fg placeholder-app-fg/30 focus:outline-none font-sans"
-                          />
-                          {trackSearchQuery && (
-                            <button
-                              onClick={() => setTrackSearchQuery("")}
-                              className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-app-fg opacity-45 hover:opacity-100 transition-opacity"
-                            >
-                              <X size={14} />
-                            </button>
-                          )}
                         </div>
-                      </div>
-                    )}
 
-                    {/* Floating Settings Panel (Sticky, compact, right-aligned) */}
-                    {currentTrack.rawLyrics && (
-                      <div className="sticky top-3 z-45 self-end mr-1 mb-4 flex items-center gap-1 bg-app-card/95 backdrop-blur-md border border-app-card-border rounded-xl p-1 shadow-lg shrink-0 justify-center">
-                        {(() => {
-                          const srcLangObj = SUPPORTED_LANGUAGES.find(l => 
-                            l.name.toLowerCase() === (currentTrack?.sourceLanguage || "English").toLowerCase() ||
-                            l.code.toLowerCase() === (currentTrack?.sourceLanguage || "English").toLowerCase()
-                          );
-                          const srcLangCode = srcLangObj ? srcLangObj.code : "EN";
+                        {/* Row 2: Control panel (Sticky, compact, aligned to the right edge of the lyric block) */}
+                        <div className="sticky top-0 z-40 bg-transparent pointer-events-none py-1 mb-2 flex justify-end px-3 sm:px-6">
+                          <div className="flex items-center gap-1 bg-app-card/95 backdrop-blur-md border border-app-card-border rounded-xl p-1 shadow-md shrink-0 pointer-events-auto">
+                            {(() => {
+                              const srcLangObj = SUPPORTED_LANGUAGES.find(l => 
+                                l.name.toLowerCase() === (currentTrack?.sourceLanguage || "English").toLowerCase() ||
+                                l.code.toLowerCase() === (currentTrack?.sourceLanguage || "English").toLowerCase()
+                              );
+                              const srcLangCode = srcLangObj ? srcLangObj.code : "EN";
 
-                          const targetLangObj = SUPPORTED_LANGUAGES.find(l => 
-                            l.name.toLowerCase() === (targetLanguage || "Russian").toLowerCase() ||
-                            l.code.toLowerCase() === (targetLanguage || "Russian").toLowerCase()
-                          );
-                          const targetLangCode = targetLangObj ? targetLangObj.code : "RU";
+                              const targetLangObj = SUPPORTED_LANGUAGES.find(l => 
+                                l.name.toLowerCase() === (targetLanguage || "Russian").toLowerCase() ||
+                                l.code.toLowerCase() === (targetLanguage || "Russian").toLowerCase()
+                              );
+                              const targetLangCode = targetLangObj ? targetLangObj.code : "RU";
 
-                          const isSrcActive = lyricsDisplayMode === "lyrics" || lyricsDisplayMode === "both";
-                          const isTargetActive = lyricsDisplayMode === "translation" || lyricsDisplayMode === "both";
+                              const isSrcActive = lyricsDisplayMode === "lyrics" || lyricsDisplayMode === "both";
+                              const isTargetActive = lyricsDisplayMode === "translation" || lyricsDisplayMode === "both";
 
-                          const btnBase = "w-9 h-9 rounded-lg flex items-center justify-center transition-all duration-200 outline-none select-none cursor-pointer relative active:scale-95 text-xs font-bold";
-                          const activeClass = "bg-app-accent text-white shadow-md font-black border-transparent";
-                          const inactiveClass = "text-app-fg opacity-65 hover:opacity-100 hover:bg-app-fg/5";
+                              const btnBase = "w-9 h-9 rounded-lg flex items-center justify-center transition-all duration-200 outline-none select-none cursor-pointer relative active:scale-95 text-xs font-bold";
+                              const activeClass = "bg-app-accent text-white shadow-md font-black border-transparent";
+                              const inactiveClass = "text-app-fg opacity-65 hover:opacity-100 hover:bg-app-fg/5";
 
-                          return (
-                            <>
-                              {/* Source Lang Button */}
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  if (isSrcActive) {
-                                    if (!isTargetActive) return; // cannot turn off both
-                                    handleSetLyricsDisplayMode("translation");
-                                  } else {
-                                    handleSetLyricsDisplayMode("both");
-                                  }
-                                }}
-                                title={`Toggle ${currentTrack?.sourceLanguage || "Original"} Lyrics`}
-                                className={cn(btnBase, isSrcActive ? activeClass : inactiveClass)}
-                              >
-                                <span className="text-[10px] font-black uppercase tracking-wider">{srcLangCode}</span>
-                              </button>
+                              return (
+                                <>
+                                  {/* Source Lang Button */}
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      if (isSrcActive) {
+                                        if (!isTargetActive) return; // cannot turn off both
+                                        handleSetLyricsDisplayMode("translation");
+                                      } else {
+                                        handleSetLyricsDisplayMode("both");
+                                      }
+                                    }}
+                                    title={`Toggle ${currentTrack?.sourceLanguage || "Original"} Lyrics`}
+                                    className={cn(btnBase, isSrcActive ? activeClass : inactiveClass)}
+                                  >
+                                    <span className="text-[10px] font-black uppercase tracking-wider">{srcLangCode}</span>
+                                  </button>
 
-                              {/* Target Lang Button */}
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  if (isTargetActive) {
-                                    if (!isSrcActive) return; // cannot turn off both
-                                    handleSetLyricsDisplayMode("lyrics");
-                                  } else {
-                                    handleSetLyricsDisplayMode("both");
-                                  }
-                                }}
-                                title={`Toggle ${targetLanguage || "Target"} Translation`}
-                                className={cn(btnBase, isTargetActive ? activeClass : inactiveClass)}
-                              >
-                                <span className="text-[10px] font-black uppercase tracking-wider">{targetLangCode}</span>
-                              </button>
+                                  {/* Target Lang Button */}
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      if (isTargetActive) {
+                                        if (!isSrcActive) return; // cannot turn off both
+                                        handleSetLyricsDisplayMode("lyrics");
+                                      } else {
+                                        handleSetLyricsDisplayMode("both");
+                                      }
+                                    }}
+                                    title={`Toggle ${targetLanguage || "Target"} Translation`}
+                                    className={cn(btnBase, isTargetActive ? activeClass : inactiveClass)}
+                                  >
+                                    <span className="text-[10px] font-black uppercase tracking-wider">{targetLangCode}</span>
+                                  </button>
 
-                              {/* Vertical Divider inside Panel */}
-                              <div className="w-[1px] h-5 bg-app-card-border/40 mx-1" />
+                                  {/* Vertical Divider inside Panel */}
+                                  <div className="w-[1px] h-5 bg-app-card-border/40 mx-1" />
 
-                              {/* Star/Favorites Filter Button */}
-                              <button
-                                type="button"
-                                onClick={handleToggleStarFilter}
-                                title="Show Starred Lines Only"
-                                className="w-9 h-9 rounded-lg flex items-center justify-center transition-all hover:scale-120 active:scale-90"
-                              >
-                                {isStarFilterActive ? (
-                                  <Star size={20} className="fill-amber-400 text-amber-500 drop-shadow-sm" />
-                                ) : (
-                                  <Star size={20} className="text-app-fg/20 hover:text-amber-500/80 transition-all" />
-                                )}
-                              </button>
-                            </>
-                          );
-                        })()}
-                      </div>
+                                  {/* Star/Favorites Filter Button */}
+                                  <button
+                                    type="button"
+                                    onClick={handleToggleStarFilter}
+                                    title="Show Starred Lines Only"
+                                    className="w-9 h-9 rounded-lg flex items-center justify-center transition-all hover:scale-110 active:scale-90"
+                                  >
+                                    {isStarFilterActive ? (
+                                      <Star size={20} className="fill-amber-400 text-amber-500 drop-shadow-sm" />
+                                    ) : (
+                                      <Star size={20} className="text-app-fg/20 hover:text-amber-500/80 transition-all" />
+                                    )}
+                                  </button>
+                                </>
+                              );
+                            })()}
+                          </div>
+                        </div>
+                      </>
                     )}
 
                     {currentTrack.rawLyrics ? (() => {
@@ -3380,27 +3404,13 @@ export default function App() {
                   {/* Right: Tools */}
                   <div className="flex-1 flex justify-end items-center gap-1 pr-1">
                     {activeTab !== "preview" && (
-                      <>
-                        <button
-                          onClick={() => setIsMuted(!isMuted)}
-                          className={cn(
-                            "w-10 h-10 rounded-full flex items-center justify-center transition-all active:scale-95",
-                            isMuted
-                              ? "text-red-500 bg-red-500/10 opacity-100"
-                              : "text-app-fg opacity-60 hover:opacity-100 hover:bg-app-fg/5",
-                          )}
-                          title={isMuted ? "Unmute" : "Mute"}
-                        >
-                          {isMuted ? <VolumeX size={20} /> : <Volume2 size={20} />}
-                        </button>
-                        <button
-                          onClick={() => setIsLyricsSettingsOpen(true)}
-                          className="w-10 h-10 rounded-full flex items-center justify-center text-app-fg opacity-60 hover:opacity-100 hover:bg-app-fg/5 transition-all active:scale-95"
-                          title="Settings"
-                        >
-                          <Settings size={20} />
-                        </button>
-                      </>
+                      <button
+                        onClick={() => setIsLyricsSettingsOpen(true)}
+                        className="w-10 h-10 rounded-full flex items-center justify-center text-app-fg opacity-60 hover:opacity-100 hover:bg-app-fg/5 transition-all active:scale-95"
+                        title="Settings"
+                      >
+                        <Settings size={20} />
+                      </button>
                     )}
                     <button
                       onClick={() => setIsResourcesOpen(true)}
