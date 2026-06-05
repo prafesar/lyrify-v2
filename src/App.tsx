@@ -2374,7 +2374,7 @@ export default function App() {
 
               <div
                 ref={scrollContainerRef}
-                className="flex-1 overflow-y-auto px-8 pt-4 pb-12 scrollbar-hide relative w-full max-w-5xl mx-auto"
+                className="flex-1 overflow-y-auto px-2 sm:px-8 pt-4 pb-12 scrollbar-hide relative w-full max-w-5xl mx-auto"
               >
                 <div className="mb-4">
                   <span
@@ -2743,11 +2743,11 @@ export default function App() {
 
                 {activeTab === "lyrics" && (
                   <div className="flex flex-col gap-1 pb-32">
-                    {/* Unified Search and Language Selection Toolbar */}
+                    {/* Unified Search Toolbar (Static/Non-sticky) */}
                     {currentTrack.rawLyrics && (
-                      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 bg-app-card border border-app-card-border rounded-[1.25rem] p-1.5 focus-within:border-app-accent/50 transition-all mb-4 mx-1">
+                      <div className="mb-2 mx-1">
                         {/* Search Input Section */}
-                        <div className="relative flex-1 flex items-center min-w-0">
+                        <div className="relative flex items-center min-w-0 bg-app-card border border-app-card-border rounded-[1.25rem] p-1.5 focus-within:border-app-accent/50 transition-all">
                           <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-app-fg opacity-40">
                             <Search size={18} />
                           </div>
@@ -2767,90 +2767,90 @@ export default function App() {
                             </button>
                           )}
                         </div>
-
-                        {/* Divider Line */}
-                        <div className="hidden sm:block w-[1px] h-5 bg-app-card-border/60 self-center" />
-
-                        {/* Language Selection Buttons Capsule */}
-                        <div className="flex items-center gap-1 justify-end shrink-0 bg-app-card/30 dark:bg-app-bg/20 rounded-xl p-0.5 border border-app-card-border/30">
-                          {(() => {
-                            const srcLangObj = SUPPORTED_LANGUAGES.find(l => 
-                              l.name.toLowerCase() === (currentTrack?.sourceLanguage || "English").toLowerCase() ||
-                              l.code.toLowerCase() === (currentTrack?.sourceLanguage || "English").toLowerCase()
-                            );
-                            const srcLangCode = srcLangObj ? srcLangObj.code : "EN";
-
-                            const targetLangObj = SUPPORTED_LANGUAGES.find(l => 
-                              l.name.toLowerCase() === (targetLanguage || "Russian").toLowerCase() ||
-                              l.code.toLowerCase() === (targetLanguage || "Russian").toLowerCase()
-                            );
-                            const targetLangCode = targetLangObj ? targetLangObj.code : "RU";
-
-                            const isSrcActive = lyricsDisplayMode === "lyrics" || lyricsDisplayMode === "both";
-                            const isTargetActive = lyricsDisplayMode === "translation" || lyricsDisplayMode === "both";
-
-                            return (
-                              <>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    if (isSrcActive) {
-                                      if (!isTargetActive) return; // cannot turn off both
-                                      handleSetLyricsDisplayMode("translation");
-                                    } else {
-                                      handleSetLyricsDisplayMode("both");
-                                    }
-                                  }}
-                                  title={`Toggle ${currentTrack?.sourceLanguage || "Original"} Lyrics`}
-                                  className={cn(
-                                    "px-2.5 py-1 rounded-lg font-black transition-all uppercase tracking-wider text-[9px] flex items-center gap-1",
-                                    isSrcActive
-                                      ? "bg-app-accent text-white shadow-sm"
-                                      : "text-app-fg opacity-65 hover:opacity-100"
-                                  )}
-                                >
-                                  {isSrcActive && <Check size={8} />}
-                                  <span>{srcLangCode}</span>
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    if (isTargetActive) {
-                                      if (!isSrcActive) return; // cannot turn off both
-                                      handleSetLyricsDisplayMode("lyrics");
-                                    } else {
-                                      handleSetLyricsDisplayMode("both");
-                                    }
-                                  }}
-                                  title={`Toggle ${targetLanguage || "Target"} Translation`}
-                                  className={cn(
-                                    "px-2.5 py-1 rounded-lg font-black transition-all uppercase tracking-wider text-[9px] flex items-center gap-1",
-                                    isTargetActive
-                                      ? "bg-app-accent text-white shadow-sm"
-                                      : "text-app-fg opacity-65 hover:opacity-100"
-                                  )}
-                                >
-                                  {isTargetActive && <Check size={8} />}
-                                  <span>{targetLangCode}</span>
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleRegenerateTranslations(targetLanguage)}
-                                  disabled={isTranslating}
-                                  title="Regenerate Translation"
-                                  className={cn(
-                                    "p-1.5 rounded-lg transition-all text-app-fg hover:bg-app-fg/5 flex items-center justify-center outline-none",
-                                    isTranslating ? "opacity-50 cursor-not-allowed" : "opacity-60 hover:opacity-100"
-                                  )}
-                                >
-                                  <RefreshCw size={10} className={cn("transition-transform duration-500", isTranslating ? "animate-spin" : "")} />
-                                </button>
-                              </>
-                            );
-                          })()}
-                        </div>
                       </div>
                     )}
+
+                    {/* Floating Settings Panel (Sticky, compact, right-aligned) */}
+                    {currentTrack.rawLyrics && (
+                      <div className="sticky top-3 z-45 self-end mr-1 mb-4 flex items-center gap-1 bg-app-card/95 backdrop-blur-md border border-app-card-border rounded-xl p-1 shadow-lg shrink-0 justify-center">
+                        {(() => {
+                          const srcLangObj = SUPPORTED_LANGUAGES.find(l => 
+                            l.name.toLowerCase() === (currentTrack?.sourceLanguage || "English").toLowerCase() ||
+                            l.code.toLowerCase() === (currentTrack?.sourceLanguage || "English").toLowerCase()
+                          );
+                          const srcLangCode = srcLangObj ? srcLangObj.code : "EN";
+
+                          const targetLangObj = SUPPORTED_LANGUAGES.find(l => 
+                            l.name.toLowerCase() === (targetLanguage || "Russian").toLowerCase() ||
+                            l.code.toLowerCase() === (targetLanguage || "Russian").toLowerCase()
+                          );
+                          const targetLangCode = targetLangObj ? targetLangObj.code : "RU";
+
+                          const isSrcActive = lyricsDisplayMode === "lyrics" || lyricsDisplayMode === "both";
+                          const isTargetActive = lyricsDisplayMode === "translation" || lyricsDisplayMode === "both";
+
+                          const btnBase = "w-9 h-9 rounded-lg flex items-center justify-center transition-all duration-200 outline-none select-none cursor-pointer relative active:scale-95 text-xs font-bold";
+                          const activeClass = "bg-app-accent text-white shadow-md font-black border-transparent";
+                          const inactiveClass = "text-app-fg opacity-65 hover:opacity-100 hover:bg-app-fg/5";
+
+                          return (
+                            <>
+                              {/* Source Lang Button */}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (isSrcActive) {
+                                    if (!isTargetActive) return; // cannot turn off both
+                                    handleSetLyricsDisplayMode("translation");
+                                  } else {
+                                    handleSetLyricsDisplayMode("both");
+                                  }
+                                }}
+                                title={`Toggle ${currentTrack?.sourceLanguage || "Original"} Lyrics`}
+                                className={cn(btnBase, isSrcActive ? activeClass : inactiveClass)}
+                              >
+                                <span className="text-[10px] font-black uppercase tracking-wider">{srcLangCode}</span>
+                              </button>
+
+                              {/* Target Lang Button */}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (isTargetActive) {
+                                    if (!isSrcActive) return; // cannot turn off both
+                                    handleSetLyricsDisplayMode("lyrics");
+                                  } else {
+                                    handleSetLyricsDisplayMode("both");
+                                  }
+                                }}
+                                title={`Toggle ${targetLanguage || "Target"} Translation`}
+                                className={cn(btnBase, isTargetActive ? activeClass : inactiveClass)}
+                              >
+                                <span className="text-[10px] font-black uppercase tracking-wider">{targetLangCode}</span>
+                              </button>
+
+                              {/* Vertical Divider inside Panel */}
+                              <div className="w-[1px] h-5 bg-app-card-border/40 mx-1" />
+
+                              {/* Star/Favorites Filter Button */}
+                              <button
+                                type="button"
+                                onClick={handleToggleStarFilter}
+                                title="Show Starred Lines Only"
+                                className="w-9 h-9 rounded-lg flex items-center justify-center transition-all hover:scale-120 active:scale-90"
+                              >
+                                {isStarFilterActive ? (
+                                  <Star size={20} className="fill-amber-400 text-amber-500 drop-shadow-sm" />
+                                ) : (
+                                  <Star size={20} className="text-app-fg/20 hover:text-amber-500/80 transition-all" />
+                                )}
+                              </button>
+                            </>
+                          );
+                        })()}
+                      </div>
+                    )}
+
                     {currentTrack.rawLyrics ? (() => {
                       let linesToRender = currentTrack.lines || [];
                       if (isStarFilterActive) {
@@ -2903,8 +2903,12 @@ export default function App() {
                         );
                       }
 
-                      return linesToRender.map((line: any) =>
-                        renderLyricLine(line.original, line.index, false, false),
+                      return (
+                        <div className="flex flex-col gap-1 pr-1">
+                          {linesToRender.map((line: any) =>
+                            renderLyricLine(line.original, line.index, false, false),
+                          )}
+                        </div>
                       );
                     })() : (
                       <div className="flex flex-col items-center justify-center py-20 text-center space-y-8">
@@ -3292,19 +3296,6 @@ export default function App() {
                           title="Shadowing Mode"
                         >
                           <Mic2 size={20} />
-                        </button>
-                        <div className="w-[1px] h-4 bg-app-card-border/65 self-center mx-1" />
-                        <button
-                          onClick={handleToggleStarFilter}
-                          className={cn(
-                            "p-2 rounded-full transition-all active:scale-90",
-                            isStarFilterActive
-                              ? "bg-amber-500 text-white shadow-lg"
-                              : "text-amber-500/60 hover:text-amber-500 hover:bg-amber-500/5",
-                          )}
-                          title="Star Filter"
-                        >
-                          <Star size={20} className={isStarFilterActive ? "fill-white text-white" : "text-current"} />
                         </button>
                       </div>
                     ) : (
@@ -3946,6 +3937,32 @@ export default function App() {
                         animate={{ x: skipKnownPhrases ? 24 : 0 }}
                         className="absolute inset-y-1 left-1 w-4 h-4 rounded-full bg-white shadow-sm"
                       />
+                    </button>
+                  </div>
+
+                  <div className="flex items-center justify-between p-5 rounded-3xl bg-app-card border border-app-card-border">
+                    <div className="space-y-1">
+                      <p className="font-bold text-app-fg">
+                        Translation
+                      </p>
+                      <p className="text-xs text-app-fg opacity-40">
+                        Regenerate lyrics translation
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleRegenerateTranslations(targetLanguage);
+                        setIsLyricsSettingsOpen(false);
+                      }}
+                      disabled={isTranslating}
+                      className={cn(
+                        "px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 border border-app-card-border hover:bg-app-fg/5",
+                        isTranslating ? "opacity-50 cursor-not-allowed" : "opacity-100"
+                      )}
+                    >
+                      <RefreshCw size={12} className={cn(isTranslating ? "animate-spin" : "")} />
+                      <span>{isTranslating ? "Translating..." : "Regenerate"}</span>
                     </button>
                   </div>
                 </div>
