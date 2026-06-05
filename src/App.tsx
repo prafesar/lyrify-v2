@@ -249,7 +249,7 @@ interface LyricLineProps {
   lineId?: string;
   targetLanguage?: string;
   onSaveLineExplanation?: (index: number, explanation: any, updatedTranslation?: string) => void;
-  onAddNoteToDictionary?: (lineIndex: number, note: any, noteIndex: number) => void;
+  onAddNoteToDictionary?: (lineIndex: number, note: any, noteIndex: number, status?: "known" | "learning") => void;
   originKeyMetadata?: Map<string, any>;
   onEditCardFields?: (cardId: string, fields: Partial<any>) => Promise<void>;
 }
@@ -1027,7 +1027,7 @@ export default function App() {
     saveTrackData(currentTrack.trackId, updatedTrack);
   };
 
-  const handleAddNoteToDictionary = async (lineIndex: number, note: any, noteIndex: number) => {
+  const handleAddNoteToDictionary = async (lineIndex: number, note: any, noteIndex: number, status?: "known" | "learning") => {
     if (!currentTrack) return;
     const line = currentTrack.lines[lineIndex];
     if (!line) return;
@@ -1118,7 +1118,7 @@ export default function App() {
         rawTranslation: translation,
         rawExplanation: explanation,
         userNote: ""
-      } as any, "learning");
+      } as any, status || "learning");
 
       await loadUserCards();
     } catch (err) {
@@ -1340,7 +1340,14 @@ export default function App() {
 
   const handleEditCardFields = async (cardId: string, fields: Partial<any>) => {
     try {
-      await studyCardsRepository.updateCardFields(cardId, fields);
+      if (fields.status !== undefined) {
+        await studyCardsRepository.updatePhraseStatus(cardId, fields.status);
+      }
+      
+      const { status, ...otherFields } = fields;
+      if (Object.keys(otherFields).length > 0) {
+        await studyCardsRepository.updateCardFields(cardId, otherFields as any);
+      }
       
       if (currentTrack) {
         const cardInMeta = [...(originKeyMetadata?.values() || [])].find(c => c.id === cardId) as any;

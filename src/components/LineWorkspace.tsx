@@ -90,7 +90,7 @@ interface LineWorkspaceProps {
   targetLanguage?: string;
   lineTranslation?: string; // Passed from App.tsx as a level-1 child node
   onSaveLineExplanation?: (index: number, explanation: any, updatedTranslation?: string) => void;
-  onAddNoteToDictionary?: (lineIndex: number, note: any, noteIndex: number) => void;
+  onAddNoteToDictionary?: (lineIndex: number, note: any, noteIndex: number, status?: "known" | "learning") => void;
   originKeyMetadata?: Map<string, any>;
   onEditCardFields?: (cardId: string, fields: Partial<any>) => Promise<void>;
   isLoadingExplanation: boolean;
@@ -184,6 +184,43 @@ export const LineWorkspace = ({
     if (!editingId) return;
     const handleClickOutside = (event: MouseEvent) => {
       if (editContainerRef.current && !editContainerRef.current.contains(event.target as Node)) {
+        // Safe-guard: save active values specifically before closing if they changed
+        const activeEditingId = editingId;
+        const origInput = document.getElementById(`original-input-${activeEditingId}`) as HTMLTextAreaElement | null;
+        const transInput = document.getElementById(`translation-input-${activeEditingId}`) as HTMLTextAreaElement | null;
+        const noteInput = document.getElementById(`note-textarea-${activeEditingId}`) as HTMLTextAreaElement | null;
+        
+        const updates: any = {};
+        let hasUpdates = false;
+        
+        if (origInput) {
+          const val = origInput.value.trim();
+          const matched = items.find(it => it.id === activeEditingId);
+          if (matched && matched.original !== val) {
+            updates.original = val;
+            hasUpdates = true;
+          }
+        }
+        if (transInput) {
+          const val = transInput.value.trim();
+          const matched = items.find(it => it.id === activeEditingId);
+          if (matched && matched.translation !== val) {
+            updates.translation = val;
+            hasUpdates = true;
+          }
+        }
+        if (noteInput) {
+          const val = noteInput.value.trim();
+          const matched = items.find(it => it.id === activeEditingId);
+          if (matched && matched.text !== val) {
+            updates.text = val;
+            hasUpdates = true;
+          }
+        }
+
+        if (hasUpdates) {
+          handleSaveItemEdit(activeEditingId, updates);
+        }
         setEditingId(null);
       }
     };
@@ -191,7 +228,7 @@ export const LineWorkspace = ({
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
-  }, [editingId]);
+  }, [editingId, items]);
 
   // Controls tag editing on active edit phrase
   const [tagInput, setTagInput] = useState("");
@@ -472,7 +509,7 @@ export const LineWorkspace = ({
                 <span className="text-app-fg/20 font-black shrink-0 mt-1 select-none font-mono">◦</span>
                 
                 {isEditing ? (
-                  <div className="flex-1 min-w-0 pr-1 select-text">
+                  <div ref={editContainerRef} className="flex-1 min-w-0 pr-1 select-text">
                     <textarea
                       id={`note-textarea-${item.id}`}
                       autoFocus
@@ -592,6 +629,7 @@ export const LineWorkspace = ({
             return (
               <div 
                 key={item.id} 
+                ref={editContainerRef}
                 className="relative py-2.5 px-3 bg-app-card/45 border border-app-card-border/15 rounded-2xl space-y-3 select-text transition-all"
                 id={`phrase-edit-${item.id}`}
               >
