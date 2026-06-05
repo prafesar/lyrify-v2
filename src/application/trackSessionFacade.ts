@@ -49,6 +49,7 @@ export class TrackSessionFacade {
     if (cached) {
       const updatedCached = {
         ...cached,
+        itunesTrackId: cached.itunesTrackId || track.itunesTrackId || trackId,
         coverUrl: cached.coverUrl || coverUrl,
         album: cached.album || album,
         albumId: cached.albumId || albumId,
@@ -59,7 +60,7 @@ export class TrackSessionFacade {
         appleMusicUrl: cached.appleMusicUrl || appleMusicUrl,
       };
 
-      if ((!cached.coverUrl && coverUrl) || (!cached.title && trackTitle) || (!cached.audioUrl && audioUrl)) {
+      if ((!cached.coverUrl && coverUrl) || (!cached.title && trackTitle) || (!cached.audioUrl && audioUrl) || !cached.itunesTrackId) {
         this.trackCacheRepository.saveTrackData(trackId, updatedCached);
       }
 
@@ -74,6 +75,7 @@ export class TrackSessionFacade {
     // 3. Create initial empty lyric structure
     const initialTrack: TrackLyricsData = {
       trackId: trackId,
+      itunesTrackId: track.itunesTrackId || trackId,
       artist: artist,
       artistId: artistId,
       title: trackTitle,
@@ -117,6 +119,7 @@ export class TrackSessionFacade {
             const currentCached = this.trackCacheRepository.getCachedTrack(trackId) || initialTrack;
             const updated = {
               ...currentCached,
+              itunesTrackId: currentCached.itunesTrackId || String(match.id || match.trackId || trackId),
               artistId: currentCached.artistId || match.artistId,
               albumId: currentCached.albumId || match.albumId,
               album: currentCached.album || match.album,

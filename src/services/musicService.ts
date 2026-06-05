@@ -521,6 +521,7 @@ export interface LyricsLine {
 
 export interface TrackLyricsData {
   trackId: string;
+  itunesTrackId?: string;
   artist: string;
   artistId?: string;
   title: string;

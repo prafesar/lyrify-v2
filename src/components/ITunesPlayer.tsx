@@ -130,13 +130,6 @@ export default function ITunesPlayer({
               {artistName}
             </p>
           </div>
-
-          <button
-            onClick={() => setIsMuted(!isMuted)}
-            className="p-3 rounded-full hover:bg-app-fg/5 text-app-fg opacity-40 hover:opacity-100 transition-all"
-          >
-            {isMuted ? <VolumeX size={20} /> : <Volume2 size={20} />}
-          </button>
         </div>
 
         <div className="space-y-2">

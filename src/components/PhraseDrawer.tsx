@@ -378,7 +378,7 @@ export default function PhraseDrawer({
                                     </span>
                                   )}
                                 </div>
-                                <p className="text-sm text-app-fg opacity-65 font-serif italic">{phrase.translation}</p>
+                                <p className="text-sm text-app-fg opacity-65 font-sans italic">{phrase.translation}</p>
                               </div>
 
                               <div className="flex items-center gap-2.5 ml-auto sm:ml-0 shrink-0">
@@ -446,7 +446,7 @@ export default function PhraseDrawer({
                                   <Quote size={10} />
                                   <span className="text-[9px] font-black uppercase tracking-widest">Meaning</span>
                                 </div>
-                                <p className="text-xs text-app-fg opacity-60 leading-relaxed font-serif">
+                                <p className="text-xs text-app-fg opacity-60 leading-relaxed font-sans">
                                   {phrase.explanation}
                                 </p>
                               </div>

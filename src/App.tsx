@@ -96,6 +96,7 @@ import { TracksHomeShell } from "./components/TracksHomeShell";
 import { DailyProgressBlock } from "./components/DailyProgressBlock";
 import { ResumeStudyBlock } from "./components/ResumeStudyBlock";
 import { AnalysisPhraseWorkspace } from "./components/AnalysisPhraseWorkspace";
+import { LineWorkspace } from "./components/LineWorkspace";
 
 
 
@@ -247,8 +248,8 @@ interface LyricLineProps {
   handleToggleStarLine: (index: number) => void;
   lineId?: string;
   targetLanguage?: string;
-  onSaveLineExplanation?: (index: number, explanation: any) => void;
-  onAddNoteToDictionary?: (lineIndex: number, note: any, noteIndex: number) => void;
+  onSaveLineExplanation?: (index: number, explanation: any, updatedTranslation?: string) => void;
+  onAddNoteToDictionary?: (lineIndex: number, note: any, noteIndex: number, status?: "known" | "learning") => void;
   originKeyMetadata?: Map<string, any>;
   onEditCardFields?: (cardId: string, fields: Partial<any>) => Promise<void>;
 }
@@ -285,17 +286,8 @@ const LyricLine = ({
   const [isLoadingExplanation, setIsLoadingExplanation] = useState(false);
   const [explanationError, setExplanationError] = useState<string | null>(null);
 
-  // States for inline editing of saved notes in lyrics view
-  const [editingNoteIdx, setEditingNoteIdx] = useState<number | null>(null);
-  const [editNoteFields, setEditNoteFields] = useState({
-    text: "",
-    translation: "",
-    explanation: "",
-    type: "",
-    userNote: "",
-  });
-
   const cachedExpl = currentTrack?.lines?.[i]?.explanation;
+  const hasNestedExpl = !!(cachedExpl?.notes && cachedExpl.notes.length > 0);
   const summary = cachedExpl?.summary || "";
   const notes = cachedExpl?.notes || null;
 
@@ -304,9 +296,6 @@ const LyricLine = ({
       setIsExplaining(false);
     } else {
       setIsExplaining(true);
-      if (!cachedExpl) {
-        await handleFetchExplanation();
-      }
     }
   };
 
@@ -327,10 +316,27 @@ const LyricLine = ({
       });
 
       if (sameLineWithExplanation) {
-        // Reuse from other line occurrence:
-        const result = sameLineWithExplanation.explanation;
+        // Reuse from other line occurrence and merge values safely:
+        const otherExplanation = sameLineWithExplanation.explanation;
+        const mergedNotes = [...(cachedExpl?.notes || [])];
+        (otherExplanation?.notes || []).forEach((newNote: any) => {
+          const isDuplicate = mergedNotes.some(
+            (n: any) => (n.sourceText || "").toLowerCase().trim() === (newNote.sourceText || "").toLowerCase().trim()
+          );
+          if (!isDuplicate) {
+            mergedNotes.push(newNote);
+          }
+        });
+
+        const mergedExpl = {
+          ...cachedExpl,
+          myExplanation: cachedExpl?.myExplanation || otherExplanation?.myExplanation || "",
+          summary: otherExplanation?.summary || cachedExpl?.summary || "",
+          notes: mergedNotes
+        };
+
         if (onSaveLineExplanation) {
-          onSaveLineExplanation(i, result);
+          onSaveLineExplanation(i, mergedExpl);
         }
         setIsLoadingExplanation(false);
         return;
@@ -362,9 +368,68 @@ const LyricLine = ({
         }
       );
 
-      // Save to cache:
+      // Merge AI result with existing notes and custom commentary
+      const mergedNotes = [...(cachedExpl?.notes || [])];
+      
+      const mapType = (t: string) => {
+        const lower = (t || "").toLowerCase();
+        if (lower.includes("idiom")) return "idiom";
+        if (lower.includes("colloc")) return "collocation";
+        if (lower.includes("grammar")) return "grammar-pattern";
+        if (lower.includes("cultural")) return "cultural-reference";
+        if (lower.includes("slang")) return "slang";
+        if (lower.includes("phrasal")) return "phrasal-verb";
+        if (lower.includes("metaphor")) return "metaphor";
+        return "word";
+      };
+
+      if (result.summary) {
+        const isDuplicateSummary = mergedNotes.some(
+          (n: any) => n.kind === "note" && (n.text || "").toLowerCase().trim() === result.summary.toLowerCase().trim()
+        );
+        if (!isDuplicateSummary) {
+          mergedNotes.push({
+            id: `ai_summary_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
+            kind: "note",
+            text: result.summary,
+            source: "ai"
+          });
+        }
+      }
+
+      (result.notes || []).forEach((newNote: any) => {
+        const isDuplicate = mergedNotes.some(
+          (n: any) => {
+            const existingText = n.original || n.sourceText || "";
+            return existingText.toLowerCase().trim() === (newNote.sourceText || "").toLowerCase().trim();
+          }
+        );
+        if (!isDuplicate) {
+          const phraseId = `ai_phrase_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+          mergedNotes.push({
+            id: phraseId,
+            kind: "phrase",
+            original: newNote.sourceText || "",
+            translation: newNote.translation || newNote.text || "",
+            type: mapType(newNote.type || ""),
+            tags: ["ai"],
+            source: "ai",
+            // Backward compatibility
+            sourceText: newNote.sourceText || "",
+            text: newNote.text || ""
+          });
+        }
+      });
+
+      const mergedExpl = {
+        ...cachedExpl,
+        myExplanation: cachedExpl?.myExplanation || "",
+        summary: result.summary || cachedExpl?.summary || "",
+        notes: mergedNotes
+      };
+
       if (onSaveLineExplanation) {
-        onSaveLineExplanation(i, result);
+        onSaveLineExplanation(i, mergedExpl);
       }
     } catch (err: any) {
       console.error("[LyricLine] Explanation fetch error:", err);
@@ -403,22 +468,50 @@ const LyricLine = ({
       }}
     >
       <motion.div
+        key={`lyric-line-wrapper-${i}`}
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: Math.min(i * 0.01, 1) }}
         className={cn(
-          "group relative flex flex-col gap-1 rounded-[1.5rem] border cursor-pointer z-10 transition-all duration-300",
-          isCompact ? "px-4 py-1" : "px-6 py-1.5",
+          "group relative flex flex-col gap-1 rounded-2xl cursor-pointer z-10 transition-all duration-200 border border-transparent",
+          isCompact ? "px-2 sm:px-4 py-0.5" : "px-3 sm:px-6 py-1",
           activeLineIndex === i
-            ? "scale-[1.01] bg-app-card/60 border-app-card-border shadow-xl z-20 brightness-110"
-            : "border-transparent bg-transparent opacity-65 hover:opacity-100 hover:bg-app-card/5",
+            ? "bg-app-card/30 border-app-card-border/10"
+            : "hover:bg-app-fg/[0.02]",
         )}
         onClick={() => {
           if (!trimmedLine) return;
           handleLineClick(line, i);
         }}
       >
-        <div className="flex items-center gap-4 w-full relative z-10">
+        <div className="flex items-center w-full relative z-10 pl-4 sm:pl-7">
+          {trimmedLine && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleToggleExplanation();
+              }}
+              className={cn(
+                "absolute left-0 sm:left-1 top-2 p-1 rounded hover:bg-app-fg/5 transition-all shrink-0 select-none cursor-pointer",
+                isExplaining 
+                  ? "text-[var(--accent)]" 
+                  : hasNestedExpl 
+                    ? "text-[var(--accent)]/80 hover:text-[var(--accent)] scale-110" 
+                    : "text-app-fg/20 hover:text-app-fg"
+              )}
+              title={isExplaining ? "Collapse Outline" : "Expand Outline"}
+            >
+              <ChevronRight
+                size={14}
+                className={cn(
+                  "transition-transform duration-200 stroke-[2.5]",
+                  isExplaining && "rotate-90"
+                )}
+              />
+            </button>
+          )}
+
           <div className="flex-1 min-w-0">
             <p
               className={cn(
@@ -437,22 +530,6 @@ const LyricLine = ({
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  handleToggleExplanation();
-                }}
-                className="p-2 rounded-xl transition-all hover:scale-120 active:scale-90"
-                title={cachedExpl ? "Show AI explanation" : "Explain line with AI"}
-              >
-                {isLoadingExplanation ? (
-                  <Brain size={20} className="animate-spin text-[var(--accent)]" />
-                ) : cachedExpl ? (
-                  <Brain size={20} className="fill-[var(--accent)]/15 text-[var(--accent)] drop-shadow-sm" />
-                ) : (
-                  <Brain size={20} className="text-app-fg/20 hover:text-[var(--accent)]/80 transition-all" />
-                )}
-              </button>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
                   handleToggleStarLine(i);
                 }}
                 className="p-2 rounded-xl transition-all hover:scale-120 active:scale-90"
@@ -467,7 +544,7 @@ const LyricLine = ({
           )}
         </div>
 
-        <div className="pl-1 relative z-10">
+        <div className="relative z-10">
           <AnimatePresence initial={false}>
             {(activeLineIndex === i || alwaysShowTranslation || isBoth) && (
               <motion.div
@@ -475,15 +552,13 @@ const LyricLine = ({
                 initial={{ opacity: 0, height: 0 }}
                 animate={{ opacity: 1, height: "auto" }}
                 exit={{ opacity: 0, height: 0 }}
-                className="space-y-4"
+                className="space-y-1 pl-4 sm:pl-7"
               >
-                {displayTranslation && showUnderTranslation && (
+                {displayTranslation && showUnderTranslation && !isExplaining && (
                   <p
                     className={cn(
-                      "font-serif italic text-app-fg opacity-40 transition-all duration-300 ml-1 mt-1",
-                      activeLineIndex === i
-                        ? isCompact ? "text-sm" : "text-lg"
-                        : isCompact ? "text-xs" : "text-base",
+                      "font-serif italic text-app-fg opacity-40 transition-all duration-300 ml-1 mt-0.5",
+                      isCompact ? "text-xs" : "text-base",
                     )}
                   >
                     {displayTranslation}
@@ -492,6 +567,7 @@ const LyricLine = ({
 
                 {activeLineIndex === i && isListeningForSpeech && (
                   <motion.div
+                    key={`speech-animation-${i}`}
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     className="flex items-center gap-3 mt-4 ml-1 bg-[var(--accent)]/5 border border-[var(--accent)]/10 px-4 py-3 rounded-3xl w-fit shadow-lg shadow-[var(--accent)]/5"
@@ -551,296 +627,23 @@ const LyricLine = ({
 
           <AnimatePresence initial={false}>
             {isExplaining && (
-              <motion.div
-                key={`explanation-block-${i}`}
-                initial={{ opacity: 0, height: 0, y: -5 }}
-                animate={{ opacity: 1, height: "auto", y: 0 }}
-                exit={{ opacity: 0, height: 0, y: -5 }}
-                transition={{ duration: 0.25 }}
-                className="mt-4 mb-2 p-5 bg-app-card border border-app-card-border/70 rounded-3xl relative overflow-hidden"
-                onClick={(e) => e.stopPropagation()}
-              >
-                {/* Header with Title and Close button */}
-                <div className="flex justify-between items-center mb-3">
-                  <div className="flex items-center gap-2">
-                    <Brain size={14} className="text-[var(--accent)]" />
-                    <span className="text-[10px] font-black uppercase tracking-widest text-app-fg opacity-65">
-                      Line Insight
-                    </span>
-                  </div>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setIsExplaining(false);
-                    }}
-                    className="p-1 rounded-lg hover:bg-app-fg/5 text-app-fg opacity-40 hover:opacity-100 transition-opacity"
-                  >
-                    <X size={12} />
-                  </button>
-                </div>
-
-                {/* Content Area */}
-                <div className="space-y-4">
-                  {/* Summary section */}
-                  {(streamedSummary || summary) ? (
-                    <div className="text-sm font-sans leading-relaxed text-app-fg/80 pr-2 whitespace-pre-line">
-                      {streamedSummary || summary}
-                    </div>
-                  ) : isLoadingExplanation ? (
-                    <div className="flex items-center gap-2 py-1">
-                      <span className="flex h-2 w-2 relative">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[var(--accent)] opacity-75"></span>
-                        <span className="relative inline-flex rounded-full h-2 w-2 bg-[var(--accent)]"></span>
-                      </span>
-                      <span className="text-xs italic tracking-wide text-app-fg opacity-40">
-                        Analyzing line syntax nuances...
-                      </span>
-                    </div>
-                  ) : null}
-
-                  {/* Notes list */}
-                  {notes && notes.length > 0 && (
-                    <motion.div 
-                      initial={{ opacity: 0, y: 5 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.2 }}
-                      className="pt-3 border-t border-app-card-border/50 flex flex-col gap-2.5"
-                    >
-                      {notes.map((note: any, nIdx: number) => {
-                        const bgTypeMap: Record<string, string> = {
-                          phrase: "bg-blue-500/10 border-blue-500/20 text-blue-600 dark:text-blue-400",
-                          vocabulary: "bg-teal-500/10 border-teal-500/20 text-teal-600 dark:text-teal-400",
-                          idiom: "bg-purple-500/10 border-purple-500/20 text-purple-600 dark:text-purple-400",
-                          cultural: "bg-pink-500/10 border-pink-500/20 text-pink-600 dark:text-pink-400",
-                          collocation: "bg-indigo-500/10 border-indigo-500/20 text-indigo-600 dark:text-indigo-400",
-                          grammar: "bg-amber-500/10 border-amber-500/20 text-amber-600 dark:text-amber-400",
-                          nuance: "bg-teal-500/10 border-teal-500/20 text-teal-600 dark:text-teal-400"
-                        };
-
-                        const noteOriginKey = currentTrack ? generateNoteOriginKey(currentTrack.trackId, currentTrack.lines[i]?.lineId, note.text, note.sourceText, nIdx) : "";
-                        const existingCard = noteOriginKey ? originKeyMetadata?.get(noteOriginKey) : undefined;
-                        const isAlreadyAdded = !!existingCard;
-
-                        const displayType = existingCard?.type || existingCard?.entryType || note.type || "phrase";
-                        const displaySourceText = existingCard?.text || note.sourceText || line;
-                        const displayTranslation = existingCard?.translation || note.translation || "";
-                        const displayExplanation = existingCard?.explanation || note.text || "";
-                        const displayUserNote = existingCard?.userNote || "";
-
-                        const typeClass = bgTypeMap[displayType] || bgTypeMap[note.type] || "bg-app-fg/5 border-app-card-border text-app-fg/70";
-                        const isEditing = editingNoteIdx === nIdx;
-
-                        return (
-                          <div key={noteOriginKey || nIdx} className="p-3 rounded-xl bg-app-card/30 border border-app-card-border/30 hover:border-app-card-border/65 transition-all">
-                            {isEditing ? (
-                              <div className="space-y-2.5 w-full">
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                  <div className="flex flex-col gap-0.5">
-                                    <label className="text-[9px] font-black uppercase tracking-widest opacity-40">Original term</label>
-                                    <input
-                                      type="text"
-                                      value={editNoteFields.text}
-                                      onChange={(e) => setEditNoteFields({ ...editNoteFields, text: e.target.value })}
-                                      className="w-full px-2.5 py-1.5 text-xs rounded-lg bg-app-bg border border-app-card-border focus:border-indigo-500 focus:outline-none"
-                                    />
-                                  </div>
-                                  <div className="flex flex-col gap-0.5">
-                                    <label className="text-[9px] font-black uppercase tracking-widest opacity-40">Translation</label>
-                                    <input
-                                      type="text"
-                                      value={editNoteFields.translation}
-                                      onChange={(e) => setEditNoteFields({ ...editNoteFields, translation: e.target.value })}
-                                      className="w-full px-2.5 py-1.5 text-xs rounded-lg bg-app-bg border border-app-card-border focus:border-indigo-500 focus:outline-none"
-                                    />
-                                  </div>
-                                </div>
-
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                  <div className="flex flex-col gap-0.5">
-                                    <label className="text-[9px] font-black uppercase tracking-widest opacity-40">Type</label>
-                                    <select
-                                      value={editNoteFields.type}
-                                      onChange={(e) => setEditNoteFields({ ...editNoteFields, type: e.target.value })}
-                                      className="w-full px-2.5 py-1 text-xs rounded-lg bg-app-bg border border-app-card-border focus:border-indigo-500 focus:outline-none"
-                                    >
-                                      <option value="phrase">Phrase</option>
-                                      <option value="vocabulary">Vocabulary</option>
-                                      <option value="idiom">Idiom</option>
-                                      <option value="collocation">Collocation</option>
-                                      <option value="grammar">Grammar</option>
-                                      <option value="nuance">Nuance</option>
-                                      <option value="cultural">Cultural</option>
-                                    </select>
-                                  </div>
-                                  <div className="flex flex-col gap-0.5">
-                                    <label className="text-[9px] font-black uppercase tracking-widest opacity-40">Memory Note (Optional)</label>
-                                    <input
-                                      type="text"
-                                      value={editNoteFields.userNote}
-                                      placeholder="Mnemonic helper..."
-                                      onChange={(e) => setEditNoteFields({ ...editNoteFields, userNote: e.target.value })}
-                                      className="w-full px-2.5 py-1.5 text-xs rounded-lg bg-app-bg border border-app-card-border focus:border-indigo-500 focus:outline-none"
-                                    />
-                                  </div>
-                                </div>
-
-                                <div className="flex flex-col gap-0.5">
-                                  <label className="text-[9px] font-black uppercase tracking-widest opacity-40">Explanation</label>
-                                  <textarea
-                                    value={editNoteFields.explanation}
-                                    rows={2}
-                                    onChange={(e) => setEditNoteFields({ ...editNoteFields, explanation: e.target.value })}
-                                    className="w-full px-2.5 py-1.5 text-xs rounded-lg bg-app-bg border border-app-card-border focus:border-indigo-500 focus:outline-none resize-none"
-                                  />
-                                </div>
-
-                                <div className="flex items-center justify-end gap-2 pt-1 border-t border-app-card-border/20">
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setEditingNoteIdx(null);
-                                    }}
-                                    className="px-2.5 py-1 text-[9px] font-extrabold uppercase tracking-widest rounded-lg border border-app-card-border hover:bg-app-fg/5 transition-all"
-                                  >
-                                    Cancel
-                                  </button>
-                                  <button
-                                    onClick={async (e) => {
-                                      e.stopPropagation();
-                                      if (existingCard && onEditCardFields) {
-                                        await onEditCardFields(existingCard.id, {
-                                          text: editNoteFields.text,
-                                          translation: editNoteFields.translation,
-                                          explanation: editNoteFields.explanation,
-                                          type: editNoteFields.type,
-                                          entryType: editNoteFields.type,
-                                          userNote: editNoteFields.userNote,
-                                        });
-                                      }
-                                      setEditingNoteIdx(null);
-                                    }}
-                                    className="px-2.5 py-1 text-[9px] font-extrabold uppercase tracking-widest rounded-lg bg-app-fg text-app-bg hover:scale-105 active:scale-95 transition-all"
-                                  >
-                                    Save
-                                  </button>
-                                </div>
-                              </div>
-                            ) : (
-                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 w-full">
-                                <div className="flex gap-2.5 items-start flex-1 min-w-0">
-                                  <span className={cn(
-                                    "text-[8px] font-black uppercase tracking-widest px-2 py-0.5 mt-0.5 rounded-md border shrink-0",
-                                    typeClass
-                                  )}>
-                                    {displayType}
-                                  </span>
-                                  <div className="flex flex-col gap-0.5 min-w-0">
-                                    <span className="text-xs font-semibold text-app-fg tracking-tight flex flex-wrap items-center gap-1.5">
-                                      {displaySourceText}
-                                      {displayTranslation && (
-                                        <span className="text-[10px] font-normal text-app-fg/50 font-mono">
-                                          ({displayTranslation})
-                                        </span>
-                                      )}
-                                      {displayUserNote && (
-                                        <span className="text-[9px] font-bold text-teal-600 dark:text-teal-400 bg-teal-500/10 px-1.5 py-0.5 rounded-md">
-                                          Note: {displayUserNote}
-                                        </span>
-                                      )}
-                                      {existingCard && (
-                                        <span className={cn(
-                                          "text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded",
-                                          existingCard.status === "known" 
-                                            ? "bg-emerald-500/10 text-emerald-600" 
-                                            : "bg-orange-500/10 text-orange-600"
-                                        )}>
-                                          {existingCard.status === "known" ? "known" : "learning"}
-                                        </span>
-                                      )}
-                                    </span>
-                                    <span className="text-xs font-sans text-app-fg/75 leading-normal">
-                                      {displayExplanation}
-                                    </span>
-                                  </div>
-                                </div>
-
-                                <div className="flex items-center gap-2 mt-1 sm:mt-0 shrink-0 self-end sm:self-center">
-                                  {isAlreadyAdded && onEditCardFields && (
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setEditingNoteIdx(nIdx);
-                                        setEditNoteFields({
-                                          text: displaySourceText,
-                                          translation: displayTranslation,
-                                          explanation: displayExplanation,
-                                          type: displayType,
-                                          userNote: displayUserNote,
-                                        });
-                                      }}
-                                      className="text-[10px] h-7 px-2.5 rounded-lg font-bold flex items-center justify-center gap-1 transition-all border border-transparent bg-app-fg/5 hover:bg-app-fg/10 cursor-pointer"
-                                    >
-                                      <Edit3 size={10} />
-                                      <span>Edit</span>
-                                    </button>
-                                  )}
-
-                                  {onAddNoteToDictionary && (
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        if (!isAlreadyAdded) {
-                                          onAddNoteToDictionary(i, note, nIdx);
-                                        }
-                                      }}
-                                      disabled={isAlreadyAdded}
-                                      className={cn(
-                                        "text-[10px] h-7 px-2.5 rounded-lg font-bold flex items-center justify-center gap-1 transition-all",
-                                        isAlreadyAdded 
-                                          ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20"
-                                          : "bg-app-fg/10 hover:bg-[var(--accent)] hover:text-white border border-transparent cursor-pointer"
-                                      )}
-                                    >
-                                      {isAlreadyAdded ? (
-                                        <>
-                                          <Check size={10} className="stroke-[3px]" />
-                                          <span>Saved</span>
-                                        </>
-                                      ) : (
-                                        <>
-                                          <Plus size={10} className="stroke-[3px]" />
-                                          <span>Add to Study</span>
-                                        </>
-                                      )}
-                                    </button>
-                                  )}
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </motion.div>
-                  )}
-
-                  {/* Error display */}
-                  {explanationError && (
-                    <div className="flex gap-2 items-center text-xs text-orange-500 pt-2 border-t border-app-card-border/30">
-                      <AlertTriangle size={14} className="shrink-0" />
-                      <span>{explanationError}</span>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleFetchExplanation(true);
-                        }}
-                        className="ml-auto text-[10px] uppercase tracking-wider font-extrabold underline hover:text-orange-400"
-                      >
-                        Retry
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </motion.div>
+              <LineWorkspace
+                line={line}
+                i={i}
+                currentTrack={currentTrack}
+                targetLanguage={targetLanguage}
+                onSaveLineExplanation={onSaveLineExplanation}
+                onAddNoteToDictionary={onAddNoteToDictionary}
+                originKeyMetadata={originKeyMetadata}
+                onEditCardFields={onEditCardFields}
+                isLoadingExplanation={isLoadingExplanation}
+                explanationError={explanationError}
+                streamedSummary={streamedSummary}
+                handleFetchExplanation={handleFetchExplanation}
+                onClose={() => setIsExplaining(false)}
+                lineTranslation={displayTranslation}
+                isCompact={isCompact}
+              />
             )}
           </AnimatePresence>
         </div>
@@ -1203,11 +1006,15 @@ export default function App() {
     saveTrackData(currentTrack.trackId, updatedTrack);
   };
 
-  const handleSaveLineExplanation = (index: number, explanation: any) => {
+  const handleSaveLineExplanation = (index: number, explanation: any, updatedTranslation?: string) => {
     if (!currentTrack) return;
     const updatedLines = currentTrack.lines.map((l: any) => {
       if (l.index === index) {
-        return { ...l, explanation };
+        const updated = { ...l, explanation };
+        if (updatedTranslation !== undefined) {
+          updated.translation = updatedTranslation;
+        }
+        return updated;
       }
       return l;
     });
@@ -1220,18 +1027,39 @@ export default function App() {
     saveTrackData(currentTrack.trackId, updatedTrack);
   };
 
-  const handleAddNoteToDictionary = async (lineIndex: number, note: any, noteIndex: number) => {
+  const handleAddNoteToDictionary = async (lineIndex: number, note: any, noteIndex: number, status?: "known" | "learning") => {
     if (!currentTrack) return;
     const line = currentTrack.lines[lineIndex];
     if (!line) return;
 
-    const phraseText = note.sourceText || line.original;
-    const translation = note.translation || note.text || "";
-    const explanation = note.text || "";
+    // Support both active/raw LineItem structure (original & translation) and saved legacy format (sourceText & text)
+    const isPhrase = note.kind === "phrase" || note.original !== undefined;
+    
+    const phraseText = isPhrase 
+      ? (note.original || note.sourceText || "").trim() || line.original
+      : "";
+    
+    const translation = isPhrase
+      ? (note.translation || note.text || "").trim()
+      : (note.text || "").trim();
+
+    const explanation = isPhrase
+      ? (note.explanation || note.text || "")
+      : (note.text || "");
+
     const targetLineId = line.lineId;
     const noteType = note.type || "phrase";
 
-    const noteOriginKey = generateNoteOriginKey(currentTrack.trackId, targetLineId, note.text, note.sourceText, noteIndex);
+    const keyTranslation = isPhrase ? translation : explanation;
+    const keyOriginal = isPhrase ? phraseText : "";
+
+    const noteOriginKey = generateNoteOriginKey(
+      currentTrack.trackId,
+      targetLineId,
+      keyTranslation,
+      keyOriginal,
+      noteIndex
+    );
 
     try {
       let connectedPhraseId = "";
@@ -1290,7 +1118,7 @@ export default function App() {
         rawTranslation: translation,
         rawExplanation: explanation,
         userNote: ""
-      } as any, "learning");
+      } as any, status || "learning");
 
       await loadUserCards();
     } catch (err) {
@@ -1512,7 +1340,14 @@ export default function App() {
 
   const handleEditCardFields = async (cardId: string, fields: Partial<any>) => {
     try {
-      await studyCardsRepository.updateCardFields(cardId, fields);
+      if (fields.status !== undefined) {
+        await studyCardsRepository.updatePhraseStatus(cardId, fields.status);
+      }
+      
+      const { status, ...otherFields } = fields;
+      if (Object.keys(otherFields).length > 0) {
+        await studyCardsRepository.updateCardFields(cardId, otherFields as any);
+      }
       
       if (currentTrack) {
         const cardInMeta = [...(originKeyMetadata?.values() || [])].find(c => c.id === cardId) as any;
@@ -1669,7 +1504,89 @@ export default function App() {
               // Fallback to external lookup if not in cache
               const trackData = await getTrackDetails(currentRoute.id);
               if (trackData && active) {
-                await handleTrackSelect(trackData);
+                // Check shared/server cache
+                try {
+                  const sharedCacheResult = await aiClient.getTrackMeaningFromCache(
+                    trackData.title,
+                    [trackData.artist],
+                    targetLanguage
+                  );
+                  if (sharedCacheResult && (sharedCacheResult.meanings || sharedCacheResult.rawLyrics)) {
+                    const langKey = targetLanguage.toLowerCase().trim();
+                    let meaning = sharedCacheResult.meanings?.en || "";
+                    if (langKey === 'spanish') meaning = sharedCacheResult.meanings?.es || "";
+                    if (langKey === 'russian') meaning = sharedCacheResult.meanings?.ru || "";
+                    if (langKey === 'polish') meaning = sharedCacheResult.meanings?.pl || "";
+
+                    const hasLyricsAndLinesCache = !!(sharedCacheResult.rawLyrics && sharedCacheResult.lines && sharedCacheResult.lines.length > 0);
+
+                    const fullTrack: TrackLyricsData = {
+                      trackId: String(trackData.id),
+                      itunesTrackId: String(trackData.id),
+                      title: trackData.title,
+                      artist: trackData.artist,
+                      artistId: trackData.artistId,
+                      album: trackData.album,
+                      albumId: trackData.albumId,
+                      coverUrl: trackData.coverUrl,
+                      audioUrl: trackData.audioUrl,
+                      appleMusicUrl: trackData.appleMusicUrl,
+                      rawLyrics: hasLyricsAndLinesCache ? sharedCacheResult.rawLyrics : "",
+                      source: hasLyricsAndLinesCache ? (sharedCacheResult.source as any || "LRCLib") : null,
+                      sourceLanguage: sharedCacheResult.originalLanguage || "English",
+                      meaning,
+                      meanings: sharedCacheResult.meanings,
+                      difficulty: sharedCacheResult.difficulty,
+                      promptVersion: sharedCacheResult.promptVersion,
+                      lines: hasLyricsAndLinesCache ? sharedCacheResult.lines : [],
+                      processingStatus: {
+                        stage1_completed: hasLyricsAndLinesCache,
+                        stage2_completed: true,
+                        stage3_completed: hasLyricsAndLinesCache ? sharedCacheResult.lines.some((l: any) => l.phrases && l.phrases.length > 0) : false
+                      },
+                      lastUpdated: Date.now()
+                    };
+
+                    if (active) {
+                      saveTrackData(fullTrack.trackId, fullTrack);
+                      await handleTrackSelect(fullTrack);
+                    }
+                  } else {
+                    // Shared cache not found: fallback to initialTrack creation
+                    const initialTrack: TrackLyricsData = {
+                      trackId: String(trackData.id),
+                      itunesTrackId: String(trackData.id),
+                      artist: trackData.artist,
+                      artistId: trackData.artistId,
+                      title: trackData.title,
+                      album: trackData.album,
+                      albumId: trackData.albumId,
+                      coverUrl: trackData.coverUrl,
+                      audioUrl: trackData.audioUrl,
+                      appleMusicUrl: trackData.appleMusicUrl,
+                      rawLyrics: "",
+                      source: null,
+                      sourceLanguage: "English",
+                      lines: [],
+                      processingStatus: {
+                        stage1_completed: false,
+                        stage2_completed: false,
+                        stage3_completed: false,
+                      },
+                      lastUpdated: Date.now(),
+                    };
+
+                    if (active) {
+                      await saveTrackData(initialTrack.trackId, initialTrack);
+                      await handleTrackSelect(initialTrack);
+                    }
+                  }
+                } catch (cacheErr) {
+                  console.error("[RouteLoaderSync] Shared cache read/setup fallback:", cacheErr);
+                  if (active) {
+                    await handleTrackSelect(trackData);
+                  }
+                }
               }
             }
           }
@@ -2421,61 +2338,54 @@ export default function App() {
               exit={{ opacity: 0, x: -50 }}
               className="flex-1 flex flex-col overflow-hidden"
             >
-              <div className="bg-app-card/50 border-b border-app-card-border backdrop-blur-xl">
-                <div className="max-w-5xl mx-auto w-full px-6 py-4 flex items-center justify-between animate-in fade-in duration-300">
-                  <button
-                    onClick={() => goBack({ type: "explore" })}
-                    className="flex items-center gap-1 text-app-fg opacity-40 text-xs font-bold uppercase py-2 px-1 hover:opacity-100 transition-opacity"
-                  >
-                    <ChevronLeft size={18} /> Library
-                  </button>
-                  <div className="flex items-center gap-4">
+              <div
+                ref={scrollContainerRef}
+                className="flex-1 overflow-y-auto px-4 sm:px-8 pt-4 pb-12 scrollbar-hide relative w-full max-w-5xl mx-auto"
+              >
+                <div className="mb-6 px-3 sm:px-6 animate-in fade-in duration-300">
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <span
+                      className="text-[10px] font-black uppercase tracking-[0.4em] block opacity-60"
+                      style={{ color: "var(--accent)" }}
+                    >
+                      Reading Session
+                    </span>
                     {isLoadingLyrics && (
                       <div className={cn(
-                        "flex items-center gap-2 px-3 py-1 rounded-full border animate-pulse",
-                        loadingStep === "searching" ? "bg-amber-500/10 border-amber-500/20" : "bg-[var(--accent)]/10 border-[var(--accent)]/20"
+                        "flex items-center gap-2 px-2.5 py-0.5 rounded-full border text-[9px] font-bold uppercase animate-pulse leading-none shrink-0",
+                        loadingStep === "searching" ? "bg-amber-500/10 border-amber-500/20 text-amber-500" : "bg-[var(--accent)]/10 border-[var(--accent)]/20 text-[var(--accent)]"
                       )}>
                         <RefreshCw
-                          size={12}
+                          size={10}
                           className={cn(
                             "animate-spin",
                             loadingStep === "searching" ? "text-amber-500 duration-[2s]" : "text-[var(--accent)] duration-700"
                           )}
                         />
-                        <span className={cn(
-                          "text-[10px] font-black uppercase tracking-widest",
-                          loadingStep === "searching" ? "text-amber-500" : "text-[var(--accent)]"
-                        )}>
+                        <span>
                           {loadingStep === "searching" ? "Searching Lyrics" : 
                            loadingStep === "meaning" ? "Generating Preview" : "Analyzing Track"}
                         </span>
                       </div>
                     )}
                   </div>
-                </div>
-              </div>
+                  
+                  <div className="flex flex-col gap-4">
+                    {/* Compact action row: Back button on the left, mobile Heart on the right */}
+                    <div className="flex items-center justify-between w-full">
+                      <button
+                        onClick={() => goBack({ type: "explore" })}
+                        className="w-10 h-10 rounded-2xl border border-app-card-border bg-app-card/30 flex items-center justify-center text-app-fg opacity-60 hover:opacity-100 hover:bg-app-fg/5 transition-all shrink-0 cursor-pointer"
+                        title="Back"
+                      >
+                        <ChevronLeft size={20} />
+                      </button>
 
-              <div
-                ref={scrollContainerRef}
-                className="flex-1 overflow-y-auto px-8 pt-4 pb-12 scrollbar-hide relative w-full max-w-5xl mx-auto"
-              >
-                <div className="mb-4">
-                  <span
-                    className="text-[10px] font-black uppercase tracking-[0.4em] mb-1 block opacity-60"
-                    style={{ color: "var(--accent)" }}
-                  >
-                    Reading Session
-                  </span>
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-3 mb-1">
-                        <h1 className="text-3xl font-bold text-app-fg leading-tight truncate">
-                          {currentTrack.title}
-                        </h1>
+                      <div className="flex sm:hidden items-center gap-2">
                         <button
                           type="button"
                           onClick={() => handleToggleFavoriteInApp(mapTrackLyricsDataToTrack(currentTrack))}
-                          className="p-1.5 hover:bg-app-fg/5 rounded-full transition-colors shrink-0"
+                          className="p-2 hover:bg-app-fg/5 rounded-full transition-colors shrink-0"
                           title={isTrackFavoriteInApp(currentTrack.trackId) ? "Remove from Favorites" : "Add to Favorites"}
                         >
                           <Heart
@@ -2489,79 +2399,108 @@ export default function App() {
                           />
                         </button>
                       </div>
-                      <div className="flex flex-col gap-0.5">
-                        <button
-                          onClick={() => {
-                            if (currentTrack.artistId && !currentTrack.artistId.startsWith("artist-") && currentTrack.artistId !== "undefined") {
-                              goToArtist(currentTrack.artistId);
-                            } else if (currentTrack.artistId) {
-                               handleArtistSelect(currentTrack.artistId);
-                               goToExplore();
-                            }
-                          }}
-                          className={cn(
-                             "text-lg text-app-fg opacity-60 font-serif italic text-left w-fit transition-all",
-                             currentTrack.artistId ? "hover:opacity-100 hover:text-app-accent cursor-pointer" : ""
-                          )}
-                        >
-                          {currentTrack.artist}
-                        </button>
-                        {currentTrack.album && (
+                    </div>
+
+                    {/* Left Column (Metadata + Title Row) & Right Column (Image Cover info) */}
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-start gap-3">
+                          <h1 className="text-2xl sm:text-3xl font-bold text-app-fg leading-tight break-words flex-1">
+                            {currentTrack.title}
+                          </h1>
+                          <button
+                            type="button"
+                            onClick={() => handleToggleFavoriteInApp(mapTrackLyricsDataToTrack(currentTrack))}
+                            className="hidden sm:block p-1.5 hover:bg-app-fg/5 rounded-full transition-colors shrink-0"
+                            title={isTrackFavoriteInApp(currentTrack.trackId) ? "Remove from Favorites" : "Add to Favorites"}
+                          >
+                            <Heart
+                              size={22}
+                              className={cn(
+                                "transition-all duration-300",
+                                isTrackFavoriteInApp(currentTrack.trackId)
+                                  ? "fill-red-500 text-red-500 scale-110"
+                                  : "text-app-fg/30 hover:text-red-500/80 hover:scale-105"
+                              )}
+                            />
+                          </button>
+                        </div>
+                        
+                        <div className="flex flex-col gap-0.5 mt-2.5">
                           <button
                             onClick={() => {
-                              if (currentTrack.albumId && !currentTrack.albumId.startsWith("album-") && currentTrack.albumId !== "undefined") {
-                                goToAlbum(currentTrack.albumId);
-                              } else if (currentTrack.albumId) {
-                                handleAlbumSelect(currentTrack.albumId);
-                                goToExplore();
+                              if (currentTrack.artistId && !currentTrack.artistId.startsWith("artist-") && currentTrack.artistId !== "undefined") {
+                                goToArtist(currentTrack.artistId);
+                              } else if (currentTrack.artistId) {
+                                 handleArtistSelect(currentTrack.artistId);
+                                 goToExplore();
                               }
                             }}
                             className={cn(
-                               "text-xs text-app-fg opacity-30 font-medium uppercase tracking-wider text-left w-fit transition-all",
-                               currentTrack.albumId ? "hover:opacity-100 hover:text-app-accent cursor-pointer" : ""
+                               "text-lg text-app-fg opacity-60 font-serif italic text-left w-fit transition-all",
+                               currentTrack.artistId ? "hover:opacity-100 hover:text-app-accent cursor-pointer" : ""
                             )}
                           >
-                            {currentTrack.album}
+                            {currentTrack.artist}
                           </button>
-                        )}
+                          {currentTrack.album && (
+                            <button
+                              onClick={() => {
+                                if (currentTrack.albumId && !currentTrack.albumId.startsWith("album-") && currentTrack.albumId !== "undefined") {
+                                  goToAlbum(currentTrack.albumId);
+                                } else if (currentTrack.albumId) {
+                                  handleAlbumSelect(currentTrack.albumId);
+                                  goToExplore();
+                                }
+                              }}
+                              className={cn(
+                                 "text-xs text-app-fg opacity-30 font-medium uppercase tracking-wider text-left w-fit transition-all",
+                                 currentTrack.albumId ? "hover:opacity-100 hover:text-app-accent cursor-pointer" : ""
+                              )}
+                            >
+                              {currentTrack.album}
+                            </button>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                    {currentTrack.coverUrl && currentTrack.coverUrl !== "" ? (
-                      <button 
-                        onClick={() => {
-                          if (currentTrack.albumId && !currentTrack.albumId.startsWith("album-") && currentTrack.albumId !== "undefined") {
-                            goToAlbum(currentTrack.albumId);
-                          } else if (currentTrack.albumId) {
-                            handleAlbumSelect(currentTrack.albumId);
-                            goToExplore();
-                          }
-                        }}
-                        className={cn(
-                          "relative group transition-transform active:scale-95",
-                          currentTrack.albumId ? "cursor-pointer" : "cursor-default"
-                        )}
-                      >
-                        <div className="absolute -inset-1 bg-gradient-to-r from-[var(--accent)] to-purple-600 rounded-[1.8rem] opacity-20 blur-xl group-hover:opacity-40 transition-opacity" />
-                        <img
-                          src={currentTrack.coverUrl}
-                          className="relative w-24 h-24 rounded-[1.5rem] object-cover shadow-2xl shrink-0 border border-app-card-border"
-                          alt={`${currentTrack.title} cover`}
-                          referrerPolicy="no-referrer"
-                          onError={(e) => {
-                            (e.target as HTMLImageElement).src = `https://ui-avatars.com/api/?name=${encodeURIComponent(currentTrack.title)}&background=random&color=fff&size=256`;
+
+                      {currentTrack.coverUrl && currentTrack.coverUrl !== "" ? (
+                        <button 
+                          onClick={() => {
+                            if (currentTrack.albumId && !currentTrack.albumId.startsWith("album-") && currentTrack.albumId !== "undefined") {
+                              goToAlbum(currentTrack.albumId);
+                            } else if (currentTrack.albumId) {
+                              handleAlbumSelect(currentTrack.albumId);
+                              goToExplore();
+                            }
                           }}
-                        />
-                      </button>
-                    ) : (
-                      <div className="w-24 h-24 rounded-[1.5rem] bg-app-card border border-app-card-border flex items-center justify-center text-app-fg opacity-20 shrink-0 shadow-2xl">
-                        <Music size={32} />
-                      </div>
-                    )}
+                          className={cn(
+                            "relative group transition-transform active:scale-95 shrink-0",
+                            currentTrack.albumId ? "cursor-pointer" : "cursor-default"
+                          )}
+                        >
+                          <div className="absolute -inset-1 bg-gradient-to-r from-[var(--accent)] to-purple-600 rounded-[1.8rem] opacity-20 blur-xl group-hover:opacity-40 transition-opacity" />
+                          <img
+                            src={currentTrack.coverUrl}
+                            className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-[1.5rem] object-cover shadow-2xl shrink-0 border border-app-card-border"
+                            alt={`${currentTrack.title} cover`}
+                            referrerPolicy="no-referrer"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).src = `https://ui-avatars.com/api/?name=${encodeURIComponent(currentTrack.title)}&background=random&color=fff&size=256`;
+                            }}
+                          />
+                        </button>
+                      ) : (
+                        <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-[1.5rem] bg-app-card border border-app-card-border flex items-center justify-center text-app-fg opacity-20 shrink-0 shadow-2xl animate-pulse">
+                          <Music size={26} />
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
 
                 {trackProgressViewModel && (
-                  <div className="mb-6">
+                  <div className="mb-6 px-3 sm:px-6">
                     <TrackProgressTracker
                       viewModel={trackProgressViewModel}
                       activeTab={activeTab}
@@ -2583,7 +2522,7 @@ export default function App() {
                 )}
 
                 {trackStudySummary && (
-                  <div className="mb-6">
+                  <div className="mb-6 px-3 sm:px-6">
                     <TrackStudyBridge
                       summary={trackStudySummary}
                       onGoToStudy={() => {
@@ -2596,7 +2535,7 @@ export default function App() {
                 )}
 
                 {activeTab === "preview" && (
-                  <div className="flex flex-col gap-8 pb-32">
+                  <div className="flex flex-col gap-8 pb-32 px-3 sm:px-6">
                     {/* Show Meaning if we have it, even if loading lyrics in background */}
                     {currentTrack.meaning ? (
                       <motion.div
@@ -2826,114 +2765,116 @@ export default function App() {
 
                 {activeTab === "lyrics" && (
                   <div className="flex flex-col gap-1 pb-32">
-                    {/* Unified Search and Language Selection Toolbar */}
+                    {/* Unified Search and Control Toolbar */}
                     {currentTrack.rawLyrics && (
-                      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 bg-app-card border border-app-card-border rounded-[1.25rem] p-1.5 focus-within:border-app-accent/50 transition-all mb-4 mx-1">
-                        {/* Search Input Section */}
-                        <div className="relative flex-1 flex items-center min-w-0">
-                          <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-app-fg opacity-40">
-                            <Search size={18} />
+                      <>
+                        {/* Row 1: Search Input (Static - scrolls naturally, does not stick) */}
+                        <div className="px-3 sm:px-6 mb-3">
+                          <div className="relative flex items-center min-w-0 bg-app-card border border-app-card-border rounded-[1.25rem] p-1.5 focus-within:border-app-accent/50 transition-all">
+                            <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-app-fg opacity-40">
+                              <Search size={18} />
+                            </div>
+                            <input
+                              type="text"
+                              placeholder="Search original text, translations, or phrases in lyrics..."
+                              value={trackSearchQuery}
+                              onChange={(e) => setTrackSearchQuery(e.target.value)}
+                              className="w-full pl-10 pr-8 py-2 bg-transparent text-base md:text-lg font-medium text-app-fg placeholder-app-fg/30 focus:outline-none font-sans"
+                            />
+                            {trackSearchQuery && (
+                              <button
+                                onClick={() => setTrackSearchQuery("")}
+                                className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-app-fg opacity-45 hover:opacity-100 transition-opacity"
+                              >
+                                <X size={14} />
+                              </button>
+                            )}
                           </div>
-                          <input
-                            type="text"
-                            placeholder="Search original text, translations, or phrases in lyrics..."
-                            value={trackSearchQuery}
-                            onChange={(e) => setTrackSearchQuery(e.target.value)}
-                            className="w-full pl-10 pr-8 py-2 bg-transparent text-base md:text-lg font-medium text-app-fg placeholder-app-fg/30 focus:outline-none font-sans"
-                          />
-                          {trackSearchQuery && (
-                            <button
-                              onClick={() => setTrackSearchQuery("")}
-                              className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-app-fg opacity-45 hover:opacity-100 transition-opacity"
-                            >
-                              <X size={14} />
-                            </button>
-                          )}
                         </div>
 
-                        {/* Divider Line */}
-                        <div className="hidden sm:block w-[1px] h-5 bg-app-card-border/60 self-center" />
+                        {/* Row 2: Control panel (Sticky, compact, aligned to the right edge of the lyric block) */}
+                        <div className="sticky top-0 z-40 bg-transparent pointer-events-none py-1 mb-2 flex justify-end px-3 sm:px-6">
+                          <div className="flex items-center gap-1 bg-app-card/95 backdrop-blur-md border border-app-card-border rounded-xl p-1 shadow-md shrink-0 pointer-events-auto">
+                            {(() => {
+                              const srcLangObj = SUPPORTED_LANGUAGES.find(l => 
+                                l.name.toLowerCase() === (currentTrack?.sourceLanguage || "English").toLowerCase() ||
+                                l.code.toLowerCase() === (currentTrack?.sourceLanguage || "English").toLowerCase()
+                              );
+                              const srcLangCode = srcLangObj ? srcLangObj.code : "EN";
 
-                        {/* Language Selection Buttons Capsule */}
-                        <div className="flex items-center gap-1 justify-end shrink-0 bg-app-card/30 dark:bg-app-bg/20 rounded-xl p-0.5 border border-app-card-border/30">
-                          {(() => {
-                            const srcLangObj = SUPPORTED_LANGUAGES.find(l => 
-                              l.name.toLowerCase() === (currentTrack?.sourceLanguage || "English").toLowerCase() ||
-                              l.code.toLowerCase() === (currentTrack?.sourceLanguage || "English").toLowerCase()
-                            );
-                            const srcLangCode = srcLangObj ? srcLangObj.code : "EN";
+                              const targetLangObj = SUPPORTED_LANGUAGES.find(l => 
+                                l.name.toLowerCase() === (targetLanguage || "Russian").toLowerCase() ||
+                                l.code.toLowerCase() === (targetLanguage || "Russian").toLowerCase()
+                              );
+                              const targetLangCode = targetLangObj ? targetLangObj.code : "RU";
 
-                            const targetLangObj = SUPPORTED_LANGUAGES.find(l => 
-                              l.name.toLowerCase() === (targetLanguage || "Russian").toLowerCase() ||
-                              l.code.toLowerCase() === (targetLanguage || "Russian").toLowerCase()
-                            );
-                            const targetLangCode = targetLangObj ? targetLangObj.code : "RU";
+                              const isSrcActive = lyricsDisplayMode === "lyrics" || lyricsDisplayMode === "both";
+                              const isTargetActive = lyricsDisplayMode === "translation" || lyricsDisplayMode === "both";
 
-                            const isSrcActive = lyricsDisplayMode === "lyrics" || lyricsDisplayMode === "both";
-                            const isTargetActive = lyricsDisplayMode === "translation" || lyricsDisplayMode === "both";
+                              const btnBase = "w-9 h-9 rounded-lg flex items-center justify-center transition-all duration-200 outline-none select-none cursor-pointer relative active:scale-95 text-xs font-bold";
+                              const activeClass = "bg-app-accent text-white shadow-md font-black border-transparent";
+                              const inactiveClass = "text-app-fg opacity-65 hover:opacity-100 hover:bg-app-fg/5";
 
-                            return (
-                              <>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    if (isSrcActive) {
-                                      if (!isTargetActive) return; // cannot turn off both
-                                      handleSetLyricsDisplayMode("translation");
-                                    } else {
-                                      handleSetLyricsDisplayMode("both");
-                                    }
-                                  }}
-                                  title={`Toggle ${currentTrack?.sourceLanguage || "Original"} Lyrics`}
-                                  className={cn(
-                                    "px-2.5 py-1 rounded-lg font-black transition-all uppercase tracking-wider text-[9px] flex items-center gap-1",
-                                    isSrcActive
-                                      ? "bg-app-accent text-white shadow-sm"
-                                      : "text-app-fg opacity-65 hover:opacity-100"
-                                  )}
-                                >
-                                  {isSrcActive && <Check size={8} />}
-                                  <span>{srcLangCode}</span>
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    if (isTargetActive) {
-                                      if (!isSrcActive) return; // cannot turn off both
-                                      handleSetLyricsDisplayMode("lyrics");
-                                    } else {
-                                      handleSetLyricsDisplayMode("both");
-                                    }
-                                  }}
-                                  title={`Toggle ${targetLanguage || "Target"} Translation`}
-                                  className={cn(
-                                    "px-2.5 py-1 rounded-lg font-black transition-all uppercase tracking-wider text-[9px] flex items-center gap-1",
-                                    isTargetActive
-                                      ? "bg-app-accent text-white shadow-sm"
-                                      : "text-app-fg opacity-65 hover:opacity-100"
-                                  )}
-                                >
-                                  {isTargetActive && <Check size={8} />}
-                                  <span>{targetLangCode}</span>
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleRegenerateTranslations(targetLanguage)}
-                                  disabled={isTranslating}
-                                  title="Regenerate Translation"
-                                  className={cn(
-                                    "p-1.5 rounded-lg transition-all text-app-fg hover:bg-app-fg/5 flex items-center justify-center outline-none",
-                                    isTranslating ? "opacity-50 cursor-not-allowed" : "opacity-60 hover:opacity-100"
-                                  )}
-                                >
-                                  <RefreshCw size={10} className={cn("transition-transform duration-500", isTranslating ? "animate-spin" : "")} />
-                                </button>
-                              </>
-                            );
-                          })()}
+                              return (
+                                <>
+                                  {/* Source Lang Button */}
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      if (isSrcActive) {
+                                        if (!isTargetActive) return; // cannot turn off both
+                                        handleSetLyricsDisplayMode("translation");
+                                      } else {
+                                        handleSetLyricsDisplayMode("both");
+                                      }
+                                    }}
+                                    title={`Toggle ${currentTrack?.sourceLanguage || "Original"} Lyrics`}
+                                    className={cn(btnBase, isSrcActive ? activeClass : inactiveClass)}
+                                  >
+                                    <span className="text-[10px] font-black uppercase tracking-wider">{srcLangCode}</span>
+                                  </button>
+
+                                  {/* Target Lang Button */}
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      if (isTargetActive) {
+                                        if (!isSrcActive) return; // cannot turn off both
+                                        handleSetLyricsDisplayMode("lyrics");
+                                      } else {
+                                        handleSetLyricsDisplayMode("both");
+                                      }
+                                    }}
+                                    title={`Toggle ${targetLanguage || "Target"} Translation`}
+                                    className={cn(btnBase, isTargetActive ? activeClass : inactiveClass)}
+                                  >
+                                    <span className="text-[10px] font-black uppercase tracking-wider">{targetLangCode}</span>
+                                  </button>
+
+                                  {/* Vertical Divider inside Panel */}
+                                  <div className="w-[1px] h-5 bg-app-card-border/40 mx-1" />
+
+                                  {/* Star/Favorites Filter Button */}
+                                  <button
+                                    type="button"
+                                    onClick={handleToggleStarFilter}
+                                    title="Show Starred Lines Only"
+                                    className="w-9 h-9 rounded-lg flex items-center justify-center transition-all hover:scale-110 active:scale-90"
+                                  >
+                                    {isStarFilterActive ? (
+                                      <Star size={20} className="fill-amber-400 text-amber-500 drop-shadow-sm" />
+                                    ) : (
+                                      <Star size={20} className="text-app-fg/20 hover:text-amber-500/80 transition-all" />
+                                    )}
+                                  </button>
+                                </>
+                              );
+                            })()}
+                          </div>
                         </div>
-                      </div>
+                      </>
                     )}
+
                     {currentTrack.rawLyrics ? (() => {
                       let linesToRender = currentTrack.lines || [];
                       if (isStarFilterActive) {
@@ -2986,8 +2927,12 @@ export default function App() {
                         );
                       }
 
-                      return linesToRender.map((line: any) =>
-                        renderLyricLine(line.original, line.index, false, false),
+                      return (
+                        <div className="flex flex-col gap-1 pr-1">
+                          {linesToRender.map((line: any) =>
+                            renderLyricLine(line.original, line.index, false, false),
+                          )}
+                        </div>
                       );
                     })() : (
                       <div className="flex flex-col items-center justify-center py-20 text-center space-y-8">
@@ -3376,19 +3321,6 @@ export default function App() {
                         >
                           <Mic2 size={20} />
                         </button>
-                        <div className="w-[1px] h-4 bg-app-card-border/65 self-center mx-1" />
-                        <button
-                          onClick={handleToggleStarFilter}
-                          className={cn(
-                            "p-2 rounded-full transition-all active:scale-90",
-                            isStarFilterActive
-                              ? "bg-amber-500 text-white shadow-lg"
-                              : "text-amber-500/60 hover:text-amber-500 hover:bg-amber-500/5",
-                          )}
-                          title="Star Filter"
-                        >
-                          <Star size={20} className={isStarFilterActive ? "fill-white text-white" : "text-current"} />
-                        </button>
                       </div>
                     ) : (
                       /* Minimalist info / iTunes Attribution */
@@ -3472,27 +3404,13 @@ export default function App() {
                   {/* Right: Tools */}
                   <div className="flex-1 flex justify-end items-center gap-1 pr-1">
                     {activeTab !== "preview" && (
-                      <>
-                        <button
-                          onClick={() => setIsMuted(!isMuted)}
-                          className={cn(
-                            "w-10 h-10 rounded-full flex items-center justify-center transition-all active:scale-95",
-                            isMuted
-                              ? "text-red-500 bg-red-500/10 opacity-100"
-                              : "text-app-fg opacity-60 hover:opacity-100 hover:bg-app-fg/5",
-                          )}
-                          title={isMuted ? "Unmute" : "Mute"}
-                        >
-                          {isMuted ? <VolumeX size={20} /> : <Volume2 size={20} />}
-                        </button>
-                        <button
-                          onClick={() => setIsLyricsSettingsOpen(true)}
-                          className="w-10 h-10 rounded-full flex items-center justify-center text-app-fg opacity-60 hover:opacity-100 hover:bg-app-fg/5 transition-all active:scale-95"
-                          title="Settings"
-                        >
-                          <Settings size={20} />
-                        </button>
-                      </>
+                      <button
+                        onClick={() => setIsLyricsSettingsOpen(true)}
+                        className="w-10 h-10 rounded-full flex items-center justify-center text-app-fg opacity-60 hover:opacity-100 hover:bg-app-fg/5 transition-all active:scale-95"
+                        title="Settings"
+                      >
+                        <Settings size={20} />
+                      </button>
                     )}
                     <button
                       onClick={() => setIsResourcesOpen(true)}
@@ -4029,6 +3947,32 @@ export default function App() {
                         animate={{ x: skipKnownPhrases ? 24 : 0 }}
                         className="absolute inset-y-1 left-1 w-4 h-4 rounded-full bg-white shadow-sm"
                       />
+                    </button>
+                  </div>
+
+                  <div className="flex items-center justify-between p-5 rounded-3xl bg-app-card border border-app-card-border">
+                    <div className="space-y-1">
+                      <p className="font-bold text-app-fg">
+                        Translation
+                      </p>
+                      <p className="text-xs text-app-fg opacity-40">
+                        Regenerate lyrics translation
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleRegenerateTranslations(targetLanguage);
+                        setIsLyricsSettingsOpen(false);
+                      }}
+                      disabled={isTranslating}
+                      className={cn(
+                        "px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 border border-app-card-border hover:bg-app-fg/5",
+                        isTranslating ? "opacity-50 cursor-not-allowed" : "opacity-100"
+                      )}
+                    >
+                      <RefreshCw size={12} className={cn(isTranslating ? "animate-spin" : "")} />
+                      <span>{isTranslating ? "Translating..." : "Regenerate"}</span>
                     </button>
                   </div>
                 </div>

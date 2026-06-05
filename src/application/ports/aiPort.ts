@@ -25,6 +25,7 @@ export interface TrackMeaningResult {
   promptVersion?: number;
   translationPromptVersion?: number;
   rawLyrics?: string;
+  source?: string | null;
   lines?: any[];
 }
 
