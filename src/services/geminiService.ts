@@ -636,11 +636,12 @@ Text: ${text.slice(0, 300)}`;
 export async function explainPhraseStructured(phrase: string, targetLanguage: string) {
   const prompt = `Explain the following foreign phrase in ${targetLanguage}: "${phrase}".
 CRITICAL: The explanation MUST be written entirely in ${targetLanguage}.
+If the phrase is inflected/conjugated, please first normalize it to its canonical/base/dictionary form, and use that as the explanation/translation base.
 
 Return a JSON object:
 {
   "translation": "Natural translation",
-  "explanation": "Detailed grammar/idiom note"
+  "explanation": "Extremely brief, compact 1-sentence note or meaning list (no long verbose explanations)"
 }
 
 Return ONLY clean JSON.`;
@@ -1366,11 +1367,11 @@ INSTRUCTIONS:
 2. Provide a list of 1-3 highly notable linguistic aspects (notes) from the current line. Each note must target an interesting part of this line.
 3. For each note, assign one of these exact types: "idiom", "cultural", "collocation", "grammar", "nuance".
 4. For each note, try to extract:
-   - "sourceText": the specific substring/word/phrase from the current line that the note refers to (e.g. "hold on", "love").
+   - "sourceText": the Specific substring/word/phrase from the current line that the note refers to, normalized to its dictionary/canonical/base form (e.g. if the line has 'was running', return 'run'; if 'worse', return 'bad'). Do NOT just duplicate the inflected surface form from the line.
    - "translation": a short precise meaning or translation of the sourceText in "${targetLanguage || "English"}".
    - "entryType": whether the sourceText acts as a single "word" or an "expression".
 5. Do NOT suggest list of phrases/words or return suggestions.
-6. Provide a short, direct explanation for each note in "text".
+6. Provide an EXTREMELY concise meaning, translation, or short list of meanings in "text". Avoid any long-winded, verbose grammatical or cultural explanations. It should be highly compact, readable at a single glance.
 7. The entire output must be valid JSON matching the schema precisely.
 
 Return a valid JSON object with the following structure exactly:
@@ -1379,8 +1380,8 @@ Return a valid JSON object with the following structure exactly:
   "notes": [
     {
       "type": "idiom" | "cultural" | "collocation" | "grammar" | "nuance",
-      "text": "short clear explanation focusing on a specific part of the line",
-      "sourceText": "the raw fragment/word from the original current line (optional)",
+      "text": "very short, concise translation or meanings list (1-5 words)",
+      "sourceText": "normalized canonical/dictionary base form of the extracted word/phrase",
       "translation": "brief meaning or translation of the sourceText (optional)",
       "entryType": "word" | "expression" (optional)
     }

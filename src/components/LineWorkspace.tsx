@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { 
-  Brain, Check, Plus, Trash2, Edit2, Sparkles, X, MessageSquare
+  Brain, Check, Plus, Trash2, Edit2, Sparkles, X, MessageSquare, MoreVertical
 } from "lucide-react";
 import { cn } from "../lib/utils";
 
@@ -175,7 +175,24 @@ export const LineWorkspace = ({
   const [trans, setTrans] = useState(lineTranslation || "");
   const [items, setItems] = useState<LineItem[]>(getInitialItems());
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
   
+  const editContainerRef = useRef<HTMLDivElement | null>(null);
+
+  // Close editing state by clicking outside
+  useEffect(() => {
+    if (!editingId) return;
+    const handleClickOutside = (event: MouseEvent) => {
+      if (editContainerRef.current && !editContainerRef.current.contains(event.target as Node)) {
+        setEditingId(null);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [editingId]);
+
   // Controls tag editing on active edit phrase
   const [tagInput, setTagInput] = useState("");
   const [selectedTagIndex, setSelectedTagIndex] = useState(0);
@@ -396,11 +413,11 @@ export const LineWorkspace = ({
   return (
     <div 
       onClick={(e) => e.stopPropagation()}
-      className="mt-1 mb-2 pl-4 sm:pl-5 select-text font-sans relative"
+      className="mt-1 mb-2 pl-4 sm:pl-7 select-text font-sans relative"
       id={`workspace-wrapper-${i}`}
     >
       {/* Lyric line translation block at the top */}
-      <div className="flex items-start gap-2 py-1 select-text pr-1">
+      <div className="flex items-start gap-2 select-text pr-1">
         <textarea
           id={`lyrics-translation-input-${i}`}
           value={trans}
@@ -428,8 +445,8 @@ export const LineWorkspace = ({
             }
           }}
           className={cn(
-            "w-full bg-transparent border-b border-transparent hover:border-app-card-border/35 focus:border-[var(--accent)]/40 focus:outline-none font-serif italic text-app-fg opacity-40 transition-all duration-300 ml-1 mt-0.5 leading-snug py-0.5 resize-none",
-            isCompact ? "text-sm" : "text-lg"
+            "w-full bg-transparent border-none focus:outline-none font-serif italic text-app-fg opacity-40 transition-all duration-300 ml-1 mt-0.5 leading-snug p-0 resize-none overflow-hidden",
+            isCompact ? "text-xs" : "text-base"
           )}
           placeholder="Add line translation/meaning..."
         />
@@ -439,7 +456,7 @@ export const LineWorkspace = ({
         Single Outliner Stack: 
         No subtitles or noisy nested divisions. 
       */}
-      <div className="border-l border-app-card-border/10 pl-5 space-y-1 ml-1 relative">
+      <div className="border-l border-app-card-border/10 pl-3.5 sm:pl-5 space-y-1 ml-1 relative">
         {items.map((item, nIdx) => {
           const isEditing = editingId === item.id;
           
@@ -484,8 +501,8 @@ export const LineWorkspace = ({
                       }}
                       rows={1}
                       className={cn(
-                        "w-full bg-transparent border-b border-transparent hover:border-app-card-border/30 focus:border-[var(--accent)]/40 focus:outline-none py-0.5 resize-none font-sans leading-relaxed overflow-hidden",
-                        isCompact ? "text-sm" : "text-lg"
+                        "w-full bg-transparent border-b border-transparent hover:border-app-card-border/30 focus:border-[var(--accent)]/40 focus:outline-none py-0.5 resize-none font-serif italic leading-relaxed overflow-hidden text-app-fg/50 focus:text-app-fg",
+                        isCompact ? "text-xs" : "text-base"
                       )}
                     />
                   </div>
@@ -496,15 +513,15 @@ export const LineWorkspace = ({
                   >
                     {hasTextVal ? (
                       <span className={cn(
-                        "font-sans tracking-normal leading-relaxed text-app-fg/80",
-                        isCompact ? "text-sm" : "text-lg"
+                        "font-serif italic tracking-normal leading-relaxed text-app-fg/40 hover:text-app-fg/75 transition-colors",
+                        isCompact ? "text-xs" : "text-base"
                       )}>
                         {item.text}
                       </span>
                     ) : (
                       <span className={cn(
-                        "italic font-light select-none font-sans text-app-fg/30",
-                        isCompact ? "text-sm" : "text-lg"
+                        "italic font-light select-none font-serif text-app-fg/20",
+                        isCompact ? "text-xs" : "text-base"
                       )}>
                         Empty note. Click to comment...
                       </span>
@@ -512,26 +529,46 @@ export const LineWorkspace = ({
                   </div>
                 )}
 
-                {/* Unified subtle hover control icons */}
-                <div className="flex items-center gap-1 opacity-0 group-hover/item:opacity-100 transition-opacity shrink-0 ml-1.5 select-none">
-                  {!isEditing && (
+                {/* Unified subtle hover control icons without edit button */}
+                <div className="flex items-center gap-1.5 opacity-0 group-hover/item:opacity-100 transition-opacity shrink-0 ml-1.5 select-none relative">
+                  <div className="relative">
                     <button
                       type="button"
-                      onClick={() => setEditingId(item.id)}
-                      title="Edit note"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setActiveMenuId(activeMenuId === item.id ? null : item.id);
+                      }}
                       className="p-1 rounded text-app-fg/30 hover:bg-app-fg/5 hover:text-app-fg transition-colors cursor-pointer"
+                      title="Options"
                     >
-                      <Edit2 size={12} />
+                      <MoreVertical size={13} />
                     </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => handleDeleteItem(item.id)}
-                    title="Delete note pointer"
-                    className="p-1 rounded text-red-500/35 hover:bg-red-500/5 hover:text-red-500 transition-colors cursor-pointer"
-                  >
-                    <Trash2 size={12} />
-                  </button>
+                    {activeMenuId === item.id && (
+                      <>
+                        <div 
+                          className="fixed inset-0 z-40" 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setActiveMenuId(null);
+                          }}
+                        />
+                        <div className="absolute right-0 mt-1 bg-app-card border border-app-card-border/60 shadow-lg rounded-xl py-1 px-1 z-50 min-w-[100px] text-xs">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteItem(item.id);
+                              setActiveMenuId(null);
+                            }}
+                            className="w-full flex items-center gap-1.5 px-2.5 py-1.5 text-red-500 hover:bg-red-500/5 hover:text-red-500 rounded bg-transparent border-none text-left cursor-pointer font-sans"
+                          >
+                            <Trash2 size={12} />
+                            <span>Delete</span>
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
                 </div>
               </div>
             );
@@ -587,8 +624,8 @@ export const LineWorkspace = ({
                       }}
                       rows={1}
                       className={cn(
-                        "w-full bg-transparent border-b border-app-card-border/25 focus:border-[var(--accent)]/45 focus:outline-none font-semibold text-app-fg py-0.5 placeholder:text-app-fg/20 resize-none overflow-hidden leading-relaxed",
-                        isCompact ? "text-sm" : "text-lg"
+                        "w-full bg-transparent border-b border-app-card-border/25 focus:border-[var(--accent)]/45 focus:outline-none font-serif italic font-semibold text-app-fg py-0.5 placeholder:text-app-fg/20 resize-none overflow-hidden leading-relaxed",
+                        isCompact ? "text-xs" : "text-base"
                       )}
                     />
                   </div>
@@ -618,8 +655,8 @@ export const LineWorkspace = ({
                       }}
                       rows={1}
                       className={cn(
-                        "w-full bg-transparent border-b border-app-card-border/25 focus:border-[var(--accent)]/45 focus:outline-none text-app-fg/90 py-0.5 placeholder:text-app-fg/20 resize-none overflow-hidden leading-relaxed",
-                        isCompact ? "text-sm" : "text-lg"
+                        "w-full bg-transparent border-b border-app-card-border/25 focus:border-[var(--accent)]/45 focus:outline-none font-serif italic text-app-fg/90 py-0.5 placeholder:text-app-fg/20 resize-none overflow-hidden leading-relaxed",
+                        isCompact ? "text-xs" : "text-base"
                       )}
                     />
                   </div>
@@ -657,19 +694,6 @@ export const LineWorkspace = ({
                   </div>
                 </div>
 
-                {/* Close editing triggers */}
-                <div className="flex items-center justify-end gap-1 select-none pt-0.5">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      // Save and collapse active edits
-                      setEditingId(null);
-                    }}
-                    className="px-3 py-1 text-[11px] font-bold text-[var(--accent)] bg-[var(--accent)]/5 hover:bg-[var(--accent)]/10 rounded-xl cursor-pointer transition-colors"
-                  >
-                    Done
-                  </button>
-                </div>
               </div>
             );
           }
@@ -682,87 +706,173 @@ export const LineWorkspace = ({
           return (
             <div 
               key={item.id}
-              className="group/item flex items-center justify-between gap-2 py-0.5 hover:bg-app-fg/[0.012] rounded px-1 relative transition-all text-app-fg/80"
+              className={cn(
+                "group/item flex flex-col sm:flex-row justify-between sm:items-center gap-2 py-2 px-3 sm:px-3.5 rounded-2xl relative transition-all border select-none sm:select-text",
+                isAlreadyInDictionary && existingCard
+                  ? existingCard.status === "known"
+                    ? "bg-emerald-500/[0.04] hover:bg-emerald-500/[0.07] border-emerald-500/10"
+                    : "bg-orange-500/[0.04] hover:bg-orange-500/[0.07] border-orange-500/10"
+                  : "bg-transparent hover:bg-app-fg/[0.015] border-transparent"
+              )}
               id={`phrase-read-${item.id}`}
             >
               {/* Bullet and compact literal values stack */}
               <div 
                 onClick={() => setEditingId(item.id)}
                 className={cn(
-                  "flex-1 flex items-center gap-1.5 min-w-0 overflow-hidden cursor-pointer select-text font-sans",
-                  isCompact ? "text-sm" : "text-lg"
+                  "flex-1 flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5 min-w-0 cursor-pointer select-text font-serif italic",
+                  isCompact ? "text-xs" : "text-base"
                 )}
               >
-                <span className="text-app-fg/20 font-black shrink-0 mt-0.5 select-none font-mono text-base">◦</span>
+                <span className="text-app-fg/20 font-black shrink-0 select-none font-mono text-base mr-0.5">◦</span>
                 
-                <span className={cn("font-semibold text-app-fg shrink-0", isCompact ? "text-sm" : "text-lg")}>
+                <span className="font-semibold text-app-fg/40 group-hover/item:text-app-fg/75 transition-colors break-words">
                   {phraseText || <span className="text-app-fg/20 lowercase italic font-normal">[unsigned word]</span>}
                 </span>
 
-                <span className="text-app-fg/20 font-light select-none shrink-0">—</span>
+                <span className="text-app-fg/20 font-light select-none">—</span>
 
-                <span className={cn("text-app-fg/80 truncate", isCompact ? "text-sm" : "text-lg")}>
+                <span className="text-app-fg/40 group-hover/item:text-app-fg/75 transition-colors break-words">
                   {translationText || <span className="text-app-fg/20 lowercase italic font-normal">[unsigned translation]</span>}
                 </span>
 
                 {/* Subdued category and tag text labels */}
-                <span className="inline-flex items-center gap-1.5 shrink-0 text-[10px] select-none text-app-fg/35 pl-1 flex-wrap">
+                <span className="inline-flex flex-wrap items-center gap-1.5 text-[10px] select-none text-app-fg/30 group-hover/item:text-app-fg/50 transition-colors pl-1">
                   <span className="font-light">·</span>
                   <span className="italic">{cleanDisplayUrlLabel}</span>
                   {wordTags.map((t) => (
                     <span key={t} className="font-light italic shrink-0">#{t}</span>
                   ))}
-                  
-                  {/* Sync status identifier badges */}
-                  {isAlreadyInDictionary && existingCard && (
-                    <span className={cn(
-                      "font-semibold lowercase border-l border-app-card-border/10 pl-1.5 shrink-0",
-                      existingCard.status === "known" ? "text-emerald-500/55" : "text-orange-500/55"
-                    )}>
-                      #{existingCard.status === "known" ? "known" : "learning"}
-                    </span>
-                  )}
                 </span>
               </div>
 
-              {/* Hover action bar */}
-              <div className="flex items-center gap-1 opacity-0 group-hover/item:opacity-100 transition-opacity shrink-0 ml-2 select-none">
+              {/* Hover action bar replacing old icons with Know / Learn action pills */}
+              <div className="flex items-center gap-1.5 shrink-0 ml-auto sm:ml-2 mt-1 sm:mt-0 select-none">
+                {/* Primary visible actions on Desktop: Know and Learn */}
                 <button
                   type="button"
-                  onClick={() => setEditingId(item.id)}
-                  title="Edit word details"
-                  className="p-1 rounded text-app-fg/30 hover:bg-app-fg/5 hover:text-app-fg transition-colors cursor-pointer"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (isAlreadyInDictionary && existingCard) {
+                      if (onEditCardFields) onEditCardFields(existingCard.id, { status: "known" });
+                    } else {
+                      if (onAddNoteToDictionary) onAddNoteToDictionary(i, item, nIdx, "known");
+                    }
+                  }}
+                  className={cn(
+                    "hidden sm:inline-flex items-center justify-center px-3 py-1 rounded-xl text-[11px] font-bold transition-all cursor-pointer border",
+                    isAlreadyInDictionary && existingCard?.status === "known"
+                      ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 shadow-sm"
+                      : "bg-transparent text-app-fg/40 hover:text-emerald-500 border-transparent hover:bg-emerald-500/5"
+                  )}
                 >
-                  <Edit2 size={12} />
+                  Know
                 </button>
                 <button
                   type="button"
-                  onClick={() => handleDeleteItem(item.id)}
-                  title="Remove word bullet"
-                  className="p-1 rounded text-red-500/35 hover:bg-red-500/5 hover:text-red-500 transition-colors cursor-pointer"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (isAlreadyInDictionary && existingCard) {
+                      if (onEditCardFields) onEditCardFields(existingCard.id, { status: "learning" });
+                    } else {
+                      if (onAddNoteToDictionary) onAddNoteToDictionary(i, item, nIdx, "learning");
+                    }
+                  }}
+                  className={cn(
+                    "hidden sm:inline-flex items-center justify-center px-3 py-1 rounded-xl text-[11px] font-bold transition-all cursor-pointer border",
+                    isAlreadyInDictionary && existingCard?.status === "learning"
+                      ? "bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/20 shadow-sm"
+                      : "bg-transparent text-app-fg/40 hover:text-orange-500 border-transparent hover:bg-orange-500/5"
+                  )}
                 >
-                  <Trash2 size={12} />
+                  Learn
                 </button>
-                {onAddNoteToDictionary && (
+
+                {/* Vertical menu with 3-dots */}
+                <div className="relative">
                   <button
                     type="button"
-                    onClick={() => {
-                      if (!isAlreadyInDictionary) {
-                        onAddNoteToDictionary(i, item, nIdx);
-                      }
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setActiveMenuId(activeMenuId === item.id ? null : item.id);
                     }}
-                    disabled={isAlreadyInDictionary}
-                    className={cn(
-                      "p-1 rounded transition-colors cursor-pointer",
-                      isAlreadyInDictionary 
-                        ? "text-emerald-500 bg-emerald-500/5"
-                        : "hover:bg-app-fg/5 text-app-fg/40 hover:text-[var(--accent)]"
-                    )}
-                    title={isAlreadyInDictionary ? "Saved in study cards" : "Add to Study Cards"}
+                    className="p-1.5 rounded-lg text-app-fg/30 hover:bg-app-fg/5 hover:text-app-fg transition-colors cursor-pointer"
+                    title="Options"
                   >
-                    {isAlreadyInDictionary ? <Check size={11} className="stroke-[3.5px]" /> : <Plus size={11} className="stroke-[2.5]" />}
+                    <MoreVertical size={13} />
                   </button>
-                )}
+                  {activeMenuId === item.id && (
+                    <>
+                      <div 
+                        className="fixed inset-0 z-40" 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setActiveMenuId(null);
+                        }}
+                      />
+                      <div className="absolute right-0 mt-1.5 bg-app-card border border-app-card-border/60 shadow-lg rounded-xl py-1 px-1 z-50 min-w-[130px] text-xs">
+                        {/* Mobile active menu buttons listed inside dropdown */}
+                        <div className="flex flex-col sm:hidden border-b border-app-card-border/40 pb-1 mb-1 gap-0.5">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (isAlreadyInDictionary && existingCard) {
+                                if (onEditCardFields) onEditCardFields(existingCard.id, { status: "known" });
+                              } else {
+                                if (onAddNoteToDictionary) onAddNoteToDictionary(i, item, nIdx, "known");
+                              }
+                              setActiveMenuId(null);
+                            }}
+                            className={cn(
+                              "w-full flex items-center justify-between px-2.5 py-1.5 rounded text-left font-sans font-medium transition-all cursor-pointer",
+                              isAlreadyInDictionary && existingCard?.status === "known"
+                                ? "text-emerald-600 dark:text-emerald-400 bg-emerald-500/10"
+                                : "text-app-fg/70 hover:bg-app-fg/5"
+                            )}
+                          >
+                            <span>Know</span>
+                            {isAlreadyInDictionary && existingCard?.status === "known" && <Check size={12} />}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (isAlreadyInDictionary && existingCard) {
+                                if (onEditCardFields) onEditCardFields(existingCard.id, { status: "learning" });
+                              } else {
+                                if (onAddNoteToDictionary) onAddNoteToDictionary(i, item, nIdx, "learning");
+                              }
+                              setActiveMenuId(null);
+                            }}
+                            className={cn(
+                              "w-full flex items-center justify-between px-2.5 py-1.5 rounded text-left font-sans font-medium transition-all cursor-pointer",
+                              isAlreadyInDictionary && existingCard?.status === "learning"
+                                ? "text-orange-600 dark:text-orange-400 bg-orange-500/10"
+                                : "text-app-fg/70 hover:bg-app-fg/5"
+                            )}
+                          >
+                            <span>Learn</span>
+                            {isAlreadyInDictionary && existingCard?.status === "learning" && <Check size={12} />}
+                          </button>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteItem(item.id);
+                            setActiveMenuId(null);
+                          }}
+                          className="w-full flex items-center gap-1.5 px-2.5 py-1.5 text-red-500 hover:bg-red-500/5 hover:text-red-500 rounded bg-transparent border-none text-left cursor-pointer font-sans font-medium"
+                        >
+                          <Trash2 size={12} />
+                          <span>Delete</span>
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
               </div>
             </div>
           );

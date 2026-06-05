@@ -287,6 +287,7 @@ const LyricLine = ({
   const [explanationError, setExplanationError] = useState<string | null>(null);
 
   const cachedExpl = currentTrack?.lines?.[i]?.explanation;
+  const hasNestedExpl = !!(cachedExpl?.notes && cachedExpl.notes.length > 0);
   const summary = cachedExpl?.summary || "";
   const notes = cachedExpl?.notes || null;
 
@@ -473,7 +474,7 @@ const LyricLine = ({
         transition={{ delay: Math.min(i * 0.01, 1) }}
         className={cn(
           "group relative flex flex-col gap-1 rounded-2xl cursor-pointer z-10 transition-all duration-200 border border-transparent",
-          isCompact ? "px-4 py-0.5" : "px-6 py-1",
+          isCompact ? "px-2 sm:px-4 py-0.5" : "px-3 sm:px-6 py-1",
           activeLineIndex === i
             ? "bg-app-card/30 border-app-card-border/10"
             : "hover:bg-app-fg/[0.02]",
@@ -483,7 +484,7 @@ const LyricLine = ({
           handleLineClick(line, i);
         }}
       >
-        <div className="flex items-center w-full relative z-10 pl-6 sm:pl-7">
+        <div className="flex items-center w-full relative z-10 pl-4 sm:pl-7">
           {trimmedLine && (
             <button
               type="button"
@@ -491,14 +492,21 @@ const LyricLine = ({
                 e.stopPropagation();
                 handleToggleExplanation();
               }}
-              className="absolute left-0 sm:left-1 top-2 p-1 rounded hover:bg-app-fg/5 text-app-fg/20 hover:text-app-fg transition-all shrink-0 select-none cursor-pointer"
+              className={cn(
+                "absolute left-0 sm:left-1 top-2 p-1 rounded hover:bg-app-fg/5 transition-all shrink-0 select-none cursor-pointer",
+                isExplaining 
+                  ? "text-[var(--accent)]" 
+                  : hasNestedExpl 
+                    ? "text-[var(--accent)]/80 hover:text-[var(--accent)] scale-110" 
+                    : "text-app-fg/20 hover:text-app-fg"
+              )}
               title={isExplaining ? "Collapse Outline" : "Expand Outline"}
             >
               <ChevronRight
                 size={14}
                 className={cn(
                   "transition-transform duration-200 stroke-[2.5]",
-                  isExplaining && "rotate-90 text-[var(--accent)]"
+                  isExplaining && "rotate-90"
                 )}
               />
             </button>
@@ -536,7 +544,7 @@ const LyricLine = ({
           )}
         </div>
 
-        <div className="pl-1 relative z-10">
+        <div className="relative z-10">
           <AnimatePresence initial={false}>
             {(activeLineIndex === i || alwaysShowTranslation || isBoth) && (
               <motion.div
@@ -544,15 +552,13 @@ const LyricLine = ({
                 initial={{ opacity: 0, height: 0 }}
                 animate={{ opacity: 1, height: "auto" }}
                 exit={{ opacity: 0, height: 0 }}
-                className="space-y-1 pl-6 sm:pl-7"
+                className="space-y-1 pl-4 sm:pl-7"
               >
                 {displayTranslation && showUnderTranslation && !isExplaining && (
                   <p
                     className={cn(
                       "font-serif italic text-app-fg opacity-40 transition-all duration-300 ml-1 mt-0.5",
-                      activeLineIndex === i
-                        ? isCompact ? "text-sm" : "text-lg"
-                        : isCompact ? "text-xs" : "text-base",
+                      isCompact ? "text-xs" : "text-base",
                     )}
                   >
                     {displayTranslation}

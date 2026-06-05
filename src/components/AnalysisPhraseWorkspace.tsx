@@ -413,7 +413,7 @@ export const AnalysisPhraseWorkspace: React.FC<AnalysisPhraseWorkspaceProps> = (
                             {idx + 1}.
                           </span>
 
-                          <h3 className="text-xl font-serif text-app-fg leading-snug">
+                          <h3 className="text-lg font-sans font-semibold text-app-fg leading-snug">
                             {highlightMatch(item.text, trackSearchQuery)}
                           </h3>
 
@@ -436,7 +436,7 @@ export const AnalysisPhraseWorkspace: React.FC<AnalysisPhraseWorkspaceProps> = (
 
                         {/* Second line: Translation with subtle horizontal indentation aligning with the text */}
                         {item.translation && (
-                          <p className="text-base font-serif italic text-app-fg opacity-40 leading-snug pl-6 mt-1 transition-all">
+                          <p className="text-sm font-sans text-app-fg/60 leading-snug pl-6 mt-1 transition-all">
                             {highlightMatch(item.translation, trackSearchQuery)}
                           </p>
                         )}
@@ -534,14 +534,14 @@ export const AnalysisPhraseWorkspace: React.FC<AnalysisPhraseWorkspaceProps> = (
                               Edit Phrase Inline
                             </span>
 
-                            <div className="grid gap-3 sm:grid-cols-2">
+                             <div className="grid gap-3 sm:grid-cols-2">
                               <div className="space-y-1">
                                 <label className="text-[9px] font-black uppercase text-app-fg opacity-40 tracking-wider block">Phrase / Word</label>
                                 <input
                                   type="text"
                                   value={formText}
                                   onChange={(e) => setFormText(e.target.value)}
-                                  className="w-full px-3 py-2 bg-app-card border border-app-card-border rounded-xl text-xs text-app-fg focus:outline-none focus:border-orange-500/50 font-serif"
+                                  className="w-full px-3 py-2 bg-app-card border border-app-card-border rounded-xl text-xs text-app-fg focus:outline-none focus:border-orange-500/50 font-sans"
                                 />
                               </div>
 
@@ -551,7 +551,7 @@ export const AnalysisPhraseWorkspace: React.FC<AnalysisPhraseWorkspaceProps> = (
                                   type="text"
                                   value={formTranslation}
                                   onChange={(e) => setFormTranslation(e.target.value)}
-                                  className="w-full px-3 py-2 bg-app-card border border-app-card-border rounded-xl text-xs text-app-fg focus:outline-none focus:border-orange-500/50 font-serif"
+                                  className="w-full px-3 py-2 bg-app-card border border-app-card-border rounded-xl text-xs text-app-fg focus:outline-none focus:border-orange-500/50 font-sans"
                                 />
                               </div>
                             </div>
