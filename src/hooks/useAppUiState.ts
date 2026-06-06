@@ -32,7 +32,7 @@ const explainPhraseStructured = (phrase: string, targetLanguage: string) =>
 
 export function useAppUiState() {
   const [onboardingCompleted, setOnboardingCompleted] = useState(() => isOnboardingCompleted());
-  const [activeTab, setActiveTab] = useState<"preview" | "lyrics" | "analysis">("preview");
+  const [activeTab, setActiveTab] = useState<"preview" | "lyrics" | "cards" | "analysis">("preview");
   const [targetLanguage, setTargetLanguage] = useState(
     () => userPreferencesRepository.getPreference("lyrify_target_lang", "Russian")
   );

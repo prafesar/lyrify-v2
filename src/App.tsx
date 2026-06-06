@@ -96,6 +96,7 @@ import { TracksHomeShell } from "./components/TracksHomeShell";
 import { DailyProgressBlock } from "./components/DailyProgressBlock";
 import { ResumeStudyBlock } from "./components/ResumeStudyBlock";
 import { AnalysisPhraseWorkspace } from "./components/AnalysisPhraseWorkspace";
+import { StructuredAnalysisLecture } from "./components/StructuredAnalysisLecture";
 import { LineWorkspace } from "./components/LineWorkspace";
 
 
@@ -2510,7 +2511,7 @@ export default function App() {
                         } else if (actionType === 'generate_analysis') {
                           handleNextStepClickDirect();
                         } else if (actionType === 'save_phrase') {
-                          setActiveTab('analysis');
+                          setActiveTab('cards');
                         } else if (actionType === 'go_to_study' || actionType === 'review_again') {
                           setStudyTrackId(currentTrack.trackId);
                           goToStudy();
@@ -3113,31 +3114,27 @@ export default function App() {
                           </div>
                         </div>
                         <div className="space-y-2">
-                          <h3 className="text-lg font-black text-app-fg uppercase tracking-widest">
-                            {loadingStep === "searching" ? "Finding Lyrics" : "Deep Analysis"}
+                          <h3 className="text-lg font-black text-app-fg uppercase tracking-widest text-center">
+                            {loadingStep === "searching" ? "Finding Lyrics" : loadingStep === "lecture" ? "Generating Lecture" : "Deep Analysis"}
                           </h3>
                           <div className="flex items-center justify-center gap-3">
                              <div className="flex gap-1">
                                 <div className={cn("w-1 h-1 rounded-full", loadingStep === "searching" ? "bg-amber-500 animate-pulse" : "bg-emerald-500")} />
-                                <div className={cn("w-1 h-1 rounded-full", loadingStep === "analyzing" ? "bg-app-accent animate-pulse" : "bg-app-fg/10")} />
+                                <div className={cn("w-1 h-1 rounded-full", loadingStep === "lecture" ? "bg-purple-500 animate-pulse" : loadingStep === "analyzing" ? "bg-app-accent animate-pulse" : "bg-app-fg/10")} />
                              </div>
                              <span className="text-[10px] font-black uppercase tracking-[0.2em] opacity-40">Consulting Gemini</span>
                           </div>
                         </div>
                       </div>
-                    ) : ((currentTrack.phrases && currentTrack.phrases.length > 0) || currentTrack.lines.some(l => l.phrases && l.phrases.length > 0)) ? (
+                    ) : (currentTrack.meaning || (currentTrack.lectureBlocks && currentTrack.lectureBlocks.length > 0)) ? (
                       <motion.div
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
-                        className="space-y-12"
+                        className="space-y-12 animate-in fade-in zoom-in duration-300"
                       >
-                        <AnalysisPhraseWorkspace
+                        <StructuredAnalysisLecture
                           currentTrack={currentTrack}
-                          trackSearchQuery={trackSearchQuery}
-                          setTrackSearchQuery={setTrackSearchQuery}
-                          phraseMetadata={phraseMetadata}
-                          handleSetAnalysisPhraseStatus={handleSetAnalysisPhraseStatus}
-                          speak={speak}
+                          targetLanguage={targetLanguage}
                           onUpdateTrack={async (updatedTrack) => {
                             setCurrentTrack(updatedTrack);
                             await saveTrackData(updatedTrack.trackId, updatedTrack);
@@ -3145,7 +3142,6 @@ export default function App() {
                           }}
                           isGeneratingAnalysis={isGeneratingAnalysis}
                           handleRegenerateAnalysis={handleRegenerateAnalysis}
-                          onOpenAssistantForPhrase={handleOpenAssistantForPhrase}
                         />
                       </motion.div>
                     ) : (
@@ -3171,15 +3167,99 @@ export default function App() {
                           </div>
                         )}
 
-                            <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
-                              <button
-                                onClick={() => handleGenerateAnalysis()}
-                                className="px-10 py-5 rounded-3xl bg-app-fg text-app-bg font-black uppercase tracking-[0.2em] text-[10px] shadow-2xl hover:scale-105 transition-all flex items-center gap-3"
-                              >
-                                <Sparkles size={16} />
-                                Generate Deep Analysis
-                              </button>
-                            </div>
+                        <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
+                          <button
+                            onClick={() => handleGenerateAnalysis()}
+                            className="px-10 py-5 rounded-3xl bg-app-fg text-app-bg font-black uppercase tracking-[0.2em] text-[10px] shadow-2xl hover:scale-105 transition-all flex items-center gap-3 cursor-pointer"
+                          >
+                            <Sparkles size={16} />
+                            Generate Deep Analysis
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {activeTab === "cards" && (
+                  <div className="pb-32 space-y-12">
+                    {isGeneratingAnalysis ? (
+                      <div className="flex flex-col items-center justify-center py-24 text-center space-y-6">
+                        <div className="relative w-24 h-24 flex items-center justify-center">
+                          <div className="absolute inset-0 border-4 border-app-card-border rounded-full" />
+                          <motion.div
+                            animate={{ rotate: 360 }}
+                            transition={{ 
+                              duration: loadingStep === "searching" ? 2 : 1, 
+                              repeat: Infinity, 
+                              ease: "linear" 
+                            }}
+                            className="absolute inset-0 rounded-full border-4 border-t-transparent border-[var(--accent)]"
+                          />
+                          <div className="absolute inset-0 flex items-center justify-center">
+                            {loadingStep === "searching" ? (
+                               <SearchCode size={32} className="text-[var(--accent)]" />
+                            ) : (
+                               <Brain size={32} className="text-[var(--accent)]" />
+                            )}
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <h3 className="text-lg font-black text-app-fg uppercase tracking-widest text-center">
+                            {loadingStep === "searching" ? "Finding Lyrics" : loadingStep === "lecture" ? "Generating Lecture" : "Deep Analysis"}
+                          </h3>
+                          <div className="flex items-center justify-center gap-3">
+                             <div className="flex gap-1">
+                                <div className={cn("w-1 h-1 rounded-full", loadingStep === "searching" ? "bg-amber-500 animate-pulse" : "bg-emerald-500")} />
+                                <div className={cn("w-1 h-1 rounded-full", loadingStep === "lecture" ? "bg-purple-500 animate-pulse" : loadingStep === "analyzing" ? "bg-app-accent animate-pulse" : "bg-app-fg/10")} />
+                             </div>
+                             <span className="text-[10px] font-black uppercase tracking-[0.2em] opacity-40">Consulting Gemini</span>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (currentTrack.meaning || (currentTrack.phrases && currentTrack.phrases.length > 0) || currentTrack.lines.some(l => l.phrases && l.phrases.length > 0)) ? (
+                      <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="space-y-12 animate-in fade-in zoom-in duration-300"
+                      >
+                        <AnalysisPhraseWorkspace
+                          currentTrack={currentTrack}
+                          trackSearchQuery={trackSearchQuery}
+                          setTrackSearchQuery={setTrackSearchQuery}
+                          phraseMetadata={phraseMetadata}
+                          handleSetAnalysisPhraseStatus={handleSetAnalysisPhraseStatus}
+                          speak={speak}
+                          onUpdateTrack={async (updatedTrack) => {
+                            setCurrentTrack(updatedTrack);
+                            await saveTrackData(updatedTrack.trackId, updatedTrack);
+                            loadCommunityTracks();
+                          }}
+                          isGeneratingAnalysis={isGeneratingAnalysis}
+                          handleRegenerateAnalysis={handleRegenerateAnalysis}
+                          onOpenAssistantForPhrase={handleOpenAssistantForPhrase}
+                        />
+                      </motion.div>
+                    ) : (
+                      <div className="py-20 flex flex-col items-center justify-center text-center space-y-8 font-sans">
+                        <div className="w-20 h-20 rounded-[2rem] bg-app-card border border-app-card-border flex items-center justify-center text-app-fg opacity-10">
+                          <Bookmark size={40} />
+                        </div>
+                        <div className="space-y-3">
+                          <h3 className="text-2xl font-bold text-app-fg">No Saved study phrases</h3>
+                          <p className="text-app-fg opacity-40 max-w-sm mx-auto font-sans leading-normal">
+                            Run Deep Analysis first to automatically extract and analyze core vocabulary/phrases, or star verses on the Lyrics page to study specific lines.
+                          </p>
+                        </div>
+                        <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
+                          <button
+                            onClick={() => handleGenerateAnalysis()}
+                            className="px-10 py-5 rounded-3xl bg-app-fg text-app-bg font-black uppercase tracking-[0.2em] text-[10px] shadow-2xl hover:scale-105 transition-all flex items-center gap-3 cursor-pointer"
+                          >
+                            <Sparkles size={16} />
+                            Generate Phrase Cards
+                          </button>
+                        </div>
                       </div>
                     )}
                   </div>

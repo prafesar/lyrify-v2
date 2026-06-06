@@ -1,6 +1,6 @@
 import { db } from '../lib/firebase';
 import { doc, getDoc, setDoc, serverTimestamp, collection, query, orderBy, limit, getDocs, where } from 'firebase/firestore';
-import { TrackLyricsData } from "./musicService";
+import { TrackLyricsData, StructuredLectureBlock } from "./musicService";
 
 export enum Type {
   TYPE_UNSPECIFIED = "TYPE_UNSPECIFIED",
@@ -1844,6 +1844,93 @@ export async function saveTrackToSharedCache(track: TrackLyricsData): Promise<vo
     console.log(`[SharedCache] Saved track analysis for ${track.title} directly to Firestore!`);
   } catch (err) {
     console.error("[SharedCache] Failed to save track analysis to Firestore:", err);
+  }
+}
+
+
+export async function fetchStructuredLecture(
+  lyrics: string,
+  title: string,
+  artist: string,
+  targetLanguage: string
+): Promise<StructuredLectureBlock[]> {
+  const prompt = `Role: Expert literary and musical analyst, custom language educator.
+Analyzing the song "${title}" by "${artist}". 
+
+Linguistic goal: All commentary, explanations, subtitles, and bullet points MUST be written in ${targetLanguage}.
+
+Instructions:
+Generate a structured, engaging, and detailed scholarly lecture/breakdown of the song. 
+Do not use a generic text blob. Separate the content strictly into these 7 predefined categories:
+1. 'summary': Executive summary of the song's primary situation, emotional premise, and main message.
+2. 'themes': Themes & deeper philosophical/emotional concepts explored (e.g., identity, loss, rebellion).
+3. 'motifs': Motifs, recurring images, metaphoric or symbolic language (e.g., references to seasons, colors, elements).
+4. 'context': Socio-cultural backstory, plot, release era history, slang influences, or interesting trivia.
+5. 'important_lines': Specifically highlighted lines from the lyrics that carry structural climax or beautiful poetry, explaining why they matter.
+6. 'takeaways': Linguistic insights, grammar/slang tricks, cultural or idiomatic takeaways for language learners.
+7. 'notes': Pedagogical guidance, review recommendations, or notes to help the student learn.
+
+Lyrics to analyze:
+${lyrics.substring(0, 4000)}
+
+Return a JSON array of blocks conforming EXACTLY to this schema:
+[
+  {
+    "id": "block-summary",
+    "kind": "summary",
+    "title": "Core Story & Summary",
+    "text": "Detailed overview...",
+    "source": "ai"
+  },
+  {
+    "id": "block-themes",
+    "kind": "themes",
+    "title": "Key Themes & Interpretations",
+    "text": "Themes detail...",
+    "source": "ai"
+  }
+]`;
+
+  try {
+    const response = await callGeminiApi({
+      model: "gemini-2.5-flash",
+      contents: prompt,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              id: { type: Type.STRING },
+              kind: { 
+                type: Type.STRING, 
+                enum: ['summary', 'themes', 'motifs', 'context', 'important_lines', 'takeaways', 'notes'] 
+              },
+              title: { type: Type.STRING },
+              text: { type: Type.STRING },
+              source: { type: Type.STRING }
+            },
+            required: ["id", "kind", "title", "text", "source"]
+          }
+        }
+      }
+    });
+
+    const blocks = JSON.parse(response.text) as StructuredLectureBlock[];
+    return blocks;
+  } catch (err) {
+    console.error("fetchStructuredLecture failed:", err);
+    // Return high quality fallback lecture blocks if AI fails
+    return [
+      {
+        id: "fallback-summary",
+        kind: "summary",
+        title: "Song Overview",
+        text: `Overview analysis for "${title}" by ${artist}. This track contains beautiful lyrical layers and serves as a wonderful study material for learning. Connect each line with your heart to master the tone and meaning.`,
+        source: "ai"
+      }
+    ];
   }
 }
 

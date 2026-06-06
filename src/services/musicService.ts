@@ -519,6 +519,15 @@ export interface LyricsLine {
   };
 }
 
+export interface StructuredLectureBlock {
+  id: string;
+  kind: 'summary' | 'themes' | 'motifs' | 'context' | 'important_lines' | 'takeaways' | 'notes';
+  title?: string;
+  text: string;
+  source: 'ai' | 'manual';
+  lineIds?: string[];
+}
+
 export interface TrackLyricsData {
   trackId: string;
   itunesTrackId?: string;
@@ -537,6 +546,7 @@ export interface TrackLyricsData {
   authors?: string;
   lyricSource?: string;
   meaning?: string;
+  lectureBlocks?: StructuredLectureBlock[];
   meanings?: {
     en?: string;
     es?: string;

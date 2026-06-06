@@ -5,9 +5,9 @@ import { TrackProgressViewModel, TrackStationId } from '../services/trackProgres
 
 interface TrackProgressTrackerProps {
   viewModel: TrackProgressViewModel;
-  activeTab: 'preview' | 'lyrics' | 'analysis';
+  activeTab: 'preview' | 'lyrics' | 'cards' | 'analysis';
   onAction: (actionType: TrackProgressViewModel['ctaActionType']) => void;
-  onTabChange: (tab: 'preview' | 'lyrics' | 'analysis') => void;
+  onTabChange: (tab: 'preview' | 'lyrics' | 'cards' | 'analysis') => void;
 }
 
 export const TrackProgressTracker: React.FC<TrackProgressTrackerProps> = ({
@@ -36,13 +36,8 @@ export const TrackProgressTracker: React.FC<TrackProgressTrackerProps> = ({
     }
   };
 
-  // Determine if Analysis is completed
-  const isAnalysisCompleted = steps.find(s => s.id === 'analysis')?.status === 'completed';
-
-  // Filter out the 'analysis' station if completed to prevent duplicates with 'saved' (Cards)
-  const displayedSteps = isAnalysisCompleted 
-    ? steps.filter(s => s.id !== 'analysis') 
-    : steps;
+  // We want to display all steps as we've cleanly separated Analysis and Cards (saved phrases)!
+  const displayedSteps = steps;
 
   // Calculate active segments count
   let activeSegmentsCount = 0;
@@ -63,7 +58,7 @@ export const TrackProgressTracker: React.FC<TrackProgressTrackerProps> = ({
     if (id === 'opened') return activeTab === 'preview';
     if (id === 'lyrics') return activeTab === 'lyrics';
     if (id === 'analysis') return activeTab === 'analysis';
-    if (id === 'saved') return activeTab === 'analysis';
+    if (id === 'saved') return activeTab === 'cards';
     return false;
   };
 
@@ -121,7 +116,7 @@ export const TrackProgressTracker: React.FC<TrackProgressTrackerProps> = ({
                   onAction('generate_analysis');
                 }
               } else if (step.id === 'saved') {
-                onTabChange('analysis');
+                onTabChange('cards');
                 if (isCurrent) {
                   onAction('save_phrase');
                 }
