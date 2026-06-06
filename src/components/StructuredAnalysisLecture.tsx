@@ -53,7 +53,7 @@ export const StructuredAnalysisLecture: React.FC<StructuredAnalysisLectureProps>
     let rawBlocks = currentTrack.lectureBlocks || [];
     
     // Fallback migration to map legacy kinds to our modern 6-kind structure
-    let migrated: StructuredLectureBlock[] = rawBlocks.map(b => {
+    return rawBlocks.map(b => {
       let k = b.kind as string;
       if (k === 'summary' || k === 'important_lines') k = 'overview';
       if (k === 'themes' || k === 'motifs') k = 'emotions';
@@ -64,30 +64,7 @@ export const StructuredAnalysisLecture: React.FC<StructuredAnalysisLectureProps>
         kind: k as any
       };
     });
-
-    // Make sure we have at least one block placeholder for all 6 target kinds to ensure completeness
-    const result: StructuredLectureBlock[] = [];
-    
-    targetKinds.forEach(kind => {
-      // Find all blocks of this kind
-      const matching = migrated.filter(b => b.kind === kind);
-      if (matching.length > 0) {
-        matching.forEach(b => result.push(b));
-      } else {
-        // Create an elegant default placeholder
-        result.push({
-          id: `init-${kind}`,
-          kind: kind,
-          title: getKindTitlePlaceholder(kind),
-          text: getKindTextPlaceholder(kind, currentTrack.artist),
-          source: 'manual',
-          phrases: []
-        });
-      }
-    });
-
-    return result;
-  }, [currentTrack.lectureBlocks, currentTrack.meaning, currentTrack.artist]);
+  }, [currentTrack.lectureBlocks]);
 
   // Active inline editing states
   const [editingBlockId, setEditingBlockId] = useState<string | null>(null);

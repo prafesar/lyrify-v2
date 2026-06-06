@@ -1854,47 +1854,60 @@ export async function fetchStructuredLecture(
   artist: string,
   targetLanguage: string
 ): Promise<StructuredLectureBlock[]> {
-  const prompt = `Role: Senior Literary Scholar & Language Educator.
-Song: "${title}" by "${artist}". 
-Goal: Provide a highly engaging, structured, and beautiful annotated analysis/lecture in ${targetLanguage}.
+  const prompt = `Role: Senior Literary Scholar & Music Educator.
+Song Name: "${title}" by "${artist}".
+Target Language for Lecture/Analysis text: ${targetLanguage}.
 
 Instructions:
-Generate a detailed editorial lecture divided into these 6 strict categories.
-1. 'overview': High-level narrative, situation, central emotional premise, and backstory.
-2. 'emotions': Emotional journey, mood transitions, psychological impact, and artistic tone.
-3. 'sections': Detailed structural breakdown of the song (e.g. Intro, Verses, Chorus, Outro) with line groupings and interpretations.
-4. 'lexical_groups': Key vocabulary and idiomatic groups clustered by theme or grammar categories (e.g., words about memory, conditional tense, slang).
-5. 'takeaways': Major linguistic tricks, cultural insights, grammar takeaways, and idiomatic discoveries.
-6. 'notes': Pedagogical tips, recommendations for practicing shadow/listening modes, and user workspace encouragement.
+Generate an engaging, structured editorial lecture / annotated guide of the song. Let typography and concise insights lead the layout.
+Break down the content strictly into these 6 categories, keeping explanations compact, direct, and free from literary fluff or boilerplate text.
 
-Additionally, for sections like 'sections', 'lexical_groups', or 'takeaways', extract key target phrases/idioms as a structured list of vocabulary elements ('phrases') so the user can study them. Each phrase must be a useful vocabulary chunk or slang phrase found in the song.
+DO NOT write long academic essays. 
+DO NOT use markdown tables under any circumstances. Instead, use clean formatting, bullet lists, and short paragraphs.
+DO NOT duplicate the same phrase items across different blocks. Keep phrase lists distinct and high quality.
+
+Predefined Categories to return:
+1. 'overview': High-level core ideas, narrative, central emotional premise, backstory, or socio-cultural setting.
+2. 'emotions': The song's emotional journey, mood transitions, and psychological impact. Let the text capture the track's authentic tone.
+3. 'sections': Narrative sections of the song reflecting real thematic shifts (e.g. "Youth / Chaos", "Melancholy of Chorus", "Acceptance & Bridge"). Include a markdown summary of their meaning, and associate them with a list of key phrases/idioms inside 'phrases'.
+4. 'lexical_groups': Meaningful vocabulary clusters grouped conceptually (e.g., words about memory, slang, expressive formulas). Explain the categories in the text and list the grouped phrase items in the nested 'phrases' key.
+5. 'takeaways': Major linguistic discoveries, grammar insights, or idiomatic tricks. Text must answer: "What is actually worth bringing into active review?" Keep nested 'phrases' restricted to the highest-yield, most reusable expressions.
+6. 'notes': Optional pedagogical remarks and recommendations for practicing listening/shadowing modes or future manual workspace additions.
+
+Phrase Object Schema Requirements:
+For blocks that contain associated phrases ('phrases' array), you MUST strictly adhere to this standard:
+- 'text': Canonical form of the word or expression (e.g. infinitive of the verb, base singular noun, natural idiom string). DO NOT casually copy-paste truncated fragments of the lyric line.
+- 'translation': Very short, card-ready translation or definition in ${targetLanguage}. Do not include long paragraphs or explanations here.
+- 'studyExample': (Optional) An illustrative complete sentence or phrase showing authentic usage.
+- 'type': A simple grammatical or stylistic classification (e.g., "idiom", "slang", "verb", "metaphor", "phrasal verb").
+- 'source': Always "ai".
 
 Lyrics to analyze:
 ${lyrics.substring(0, 4000)}
 
-Return a JSON array of blocks conforming EXACTLY to this schema:
+Return a valid JSON array of objects conforming exactly to this schema:
 [
   {
     "id": "block-overview",
     "kind": "overview",
-    "title": "Narrative Narrative & Overview",
-    "text": "Detailed markdown explanation...",
+    "title": "Creative Overview",
+    "text": "Clear and insightful overview in ${targetLanguage}...",
     "source": "ai",
     "phrases": []
   },
   {
-    "id": "block-lexic",
-    "kind": "lexical_groups",
-    "title": "Visual Imagery & Vocabulary Groups",
-    "text": "Discussion of the thematic vocabulary groups in markdown...",
+    "id": "block-sections",
+    "kind": "sections",
+    "title": "Thematic Sections",
+    "text": "Discussion of the thematic movements in the lyrics...",
     "source": "ai",
     "phrases": [
       {
-        "id": "phr-1",
-        "text": "original song phrase",
-        "translation": "translated phrase meaning",
-        "studyExample": "Optional sentence demonstrating use or poetic context",
-        "type": "idiom/slang/verb",
+        "id": "sec-phr-1",
+        "text": "original song idiom or word",
+        "translation": "short translation",
+        "studyExample": "Poetic study example using the idiom",
+        "type": "idiom",
         "source": "ai"
       }
     ]
