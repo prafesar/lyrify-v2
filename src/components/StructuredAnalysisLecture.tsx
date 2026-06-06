@@ -1,27 +1,21 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Sparkles, 
   Plus, 
   Trash2, 
   Edit3, 
-  BookOpen, 
   Save, 
   X, 
-  Quote, 
-  Grid,
-  TrendingUp,
-  Award,
-  Globe,
-  Compass,
-  FileText,
-  PenTool,
-  Bookmark,
-  RefreshCw,
-  Eye,
-  Link
+  Volume2, 
+  Check, 
+  RefreshCw, 
+  BookOpen, 
+  HelpCircle,
+  Hash
 } from 'lucide-react';
-import { TrackLyricsData, StructuredLectureBlock, LyricsLine } from '../services/musicService';
+import { TrackLyricsData, StructuredLectureBlock, StructuredSectionPhrase } from '../services/musicService';
+import { PhraseStatus } from '../services/cardService';
 import ReactMarkdown from 'react-markdown';
 
 interface StructuredAnalysisLectureProps {
@@ -30,6 +24,14 @@ interface StructuredAnalysisLectureProps {
   isGeneratingAnalysis?: boolean;
   handleRegenerateAnalysis?: () => void;
   targetLanguage: string;
+  phraseMetadata: Map<string, any>;
+  handleSetAnalysisPhraseStatus: (
+    phraseText: string, 
+    translation: string, 
+    explanation: string, 
+    status: PhraseStatus
+  ) => void;
+  speak: (text: string, onEnd?: () => void, lang?: string) => void;
 }
 
 export const StructuredAnalysisLecture: React.FC<StructuredAnalysisLectureProps> = ({
@@ -37,113 +39,116 @@ export const StructuredAnalysisLecture: React.FC<StructuredAnalysisLectureProps>
   onUpdateTrack,
   isGeneratingAnalysis = false,
   handleRegenerateAnalysis,
-  targetLanguage
+  targetLanguage,
+  phraseMetadata,
+  handleSetAnalysisPhraseStatus,
+  speak
 }) => {
-  // Ensure we have a valid array of blocks
+  // Ordered target kinds of the blocks
+  const targetKinds = ['overview', 'emotions', 'sections', 'lexical_groups', 'takeaways', 'notes'] as const;
+  type BlockKind = typeof targetKinds[number];
+
+  // Migration mapping & initialization helper: converts older format blocks gracefully to the new 6-kind structure
   const blocks = useMemo(() => {
-    if (currentTrack.lectureBlocks && currentTrack.lectureBlocks.length > 0) {
-      return currentTrack.lectureBlocks;
-    }
+    let rawBlocks = currentTrack.lectureBlocks || [];
     
-    // Auto-initialize standard default blocks if they do not exist
-    const initial: StructuredLectureBlock[] = [
-      {
-        id: 'init-summary',
-        kind: 'summary',
-        title: 'Core Narrative & Summary',
-        text: currentTrack.meaning || 'Provide a central summary and emotional premise of the song lyrics.',
-        source: 'ai'
-      },
-      {
-        id: 'init-themes',
-        kind: 'themes',
-        title: 'Primary Themes',
-        text: 'The themes of this song frequently capture core components of human dialogue, relationships, and identity.',
-        source: 'ai'
-      },
-      {
-        id: 'init-motifs',
-        kind: 'motifs',
-        title: 'Metaphors & Poetic Imagery',
-        text: 'Pay attention to key visual motifs or repeating metaphors like color descriptors, climate/seasons, or physical distances.',
-        source: 'ai'
-      },
-      {
-        id: 'init-context',
-        kind: 'context',
-        title: 'Cultural & Historic Background',
-        text: `Background context regarding this track by ${currentTrack.artist}. Discover real-life stories behind the release or slang patterns in the target culture.`,
-        source: 'ai'
-      },
-      {
-        id: 'init-important_lines',
-        kind: 'important_lines',
-        title: 'Poetic Verses & Climaxes',
-        text: 'Review the lyrics for structural climaxes or high-priority verses that anchor the entire meaning of the song.',
-        source: 'ai'
-      },
-      {
-        id: 'init-takeaways',
-        kind: 'takeaways',
-        title: 'Linguistic Key Takeaways',
-        text: 'Linguistic notes, vocabulary discoveries, and grammar insights derived from researching this track.',
-        source: 'ai'
-      },
-      {
-        id: 'init-notes',
-        kind: 'notes',
-        title: 'Personal Study Notebook',
-        text: 'Use this workspace card as a general journal to map out your progression, questions, or custom translations.',
-        source: 'manual'
+    // Fallback migration to map legacy kinds to our modern 6-kind structure
+    let migrated: StructuredLectureBlock[] = rawBlocks.map(b => {
+      let k = b.kind as string;
+      if (k === 'summary' || k === 'important_lines') k = 'overview';
+      if (k === 'themes' || k === 'motifs') k = 'emotions';
+      if (k === 'context') k = 'overview';
+      
+      return {
+        ...b,
+        kind: k as any
+      };
+    });
+
+    // Make sure we have at least one block placeholder for all 6 target kinds to ensure completeness
+    const result: StructuredLectureBlock[] = [];
+    
+    targetKinds.forEach(kind => {
+      // Find all blocks of this kind
+      const matching = migrated.filter(b => b.kind === kind);
+      if (matching.length > 0) {
+        matching.forEach(b => result.push(b));
+      } else {
+        // Create an elegant default placeholder
+        result.push({
+          id: `init-${kind}`,
+          kind: kind,
+          title: getKindTitlePlaceholder(kind),
+          text: getKindTextPlaceholder(kind, currentTrack.artist),
+          source: 'manual',
+          phrases: []
+        });
       }
-    ];
-    return initial;
+    });
+
+    return result;
   }, [currentTrack.lectureBlocks, currentTrack.meaning, currentTrack.artist]);
 
-  // Active filters and query searching
-  const [activeFilter, setActiveFilter] = useState<string>('all');
-  const [searchQuery, setSearchQuery] = useState<string>('');
-
-  // Editing state
+  // Active inline editing states
   const [editingBlockId, setEditingBlockId] = useState<string | null>(null);
-  const [formKind, setFormKind] = useState<StructuredLectureBlock['kind']>('summary');
-  const [formTitle, setFormTitle] = useState('');
-  const [formText, setFormText] = useState('');
-  const [formLineIds, setFormLineIds] = useState<string[]>([]);
-  const [isLinkingLinesOpen, setIsLinkingLinesOpen] = useState(false);
+  const [editingField, setEditingField] = useState<'title' | 'text' | null>(null);
+  
+  // Track state of inline phrase we are editing
+  const [editingPhraseId, setEditingPhraseId] = useState<string | null>(null);
 
-  // New block adding state
-  const [isAddingNew, setIsAddingNew] = useState(false);
+  // Temporary edit value buffer
+  const [tempEditValue, setTempEditValue] = useState('');
+  
+  // Phrase edit buffer
+  const [tempPhraseText, setTempPhraseText] = useState('');
+  const [tempPhraseTranslation, setTempPhraseTranslation] = useState('');
+  const [tempPhraseExample, setTempPhraseExample] = useState('');
+  const [tempPhraseType, setTempPhraseType] = useState('phrase');
 
-  // Filter types definitions
-  const sectionFilters = [
-    { id: 'all', label: 'All Content', icon: <Grid size={13} /> },
-    { id: 'summary', label: 'Summary', icon: <BookOpen size={13} /> },
-    { id: 'themes', label: 'Themes', icon: <TrendingUp size={13} /> },
-    { id: 'motifs', label: 'Motifs', icon: <Award size={13} /> },
-    { id: 'context', label: 'Context', icon: <Globe size={13} /> },
-    { id: 'important_lines', label: 'Key Verses', icon: <FileText size={13} /> },
-    { id: 'takeaways', label: 'Linguistic Notes', icon: <Compass size={13} /> },
-    { id: 'notes', label: 'My Notes', icon: <PenTool size={13} /> }
-  ];
+  // Input referencers for auto-focus
+  const editorRef = useRef<HTMLTextAreaElement>(null);
+  const titleInputRef = useRef<HTMLInputElement>(null);
 
-  // Helper to match text highlights
-  const matchesFilter = (block: StructuredLectureBlock) => {
-    if (activeFilter !== 'all' && block.kind !== activeFilter) return false;
-    if (searchQuery.trim() !== '') {
-      const q = searchQuery.toLowerCase();
-      const contentMatch = block.text.toLowerCase().includes(q);
-      const titleMatch = (block.title || '').toLowerCase().includes(q);
-      return contentMatch || titleMatch;
+  useEffect(() => {
+    if (editingField === 'text' && editorRef.current) {
+      editorRef.current.focus();
+      // Auto-increase height based on text initial length
+      editorRef.current.style.height = 'auto';
+      editorRef.current.style.height = `${editorRef.current.scrollHeight}px`;
+    } else if (editingField === 'title' && titleInputRef.current) {
+      titleInputRef.current.focus();
     }
-    return true;
-  };
+  }, [editingField, editingBlockId]);
 
-  const filteredBlocks = useMemo(() => {
-    return blocks.filter(matchesFilter);
-  }, [blocks, activeFilter, searchQuery]);
+  function getKindTitlePlaceholder(kind: BlockKind): string {
+    switch (kind) {
+      case 'overview': return 'Narrative & Song Overview';
+      case 'emotions': return 'Aesthetic Mood & Tone Analysis';
+      case 'sections': return 'Key Song Sections';
+      case 'lexical_groups': return 'Thematic Vocabulary Clusters';
+      case 'takeaways': return 'Linguistic Insights & Grammar Study';
+      case 'notes': return 'Personal Notes & Workspace';
+    }
+  }
 
-  // Trigger update block
+  function getKindTextPlaceholder(kind: BlockKind, artistName: string): string {
+    switch (kind) {
+      case 'overview': 
+        return currentTrack.meaning || 'Provide a central summary and emotional premise of the song lyrics here.';
+      case 'emotions': 
+        return `A detailed review of the emotional landscape and performance attitude generated on this track by ${artistName || 'the artist'}. Close-up study of stylistic devices.`;
+      case 'sections': 
+        return 'Overview breakdowns of Verses, Chorus structures, and bridges. Edit this block or add key section highlights below.';
+      case 'lexical_groups': 
+        return 'Group custom vocabulary elements here (e.g. metaphors of sea, words about winter weather, passive voice entries).';
+      case 'takeaways': 
+        return 'Grammar insights and translation guidelines derived from studying the natural lyric dialogue.';
+      case 'notes': 
+        return 'Your independent annotated commentary. Write translations, pronunciation reminders, or emotional insights here.';
+    }
+  }
+
+  // Trigger global track save
   const handleSaveBlocks = async (updatedList: StructuredLectureBlock[]) => {
     const updatedTrack: TrackLyricsData = {
       ...currentTrack,
@@ -152,447 +157,492 @@ export const StructuredAnalysisLecture: React.FC<StructuredAnalysisLectureProps>
     await onUpdateTrack(updatedTrack);
   };
 
-  // Start editing block
-  const startEdit = (block: StructuredLectureBlock) => {
-    setEditingBlockId(block.id);
-    setFormKind(block.kind);
-    setFormTitle(block.title || '');
-    setFormText(block.text);
-    setFormLineIds(block.lineIds || []);
-    setIsAddingNew(false);
+  // Block inline edit activations
+  const startBlockEdit = (blockId: string, field: 'title' | 'text', currentVal: string) => {
+    setEditingPhraseId(null);
+    setEditingBlockId(blockId);
+    setEditingField(field);
+    setTempEditValue(currentVal);
   };
 
-  // Save the block
-  const saveBlockEdit = async () => {
-    if (!formText.trim()) return;
+  const saveBlockEdit = async (blockId: string) => {
+    if (editingField === 'title' && !tempEditValue.trim()) {
+      cancelEdit();
+      return;
+    }
     const updated = blocks.map(b => {
-      if (b.id === editingBlockId) {
+      if (b.id === blockId) {
         return {
           ...b,
-          kind: formKind,
-          title: formTitle.trim() || undefined,
-          text: formText,
-          lineIds: formLineIds,
-          source: b.source // preserve either ai or manual
+          title: editingField === 'title' ? tempEditValue.trim() : b.title,
+          text: editingField === 'text' ? tempEditValue : b.text,
+          source: b.source
         } as StructuredLectureBlock;
       }
       return b;
     });
     await handleSaveBlocks(updated);
-    setEditingBlockId(null);
+    cancelEdit();
   };
 
-  // Delete a block
-  const deleteBlock = async (id: string) => {
-    if (confirm('Delete this lecture block?')) {
-      const updated = blocks.filter(b => b.id !== id);
+  const deleteBlockBlock = async (blockId: string) => {
+    if (window.confirm('Are you sure you want to delete this custom section from your lecture?')) {
+      const updated = blocks.filter(b => b.id !== blockId);
       await handleSaveBlocks(updated);
-      if (editingBlockId === id) setEditingBlockId(null);
+      cancelEdit();
     }
   };
 
-  // Add custom manual block
-  const addNewBlock = async () => {
-    if (!formText.trim()) return;
-    const newBlock: StructuredLectureBlock = {
-      id: `block-${Date.now()}`,
-      kind: formKind,
-      title: formTitle.trim() || 'New Study Module',
-      text: formText,
-      lineIds: formLineIds,
+  const cancelEdit = () => {
+    setEditingBlockId(null);
+    setEditingField(null);
+    setTempEditValue('');
+    setEditingPhraseId(null);
+  };
+
+  // Phrase inline edit activations
+  const startPhraseEdit = (phrase: StructuredSectionPhrase) => {
+    setEditingBlockId(null);
+    setEditingField(null);
+    setEditingPhraseId(phrase.id);
+    setTempPhraseText(phrase.text);
+    setTempPhraseTranslation(phrase.translation);
+    setTempPhraseExample(phrase.studyExample || '');
+    setTempPhraseType(phrase.type || 'phrase');
+  };
+
+  const savePhraseEdit = async (blockId: string, phraseId: string) => {
+    if (!tempPhraseText.trim() || !tempPhraseTranslation.trim()) return;
+
+    const updated = blocks.map(b => {
+      if (b.id === blockId) {
+        const phrasesList = b.phrases || [];
+        const updatedPhras = phrasesList.map(p => {
+          if (p.id === phraseId) {
+            return {
+              ...p,
+              text: tempPhraseText.trim(),
+              translation: tempPhraseTranslation.trim(),
+              studyExample: tempPhraseExample.trim() || undefined,
+              type: tempPhraseType,
+              source: p.source
+            } as StructuredSectionPhrase;
+          }
+          return p;
+        });
+        return { ...b, phrases: updatedPhras };
+      }
+      return b;
+    });
+
+    await handleSaveBlocks(updated);
+    setEditingPhraseId(null);
+  };
+
+  const deletePhraseItem = async (blockId: string, phraseId: string) => {
+    if (window.confirm('Remove this phrase card from the lecture section?')) {
+      const updated = blocks.map(b => {
+        if (b.id === blockId) {
+          return {
+            ...b,
+            phrases: (b.phrases || []).filter(p => p.id !== phraseId)
+          };
+        }
+        return b;
+      });
+      await handleSaveBlocks(updated);
+      setEditingPhraseId(null);
+    }
+  };
+
+  const addPhraseItem = async (blockId: string) => {
+    const newPhr: StructuredSectionPhrase = {
+      id: `phr-${Date.now()}`,
+      text: 'New phrase',
+      translation: 'Translation / Explanation',
+      studyExample: '',
+      type: 'phrase',
       source: 'manual'
     };
-    const updated = [...blocks, newBlock];
+
+    const updated = blocks.map(b => {
+      if (b.id === blockId) {
+        return {
+          ...b,
+          phrases: [...(b.phrases || []), newPhr]
+        };
+      }
+      return b;
+    });
+
     await handleSaveBlocks(updated);
-    setIsAddingNew(false);
-    resetForm();
+    // Open editor right away for the newly added phrase block
+    startPhraseEdit(newPhr);
   };
 
-  const resetForm = () => {
-    setFormKind('notes');
-    setFormTitle('');
-    setFormText('');
-    setFormLineIds([]);
-    setIsLinkingLinesOpen(false);
+  // Checking Card Database sync state
+  const isPhraseSaved = (phraseText: string) => {
+    const key = phraseText.trim().toLowerCase();
+    const card = phraseMetadata?.get(key);
+    return card && (card.status === 'learning' || card.status === 'known');
   };
 
-  // Category labels with distinct stylish styling
-  const getCategoryDetails = (kind: StructuredLectureBlock['kind']) => {
-    switch (kind) {
-      case 'summary':
-        return { label: 'Summary', color: 'bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400 border-amber-200 dark:border-amber-500/20' };
-      case 'themes':
-        return { label: 'Themes', color: 'bg-purple-100 text-purple-700 dark:bg-purple-500/10 dark:text-purple-400 border-purple-200 dark:border-purple-500/20' };
-      case 'motifs':
-        return { label: 'Imagery & Symbols', color: 'bg-pink-100 text-pink-700 dark:bg-pink-500/10 dark:text-pink-400 border-pink-200 dark:border-pink-500/20' };
-      case 'context':
-        return { label: 'Context', color: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-400 border-indigo-200 dark:border-indigo-500/20' };
-      case 'important_lines':
-        return { label: 'Key Verses', color: 'bg-blue-100 text-blue-700 dark:bg-blue-500/10 dark:text-blue-400 border-blue-200 dark:border-blue-500/20' };
-      case 'takeaways':
-        return { label: 'Linguistic Notes', color: 'bg-teal-100 text-teal-700 dark:bg-teal-500/10 dark:text-teal-400 border-teal-200 dark:border-teal-500/20' };
-      case 'notes':
-        return { label: 'My Notes', color: 'bg-neutral-100 text-neutral-700 dark:bg-neutral-500/10 dark:text-neutral-300 border-neutral-200 dark:border-neutral-500/20' };
+  const handleTogglePhraseSaved = (phrase: StructuredSectionPhrase) => {
+    const saved = isPhraseSaved(phrase.text);
+    if (saved) {
+      // Toggle card status to mark it as new or keep it
+      handleSetAnalysisPhraseStatus(phrase.text, phrase.translation, phrase.studyExample || '', 'new');
+    } else {
+      // Save phrase as learning item in CantoLex FSRS / Cards tab
+      handleSetAnalysisPhraseStatus(phrase.text, phrase.translation, phrase.studyExample || '', 'learning');
     }
   };
 
-  // Toggle associated line
-  const toggleLineIdSelection = (lineId: string) => {
-    setFormLineIds(prev => 
-      prev.includes(lineId) ? prev.filter(id => id !== lineId) : [...prev, lineId]
-    );
+  // Safe voicing wrapper
+  const handleVoicing = (phraseText: string) => {
+    speak(phraseText);
   };
 
   return (
-    <div className="w-full space-y-8 select-none" id="structured-lecture-analysis">
+    <div className="w-full max-w-3xl mx-auto font-sans text-app-fg select-text leading-relaxed pb-32" id="structured-lecture-analysis">
       
-      {/* Search and Filters Header bar */}
-      <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-center border-b border-app-card-border/60 pb-6">
-        
-        {/* Search bar on left */}
-        <div className="md:col-span-4 relative">
-          <input
-            id="search-lecture-blocks"
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search block contents..."
-            className="w-full bg-app-card border border-app-card-border/80 text-app-fg placeholder-app-muted rounded-2xl py-2.5 pl-10 pr-4 text-xs font-medium focus:outline-none focus:border-app-accent focus:ring-1 focus:ring-app-accent/30 transition-all duration-200 shadow-sm"
-          />
-          <BookOpen className="absolute left-3 top-3.5 text-app-muted shrink-0" size={14} />
-          {searchQuery && (
-            <button 
-              onClick={() => setSearchQuery('')}
-              className="absolute right-3 top-3 text-app-muted hover:text-app-fg"
-            >
-              <X size={12} />
-            </button>
-          )}
+      {/* Editorial Header */}
+      <div className="text-center md:text-left space-y-2 border-b border-app-card-border/30 pb-10 mb-14" id="lecture-title-block">
+        <div className="inline-flex items-center gap-1.5 uppercase font-bold tracking-[0.25em] text-[10px] text-app-accent leading-none">
+          <BookOpen size={11} className="shrink-0" /> Annotated Lecture Breakdown
         </div>
-
-        {/* Filters and CTA button on right */}
-        <div className="md:col-span-8 flex flex-wrap items-center justify-between gap-3">
-          {/* Section Filter Pills */}
-          <div className="flex flex-wrap gap-1.5 max-w-full">
-            {sectionFilters.map((pill) => (
-              <button
-                key={pill.id}
-                type="button"
-                onClick={() => setActiveFilter(pill.id)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider border transition-all duration-200 cursor-pointer ${
-                  activeFilter === pill.id
-                    ? 'bg-app-fg text-app-bg border-app-fg shadow-md scale-[1.03]'
-                    : 'bg-app-card text-app-muted border-app-card-border/60 hover:border-app-accent/30 hover:text-app-fg'
-                }`}
-              >
-                {pill.icon}
-                <span>{pill.label}</span>
-              </button>
-            ))}
-          </div>
-
-          <button
-            type="button"
-            onClick={() => {
-              setIsAddingNew(true);
-              setEditingBlockId(null);
-              resetForm();
-            }}
-            className="flex items-center gap-2 px-4 py-2.5 bg-app-fg hover:bg-app-fg-hover cursor-pointer text-app-bg rounded-xl text-xs font-black uppercase tracking-wider hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 shadow-md"
-          >
-            <Plus size={14} /> Add Block
-          </button>
-        </div>
+        <h1 className="font-serif text-3xl md:text-4xl font-extrabold tracking-tight text-app-fg mt-1 leading-tight uppercase font-sans">
+          {currentTrack.title}
+        </h1>
+        <p className="text-sm font-semibold tracking-wide text-app-fg opacity-65 font-sans lowercase">
+          by {currentTrack.artist} • custom linguistic essay
+        </p>
       </div>
 
-      <AnimatePresence mode="wait">
-        
-        {/* Creator / Inline Editor Mode */}
-        {(isAddingNew || editingBlockId) && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            className="bg-app-card border border-app-accent/30 rounded-3xl p-5 sm:p-6 space-y-5 shadow-2xl relative overflow-hidden"
-          >
-            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-app-accent via-app-accent/80 to-app-fg" />
+      {/* Structured Continuous List of Blocks */}
+      <div className="space-y-16">
+        {blocks.map((block) => {
+          const isModelEditingText = editingBlockId === block.id && editingField === 'text';
+          const isModelEditingTitle = editingBlockId === block.id && editingField === 'title';
 
-            <div className="flex items-center justify-between pb-3 border-b border-app-card-border/60">
-              <h3 className="text-sm font-black uppercase tracking-widest text-app-fg flex items-center gap-2">
-                <PenTool size={16} className="text-app-accent" />
-                {isAddingNew ? 'Create New Study Block' : 'Edit Study Block'}
-              </h3>
-              <button
-                type="button"
-                onClick={() => {
-                  setIsAddingNew(false);
-                  setEditingBlockId(null);
-                }}
-                className="p-1 px-3 bg-app-bg text-[10px] uppercase font-black tracking-wider text-app-muted hover:text-app-fg rounded-lg border border-app-card-border/80 transition-colors"
-              >
-                Cancel
-              </button>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-12 gap-5">
+          return (
+            <section 
+              key={block.id} 
+              id={`block-${block.id}`} 
+              className="space-y-4 animate-in fade-in duration-300 scroll-mt-24 group/section"
+            >
               
-              {/* Category picker */}
-              <div className="md:col-span-4 space-y-2">
-                <label className="text-[10px] font-black uppercase tracking-wider text-app-muted">Category Type</label>
-                <div className="grid grid-cols-1 gap-1">
-                  {sectionFilters.filter(f => f.id !== 'all').map((kindOpt) => (
-                    <button
-                      key={kindOpt.id}
-                      type="button"
-                      onClick={() => setFormKind(kindOpt.id as any)}
-                      className={`flex items-center justify-between px-3 py-2 text-xs font-bold rounded-xl transition-all duration-150 border cursor-pointer ${
-                        formKind === kindOpt.id 
-                          ? 'bg-app-accent/5 text-app-accent border-app-accent' 
-                          : 'bg-app-bg text-app-muted border-app-card-border/30 hover:border-app-card-border/80 hover:text-app-fg'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2">
-                        {kindOpt.icon}
-                        <span>{kindOpt.label}</span>
-                      </div>
-                      {formKind === kindOpt.id && <span className="h-2 w-2 rounded-full bg-app-accent shrink-0 animate-pulse" />}
-                    </button>
-                  ))}
-                </div>
+              {/* Kind Marker Tag -- ultra minimalist inline label block */}
+              <div className="flex items-center justify-between pb-1">
+                <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-app-accent opacity-50 shrink-0 select-none">
+                  {block.kind}
+                </span>
+
+                {/* Optional tiny manual section deleter */}
+                {block.source === 'manual' && !editingBlockId && (
+                  <button
+                    type="button"
+                    onClick={() => deleteBlockBlock(block.id)}
+                    className="opacity-0 group-hover/section:opacity-60 hover:!opacity-100 p-1 text-app-muted hover:text-red-400 transition-opacity duration-200 cursor-pointer text-[10px] font-bold uppercase tracking-wider"
+                    title="Delete section"
+                  >
+                    Delete
+                  </button>
+                )}
               </div>
 
-              {/* General fields */}
-              <div className="md:col-span-8 space-y-4">
-                <div className="space-y-1.5 animate-in fade-in duration-300">
-                  <label className="text-[10px] font-black uppercase tracking-wider text-app-muted">Custom Block Title</label>
-                  <input
-                    type="text"
-                    value={formTitle}
-                    onChange={(e) => setFormTitle(e.target.value)}
-                    placeholder="Enter short block headline..."
-                    className="w-full bg-app-bg border border-app-card-border/80 text-app-fg rounded-xl py-2 px-3 text-xs font-semibold focus:outline-none focus:border-app-accent transition-colors shadow-inner"
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-black uppercase tracking-wider text-app-muted">Lecture Text / Analysis Commentary (Markdown supported)</label>
-                  <textarea
-                    rows={6}
-                    value={formText}
-                    onChange={(e) => setFormText(e.target.value)}
-                    placeholder="Provide insights, grammar details, translations, cultural background..."
-                    className="w-full bg-app-bg border border-app-card-border/80 text-app-fg rounded-xl py-2.5 px-3 text-xs font-semibold focus:outline-none focus:border-app-accent transition-colors shadow-inner font-sans resize-y"
-                  />
-                </div>
-
-                {/* Linking lyrics lines section */}
-                <div className="space-y-2 border-t border-app-card-border/60 pt-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Link size={13} className="text-app-accent" />
-                      <span className="text-[10px] font-black uppercase tracking-wider text-app-fg">
-                        Link Specific Lyrics Verses ({formLineIds.length} Linked)
-                      </span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setIsLinkingLinesOpen(!isLinkingLinesOpen)}
-                      className="px-2.5 py-1 bg-app-bg hover:bg-app-card text-[9px] uppercase font-black tracking-wider text-app-accent rounded-lg border border-app-card-border/60 cursor-pointer"
-                    >
-                      {isLinkingLinesOpen ? 'Hide Picker' : 'Show & Pick Verses'}
-                    </button>
-                  </div>
-
-                  <AnimatePresence>
-                    {isLinkingLinesOpen && (
-                      <motion.div
-                        initial={{ opacity: 0, height: 0 }}
-                        animate={{ opacity: 1, height: 160 }}
-                        exit={{ opacity: 0, height: 0 }}
-                        className="overflow-y-auto border border-app-card-border/40 bg-app-bg/50 rounded-xl p-2.5 text-xs font-medium space-y-1"
+              {/* Editable Block Title */}
+              <div className="relative group/title">
+                {isModelEditingTitle ? (
+                  <div className="flex items-center gap-2 max-w-full">
+                    <input
+                      ref={titleInputRef}
+                      type="text"
+                      value={tempEditValue}
+                      onChange={(e) => setTempEditValue(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') saveBlockEdit(block.id);
+                        if (e.key === 'Escape') cancelEdit();
+                      }}
+                      className="text-lg font-bold tracking-tight bg-transparent text-app-fg border-b border-app-accent w-full focus:outline-none py-0.5"
+                    />
+                    <div className="flex gap-2 shrink-0 select-none">
+                      <button 
+                        onClick={() => saveBlockEdit(block.id)} 
+                        className="p-1 text-app-accent hover:scale-105 transition-transform"
                       >
-                        {currentTrack.lines.map((line) => {
-                          const isSelected = formLineIds.includes(String(line.index));
-                          return (
-                            <button
-                              key={line.index}
-                              type="button"
-                              onClick={() => toggleLineIdSelection(String(line.index))}
-                              className={`w-full text-left p-1.5 px-2.5 rounded-lg flex items-center justify-between border cursor-pointer transition-colors ${
-                                isSelected 
-                                  ? 'bg-app-accent/10 border-app-accent/80 text-app-accent font-bold' 
-                                  : 'bg-app-card border-app-card-border/20 text-app-muted hover:border-app-card-border hover:text-app-fg'
-                              }`}
-                            >
-                              <div className="flex items-center gap-3 truncate">
-                                <span className="font-mono text-[9px] opacity-40 shrink-0">#{line.index + 1}</span>
-                                <span className="truncate">{line.original}</span>
-                              </div>
-                              <span className="text-[8px] opacity-60 italic shrink-0 truncate max-w-[120px] ml-4">{line.translation}</span>
-                            </button>
-                          );
-                        })}
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
-              </div>
-
-            </div>
-
-            <div className="flex items-center justify-end gap-3 pt-3 border-t border-app-card-border/60">
-              <button
-                type="button"
-                onClick={() => {
-                  setIsAddingNew(false);
-                  setEditingBlockId(null);
-                }}
-                className="px-4 py-2 text-xs font-bold text-app-muted hover:text-app-fg cursor-pointer transition-colors"
-              >
-                Close
-              </button>
-              <button
-                type="button"
-                onClick={isAddingNew ? addNewBlock : saveBlockEdit}
-                className="flex items-center gap-2 px-5 py-2 bg-app-accent hover:bg-app-accent/90 text-white font-black text-xs uppercase tracking-widest rounded-xl transition-all duration-200 cursor-pointer shadow-md shadow-app-accent/10"
-              >
-                <Save size={13} /> Save Block
-              </button>
-            </div>
-
-          </motion.div>
-        )}
-
-      </AnimatePresence>
-
-      {/* Main Blocks List Container */}
-      <div className="space-y-6">
-        {filteredBlocks.length === 0 ? (
-          <div className="py-20 flex flex-col items-center justify-center text-center space-y-6">
-            <div className="w-16 h-16 rounded-[1.5rem] bg-app-card border border-app-card-border flex items-center justify-center text-app-fg opacity-20">
-              <Sparkles size={28} />
-            </div>
-            <div className="space-y-2">
-              <h4 className="text-md font-bold text-app-fg">No Blocks Matched</h4>
-              <p className="text-app-fg opacity-40 text-xs max-w-sm mx-auto">
-                No lecture blocks matched your filter/search criteria. Feel free to clear the filter or click "Add Block" to insert your own manual observations.
-              </p>
-            </div>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 gap-6">
-            {filteredBlocks.map((block) => {
-              const cat = getCategoryDetails(block.kind);
-              const isEditing = editingBlockId === block.id;
-
-              return (
-                <motion.div
-                  layout
-                  key={block.id}
-                  id={`block-card-${block.id}`}
-                  initial={{ opacity: 0, y: 12 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -12 }}
-                  transition={{ duration: 0.2 }}
-                  className={`group bg-app-card border border-app-card-border/60 rounded-3xl p-5 sm:p-6 space-y-4 shadow-md transition-all duration-300 hover:shadow-lg hover:border-app-card-border ${
-                    isEditing ? 'ring-2 ring-app-accent' : ''
-                  }`}
-                >
-                  
-                  {/* Card Header with Badges and controls */}
-                  <div className="flex items-center justify-between">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider border leading-none ${cat.color}`}>
-                        {cat.label}
-                      </span>
-                      {block.source === 'ai' ? (
-                        <span className="bg-app-bg border border-app-card-border text-app-muted rounded-md text-[8px] px-1.5 py-0.5 leading-none font-bold uppercase tracking-wider flex items-center gap-1">
-                          <Sparkles size={8} className="text-app-accent" /> AI Analyst
-                        </span>
-                      ) : (
-                        <span className="bg-app-accent/5 border border-app-accent/20 text-app-accent rounded-md text-[8px] px-1.5 py-0.5 leading-none font-bold uppercase tracking-wider flex items-center gap-1">
-                          <PenTool size={8} /> My study-note
-                        </span>
-                      )}
-                    </div>
-
-                    <div className="flex items-center gap-1.5 opacity-40 group-hover:opacity-100 transition-opacity">
-                      <button
-                        type="button"
-                        onClick={() => startEdit(block)}
-                        title="Edit study block"
-                        className="p-1.5 bg-app-bg hover:bg-app-card-border/40 text-app-muted hover:text-app-fg rounded-xl border border-app-card-border/30 cursor-pointer"
-                      >
-                        <Edit3 size={13} />
+                        <Check size={14} />
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => deleteBlock(block.id)}
-                        title="Delete block"
-                        className="p-1.5 bg-app-bg hover:bg-red-500/15 text-app-muted hover:text-red-500 rounded-xl border border-app-card-border/30 cursor-pointer"
+                      <button 
+                        onClick={cancelEdit} 
+                        className="p-1 text-app-muted hover:scale-105 transition-transform"
                       >
-                        <Trash2 size={13} />
+                        <X size={14} />
                       </button>
                     </div>
                   </div>
+                ) : (
+                  <h2 
+                    onClick={() => startBlockEdit(block.id, 'title', block.title || '')}
+                    className="font-sans font-extrabold text-xl md:text-2xl text-app-fg tracking-tight leading-tight cursor-text hover:text-app-accent/80 transition-colors uppercase"
+                  >
+                    {block.title || getKindTitlePlaceholder(block.kind as BlockKind)}
+                    <span className="inline-block opacity-0 group-hover/title:opacity-40 text-app-muted ml-2 pb-1.5 transition-opacity">
+                      <Edit3 size={12} className="inline align-middle" />
+                    </span>
+                  </h2>
+                )}
+              </div>
 
-                  {/* Title */}
-                  {block.title && (
-                    <h3 className="text-md sm:text-lg font-black text-app-fg uppercase tracking-widest leading-snug">
-                      {block.title}
-                    </h3>
-                  )}
-
-                  {/* Linked Lines quoted block */}
-                  {block.lineIds && block.lineIds.length > 0 && (
-                    <div className="bg-app-bg/50 border-l-2 border-app-accent/50 rounded-r-2xl p-3 space-y-2">
-                      <div className="flex items-center gap-1 text-[9px] font-black uppercase tracking-wider opacity-60">
-                        <Quote size={10} className="text-app-accent" /> Linked lyrics details:
-                      </div>
-                      <div className="space-y-1.5 text-xs font-semibold">
-                        {block.lineIds.map(lineIdx => {
-                          const lineObj = currentTrack.lines.find(l => String(l.index) === String(lineIdx));
-                          if (!lineObj) return null;
-                          return (
-                            <div key={lineIdx} className="leading-relaxed">
-                              <span className="text-app-fg block">{lineObj.original}</span>
-                              <span className="text-app-muted font-normal block text-[10px] mt-0.5">{lineObj.translation}</span>
-                            </div>
-                          );
-                        })}
-                      </div>
+              {/* Editable Commentary Paragraph Details */}
+              <div className="relative group/text">
+                {isModelEditingText ? (
+                  <div className="space-y-3 mt-1">
+                    <textarea
+                      ref={editorRef}
+                      value={tempEditValue}
+                      onChange={(e) => {
+                        setTempEditValue(e.target.value);
+                        // Auto-growing textbox
+                        e.target.style.height = 'auto';
+                        e.target.style.height = `${e.target.scrollHeight}px`;
+                      }}
+                      className="w-full bg-transparent border-0 border-l border-app-accent/40 text-[15px] leading-relaxed text-app-fg font-medium py-1 px-4 focus:ring-0 focus:outline-none resize-none font-sans"
+                      style={{ minHeight: '120px' }}
+                    />
+                    <div className="flex items-center justify-start gap-4 text-[10px] uppercase font-black tracking-widest pl-4 select-none">
+                      <button 
+                        onClick={() => saveBlockEdit(block.id)} 
+                        className="text-app-accent hover:opacity-80 flex items-center gap-1 cursor-pointer"
+                      >
+                        <Check size={11} className="inline" /> Save Content
+                      </button>
+                      <button 
+                        onClick={cancelEdit} 
+                        className="text-app-muted hover:text-app-fg cursor-pointer"
+                      >
+                        Cancel
+                      </button>
                     </div>
-                  )}
-
-                  {/* Main commentary text block */}
-                  <div className="prose prose-sm dark:prose-invert max-w-none text-xs leading-relaxed text-app-fg/80 font-medium">
+                  </div>
+                ) : (
+                  <div 
+                    onClick={() => startBlockEdit(block.id, 'text', block.text)}
+                    className="prose prose-sm dark:prose-invert max-w-none text-base leading-relaxed text-app-fg/75 font-medium cursor-text selection:bg-app-accent/10"
+                    title="Click text body to edit inline"
+                  >
                     <div className="markdown-body">
                       <ReactMarkdown>{block.text}</ReactMarkdown>
                     </div>
                   </div>
+                )}
+              </div>
 
-                </motion.div>
-              );
-            })}
-          </div>
-        )}
+              {/* Nestable Phrases associated with this Section */}
+              <div className="pt-2">
+                <div className="space-y-2.5">
+                  {(block.phrases || []).map((phrase) => {
+                    const isSaveActive = isPhraseSaved(phrase.text);
+                    const isPhraseEditing = editingPhraseId === phrase.id;
+
+                    if (isPhraseEditing) {
+                      return (
+                        <div 
+                          key={phrase.id} 
+                          className="p-3.5 bg-app-card border border-app-accent/30 rounded-2xl space-y-3 border-l-2 border-l-app-accent animate-in fade-in zoom-in-95 duration-200"
+                        >
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div className="space-y-1">
+                              <label className="text-[9px] uppercase font-black tracking-wider text-app-muted">Original Phrase</label>
+                              <input
+                                type="text"
+                                value={tempPhraseText}
+                                onChange={(e) => setTempPhraseText(e.target.value)}
+                                className="w-full bg-app-bg text-app-fg rounded-lg py-1 px-2.5 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-app-accent"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-[9px] uppercase font-black tracking-wider text-app-muted">Translation</label>
+                              <input
+                                type="text"
+                                value={tempPhraseTranslation}
+                                onChange={(e) => setTempPhraseTranslation(e.target.value)}
+                                className="w-full bg-app-bg text-app-fg rounded-lg py-1 px-2.5 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-app-accent"
+                              />
+                            </div>
+                          </div>
+                          
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div className="space-y-1">
+                              <label className="text-[9px] uppercase font-black tracking-wider text-app-muted">Poetic Study Example (Optional)</label>
+                              <input
+                                type="text"
+                                value={tempPhraseExample}
+                                onChange={(e) => setTempPhraseExample(e.target.value)}
+                                className="w-full bg-app-bg text-app-fg rounded-lg py-1 px-2.5 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-app-accent"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-[9px] uppercase font-black tracking-wider text-app-muted">Keyword Category / Grammar Tag</label>
+                              <input
+                                type="text"
+                                value={tempPhraseType}
+                                onChange={(e) => setTempPhraseType(e.target.value)}
+                                placeholder="idiom, slang, verb, cultural..."
+                                className="w-full bg-app-bg text-app-fg rounded-lg py-1 px-2.5 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-app-accent"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="flex items-center justify-between text-[10px] uppercase font-bold tracking-widest leading-none pt-2 border-t border-app-card-border/20 select-none">
+                            <button
+                              type="button"
+                              onClick={() => deletePhraseItem(block.id, phrase.id)}
+                              className="text-red-400 hover:text-red-500 cursor-pointer"
+                            >
+                              Delete Phrase
+                            </button>
+                            <div className="flex items-center gap-3">
+                              <button
+                                type="button"
+                                onClick={() => savePhraseEdit(block.id, phrase.id)}
+                                className="text-app-accent hover:opacity-80 flex items-center gap-0.5 cursor-pointer"
+                              >
+                                <Check size={12} /> Save Phrase
+                              </button>
+                              <button
+                                type="button"
+                                onClick={cancelEdit}
+                                className="text-app-muted hover:text-app-fg cursor-pointer"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <div 
+                        key={phrase.id} 
+                        className="group/phrase flex items-baseline justify-between py-1.5 px-3 -mx-3 hover:bg-app-card-border/10 rounded-xl transition-all duration-150 relative border-l border-transparent hover:border-app-accent/25"
+                      >
+                        <div className="flex items-baseline flex-wrap gap-x-2 gap-y-1.5 max-w-[85%]">
+                          {/* Play pronunciation button */}
+                          <button
+                            type="button"
+                            onClick={() => handleVoicing(phrase.text)}
+                            className="p-1 hover:bg-app-bg text-app-muted hover:text-app-fg rounded-lg transition-transform hover:scale-105 inline-flex shrink-0 border border-transparent hover:border-app-card-border align-middle leading-none"
+                            title="Pronounce"
+                          >
+                            <Volume2 size={10.5} />
+                          </button>
+
+                          {/* Foreign Key Phrase word */}
+                          <span 
+                            onClick={() => startPhraseEdit(phrase)}
+                            className="font-mono text-[13px] md:text-sm font-bold text-app-fg tracking-tight leading-none text-left cursor-text hover:text-app-accent"
+                          >
+                            {phrase.text}
+                          </span>
+
+                          {/* Category Badge / Indicator */}
+                          {phrase.type && phrase.type !== 'phrase' && (
+                            <span className="text-[8.5px] uppercase font-black tracking-widest text-app-accent leading-none scale-[0.9] opacity-60 self-center">
+                              {phrase.type}
+                            </span>
+                          )}
+
+                          {/* Simple Dash separator & translation */}
+                          <span className="text-xs text-app-muted">—</span>
+                          <span 
+                            onClick={() => startPhraseEdit(phrase)}
+                            className="text-xs font-semibold text-app-muted cursor-text hover:text-app-fg transition-colors"
+                          >
+                            {phrase.translation}
+                          </span>
+
+                          {/* Embedded Poetic Example */}
+                          {phrase.studyExample && (
+                            <span 
+                              onClick={() => startPhraseEdit(phrase)}
+                              className="text-[10.5px] font-medium text-app-muted italic opacity-60 ml-2 border-l border-app-card-border/65 pl-2 leading-none self-center cursor-text"
+                            >
+                              "{phrase.studyExample}"
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Inline Delicate FSRS / Cards Sync controls */}
+                        <div className="flex items-center gap-2 select-none opacity-0 group-hover/phrase:opacity-100 focus-within:opacity-100 transition-opacity duration-200">
+                          {/* Open editor shortcut */}
+                          <button
+                            type="button"
+                            onClick={() => startPhraseEdit(phrase)}
+                            className="text-[9px] uppercase font-bold tracking-wider text-app-muted hover:text-app-fg cursor-pointer p-0.5"
+                          >
+                            Edit
+                          </button>
+
+                          {/* Star/Check Card Icon */}
+                          <button
+                            type="button"
+                            onClick={() => handleTogglePhraseSaved(phrase)}
+                            className={`p-1.5 rounded-full transition-all duration-200 cursor-pointer ${
+                              isSaveActive 
+                                ? 'bg-emerald-500/10 text-emerald-400 font-bold border border-emerald-500/20' 
+                                : 'bg-app-bg text-app-muted hover:text-app-fg border border-app-card-border/30 hover:border-app-accent'
+                            }`}
+                            title={isSaveActive ? 'Saved in Study Cards' : 'Add phrase to Cards'}
+                          >
+                            {isSaveActive ? <Check size={11} /> : <Plus size={11} />}
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Quiet add word card block inside specific kinds */}
+                {(['sections', 'lexical_groups', 'takeaways'] as string[]).includes(block.kind) && !editingBlockId && (
+                  <div className="pt-2 select-none">
+                    <button
+                      type="button"
+                      onClick={() => addPhraseItem(block.id)}
+                      className="inline-flex items-center gap-1 text-[10px] uppercase font-black tracking-widest text-app-muted hover:text-app-accent/80 transition-colors cursor-pointer"
+                    >
+                      <Plus size={10} /> Add Practice Phrase
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Gentle Thin Divider line */}
+              {block.kind !== 'notes' && <div className="border-b border-app-card-border/35 pt-10" />}
+
+            </section>
+          );
+        })}
       </div>
 
-      {/* Regeneration prompt container at bottom */}
+      {/* Regeneration action panel at the deep bottom */}
       {handleRegenerateAnalysis && (
-        <div className="border border-app-card-border/50 bg-app-card rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="space-y-1 text-center sm:text-left">
-            <h5 className="text-xs font-black uppercase tracking-wider text-app-fg">Reset AI Lecture Analysis</h5>
-            <p className="text-[10px] text-app-fg opacity-40 max-w-md font-medium leading-normal">
-              Would you like to ask the Gemini AI music expert to rebuild the entire structured translation and lecture breakdown for this song again?
+        <div className="border border-app-card-border/30 rounded-3xl p-6 flex flex-col md:flex-row items-center justify-between gap-6 mt-20" id="reset-lecture-block">
+          <div className="space-y-1 text-center md:text-left select-none">
+            <h5 className="text-[12px] font-black uppercase tracking-[0.18em] text-app-fg leading-none flex items-center justify-center md:justify-start gap-1">
+              <RefreshCw size={11} className="text-app-accent shrink-0" /> Rebuild Analysis Lecture
+            </h5>
+            <p className="text-[11px] text-app-fg opacity-40 max-w-sm font-medium leading-normal">
+              Re-engage Gemini AI music specialists to reconstruct the structured language breakdown essay from the source lyrics block.
             </p>
           </div>
           <button
             type="button"
             onClick={handleRegenerateAnalysis}
-            className="flex items-center gap-2 px-5 py-2.5 bg-app-bg hover:bg-app-card border border-app-card-border text-app-fg rounded-xl text-xs font-black uppercase tracking-wider transition-all hover:scale-[1.02] cursor-pointer"
+            className="flex items-center gap-2 px-5 py-2.5 bg-app-fg hover:bg-app-fg-hover cursor-pointer text-app-bg rounded-xl text-[10px] font-black uppercase tracking-wider transition-all hover:scale-[1.03]"
           >
-            <RefreshCw size={13} className="text-app-accent shrink-0" /> Regenerate Lecture
+            Regenerate Essay
           </button>
         </div>
       )}

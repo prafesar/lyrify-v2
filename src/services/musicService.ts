@@ -519,13 +519,24 @@ export interface LyricsLine {
   };
 }
 
+export interface StructuredSectionPhrase {
+  id: string;
+  text: string;
+  translation: string;
+  studyExample?: string;
+  type?: string;
+  source: 'ai' | 'manual';
+  lineIds?: string[];
+}
+
 export interface StructuredLectureBlock {
   id: string;
-  kind: 'summary' | 'themes' | 'motifs' | 'context' | 'important_lines' | 'takeaways' | 'notes';
+  kind: 'overview' | 'emotions' | 'sections' | 'lexical_groups' | 'takeaways' | 'notes' | 'summary' | 'themes' | 'motifs' | 'context' | 'important_lines';
   title?: string;
   text: string;
   source: 'ai' | 'manual';
   lineIds?: string[];
+  phrases?: StructuredSectionPhrase[];
 }
 
 export interface TrackLyricsData {

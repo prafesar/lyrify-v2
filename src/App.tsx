@@ -3135,6 +3135,9 @@ export default function App() {
                         <StructuredAnalysisLecture
                           currentTrack={currentTrack}
                           targetLanguage={targetLanguage}
+                          phraseMetadata={phraseMetadata}
+                          handleSetAnalysisPhraseStatus={handleSetAnalysisPhraseStatus}
+                          speak={speak}
                           onUpdateTrack={async (updatedTrack) => {
                             setCurrentTrack(updatedTrack);
                             await saveTrackData(updatedTrack.trackId, updatedTrack);

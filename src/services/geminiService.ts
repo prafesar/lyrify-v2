@@ -1854,21 +1854,20 @@ export async function fetchStructuredLecture(
   artist: string,
   targetLanguage: string
 ): Promise<StructuredLectureBlock[]> {
-  const prompt = `Role: Expert literary and musical analyst, custom language educator.
-Analyzing the song "${title}" by "${artist}". 
-
-Linguistic goal: All commentary, explanations, subtitles, and bullet points MUST be written in ${targetLanguage}.
+  const prompt = `Role: Senior Literary Scholar & Language Educator.
+Song: "${title}" by "${artist}". 
+Goal: Provide a highly engaging, structured, and beautiful annotated analysis/lecture in ${targetLanguage}.
 
 Instructions:
-Generate a structured, engaging, and detailed scholarly lecture/breakdown of the song. 
-Do not use a generic text blob. Separate the content strictly into these 7 predefined categories:
-1. 'summary': Executive summary of the song's primary situation, emotional premise, and main message.
-2. 'themes': Themes & deeper philosophical/emotional concepts explored (e.g., identity, loss, rebellion).
-3. 'motifs': Motifs, recurring images, metaphoric or symbolic language (e.g., references to seasons, colors, elements).
-4. 'context': Socio-cultural backstory, plot, release era history, slang influences, or interesting trivia.
-5. 'important_lines': Specifically highlighted lines from the lyrics that carry structural climax or beautiful poetry, explaining why they matter.
-6. 'takeaways': Linguistic insights, grammar/slang tricks, cultural or idiomatic takeaways for language learners.
-7. 'notes': Pedagogical guidance, review recommendations, or notes to help the student learn.
+Generate a detailed editorial lecture divided into these 6 strict categories.
+1. 'overview': High-level narrative, situation, central emotional premise, and backstory.
+2. 'emotions': Emotional journey, mood transitions, psychological impact, and artistic tone.
+3. 'sections': Detailed structural breakdown of the song (e.g. Intro, Verses, Chorus, Outro) with line groupings and interpretations.
+4. 'lexical_groups': Key vocabulary and idiomatic groups clustered by theme or grammar categories (e.g., words about memory, conditional tense, slang).
+5. 'takeaways': Major linguistic tricks, cultural insights, grammar takeaways, and idiomatic discoveries.
+6. 'notes': Pedagogical tips, recommendations for practicing shadow/listening modes, and user workspace encouragement.
+
+Additionally, for sections like 'sections', 'lexical_groups', or 'takeaways', extract key target phrases/idioms as a structured list of vocabulary elements ('phrases') so the user can study them. Each phrase must be a useful vocabulary chunk or slang phrase found in the song.
 
 Lyrics to analyze:
 ${lyrics.substring(0, 4000)}
@@ -1876,18 +1875,29 @@ ${lyrics.substring(0, 4000)}
 Return a JSON array of blocks conforming EXACTLY to this schema:
 [
   {
-    "id": "block-summary",
-    "kind": "summary",
-    "title": "Core Story & Summary",
-    "text": "Detailed overview...",
-    "source": "ai"
+    "id": "block-overview",
+    "kind": "overview",
+    "title": "Narrative Narrative & Overview",
+    "text": "Detailed markdown explanation...",
+    "source": "ai",
+    "phrases": []
   },
   {
-    "id": "block-themes",
-    "kind": "themes",
-    "title": "Key Themes & Interpretations",
-    "text": "Themes detail...",
-    "source": "ai"
+    "id": "block-lexic",
+    "kind": "lexical_groups",
+    "title": "Visual Imagery & Vocabulary Groups",
+    "text": "Discussion of the thematic vocabulary groups in markdown...",
+    "source": "ai",
+    "phrases": [
+      {
+        "id": "phr-1",
+        "text": "original song phrase",
+        "translation": "translated phrase meaning",
+        "studyExample": "Optional sentence demonstrating use or poetic context",
+        "type": "idiom/slang/verb",
+        "source": "ai"
+      }
+    ]
   }
 ]`;
 
@@ -1905,11 +1915,30 @@ Return a JSON array of blocks conforming EXACTLY to this schema:
               id: { type: Type.STRING },
               kind: { 
                 type: Type.STRING, 
-                enum: ['summary', 'themes', 'motifs', 'context', 'important_lines', 'takeaways', 'notes'] 
+                enum: ['overview', 'emotions', 'sections', 'lexical_groups', 'takeaways', 'notes'] 
               },
               title: { type: Type.STRING },
               text: { type: Type.STRING },
-              source: { type: Type.STRING }
+              source: { type: Type.STRING },
+              phrases: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    id: { type: Type.STRING },
+                    text: { type: Type.STRING },
+                    translation: { type: Type.STRING },
+                    studyExample: { type: Type.STRING },
+                    type: { type: Type.STRING },
+                    source: { type: Type.STRING },
+                    lineIds: {
+                      type: Type.ARRAY,
+                      items: { type: Type.STRING }
+                    }
+                  },
+                  required: ["id", "text", "translation", "source"]
+                }
+              }
             },
             required: ["id", "kind", "title", "text", "source"]
           }
@@ -1924,11 +1953,12 @@ Return a JSON array of blocks conforming EXACTLY to this schema:
     // Return high quality fallback lecture blocks if AI fails
     return [
       {
-        id: "fallback-summary",
-        kind: "summary",
+        id: "fallback-overview",
+        kind: "overview",
         title: "Song Overview",
-        text: `Overview analysis for "${title}" by ${artist}. This track contains beautiful lyrical layers and serves as a wonderful study material for learning. Connect each line with your heart to master the tone and meaning.`,
-        source: "ai"
+        text: `Overview analysis for "${title}" by ${artist}. This track contains beautiful lyrical layers and serves as wonderful study material for learning. Connect each line with your heart to master the tone and meaning.`,
+        source: "ai",
+        phrases: []
       }
     ];
   }
