@@ -21,11 +21,12 @@ import {
   buildStarredLinesAnalysisInput, 
   mergeGeneratedPhrasesForLines
 } from "../services/lyricsAnalysisService";
+import { fetchStructuredLecture } from "../services/geminiService";
 
 export interface UseTrackSessionResult {
   currentTrack: TrackLyricsData | null;
   isLoadingLyrics: boolean;
-  loadingStep: "searching" | "meaning" | "analyzing" | "translating" | "idle";
+  loadingStep: "searching" | "meaning" | "lecture" | "analyzing" | "translating" | "idle";
   lyricsFetchError: string | null;
   analysisError: string | null;
   manualLyrics: string;
@@ -297,8 +298,9 @@ export function useTrackSession(): UseTrackSessionResult {
 
     const hasPhrases = targetTrack.lines.some(l => l.phrases && l.phrases.length > 0);
     const completed = targetTrack.processingStatus.stage3_completed && hasPhrases;
+    const hasLecture = targetTrack.lectureBlocks && targetTrack.lectureBlocks.length > 0;
 
-    if (!force && completed) return;
+    if (!force && completed && hasLecture) return;
 
     setIsGeneratingAnalysis(true);
     setAnalysisError(null);
@@ -339,6 +341,21 @@ export function useTrackSession(): UseTrackSessionResult {
         callbacks.loadCommunityTracks();
       }
 
+      if (force || !trackData.lectureBlocks || trackData.lectureBlocks.length === 0) {
+        setLoadingStep("lecture");
+        try {
+          const blocks = await fetchStructuredLecture(trackData.rawLyrics, trackData.title, trackData.artist, targetLanguage, force);
+          trackData = {
+            ...trackData,
+            lectureBlocks: blocks
+          };
+          setCurrentTrack(trackData);
+          saveTrackData(trackData.trackId, trackData);
+        } catch (e) {
+          console.error("Failed to generate lecture blocks:", e);
+        }
+      }
+
       setLoadingStep("analyzing");
       await runStage3(trackData, targetLanguage, force);
     } catch (err: any) {
@@ -365,6 +382,7 @@ export function useTrackSession(): UseTrackSessionResult {
     const resetTrack: TrackLyricsData = {
       ...currentTrack,
       meaning: undefined,
+      lectureBlocks: undefined,
       promptVersion: undefined,
       translationPromptVersion: undefined,
       lines: currentTrack.lines.map(line => ({

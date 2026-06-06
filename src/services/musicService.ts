@@ -519,6 +519,27 @@ export interface LyricsLine {
   };
 }
 
+export interface StructuredSectionPhrase {
+  id: string;
+  text: string;
+  translation: string;
+  studyExample?: string;
+  type?: string;
+  source: 'ai' | 'manual';
+  lineIds?: string[];
+  priority?: "core" | "colloquial" | "cultural" | "advanced";
+}
+
+export interface StructuredLectureBlock {
+  id: string;
+  kind: 'overview' | 'emotions' | 'sections' | 'lexical_groups' | 'takeaways' | 'notes' | 'summary' | 'themes' | 'motifs' | 'context' | 'important_lines';
+  title?: string;
+  text: string;
+  source: 'ai' | 'manual';
+  lineIds?: string[];
+  phrases?: StructuredSectionPhrase[];
+}
+
 export interface TrackLyricsData {
   trackId: string;
   itunesTrackId?: string;
@@ -537,6 +558,7 @@ export interface TrackLyricsData {
   authors?: string;
   lyricSource?: string;
   meaning?: string;
+  lectureBlocks?: StructuredLectureBlock[];
   meanings?: {
     en?: string;
     es?: string;

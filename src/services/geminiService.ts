@@ -1,6 +1,6 @@
 import { db } from '../lib/firebase';
 import { doc, getDoc, setDoc, serverTimestamp, collection, query, orderBy, limit, getDocs, where } from 'firebase/firestore';
-import { TrackLyricsData } from "./musicService";
+import { TrackLyricsData, StructuredLectureBlock } from "./musicService";
 
 export enum Type {
   TYPE_UNSPECIFIED = "TYPE_UNSPECIFIED",
@@ -66,6 +66,7 @@ async function callGeminiApi(params: { model: string; contents: any; config?: an
 }
 export const ANALYSIS_PROMPT_VERSION = 3;
 export const TRANSLATION_PROMPT_VERSION = 4;
+export const LECTURE_PROMPT_VERSION = 3;
 
 export interface TrackMeaningEntry extends TrackMeaningResult {
   trackKey: string;
@@ -1844,6 +1845,176 @@ export async function saveTrackToSharedCache(track: TrackLyricsData): Promise<vo
     console.log(`[SharedCache] Saved track analysis for ${track.title} directly to Firestore!`);
   } catch (err) {
     console.error("[SharedCache] Failed to save track analysis to Firestore:", err);
+  }
+}
+
+
+export async function fetchStructuredLecture(
+  lyrics: string,
+  title: string,
+  artist: string,
+  targetLanguage: string,
+  forceRegenerate: boolean = false
+): Promise<StructuredLectureBlock[]> {
+  const trackKey = await computeTrackKey(title, [artist]);
+  const lyricsHash = await computeLyricsHash(lyrics);
+  const targetLanguageCode = getTargetLangCode2Letter(targetLanguage);
+  const docId = `lecture_${trackKey}_${lyricsHash}_${targetLanguageCode}_v${LECTURE_PROMPT_VERSION}`;
+
+  if (!forceRegenerate) {
+    try {
+      const cacheRef = doc(db, 'lecture_analysis_cache', docId);
+      const cacheSnap = await getDoc(cacheRef);
+      if (cacheSnap.exists()) {
+        console.log(`[Cache Hit] Lecture Analysis for "${title}" - "${artist}" (${targetLanguageCode})`);
+        const cachedBlocks = cacheSnap.data().lectureBlocks as StructuredLectureBlock[];
+        if (cachedBlocks && cachedBlocks.length > 0) {
+          return cachedBlocks;
+        }
+      }
+    } catch (err) {
+      console.error("Cache read error (lecture_analysis_cache):", err);
+    }
+  }
+
+  const prompt = `Role: Senior Literary Scholar & Music Educator.
+Song Name: "${title}" by "${artist}".
+Target Language for Lecture/Analysis text: ${targetLanguage}.
+
+Instructions:
+Generate an outstanding, interactive, well-structured, and highly engaging annotated learning guide (lecture) of the song. No general boilerplate or robotic introductory text. Keep explanations direct, concise, and deeply informative for language learners.
+
+STRICT DIDACTIC GUIDELINES:
+1. DESIGNED FOR LEARNERS: Every block must be immediately useful for someone studying the song's language. Clearly separate:
+   - What the song/section means in its cultural context
+   - What key words, idioms, or grammar structures are used
+   - Which expressions are highly productive and worth bringing into active vocabulary
+2. COMPACT & VISUAL: Avoid long, continuous literary paragraphs. Use concise markdown checklists, bold formatting, and bullet points. Never use markdown tables.
+3. UNIQUE PHRASES: Do NOT duplicate or replicate phrase items across different blocks. Each phrase list across the entire JSON array must remain completely distinct, highly relevant, and unique.
+4. QUALITY OVER QUANTITY FOR PHRASES: Extract phrases that are conversation-ready, highly reusable, or illustrative of important grammar. Avoid static, archaic, or broken fragments that have no speech utility. Always define base/canonical form (e.g. infinitives for verbs).
+
+REQUIRED BLOCK STRUCTURE:
+Generate a logical flow of blocks matching the following outline. You can return multiple cards of 'sections' to depict different phases of the lyrics.
+
+1. 'overview' (1 block):
+   - title: e.g. "Sociocultural Context & Message"
+   - text: A concise, engaging summary of the track's storytelling context, origins, and core premise.
+2. 'emotions' (1 block):
+   - title: e.g. "Acoustic Moods & Psychological Arc"
+   - text: Analyze the emotional registers, shifts in feeling, and aesthetic style.
+3. 'sections' (3 to 5 separate blocks):
+   - Generate multiple section blocks mapping natural narrative or emotional phases of the track.
+   - DO NOT use generic placeholders like "Section 1", "Verse 1", or "Chorus". Create expressive, thematic titles (e.g., "Youth and Bitter Illusions", "The Melancholic Echo of the Chorus", "Quiet Acceptance").
+   - text: Brief bullet-point guide detailing (a) what's happening in this track segment, (b) the emotional undertones, and (c) any specific linguistic/pronunciation/cultural note.
+   - phrases: Extract 2-5 useful, high-impact key expressions appearing in this section of the lyrics.
+4. 'lexical_groups' (1 block):
+   - title: e.g. "Thematic Word Clusters"
+   - text: Identify 2-4 conceptual categories in the song (such as slang, metaphors of water, expressions of memory, or conversational formulas) and briefly describe their usage.
+   - phrases: Extract and group vocabulary representing these lexical clusters.
+5. 'takeaways' (1 block):
+   - title: e.g. "Active Speaking Checklist & Grammar Tricks"
+   - text: High-yield explanation of key grammatical discoveries, idiomatic shortcuts, or conversational habits. Focus on the query: "What can I readily say in daily speech using this song's constructs?"
+   - phrases: Extract 8-15 most reusable and adaptable collocations or base forms.
+6. 'notes' (0 to 1 block, optional):
+   - title: e.g. "Pedagogical Grammar Annex"
+   - text: Advanced cultural remarks or complex spelling/orthography notices (omit or return empty if not needed).
+
+PHRASE OBJECT SCHEMAS:
+For any blocks with a nested 'phrases' array, strictly populated:
+- 'id': UNIQUE id string (e.g. "phr-overview-1", "phr-sec-youth-3")
+- 'text': Canonical/base form of the word, phrasal verb, or idiom in the original language of the song (e.g. "to seek" instead of conjugated text, base singular nouns, etc.). NEVER copy-paste randomly truncated lyrics fragments.
+- 'translation': Concise, neat translation suited for a flashcard back. Fits perfectly as a direct definition in ${targetLanguage}. No long paragraphs!
+- 'studyExample': (Optional) An elegant, separate illustrative sentence demonstrating natural usage of this expression in a standard daily context.
+- 'type': Grammatical or semantic type (e.g. "idiom", "slang", "verb", "phrase", "expression", "grammar pattern").
+- 'priority': Essential didactic rating assigned exactly to one of these:
+  * "core": High-frequency words or crucial everyday structures.
+  * "colloquial": Informal slang, speech particles, or conversational idioms.
+  * "cultural": Context-bound references, historic/metaphorical idioms, or allusions.
+  * "advanced": Low-frequency/complex vocabulary or elevated aesthetic styles.
+- 'source': Always "ai"
+
+Lyrics to analyze:
+${lyrics.substring(0, 4000)}
+
+Return a valid JSON array of objects conforming exactly to the schema. Keep all explanations and translations in matches for ${targetLanguage}.`;
+
+  try {
+    const response = await callGeminiApi({
+      model: "gemini-2.5-flash",
+      contents: prompt,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              id: { type: Type.STRING },
+              kind: { 
+                type: Type.STRING, 
+                enum: ['overview', 'emotions', 'sections', 'lexical_groups', 'takeaways', 'notes'] 
+              },
+              title: { type: Type.STRING },
+              text: { type: Type.STRING },
+              source: { type: Type.STRING },
+              phrases: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    id: { type: Type.STRING },
+                    text: { type: Type.STRING },
+                    translation: { type: Type.STRING },
+                    studyExample: { type: Type.STRING },
+                    type: { type: Type.STRING },
+                    source: { type: Type.STRING },
+                    priority: { 
+                      type: Type.STRING, 
+                      enum: ["core", "colloquial", "cultural", "advanced"] 
+                    },
+                    lineIds: {
+                      type: Type.ARRAY,
+                      items: { type: Type.STRING }
+                    }
+                  },
+                  required: ["id", "text", "translation", "source"]
+                }
+              }
+            },
+            required: ["id", "kind", "title", "text", "source"]
+          }
+        }
+      }
+    });
+
+    const blocks = JSON.parse(response.text) as StructuredLectureBlock[];
+    
+    // Save to cache async
+    if (blocks && blocks.length > 0) {
+      setDoc(doc(db, 'lecture_analysis_cache', docId), {
+        lectureBlocks: blocks,
+        trackKey,
+        lyricsHash,
+        targetLanguage: targetLanguage,
+        lecturePromptVersion: LECTURE_PROMPT_VERSION,
+        createdAt: serverTimestamp(),
+      }).catch(e => console.error("Cache write error (lecture_analysis_cache):", e));
+    }
+
+    return blocks;
+  } catch (err) {
+    console.error("fetchStructuredLecture failed:", err);
+    // Return high quality fallback lecture blocks if AI fails
+    return [
+      {
+        id: "fallback-overview",
+        kind: "overview",
+        title: "Song Overview",
+        text: `Overview analysis for "${title}" by ${artist}. This track contains beautiful lyrical layers and serves as wonderful study material for learning. Connect each line with your heart to master the tone and meaning.`,
+        source: "ai",
+        phrases: []
+      }
+    ];
   }
 }
 

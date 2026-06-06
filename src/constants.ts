@@ -1,3 +1,5 @@
+import { StructuredLectureBlock } from "./services/musicService";
+
 export interface StructuredAnalysis {
   meaning: string;
   phrases: {
@@ -65,6 +67,7 @@ export interface Track {
     promptVersion?: number;
   };
   structuredAnalysis?: StructuredAnalysis;
+  lectureBlocks?: StructuredLectureBlock[];
   spotifyUrl?: string;
   appleMusicUrl?: string;
   geniusUrl?: string;

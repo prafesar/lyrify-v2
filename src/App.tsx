@@ -96,6 +96,7 @@ import { TracksHomeShell } from "./components/TracksHomeShell";
 import { DailyProgressBlock } from "./components/DailyProgressBlock";
 import { ResumeStudyBlock } from "./components/ResumeStudyBlock";
 import { AnalysisPhraseWorkspace } from "./components/AnalysisPhraseWorkspace";
+import { StructuredAnalysisLecture } from "./components/StructuredAnalysisLecture";
 import { LineWorkspace } from "./components/LineWorkspace";
 
 
@@ -2510,7 +2511,7 @@ export default function App() {
                         } else if (actionType === 'generate_analysis') {
                           handleNextStepClickDirect();
                         } else if (actionType === 'save_phrase') {
-                          setActiveTab('analysis');
+                          setActiveTab('cards');
                         } else if (actionType === 'go_to_study' || actionType === 'review_again') {
                           setStudyTrackId(currentTrack.trackId);
                           goToStudy();
@@ -3113,23 +3114,113 @@ export default function App() {
                           </div>
                         </div>
                         <div className="space-y-2">
-                          <h3 className="text-lg font-black text-app-fg uppercase tracking-widest">
-                            {loadingStep === "searching" ? "Finding Lyrics" : "Deep Analysis"}
+                          <h3 className="text-lg font-black text-app-fg uppercase tracking-widest text-center">
+                            {loadingStep === "searching" ? "Finding Lyrics" : loadingStep === "lecture" ? "Generating Lecture" : "Deep Analysis"}
                           </h3>
                           <div className="flex items-center justify-center gap-3">
                              <div className="flex gap-1">
                                 <div className={cn("w-1 h-1 rounded-full", loadingStep === "searching" ? "bg-amber-500 animate-pulse" : "bg-emerald-500")} />
-                                <div className={cn("w-1 h-1 rounded-full", loadingStep === "analyzing" ? "bg-app-accent animate-pulse" : "bg-app-fg/10")} />
+                                <div className={cn("w-1 h-1 rounded-full", loadingStep === "lecture" ? "bg-purple-500 animate-pulse" : loadingStep === "analyzing" ? "bg-app-accent animate-pulse" : "bg-app-fg/10")} />
                              </div>
                              <span className="text-[10px] font-black uppercase tracking-[0.2em] opacity-40">Consulting Gemini</span>
                           </div>
                         </div>
                       </div>
-                    ) : ((currentTrack.phrases && currentTrack.phrases.length > 0) || currentTrack.lines.some(l => l.phrases && l.phrases.length > 0)) ? (
+                    ) : (currentTrack.lectureBlocks && currentTrack.lectureBlocks.length > 0) ? (
                       <motion.div
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
-                        className="space-y-12"
+                        className="space-y-12 animate-in fade-in zoom-in duration-300"
+                      >
+                        <StructuredAnalysisLecture
+                          currentTrack={currentTrack}
+                          targetLanguage={targetLanguage}
+                          phraseMetadata={phraseMetadata}
+                          handleSetAnalysisPhraseStatus={handleSetAnalysisPhraseStatus}
+                          speak={speak}
+                          onUpdateTrack={async (updatedTrack) => {
+                            setCurrentTrack(updatedTrack);
+                            await saveTrackData(updatedTrack.trackId, updatedTrack);
+                            loadCommunityTracks();
+                          }}
+                          isGeneratingAnalysis={isGeneratingAnalysis}
+                          handleRegenerateAnalysis={handleRegenerateAnalysis}
+                        />
+                      </motion.div>
+                    ) : (
+                      <div className="py-24 flex flex-col items-center justify-center text-center space-y-8 font-sans max-w-md mx-auto">
+                        <div className="w-16 h-16 rounded-[1.5rem] bg-app-card border border-app-card-border/40 flex items-center justify-center text-app-fg opacity-20">
+                          <Brain size={32} />
+                        </div>
+                        <div className="space-y-3">
+                          <h3 className="text-xl font-bold text-app-fg tracking-tight">No Analysis Yet</h3>
+                          <p className="text-sm text-app-fg opacity-50 font-medium leading-relaxed px-4">
+                            Run AI-analysis to generate a structured lecture about the song, its meaning, emotions, and key vocabulary. Once created, you will be able to edit the content and save phrase cards.
+                          </p>
+                        </div>
+
+                        {analysisError && (
+                          <div id="analysis-error-banner" className="w-full p-5 rounded-[1.5rem] bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs text-center space-y-2">
+                            <p className="font-bold uppercase tracking-wider text-[10px]">Analysis Error</p>
+                            <p className="opacity-90">{analysisError}</p>
+                          </div>
+                        )}
+
+                        <div className="pt-2">
+                          <button
+                            onClick={() => handleGenerateAnalysis()}
+                            className="px-8 py-4 rounded-2xl bg-app-fg text-app-bg font-black uppercase tracking-[0.18em] text-[10px] shadow-xl hover:scale-[1.03] transition-all flex items-center gap-2.5 cursor-pointer hover:bg-app-fg-hover"
+                          >
+                            <Sparkles size={14} className="text-app-bg" />
+                            Generate AI Analysis
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {activeTab === "cards" && (
+                  <div className="pb-32 space-y-12">
+                    {isGeneratingAnalysis ? (
+                      <div className="flex flex-col items-center justify-center py-24 text-center space-y-6">
+                        <div className="relative w-24 h-24 flex items-center justify-center">
+                          <div className="absolute inset-0 border-4 border-app-card-border rounded-full" />
+                          <motion.div
+                            animate={{ rotate: 360 }}
+                            transition={{ 
+                              duration: loadingStep === "searching" ? 2 : 1, 
+                              repeat: Infinity, 
+                              ease: "linear" 
+                            }}
+                            className="absolute inset-0 rounded-full border-4 border-t-transparent border-[var(--accent)]"
+                          />
+                          <div className="absolute inset-0 flex items-center justify-center">
+                            {loadingStep === "searching" ? (
+                               <SearchCode size={32} className="text-[var(--accent)]" />
+                            ) : (
+                               <Brain size={32} className="text-[var(--accent)]" />
+                            )}
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <h3 className="text-lg font-black text-app-fg uppercase tracking-widest text-center">
+                            {loadingStep === "searching" ? "Finding Lyrics" : loadingStep === "lecture" ? "Generating Lecture" : "Deep Analysis"}
+                          </h3>
+                          <div className="flex items-center justify-center gap-3">
+                             <div className="flex gap-1">
+                                <div className={cn("w-1 h-1 rounded-full", loadingStep === "searching" ? "bg-amber-500 animate-pulse" : "bg-emerald-500")} />
+                                <div className={cn("w-1 h-1 rounded-full", loadingStep === "lecture" ? "bg-purple-500 animate-pulse" : loadingStep === "analyzing" ? "bg-app-accent animate-pulse" : "bg-app-fg/10")} />
+                             </div>
+                             <span className="text-[10px] font-black uppercase tracking-[0.2em] opacity-40">Consulting Gemini</span>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (currentTrack.meaning || (currentTrack.phrases && currentTrack.phrases.length > 0) || currentTrack.lines.some(l => l.phrases && l.phrases.length > 0)) ? (
+                      <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="space-y-12 animate-in fade-in zoom-in duration-300"
                       >
                         <AnalysisPhraseWorkspace
                           currentTrack={currentTrack}
@@ -3151,35 +3242,23 @@ export default function App() {
                     ) : (
                       <div className="py-20 flex flex-col items-center justify-center text-center space-y-8 font-sans">
                         <div className="w-20 h-20 rounded-[2rem] bg-app-card border border-app-card-border flex items-center justify-center text-app-fg opacity-10">
-                          <Brain size={40} />
+                          <Bookmark size={40} />
                         </div>
                         <div className="space-y-3">
-                          <h3 className="text-2xl font-bold text-app-fg">No Analysis Yet</h3>
-                          {(() => {
-                            const starredCount = currentTrack?.lines?.filter(l => l.isStarred).length || 0;
-                            if (starredCount > 0) {
-                              return <p className="text-app-fg opacity-40 max-w-sm mx-auto font-sans">You have starred {starredCount} lines! Click below to run targeted analysis on them, or analyze the full song.</p>;
-                            }
-                            return <p className="text-app-fg opacity-40 max-w-sm mx-auto font-sans">Click below to start deep learning for this song, or star specific lines first for targeted analysis.</p>;
-                          })()}
+                          <h3 className="text-2xl font-bold text-app-fg">No Saved study phrases</h3>
+                          <p className="text-app-fg opacity-40 max-w-sm mx-auto font-sans leading-normal">
+                            Run Deep Analysis first to automatically extract and analyze core vocabulary/phrases, or star verses on the Lyrics page to study specific lines.
+                          </p>
                         </div>
-
-                        {analysisError && (
-                          <div id="analysis-error-banner" className="max-w-md mx-auto p-5 rounded-[1.5rem] bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs text-center space-y-2">
-                            <p className="font-bold uppercase tracking-wider text-[10px]">Analysis Error</p>
-                            <p className="opacity-90">{analysisError}</p>
-                          </div>
-                        )}
-
-                            <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
-                              <button
-                                onClick={() => handleGenerateAnalysis()}
-                                className="px-10 py-5 rounded-3xl bg-app-fg text-app-bg font-black uppercase tracking-[0.2em] text-[10px] shadow-2xl hover:scale-105 transition-all flex items-center gap-3"
-                              >
-                                <Sparkles size={16} />
-                                Generate Deep Analysis
-                              </button>
-                            </div>
+                        <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
+                          <button
+                            onClick={() => handleGenerateAnalysis()}
+                            className="px-10 py-5 rounded-3xl bg-app-fg text-app-bg font-black uppercase tracking-[0.2em] text-[10px] shadow-2xl hover:scale-105 transition-all flex items-center gap-3 cursor-pointer"
+                          >
+                            <Sparkles size={16} />
+                            Generate Phrase Cards
+                          </button>
+                        </div>
                       </div>
                     )}
                   </div>

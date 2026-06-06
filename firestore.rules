@@ -82,5 +82,10 @@ service cloud.firestore {
       allow get, list, create, update: if true;
       allow delete: if false;
     }
+
+    match /lecture_analysis_cache/{cacheId} {
+      allow get, list, create, update: if true;
+      allow delete: if false;
+    }
   }
 }

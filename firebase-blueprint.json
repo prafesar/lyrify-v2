@@ -136,6 +136,20 @@
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["phrases", "trackKey", "lyricsHash", "targetLanguage", "promptVersion", "createdAt"]
+    },
+    "LectureAnalysisCache": {
+      "title": "Lecture Analysis Cache",
+      "description": "Cached result of structured track analysis (lecture blocks) by target language, prompt version, trackKey, and lyricsHash.",
+      "type": "object",
+      "properties": {
+        "lectureBlocks": { "type": "array" },
+        "trackKey": { "type": "string" },
+        "lyricsHash": { "type": "string" },
+        "targetLanguage": { "type": "string" },
+        "lecturePromptVersion": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["lectureBlocks", "trackKey", "lyricsHash", "targetLanguage", "lecturePromptVersion", "createdAt"]
     }
   },
   "firestore": {
@@ -158,6 +172,10 @@
     "/phrase_analysis_cache/{cacheId}": {
       "schema": "PhraseAnalysisCache",
       "description": "Cache for phrase segments extraction and grammatical analysis."
+    },
+    "/lecture_analysis_cache/{cacheId}": {
+      "schema": "LectureAnalysisCache",
+      "description": "Cache for structured lecture blocks analysis."
     }
   }
 }
