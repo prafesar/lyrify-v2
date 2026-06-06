@@ -202,7 +202,8 @@ export const StructuredAnalysisLecture: React.FC<StructuredAnalysisLectureProps>
               translation: tempPhraseTranslation.trim(),
               studyExample: tempPhraseExample.trim() || undefined,
               type: tempPhraseType,
-              source: p.source
+              source: p.source,
+              priority: p.priority
             } as StructuredSectionPhrase;
           }
           return p;
@@ -515,6 +516,18 @@ export const StructuredAnalysisLecture: React.FC<StructuredAnalysisLectureProps>
                           {phrase.type && phrase.type !== 'phrase' && (
                             <span className="text-[8.5px] uppercase font-black tracking-widest text-app-accent leading-none scale-[0.9] opacity-60 self-center">
                               {phrase.type}
+                            </span>
+                          )}
+
+                          {/* Priority Badge / Didactic Indicator */}
+                          {phrase.priority && (
+                            <span className={`text-[8.5px] uppercase font-black tracking-[0.1em] px-1.5 py-0.5 rounded leading-none scale-[0.9] shrink-0 self-center ${
+                              phrase.priority === 'core' ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20' :
+                              phrase.priority === 'colloquial' ? 'bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20' :
+                              phrase.priority === 'cultural' ? 'bg-amber-500/10 text-amber-600 dark:text-amber-500/70 border border-amber-500/20' :
+                              'bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20'
+                            }`}>
+                              {phrase.priority}
                             </span>
                           )}
 

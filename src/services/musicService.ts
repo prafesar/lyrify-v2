@@ -527,6 +527,7 @@ export interface StructuredSectionPhrase {
   type?: string;
   source: 'ai' | 'manual';
   lineIds?: string[];
+  priority?: "core" | "colloquial" | "cultural" | "advanced";
 }
 
 export interface StructuredLectureBlock {

@@ -66,7 +66,7 @@ async function callGeminiApi(params: { model: string; contents: any; config?: an
 }
 export const ANALYSIS_PROMPT_VERSION = 3;
 export const TRANSLATION_PROMPT_VERSION = 4;
-export const LECTURE_PROMPT_VERSION = 2;
+export const LECTURE_PROMPT_VERSION = 3;
 
 export interface TrackMeaningEntry extends TrackMeaningResult {
   trackKey: string;
@@ -1882,73 +1882,61 @@ Song Name: "${title}" by "${artist}".
 Target Language for Lecture/Analysis text: ${targetLanguage}.
 
 Instructions:
-Generate an outstanding, educational, well-structured, and highly engaging annotated learning guide (lecture) of the song. No general boilerplate or robotic introductory text. Keep explanations direct, concise, and deeply informative.
+Generate an outstanding, interactive, well-structured, and highly engaging annotated learning guide (lecture) of the song. No general boilerplate or robotic introductory text. Keep explanations direct, concise, and deeply informative for language learners.
 
-STRICT CONSTRAINTS & NEGATIVE RULES:
-1. No general literary essay - write an educational learning content.
-2. NO MARKDOWN TABLES anywhere. Use lists and short paragraphs.
-3. DO NOT duplicate/replicate phrase items across different categories. Each phrase list across the entire JSON array must remain completely distinct, highly relevant, and unique.
-4. DO NOT write unneeded, filler, or formal dummy sentences. Let every block have rich, real text.
-5. Do not include unhelpful pedagogical advice in 'notes' (e.g. "you can practice shadowing"). Keep 'notes' to genuine annotations or empty if not needed.
+STRICT DIDACTIC GUIDELINES:
+1. DESIGNED FOR LEARNERS: Every block must be immediately useful for someone studying the song's language. Clearly separate:
+   - What the song/section means in its cultural context
+   - What key words, idioms, or grammar structures are used
+   - Which expressions are highly productive and worth bringing into active vocabulary
+2. COMPACT & VISUAL: Avoid long, continuous literary paragraphs. Use concise markdown checklists, bold formatting, and bullet points. Never use markdown tables.
+3. UNIQUE PHRASES: Do NOT duplicate or replicate phrase items across different blocks. Each phrase list across the entire JSON array must remain completely distinct, highly relevant, and unique.
+4. QUALITY OVER QUANTITY FOR PHRASES: Extract phrases that are conversation-ready, highly reusable, or illustrative of important grammar. Avoid static, archaic, or broken fragments that have no speech utility. Always define base/canonical form (e.g. infinitives for verbs).
 
-REQUIRED CATEGORIES & STRUCTURAL EXPECTATIONS:
-Generate EXACTLY 6 blocks, each representing one of these predefined 'kind' values in order:
+REQUIRED BLOCK STRUCTURE:
+Generate a logical flow of blocks matching the following outline. You can return multiple cards of 'sections' to depict different phases of the lyrics.
 
-1. 'overview': High-level narrative, socio-cultural settings, story origin, and core concept. Write 1 rich, creative, and highly specific text block about this actual song.
-2. 'emotions': Real emotional dynamics. Detail 3–6 concrete emotional anchors or transitions in the song (emotional journey).
-3. 'sections': Narrative phases of the track. Instead of template titles like "Verse 1" or "Chorus", create 3–5 descriptive section titles reflecting the specific lyrical phases (e.g. "Youth & Wild Chaos", "The Nostalgia of the Chorus", "The Acceptance"). Inside, write a brief markdown summary of each section and extract 3–6 useful phrase/idiom items from the lyrics associated with this section.
-4. 'lexical_groups': Meaningful grammar or thematic vocabulary groups (e.g., words about memories, slang, expressive emotional formulas). Group associated phrases (2–4 groups total) in the nested 'phrases' key.
-5. 'takeaways': Major linguistic discoveries, grammar rules, or idioms key to this song. Focus on: "What is actually worth taking into active review?". Provide 8–15 top reusable key phrases in the nested 'phrases' key.
-6. 'notes': Optional space for extra linguistic remarks, complex grammar notes, or workspace recommendations.
+1. 'overview' (1 block):
+   - title: e.g. "Sociocultural Context & Message"
+   - text: A concise, engaging summary of the track's storytelling context, origins, and core premise.
+2. 'emotions' (1 block):
+   - title: e.g. "Acoustic Moods & Psychological Arc"
+   - text: Analyze the emotional registers, shifts in feeling, and aesthetic style.
+3. 'sections' (3 to 5 separate blocks):
+   - Generate multiple section blocks mapping natural narrative or emotional phases of the track.
+   - DO NOT use generic placeholders like "Section 1", "Verse 1", or "Chorus". Create expressive, thematic titles (e.g., "Youth and Bitter Illusions", "The Melancholic Echo of the Chorus", "Quiet Acceptance").
+   - text: Brief bullet-point guide detailing (a) what's happening in this track segment, (b) the emotional undertones, and (c) any specific linguistic/pronunciation/cultural note.
+   - phrases: Extract 2-5 useful, high-impact key expressions appearing in this section of the lyrics.
+4. 'lexical_groups' (1 block):
+   - title: e.g. "Thematic Word Clusters"
+   - text: Identify 2-4 conceptual categories in the song (such as slang, metaphors of water, expressions of memory, or conversational formulas) and briefly describe their usage.
+   - phrases: Extract and group vocabulary representing these lexical clusters.
+5. 'takeaways' (1 block):
+   - title: e.g. "Active Speaking Checklist & Grammar Tricks"
+   - text: High-yield explanation of key grammatical discoveries, idiomatic shortcuts, or conversational habits. Focus on the query: "What can I readily say in daily speech using this song's constructs?"
+   - phrases: Extract 8-15 most reusable and adaptable collocations or base forms.
+6. 'notes' (0 to 1 block, optional):
+   - title: e.g. "Pedagogical Grammar Annex"
+   - text: Advanced cultural remarks or complex spelling/orthography notices (omit or return empty if not needed).
 
 PHRASE OBJECT SCHEMAS:
-For any blocks with a nested 'phrases' array, strictly populate:
-- 'id': UNIQUE id string (e.g. "phr-overview-1", "phr-sec-3")
-- 'text': Canonical/base form of the word or idiom in the original language of the song (e.g. verb infinitive like "to be", clean singular nouns, etc.). NEVER copy-paste randomly truncated fragments of lyrics.
-- 'translation': Concise, neat translation or list of meanings in ${targetLanguage}. Fits ideally like a flashcard back. No long paragraphs here!
-- 'studyExample': (Optional) Complete illustrative sentence demonstrating true usage.
-- 'type': Grammatical or stylistic type (e.g. "idiom", "slang", "verb", "metaphor", "phrasal verb", "expression").
-- 'source': Always "ai".
+For any blocks with a nested 'phrases' array, strictly populated:
+- 'id': UNIQUE id string (e.g. "phr-overview-1", "phr-sec-youth-3")
+- 'text': Canonical/base form of the word, phrasal verb, or idiom in the original language of the song (e.g. "to seek" instead of conjugated text, base singular nouns, etc.). NEVER copy-paste randomly truncated lyrics fragments.
+- 'translation': Concise, neat translation suited for a flashcard back. Fits perfectly as a direct definition in ${targetLanguage}. No long paragraphs!
+- 'studyExample': (Optional) An elegant, separate illustrative sentence demonstrating natural usage of this expression in a standard daily context.
+- 'type': Grammatical or semantic type (e.g. "idiom", "slang", "verb", "phrase", "expression", "grammar pattern").
+- 'priority': Essential didactic rating assigned exactly to one of these:
+  * "core": High-frequency words or crucial everyday structures.
+  * "colloquial": Informal slang, speech particles, or conversational idioms.
+  * "cultural": Context-bound references, historic/metaphorical idioms, or allusions.
+  * "advanced": Low-frequency/complex vocabulary or elevated aesthetic styles.
+- 'source': Always "ai"
 
 Lyrics to analyze:
 ${lyrics.substring(0, 4000)}
 
-Return a valid JSON array of objects conforming exactly to this schema:
-[
-  {
-    "id": "block-overview",
-    "kind": "overview",
-    "title": "Creative Overview",
-    "text": "Detailed overview text in ${targetLanguage}...",
-    "source": "ai",
-    "phrases": []
-  },
-  {
-    "id": "block-emotions",
-    "kind": "emotions",
-    "title": "Emotional Anchor Points",
-    "text": "Discussion of the emotional elements in ${targetLanguage}...",
-    "source": "ai",
-    "phrases": []
-  },
-  {
-    "id": "block-sec-1",
-    "kind": "sections",
-    "title": "Descriptive Name for Section 1 (e.g., Youth and Hopes)",
-    "text": "Description of why this section feels this way...",
-    "source": "ai",
-    "phrases": [
-      {
-        "id": "sec-phr-1",
-        "text": "base form of word/phrase",
-        "translation": "short translation",
-        "studyExample": "illustrative sentence",
-        "type": "idiom",
-        "source": "ai"
-      }
-    ]
-  }
-]`;
+Return a valid JSON array of objects conforming exactly to the schema. Keep all explanations and translations in matches for ${targetLanguage}.`;
 
   try {
     const response = await callGeminiApi({
@@ -1980,6 +1968,10 @@ Return a valid JSON array of objects conforming exactly to this schema:
                     studyExample: { type: Type.STRING },
                     type: { type: Type.STRING },
                     source: { type: Type.STRING },
+                    priority: { 
+                      type: Type.STRING, 
+                      enum: ["core", "colloquial", "cultural", "advanced"] 
+                    },
                     lineIds: {
                       type: Type.ARRAY,
                       items: { type: Type.STRING }
