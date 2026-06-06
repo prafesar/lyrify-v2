@@ -39,6 +39,7 @@ import {
   MoreVertical,
   FolderHeart,
   Edit3,
+  Bookmark,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { Track, Artist, Album } from "./constants";

@@ -39,7 +39,7 @@ export interface UseTrackSessionResult {
   
   setCurrentTrack: React.Dispatch<React.SetStateAction<TrackLyricsData | null>>;
   setIsLoadingLyrics: React.Dispatch<React.SetStateAction<boolean>>;
-  setLoadingStep: React.Dispatch<React.SetStateAction<"searching" | "meaning" | "analyzing" | "translating" | "idle">>;
+  setLoadingStep: React.Dispatch<React.SetStateAction<"searching" | "meaning" | "analyzing" | "translating" | "lecture" | "idle">>;
   setLyricsFetchError: React.Dispatch<React.SetStateAction<string | null>>;
   setAnalysisError: React.Dispatch<React.SetStateAction<string | null>>;
   setManualLyrics: React.Dispatch<React.SetStateAction<string>>;
@@ -134,7 +134,7 @@ export interface UseTrackSessionResult {
 export function useTrackSession(): UseTrackSessionResult {
   const [currentTrack, setCurrentTrack] = useState<TrackLyricsData | null>(null);
   const [isLoadingLyrics, setIsLoadingLyrics] = useState(false);
-  const [loadingStep, setLoadingStep] = useState<"searching" | "meaning" | "analyzing" | "translating" | "idle">("idle");
+  const [loadingStep, setLoadingStep] = useState<"searching" | "meaning" | "analyzing" | "translating" | "lecture" | "idle">("idle");
   const [lyricsFetchError, setLyricsFetchError] = useState<string | null>(null);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [manualLyrics, setManualLyrics] = useState("");
