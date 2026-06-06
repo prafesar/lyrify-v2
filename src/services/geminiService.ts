@@ -66,6 +66,7 @@ async function callGeminiApi(params: { model: string; contents: any; config?: an
 }
 export const ANALYSIS_PROMPT_VERSION = 3;
 export const TRANSLATION_PROMPT_VERSION = 4;
+export const LECTURE_PROMPT_VERSION = 2;
 
 export interface TrackMeaningEntry extends TrackMeaningResult {
   trackKey: string;
@@ -1852,34 +1853,61 @@ export async function fetchStructuredLecture(
   lyrics: string,
   title: string,
   artist: string,
-  targetLanguage: string
+  targetLanguage: string,
+  forceRegenerate: boolean = false
 ): Promise<StructuredLectureBlock[]> {
+  const trackKey = await computeTrackKey(title, [artist]);
+  const lyricsHash = await computeLyricsHash(lyrics);
+  const targetLanguageCode = getTargetLangCode2Letter(targetLanguage);
+  const docId = `lecture_${trackKey}_${lyricsHash}_${targetLanguageCode}_v${LECTURE_PROMPT_VERSION}`;
+
+  if (!forceRegenerate) {
+    try {
+      const cacheRef = doc(db, 'lecture_analysis_cache', docId);
+      const cacheSnap = await getDoc(cacheRef);
+      if (cacheSnap.exists()) {
+        console.log(`[Cache Hit] Lecture Analysis for "${title}" - "${artist}" (${targetLanguageCode})`);
+        const cachedBlocks = cacheSnap.data().lectureBlocks as StructuredLectureBlock[];
+        if (cachedBlocks && cachedBlocks.length > 0) {
+          return cachedBlocks;
+        }
+      }
+    } catch (err) {
+      console.error("Cache read error (lecture_analysis_cache):", err);
+    }
+  }
+
   const prompt = `Role: Senior Literary Scholar & Music Educator.
 Song Name: "${title}" by "${artist}".
 Target Language for Lecture/Analysis text: ${targetLanguage}.
 
 Instructions:
-Generate an engaging, structured editorial lecture / annotated guide of the song. Let typography and concise insights lead the layout.
-Break down the content strictly into these 6 categories, keeping explanations compact, direct, and free from literary fluff or boilerplate text.
+Generate an outstanding, educational, well-structured, and highly engaging annotated learning guide (lecture) of the song. No general boilerplate or robotic introductory text. Keep explanations direct, concise, and deeply informative.
 
-DO NOT write long academic essays. 
-DO NOT use markdown tables under any circumstances. Instead, use clean formatting, bullet lists, and short paragraphs.
-DO NOT duplicate the same phrase items across different blocks. Keep phrase lists distinct and high quality.
+STRICT CONSTRAINTS & NEGATIVE RULES:
+1. No general literary essay - write an educational learning content.
+2. NO MARKDOWN TABLES anywhere. Use lists and short paragraphs.
+3. DO NOT duplicate/replicate phrase items across different categories. Each phrase list across the entire JSON array must remain completely distinct, highly relevant, and unique.
+4. DO NOT write unneeded, filler, or formal dummy sentences. Let every block have rich, real text.
+5. Do not include unhelpful pedagogical advice in 'notes' (e.g. "you can practice shadowing"). Keep 'notes' to genuine annotations or empty if not needed.
 
-Predefined Categories to return:
-1. 'overview': High-level core ideas, narrative, central emotional premise, backstory, or socio-cultural setting.
-2. 'emotions': The song's emotional journey, mood transitions, and psychological impact. Let the text capture the track's authentic tone.
-3. 'sections': Narrative sections of the song reflecting real thematic shifts (e.g. "Youth / Chaos", "Melancholy of Chorus", "Acceptance & Bridge"). Include a markdown summary of their meaning, and associate them with a list of key phrases/idioms inside 'phrases'.
-4. 'lexical_groups': Meaningful vocabulary clusters grouped conceptually (e.g., words about memory, slang, expressive formulas). Explain the categories in the text and list the grouped phrase items in the nested 'phrases' key.
-5. 'takeaways': Major linguistic discoveries, grammar insights, or idiomatic tricks. Text must answer: "What is actually worth bringing into active review?" Keep nested 'phrases' restricted to the highest-yield, most reusable expressions.
-6. 'notes': Optional pedagogical remarks and recommendations for practicing listening/shadowing modes or future manual workspace additions.
+REQUIRED CATEGORIES & STRUCTURAL EXPECTATIONS:
+Generate EXACTLY 6 blocks, each representing one of these predefined 'kind' values in order:
 
-Phrase Object Schema Requirements:
-For blocks that contain associated phrases ('phrases' array), you MUST strictly adhere to this standard:
-- 'text': Canonical form of the word or expression (e.g. infinitive of the verb, base singular noun, natural idiom string). DO NOT casually copy-paste truncated fragments of the lyric line.
-- 'translation': Very short, card-ready translation or definition in ${targetLanguage}. Do not include long paragraphs or explanations here.
-- 'studyExample': (Optional) An illustrative complete sentence or phrase showing authentic usage.
-- 'type': A simple grammatical or stylistic classification (e.g., "idiom", "slang", "verb", "metaphor", "phrasal verb").
+1. 'overview': High-level narrative, socio-cultural settings, story origin, and core concept. Write 1 rich, creative, and highly specific text block about this actual song.
+2. 'emotions': Real emotional dynamics. Detail 3–6 concrete emotional anchors or transitions in the song (emotional journey).
+3. 'sections': Narrative phases of the track. Instead of template titles like "Verse 1" or "Chorus", create 3–5 descriptive section titles reflecting the specific lyrical phases (e.g. "Youth & Wild Chaos", "The Nostalgia of the Chorus", "The Acceptance"). Inside, write a brief markdown summary of each section and extract 3–6 useful phrase/idiom items from the lyrics associated with this section.
+4. 'lexical_groups': Meaningful grammar or thematic vocabulary groups (e.g., words about memories, slang, expressive emotional formulas). Group associated phrases (2–4 groups total) in the nested 'phrases' key.
+5. 'takeaways': Major linguistic discoveries, grammar rules, or idioms key to this song. Focus on: "What is actually worth taking into active review?". Provide 8–15 top reusable key phrases in the nested 'phrases' key.
+6. 'notes': Optional space for extra linguistic remarks, complex grammar notes, or workspace recommendations.
+
+PHRASE OBJECT SCHEMAS:
+For any blocks with a nested 'phrases' array, strictly populate:
+- 'id': UNIQUE id string (e.g. "phr-overview-1", "phr-sec-3")
+- 'text': Canonical/base form of the word or idiom in the original language of the song (e.g. verb infinitive like "to be", clean singular nouns, etc.). NEVER copy-paste randomly truncated fragments of lyrics.
+- 'translation': Concise, neat translation or list of meanings in ${targetLanguage}. Fits ideally like a flashcard back. No long paragraphs here!
+- 'studyExample': (Optional) Complete illustrative sentence demonstrating true usage.
+- 'type': Grammatical or stylistic type (e.g. "idiom", "slang", "verb", "metaphor", "phrasal verb", "expression").
 - 'source': Always "ai".
 
 Lyrics to analyze:
@@ -1891,22 +1919,30 @@ Return a valid JSON array of objects conforming exactly to this schema:
     "id": "block-overview",
     "kind": "overview",
     "title": "Creative Overview",
-    "text": "Clear and insightful overview in ${targetLanguage}...",
+    "text": "Detailed overview text in ${targetLanguage}...",
     "source": "ai",
     "phrases": []
   },
   {
-    "id": "block-sections",
+    "id": "block-emotions",
+    "kind": "emotions",
+    "title": "Emotional Anchor Points",
+    "text": "Discussion of the emotional elements in ${targetLanguage}...",
+    "source": "ai",
+    "phrases": []
+  },
+  {
+    "id": "block-sec-1",
     "kind": "sections",
-    "title": "Thematic Sections",
-    "text": "Discussion of the thematic movements in the lyrics...",
+    "title": "Descriptive Name for Section 1 (e.g., Youth and Hopes)",
+    "text": "Description of why this section feels this way...",
     "source": "ai",
     "phrases": [
       {
         "id": "sec-phr-1",
-        "text": "original song idiom or word",
+        "text": "base form of word/phrase",
         "translation": "short translation",
-        "studyExample": "Poetic study example using the idiom",
+        "studyExample": "illustrative sentence",
         "type": "idiom",
         "source": "ai"
       }
@@ -1960,6 +1996,19 @@ Return a valid JSON array of objects conforming exactly to this schema:
     });
 
     const blocks = JSON.parse(response.text) as StructuredLectureBlock[];
+    
+    // Save to cache async
+    if (blocks && blocks.length > 0) {
+      setDoc(doc(db, 'lecture_analysis_cache', docId), {
+        lectureBlocks: blocks,
+        trackKey,
+        lyricsHash,
+        targetLanguage: targetLanguage,
+        lecturePromptVersion: LECTURE_PROMPT_VERSION,
+        createdAt: serverTimestamp(),
+      }).catch(e => console.error("Cache write error (lecture_analysis_cache):", e));
+    }
+
     return blocks;
   } catch (err) {
     console.error("fetchStructuredLecture failed:", err);

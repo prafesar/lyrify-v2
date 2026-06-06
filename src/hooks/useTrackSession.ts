@@ -298,8 +298,9 @@ export function useTrackSession(): UseTrackSessionResult {
 
     const hasPhrases = targetTrack.lines.some(l => l.phrases && l.phrases.length > 0);
     const completed = targetTrack.processingStatus.stage3_completed && hasPhrases;
+    const hasLecture = targetTrack.lectureBlocks && targetTrack.lectureBlocks.length > 0;
 
-    if (!force && completed) return;
+    if (!force && completed && hasLecture) return;
 
     setIsGeneratingAnalysis(true);
     setAnalysisError(null);
@@ -343,7 +344,7 @@ export function useTrackSession(): UseTrackSessionResult {
       if (force || !trackData.lectureBlocks || trackData.lectureBlocks.length === 0) {
         setLoadingStep("lecture");
         try {
-          const blocks = await fetchStructuredLecture(trackData.rawLyrics, trackData.title, trackData.artist, targetLanguage);
+          const blocks = await fetchStructuredLecture(trackData.rawLyrics, trackData.title, trackData.artist, targetLanguage, force);
           trackData = {
             ...trackData,
             lectureBlocks: blocks

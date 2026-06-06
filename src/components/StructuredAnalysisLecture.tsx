@@ -283,19 +283,6 @@ export const StructuredAnalysisLecture: React.FC<StructuredAnalysisLectureProps>
   return (
     <div className="w-full max-w-3xl mx-auto font-sans text-app-fg select-text leading-relaxed pb-32" id="structured-lecture-analysis">
       
-      {/* Editorial Header */}
-      <div className="text-center md:text-left space-y-2 border-b border-app-card-border/30 pb-10 mb-14" id="lecture-title-block">
-        <div className="inline-flex items-center gap-1.5 uppercase font-bold tracking-[0.25em] text-[10px] text-app-accent leading-none">
-          <BookOpen size={11} className="shrink-0" /> Annotated Lecture Breakdown
-        </div>
-        <h1 className="font-serif text-3xl md:text-4xl font-extrabold tracking-tight text-app-fg mt-1 leading-tight uppercase font-sans">
-          {currentTrack.title}
-        </h1>
-        <p className="text-sm font-semibold tracking-wide text-app-fg opacity-65 font-sans lowercase">
-          by {currentTrack.artist} • custom linguistic essay
-        </p>
-      </div>
-
       {/* Structured Continuous List of Blocks */}
       <div className="space-y-16">
         {blocks.map((block) => {
@@ -341,7 +328,7 @@ export const StructuredAnalysisLecture: React.FC<StructuredAnalysisLectureProps>
                         if (e.key === 'Enter') saveBlockEdit(block.id);
                         if (e.key === 'Escape') cancelEdit();
                       }}
-                      className="text-lg font-bold tracking-tight bg-transparent text-app-fg border-b border-app-accent w-full focus:outline-none py-0.5"
+                      className="text-lg font-medium tracking-tight bg-transparent text-app-fg border-b border-app-accent w-full focus:outline-none py-0.5"
                     />
                     <div className="flex gap-2 shrink-0 select-none">
                       <button 
@@ -361,10 +348,10 @@ export const StructuredAnalysisLecture: React.FC<StructuredAnalysisLectureProps>
                 ) : (
                   <h2 
                     onClick={() => startBlockEdit(block.id, 'title', block.title || '')}
-                    className="font-sans font-extrabold text-xl md:text-2xl text-app-fg tracking-tight leading-tight cursor-text hover:text-app-accent/80 transition-colors uppercase"
+                    className="font-sans font-semibold text-lg md:text-xl text-app-fg tracking-tight leading-snug cursor-text hover:text-app-accent transition-colors"
                   >
                     {block.title || getKindTitlePlaceholder(block.kind as BlockKind)}
-                    <span className="inline-block opacity-0 group-hover/title:opacity-40 text-app-muted ml-2 pb-1.5 transition-opacity">
+                    <span className="inline-block opacity-0 group-hover/title:opacity-45 text-app-muted ml-2 pb-0.5 transition-opacity">
                       <Edit3 size={12} className="inline align-middle" />
                     </span>
                   </h2>
@@ -384,7 +371,7 @@ export const StructuredAnalysisLecture: React.FC<StructuredAnalysisLectureProps>
                         e.target.style.height = 'auto';
                         e.target.style.height = `${e.target.scrollHeight}px`;
                       }}
-                      className="w-full bg-transparent border-0 border-l border-app-accent/40 text-[15px] leading-relaxed text-app-fg font-medium py-1 px-4 focus:ring-0 focus:outline-none resize-none font-sans"
+                      className="w-full bg-transparent border-0 border-l border-app-accent/40 font-serif text-[16px] md:text-[18px] leading-relaxed text-app-fg py-1 px-4 focus:ring-0 focus:outline-none resize-none"
                       style={{ minHeight: '120px' }}
                     />
                     <div className="flex items-center justify-start gap-4 text-[10px] uppercase font-black tracking-widest pl-4 select-none">
@@ -405,7 +392,7 @@ export const StructuredAnalysisLecture: React.FC<StructuredAnalysisLectureProps>
                 ) : (
                   <div 
                     onClick={() => startBlockEdit(block.id, 'text', block.text)}
-                    className="prose prose-sm dark:prose-invert max-w-none text-base leading-relaxed text-app-fg/75 font-medium cursor-text selection:bg-app-accent/10"
+                    className="font-serif text-[17px] md:text-[19px] leading-relaxed text-app-fg/80 cursor-text selection:bg-app-accent/10"
                     title="Click text body to edit inline"
                   >
                     <div className="markdown-body">
@@ -505,7 +492,7 @@ export const StructuredAnalysisLecture: React.FC<StructuredAnalysisLectureProps>
                         key={phrase.id} 
                         className="group/phrase flex items-baseline justify-between py-1.5 px-3 -mx-3 hover:bg-app-card-border/10 rounded-xl transition-all duration-150 relative border-l border-transparent hover:border-app-accent/25"
                       >
-                        <div className="flex items-baseline flex-wrap gap-x-2 gap-y-1.5 max-w-[85%]">
+                        <div className="flex items-baseline flex-wrap gap-x-2.5 gap-y-1.5 max-w-[85%]">
                           {/* Play pronunciation button */}
                           <button
                             type="button"
@@ -513,13 +500,13 @@ export const StructuredAnalysisLecture: React.FC<StructuredAnalysisLectureProps>
                             className="p-1 hover:bg-app-bg text-app-muted hover:text-app-fg rounded-lg transition-transform hover:scale-105 inline-flex shrink-0 border border-transparent hover:border-app-card-border align-middle leading-none"
                             title="Pronounce"
                           >
-                            <Volume2 size={10.5} />
+                            <Volume2 size={12.5} />
                           </button>
 
                           {/* Foreign Key Phrase word */}
                           <span 
                             onClick={() => startPhraseEdit(phrase)}
-                            className="font-mono text-[13px] md:text-sm font-bold text-app-fg tracking-tight leading-none text-left cursor-text hover:text-app-accent"
+                            className="font-mono text-sm md:text-base font-bold text-app-fg tracking-tight leading-none text-left cursor-text hover:text-app-accent"
                           >
                             {phrase.text}
                           </span>
@@ -532,10 +519,10 @@ export const StructuredAnalysisLecture: React.FC<StructuredAnalysisLectureProps>
                           )}
 
                           {/* Simple Dash separator & translation */}
-                          <span className="text-xs text-app-muted">—</span>
+                          <span className="text-xs md:text-sm text-app-muted">—</span>
                           <span 
                             onClick={() => startPhraseEdit(phrase)}
-                            className="text-xs font-semibold text-app-muted cursor-text hover:text-app-fg transition-colors"
+                            className="text-xs md:text-sm font-medium text-app-muted cursor-text hover:text-app-fg transition-colors"
                           >
                             {phrase.translation}
                           </span>
@@ -544,7 +531,7 @@ export const StructuredAnalysisLecture: React.FC<StructuredAnalysisLectureProps>
                           {phrase.studyExample && (
                             <span 
                               onClick={() => startPhraseEdit(phrase)}
-                              className="text-[10.5px] font-medium text-app-muted italic opacity-60 ml-2 border-l border-app-card-border/65 pl-2 leading-none self-center cursor-text"
+                              className="text-xs md:text-[13px] font-medium text-app-muted italic opacity-60 ml-2 border-l border-app-card-border/65 pl-2 leading-none self-center cursor-text"
                             >
                               "{phrase.studyExample}"
                             </span>

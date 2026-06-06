@@ -3153,15 +3153,15 @@ export default function App() {
                           <Brain size={32} />
                         </div>
                         <div className="space-y-3">
-                          <h3 className="text-xl font-bold text-app-fg tracking-tight">Разбор песни еще не создан</h3>
+                          <h3 className="text-xl font-bold text-app-fg tracking-tight">No Analysis Yet</h3>
                           <p className="text-sm text-app-fg opacity-50 font-medium leading-relaxed px-4">
-                            Запустите AI-анализ, чтобы сгенерировать структурированную лекцию о песне, её смысле, эмоциях и ключевой лексике. После генерации вы сможете свободно редактировать текст и добавлять фразы в Cards.
+                            Run AI-analysis to generate a structured lecture about the song, its meaning, emotions, and key vocabulary. Once created, you will be able to edit the content and save phrase cards.
                           </p>
                         </div>
 
                         {analysisError && (
                           <div id="analysis-error-banner" className="w-full p-5 rounded-[1.5rem] bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs text-center space-y-2">
-                            <p className="font-bold uppercase tracking-wider text-[10px]">Ошибка анализа</p>
+                            <p className="font-bold uppercase tracking-wider text-[10px]">Analysis Error</p>
                             <p className="opacity-90">{analysisError}</p>
                           </div>
                         )}
@@ -3172,7 +3172,7 @@ export default function App() {
                             className="px-8 py-4 rounded-2xl bg-app-fg text-app-bg font-black uppercase tracking-[0.18em] text-[10px] shadow-xl hover:scale-[1.03] transition-all flex items-center gap-2.5 cursor-pointer hover:bg-app-fg-hover"
                           >
                             <Sparkles size={14} className="text-app-bg" />
-                            Создать AI-разбор
+                            Generate AI Analysis
                           </button>
                         </div>
                       </div>
