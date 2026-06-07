@@ -266,185 +266,28 @@ const LyricLine = ({
   activeLineIndex,
   phraseMetadata,
   currentTrack,
-  getPhrasesForLine,
+  getPhrasesForLine: _getPhrasesForLine,
   lineRefs,
-  renderHighlightedText,
+  renderHighlightedText: _renderHighlightedText,
   handleLineClick,
   isSaving: _isSaving,
   isListeningForSpeech,
   shadowingFeedback,
   shadowingAttempts,
   handleToggleStarLine,
-  lineId,
-  targetLanguage,
-  onSaveLineExplanation,
-  onAddNoteToDictionary,
-  originKeyMetadata,
-  onEditCardFields,
+  lineId: _lineId,
+  targetLanguage: _targetLanguage,
+  onSaveLineExplanation: _onSaveLineExplanation,
+  onAddNoteToDictionary: _onAddNoteToDictionary,
+  originKeyMetadata: _originKeyMetadata,
+  onEditCardFields: _onEditCardFields,
 }: LyricLineProps) => {
   const trimmedLine = line.trim();
 
-  const [isExplaining, setIsExplaining] = useState(false);
-  const [streamedSummary, setStreamedSummary] = useState("");
-  const [isLoadingExplanation, setIsLoadingExplanation] = useState(false);
-  const [explanationError, setExplanationError] = useState<string | null>(null);
-
-  const cachedExpl = currentTrack?.lines?.[i]?.explanation;
-  const hasNestedExpl = !!(cachedExpl?.notes && cachedExpl.notes.length > 0);
-  const summary = cachedExpl?.summary || "";
-  const notes = cachedExpl?.notes || null;
-
-  const handleToggleExplanation = async () => {
-    if (isExplaining) {
-      setIsExplaining(false);
-    } else {
-      setIsExplaining(true);
-    }
-  };
-
-  const handleFetchExplanation = async (_force: boolean = false) => {
-    if (isLoadingExplanation) return;
-    setIsLoadingExplanation(true);
-    setExplanationError(null);
-    setStreamedSummary("");
-    
-    try {
-      const currentHash = generateLineId(line);
-      
-      // Look for another line in the same track with the same normalized text hash that already has an explanation
-      const sameLineWithExplanation = currentTrack?.lines?.find((l: any, idx: number) => {
-        if (idx === i) return false;
-        const h = l.lineTextHash || generateLineId(l.original);
-        return h === currentHash && l.explanation && (l.explanation.summary || l.explanation.notes?.length > 0);
-      });
-
-      if (sameLineWithExplanation) {
-        // Reuse from other line occurrence and merge values safely:
-        const otherExplanation = sameLineWithExplanation.explanation;
-        const mergedNotes = [...(cachedExpl?.notes || [])];
-        (otherExplanation?.notes || []).forEach((newNote: any) => {
-          const isDuplicate = mergedNotes.some(
-            (n: any) => (n.sourceText || "").toLowerCase().trim() === (newNote.sourceText || "").toLowerCase().trim()
-          );
-          if (!isDuplicate) {
-            mergedNotes.push(newNote);
-          }
-        });
-
-        const mergedExpl = {
-          ...cachedExpl,
-          myExplanation: cachedExpl?.myExplanation || otherExplanation?.myExplanation || "",
-          summary: otherExplanation?.summary || cachedExpl?.summary || "",
-          notes: mergedNotes
-        };
-
-        if (onSaveLineExplanation) {
-          onSaveLineExplanation(i, mergedExpl);
-        }
-        setIsLoadingExplanation(false);
-        return;
-      }
-
-      const prevLine = i > 0 ? currentTrack.lines[i - 1] : undefined;
-      const nextLine = i < currentTrack.lines.length - 1 ? currentTrack.lines[i + 1] : undefined;
-      const targetLang = targetLanguage || currentTrack.targetLanguage || "English";
-      const sourceLang = currentTrack.sourceLanguage || "Auto-detect";
-
-      const metadataPayload = {
-        title: currentTrack.title,
-        artists: [currentTrack.artist],
-      };
-
-      const result = await aiClient.generateLineExplanation(
-        metadataPayload,
-        {
-          original: line,
-          translation: currentTrack?.lines?.[i]?.translation,
-          lineId: lineId
-        },
-        prevLine,
-        nextLine,
-        targetLang,
-        sourceLang,
-        (partialSummary) => {
-          setStreamedSummary(partialSummary);
-        }
-      );
-
-      // Merge AI result with existing notes and custom commentary
-      const mergedNotes = [...(cachedExpl?.notes || [])];
-      
-      const mapType = (t: string) => {
-        const lower = (t || "").toLowerCase();
-        if (lower.includes("idiom")) return "idiom";
-        if (lower.includes("colloc")) return "collocation";
-        if (lower.includes("grammar")) return "grammar-pattern";
-        if (lower.includes("cultural")) return "cultural-reference";
-        if (lower.includes("slang")) return "slang";
-        if (lower.includes("phrasal")) return "phrasal-verb";
-        if (lower.includes("metaphor")) return "metaphor";
-        return "word";
-      };
-
-      if (result.summary) {
-        const isDuplicateSummary = mergedNotes.some(
-          (n: any) => n.kind === "note" && (n.text || "").toLowerCase().trim() === result.summary.toLowerCase().trim()
-        );
-        if (!isDuplicateSummary) {
-          mergedNotes.push({
-            id: `ai_summary_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
-            kind: "note",
-            text: result.summary,
-            source: "ai"
-          });
-        }
-      }
-
-      (result.notes || []).forEach((newNote: any) => {
-        const isDuplicate = mergedNotes.some(
-          (n: any) => {
-            const existingText = n.original || n.sourceText || "";
-            return existingText.toLowerCase().trim() === (newNote.sourceText || "").toLowerCase().trim();
-          }
-        );
-        if (!isDuplicate) {
-          const phraseId = `ai_phrase_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
-          mergedNotes.push({
-            id: phraseId,
-            kind: "phrase",
-            original: newNote.sourceText || "",
-            translation: newNote.translation || newNote.text || "",
-            type: mapType(newNote.type || ""),
-            tags: ["ai"],
-            source: "ai",
-            // Backward compatibility
-            sourceText: newNote.sourceText || "",
-            text: newNote.text || ""
-          });
-        }
-      });
-
-      const mergedExpl = {
-        ...cachedExpl,
-        myExplanation: cachedExpl?.myExplanation || "",
-        summary: result.summary || cachedExpl?.summary || "",
-        notes: mergedNotes
-      };
-
-      if (onSaveLineExplanation) {
-        onSaveLineExplanation(i, mergedExpl);
-      }
-    } catch (err: any) {
-      console.error("[LyricLine] Explanation fetch error:", err);
-      setExplanationError(err.message || "Failed to explain the line. Please try again.");
-    } finally {
-      setIsLoadingExplanation(false);
-    }
-  };
   if (!trimmedLine && isCompact) return null;
   if (!trimmedLine) return <div className="h-6" />;
 
-  const metadata = phraseMetadata.get(normalizePhraseKey(trimmedLine));
+  const metadata = phraseMetadata ? phraseMetadata.get(normalizePhraseKey(trimmedLine)) : null;
   const userTrans = metadata?.translatedPhrase;
   const autoTrans = currentTrack?.lines?.[i]?.translation;
   const displayTranslation = userTrans || autoTrans;
@@ -457,7 +300,6 @@ const LyricLine = ({
 
   const showUnderTranslation = isBoth || (isLyricsOnly && activeLineIndex === i) || (alwaysShowTranslation && !isTranslationOnly);
 
-  const phrasesInLine = getPhrasesForLine(i);
   const isStarred = currentTrack?.lines?.[i]?.isStarred;
 
   return (
@@ -487,34 +329,7 @@ const LyricLine = ({
           handleLineClick(line, i);
         }}
       >
-        <div className="flex items-center w-full relative z-10 pl-4 sm:pl-7">
-          {trimmedLine && (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                handleToggleExplanation();
-              }}
-              className={cn(
-                "absolute left-0 sm:left-1 top-2 p-1 rounded hover:bg-app-fg/5 transition-all shrink-0 select-none cursor-pointer",
-                isExplaining 
-                  ? "text-[var(--accent)]" 
-                  : hasNestedExpl 
-                    ? "text-[var(--accent)]/80 hover:text-[var(--accent)] scale-110" 
-                    : "text-app-fg/20 hover:text-app-fg"
-              )}
-              title={isExplaining ? "Collapse Outline" : "Expand Outline"}
-            >
-              <ChevronRight
-                size={14}
-                className={cn(
-                  "transition-transform duration-200 stroke-[2.5]",
-                  isExplaining && "rotate-90"
-                )}
-              />
-            </button>
-          )}
-
+        <div className="flex items-center w-full relative z-10 pl-1 sm:pl-2">
           <div className="flex-1 min-w-0">
             <p
               className={cn(
@@ -524,13 +339,14 @@ const LyricLine = ({
                   : isCompact ? "text-base opacity-90" : "text-xl opacity-80",
               )}
             >
-              {mainText ? (isTranslationOnly ? mainText : renderHighlightedText(mainText, phrasesInLine)) : "\u00A0"}
+              {mainText || "\u00A0"}
             </p>
           </div>
 
           {trimmedLine && (
             <div className="flex items-center gap-2 shrink-0">
               <button
+                type="button"
                 onClick={(e) => {
                   e.stopPropagation();
                   handleToggleStarLine(i);
@@ -555,9 +371,9 @@ const LyricLine = ({
                 initial={{ opacity: 0, height: 0 }}
                 animate={{ opacity: 1, height: "auto" }}
                 exit={{ opacity: 0, height: 0 }}
-                className="space-y-1 pl-4 sm:pl-7"
+                className="space-y-1 pl-1 sm:pl-2"
               >
-                {displayTranslation && showUnderTranslation && !isExplaining && (
+                {displayTranslation && showUnderTranslation && (
                   <p
                     className={cn(
                       "font-serif italic text-app-fg opacity-40 transition-all duration-300 ml-1 mt-0.5",
@@ -625,28 +441,6 @@ const LyricLine = ({
                   </motion.div>
                 )}
               </motion.div>
-            )}
-          </AnimatePresence>
-
-          <AnimatePresence initial={false}>
-            {isExplaining && (
-              <LineWorkspace
-                line={line}
-                i={i}
-                currentTrack={currentTrack}
-                targetLanguage={targetLanguage}
-                onSaveLineExplanation={onSaveLineExplanation}
-                onAddNoteToDictionary={onAddNoteToDictionary}
-                originKeyMetadata={originKeyMetadata}
-                onEditCardFields={onEditCardFields}
-                isLoadingExplanation={isLoadingExplanation}
-                explanationError={explanationError}
-                streamedSummary={streamedSummary}
-                handleFetchExplanation={handleFetchExplanation}
-                onClose={() => setIsExplaining(false)}
-                lineTranslation={displayTranslation}
-                isCompact={isCompact}
-              />
             )}
           </AnimatePresence>
         </div>
@@ -2773,7 +2567,7 @@ export default function App() {
                             </div>
                             <input
                               type="text"
-                              placeholder="Search original text, translations, or phrases in lyrics..."
+                              placeholder="Search original text or translations..."
                               value={trackSearchQuery}
                               onChange={(e) => setTrackSearchQuery(e.target.value)}
                               className="w-full pl-10 pr-8 py-2 bg-transparent text-base md:text-lg font-medium text-app-fg placeholder-app-fg/30 focus:outline-none font-sans"
@@ -2902,10 +2696,7 @@ export default function App() {
                         linesToRender = linesToRender.filter((line: any) => {
                           const matchesOriginal = line.original?.toLowerCase().includes(q);
                           const matchesTranslation = line.translation?.toLowerCase().includes(q);
-                          const matchesPhrases = line.phrases?.some((p: any) => 
-                            p.text?.toLowerCase().includes(q) || p.translation?.toLowerCase().includes(q)
-                          );
-                          return matchesOriginal || matchesTranslation || matchesPhrases;
+                          return matchesOriginal || matchesTranslation;
                         });
                       }
 
