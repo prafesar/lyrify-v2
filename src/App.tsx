@@ -2539,229 +2539,223 @@ export default function App() {
 
                 {activeTab === "preview" && (
                   <div className="flex flex-col gap-8 pb-32 px-3 sm:px-6">
-                    {/* Show Meaning if we have it, even if loading lyrics in background */}
-                    {currentTrack.meaning ? (
+                    {isLoadingLyrics ? (
+                      <div className="flex flex-col items-center justify-center py-24 text-center space-y-6">
+                         <div className="relative w-24 h-24 flex items-center justify-center">
+                           <div className="absolute inset-0 border-4 border-app-card-border rounded-full" />
+                           <motion.div
+                             animate={{ rotate: 360 }}
+                             transition={{ 
+                               duration: loadingStep === "searching" ? 2 : 1, 
+                               repeat: Infinity, 
+                               ease: "linear" 
+                             }}
+                             className="absolute inset-0 rounded-full border-4 border-t-transparent border-[var(--accent)]"
+                           />
+                           <div className="absolute inset-0 flex items-center justify-center">
+                             {loadingStep === "searching" ? (
+                               <SearchCode className="text-[var(--accent)]" size={32} />
+                             ) : (
+                               <Brain className="text-[var(--accent)]" size={32} />
+                             )}
+                           </div>
+                         </div>
+                         <div className="space-y-1">
+                           <h3 className="text-lg font-black text-app-fg uppercase tracking-widest leading-none font-sans">
+                             {loadingStep === "searching" ? "Finding Lyrics" : "Analyzing Track"}
+                           </h3>
+                           <p className="text-[10px] text-app-muted uppercase tracking-[0.2em] font-sans font-bold">
+                             {loadingStep === "searching" ? "Scanning Databases" : "Consulting Gemini AI"}
+                           </p>
+                         </div>
+                      </div>
+                    ) : (
                       <motion.div
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
-                        className="space-y-8"
+                        className="space-y-6 max-w-2xl mx-auto w-full"
                       >
-                        <section className="p-8 rounded-[2.5rem] bg-app-card/60 border border-app-card-border shadow-app-card">
-                          <div className="flex items-center justify-between mb-4">
-                            <div className="flex items-center gap-4">
-                              <h2 className="text-[10px] font-black uppercase tracking-[0.3em] text-app-accent leading-none">
-                                Song Meaning
-                              </h2>
-                              {renderDifficultyIndicator(currentTrack.difficulty, true)}
-                            </div>
-                            {currentTrack.meaning && (!currentTrack.promptVersion || currentTrack.promptVersion < ANALYSIS_PROMPT_VERSION) && (
-                              <button
-                                onClick={handleAnalyzeSong}
-                                title="Update analysis to newest version"
-                                className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-accent/10 border border-accent/20 text-[9px] font-bold text-accent uppercase tracking-wider hover:bg-accent/20 transition-all group"
-                              >
-                                <RefreshCw size={10} className="group-active:rotate-180 transition-transform duration-500" />
-                                Update Available
-                              </button>
-                            )}
-                          </div>
-                          <p className="text-xl font-serif italic text-app-fg opacity-80 leading-relaxed">
-                            {currentTrack.meaning}
-                          </p>
-                        </section>
-
-                        <section className="p-8 rounded-[2.5rem] bg-app-card/60 border border-app-card-border shadow-app-card flex flex-col gap-6">
-                          <div className="flex items-center justify-between">
-                            <h2 className="text-[10px] font-black uppercase tracking-[0.3em] text-app-accent leading-none">
-                              Lyrics Preview
-                            </h2>
-                            <div className="flex gap-1 bg-app-card-border/30 p-1 rounded-xl">
-                              <button
-                                onClick={() => setPreviewLyricsMode("original")}
-                                className={cn(
-                                  "px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all",
-                                  previewLyricsMode === "original"
-                                    ? "bg-app-fg text-app-bg shadow"
-                                    : "text-app-fg opacity-55 hover:opacity-100"
-                                )}
-                              >
-                                Original
-                              </button>
-                              <button
-                                onClick={() => setPreviewLyricsMode("translation")}
-                                className={cn(
-                                  "px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all",
-                                  previewLyricsMode === "translation"
-                                    ? "bg-app-fg text-app-bg shadow"
-                                    : "text-app-fg opacity-55 hover:opacity-100"
-                                )}
-                              >
-                                Translation
-                              </button>
-                            </div>
-                          </div>
-
-                          <div className="space-y-1 py-1 text-left select-text">
-                            {currentTrack.lines && currentTrack.lines.length > 0 ? (
-                              currentTrack.lines.slice(0, 15).map((lineData: any, i: number) => {
-                                const text = previewLyricsMode === "original" ? lineData.original : lineData.translation;
-                                const trimmed = text?.trim();
-                                if (!trimmed) {
-                                  return <div key={i} className="h-2" />;
-                                }
-                                return (
-                                  <p key={i} className="text-lg font-serif text-app-fg opacity-85 leading-tight">
-                                    {trimmed}
-                                  </p>
-                                );
-                              })
+                        {/* 1. Track Overview Header Card */}
+                        <section className="p-6 rounded-[2rem] bg-app-card/60 border border-app-card-border shadow-app-card flex flex-col sm:flex-row gap-6 items-center sm:items-start text-center sm:text-left relative overflow-hidden">
+                          {/* Left: Beautiful Cover Art / fallback Disc icon */}
+                          <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-2xl overflow-hidden relative shadow-lg bg-gradient-to-br from-app-card-border/40 to-app-card/10 border border-app-card-border flex items-center justify-center shrink-0 animate-fade-in">
+                            {currentTrack.coverUrl ? (
+                              <img 
+                                src={currentTrack.coverUrl} 
+                                alt={currentTrack.title}
+                                referrerPolicy="no-referrer"
+                                className="w-full h-full object-cover"
+                              />
                             ) : (
-                              <p className="text-sm italic text-app-fg opacity-45">No lyrics content.</p>
+                              <Disc size={44} className="text-app-accent/60 " />
                             )}
                           </div>
+                          
+                          {/* Right: Info details */}
+                          <div className="flex-1 space-y-3 min-w-0">
+                            <div>
+                              <div className="flex items-center justify-center sm:justify-start gap-3">
+                                <span className="text-[9px] font-black uppercase tracking-widest px-2.5 py-0.5 rounded-full bg-app-accent/10 text-app-accent border border-app-accent/10">
+                                  Track Details
+                                </span>
+                                {renderDifficultyIndicator(currentTrack.difficulty, true)}
+                              </div>
+                              <h2 className="text-xl sm:text-2xl font-black text-app-fg tracking-tight font-sans mt-2 truncate">
+                                {currentTrack.title}
+                              </h2>
+                              <p className="text-sm font-medium text-app-fg opacity-60 font-sans mt-0.5 truncate">
+                                {currentTrack.artist} {currentTrack.album ? `— ${currentTrack.album}` : ""}
+                              </p>
+                            </div>
 
-                          <div className="border-t border-app-card-border/60 pt-4 flex justify-start">
-                            <button
-                              onClick={() => setActiveTab("lyrics")}
-                              className="flex items-center gap-2 text-app-accent hover:text-app-accent/80 font-black uppercase tracking-[0.15em] text-[10px] transition-all"
-                            >
-                              <Music size={14} />
-                              <span>Go to Lyrics</span>
-                            </button>
+                            {/* External Links Integration */}
+                            <div className="pt-2 border-t border-app-card-border/40">
+                              <p className="text-[9px] font-black uppercase tracking-wider text-app-muted/80 mb-2">External Resources</p>
+                              <div className="flex flex-wrap gap-1.5 justify-center sm:justify-start">
+                                {RESOURCE_TYPES.filter(r => ["youtube", "spotify", "apple", "genius"].includes(r.id)).map((resource) => {
+                                  const url = resource.getUrl(currentTrack as any);
+                                  const Icon = resource.icon;
+                                  return (
+                                    <a
+                                      key={resource.id}
+                                      href={url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="flex items-center gap-1.5 px-3 py-1.5 border border-app-card-border/60 hover:border-app-accent/40 bg-app-card/20 hover:bg-app-accent/5 rounded-xl transition-all font-sans text-[10px] font-bold text-app-fg/70 hover:text-app-fg"
+                                    >
+                                      <Icon size={11} className={resource.color} />
+                                      <span>{resource.name}</span>
+                                    </a>
+                                  );
+                                })}
+                              </div>
+                            </div>
                           </div>
                         </section>
 
+                        {/* 2. Compact Status Summary & Main CTA */}
                         {(() => {
-                          const analysisPhrases = currentTrack.lines 
-                            ? currentTrack.lines.flatMap((l: any) => l.phrases || []).filter((p: any, i: number, self: any[]) => self.findIndex(t => t.text === p.text) === i)
-                            : [];
-                          const featuredPhrases = analysisPhrases.slice(0, 5);
+                          const hasLyrics = !!(currentTrack.rawLyrics && currentTrack.rawLyrics.trim().length > 0);
+                          const hasPhrases = currentTrack.lines && currentTrack.lines.some((l: any) => l.phrases && l.phrases.length > 0);
+                          const hasBreakdown = !!(currentTrack.processingStatus?.stage3_completed && hasPhrases);
+                          const trackCards = Array.from(phraseMetadata.values()).filter(card => card.trackId === currentTrack.trackId);
+                          const savedCardsCount = trackCards.length;
 
-                          if (featuredPhrases.length > 0) {
-                            return (
-                              <section className="p-8 rounded-[2.5rem] bg-app-card/60 border border-app-card-border shadow-app-card flex flex-col gap-6">
-                                <div className="flex items-center justify-between">
-                                  <h2 className="text-[10px] font-black uppercase tracking-[0.3em] text-app-accent leading-none">
-                                    Key Phrases
-                                  </h2>
+                          // Dynamic CTA mapping
+                          let ctaLabel = "";
+                          let ctaDescription = "";
+                          let ctaIcon = null;
+                          let ctaAction = () => {};
+                          let secondaryCtaLabel = "";
+                          let secondaryCtaAction = () => {};
+
+                          if (!hasLyrics) {
+                            ctaLabel = "Fetch Lyrics & Build Preview";
+                            ctaDescription = "Fetch original lines, pronunciation tracks, and start learning this song.";
+                            ctaIcon = <Sparkles size={16} />;
+                            ctaAction = handleAnalyzeSong;
+                          } else if (!hasBreakdown) {
+                            ctaLabel = "Unlock AI Breakdown";
+                            ctaDescription = "Generate interactive translation notes, thematic vocabulary highlights, and grammar breakdowns.";
+                            ctaIcon = <Brain size={16} />;
+                            ctaAction = () => {
+                              setActiveTab("analysis");
+                              handleGenerateAnalysis();
+                            };
+                            secondaryCtaLabel = "Read Original Lyrics";
+                            secondaryCtaAction = () => setActiveTab("lyrics");
+                          } else if (savedCardsCount === 0) {
+                            ctaLabel = "Explore Breakdown Phrases";
+                            ctaDescription = "Browse extracted keywords, learn important phrases and save study cards to your workspace.";
+                            ctaIcon = <Brain size={16} />;
+                            ctaAction = () => setActiveTab("analysis");
+                            secondaryCtaLabel = "Read Full Lyrics";
+                            secondaryCtaAction = () => setActiveTab("lyrics");
+                          } else {
+                            ctaLabel = "Practice Saved Cards";
+                            ctaDescription = `Start reviewing your deck with spaced repetition interval boxes.`;
+                            ctaIcon = <Bookmark size={16} />;
+                            ctaAction = () => setActiveTab("cards");
+                            secondaryCtaLabel = "View AI Breakdown";
+                            secondaryCtaAction = () => setActiveTab("analysis");
+                          }
+
+                          return (
+                            <div className="grid gap-6">
+                              {/* Status Indicators Row */}
+                              <div className="p-5 rounded-[1.75rem] bg-app-card/40 border border-app-card-border/80 flex flex-col xs:flex-row divide-y xs:divide-y-0 xs:divide-x divide-app-card-border/30 text-center select-none">
+                                <div className="flex-1 py-1 px-2 flex flex-col items-center justify-center">
+                                  <span className="text-[10px] font-black uppercase tracking-wider text-app-muted">Lyrics Status</span>
+                                  <span className={cn(
+                                    "text-xs font-extrabold mt-1.5 flex items-center gap-1.5",
+                                    hasLyrics ? "text-emerald-500" : "text-amber-500"
+                                  )}>
+                                    <span className={cn("w-1.5 h-1.5 rounded-full", hasLyrics ? "bg-emerald-500" : "bg-amber-500 animate-pulse")} />
+                                    {hasLyrics ? "Available" : "Missing"}
+                                  </span>
+                                </div>
+                                <div className="flex-1 py-1 px-2 flex flex-col items-center justify-center">
+                                  <span className="text-[10px] font-black uppercase tracking-wider text-app-muted">Breakdown Status</span>
+                                  <span className={cn(
+                                    "text-xs font-extrabold mt-1.5 flex items-center gap-1.5",
+                                    hasBreakdown ? "text-emerald-500" : "text-amber-400"
+                                  )}>
+                                    <span className={cn("w-1.5 h-1.5 rounded-full", hasBreakdown ? "bg-emerald-500" : "bg-amber-400")} />
+                                    {hasBreakdown ? "Ready" : "Not Active"}
+                                  </span>
+                                </div>
+                                <div className="flex-1 py-1 px-2 flex flex-col items-center justify-center">
+                                  <span className="text-[10px] font-black uppercase tracking-wider text-app-muted">Study Cards</span>
+                                  <span className={cn(
+                                    "text-xs font-extrabold mt-1.5 flex items-center gap-1.5",
+                                    savedCardsCount > 0 ? "text-app-accent" : "text-app-muted"
+                                  )}>
+                                    <span className={cn("w-1.5 h-1.5 rounded-full", savedCardsCount > 0 ? "bg-app-accent" : "bg-app-muted/40")} />
+                                    {savedCardsCount === 1 ? "1 Saved Phrase" : savedCardsCount > 0 ? `${savedCardsCount} Saved Phrases` : "No Cards Yet"}
+                                  </span>
+                                </div>
+                              </div>
+
+                              {/* Consolidated Primary CTA Box */}
+                              <div className="p-8 rounded-[2.25rem] bg-gradient-to-b from-app-card/85 to-app-card/65 border border-app-card-border shadow-app-card flex flex-col items-center text-center space-y-6">
+                                <div className="space-y-2 max-w-md">
+                                  <h3 className="text-base font-black text-app-fg uppercase tracking-wider">
+                                    Next Recommended Step
+                                  </h3>
+                                  <p className="text-xs text-app-fg opacity-60 leading-relaxed font-sans font-medium">
+                                    {ctaDescription}
+                                  </p>
                                 </div>
 
-                                <div className="flex flex-col gap-4">
-                                  {featuredPhrases.map((phrase: any, idx: number) => {
-                                    return (
-                                      <div key={idx} className="flex flex-col gap-2 p-4 rounded-2xl bg-app-card border border-app-card-border/40 hover:bg-app-card/90 transition-all select-none text-left font-serif">
-                                        <div className="flex flex-col gap-1">
-                                          <p className="text-lg font-serif text-app-fg text-left">{phrase.text}</p>
-                                          {phrase.translation && (
-                                            <p className="text-sm font-serif italic text-app-fg opacity-60 text-left">
-                                              {phrase.translation}
-                                            </p>
-                                          )}
-                                        </div>
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-
-                                <div className="border-t border-app-card-border/60 pt-4 flex justify-start">
+                                <div className="flex flex-col sm:flex-row gap-3 w-full justify-center">
+                                  {secondaryCtaLabel && (
+                                    <button
+                                      onClick={secondaryCtaAction}
+                                      className="px-6 py-3.5 rounded-2xl border border-app-card-border/80 hover:border-app-fg/20 bg-app-card/40 text-app-fg text-xs font-black uppercase tracking-widest transition-all cursor-pointer active:scale-95 text-center"
+                                    >
+                                      {secondaryCtaLabel}
+                                    </button>
+                                  )}
                                   <button
-                                    onClick={() => {
-                                      setActiveTab("analysis");
-                                      if (!currentTrack?.processingStatus?.stage3_completed) {
-                                        handleGenerateAnalysis();
-                                      }
-                                    }}
-                                    className="flex items-center gap-2 text-app-accent hover:text-app-accent/80 font-black uppercase tracking-[0.15em] text-[10px] transition-all"
+                                    onClick={ctaAction}
+                                    className="flex items-center justify-center gap-2.5 px-8 py-3.5 rounded-2xl bg-app-accent hover:bg-app-accent/90 text-white text-xs font-black uppercase tracking-widest shadow-xl shadow-app-accent/10 hover:scale-[1.02] active:scale-95 transition-all cursor-pointer text-center"
                                   >
-                                    <Brain size={14} />
-                                    <span>Go to Breakdown</span>
+                                    {ctaIcon}
+                                    <span>{ctaLabel}</span>
                                   </button>
                                 </div>
-                              </section>
-                            );
-                          } else {
-                            return (
-                              <section className="p-8 rounded-[2.5rem] bg-app-card/60 border border-app-card-border shadow-app-card flex flex-col gap-6 items-center text-center">
-                                <Brain size={32} className="text-app-accent/60" />
-                                <div>
-                                  <h3 className="text-sm font-black text-app-fg uppercase tracking-wider mb-1">Breakdown not generated</h3>
-                                  <p className="text-xs text-app-fg opacity-60 max-w-xs">Run deep track breakdown to extract key phrases.</p>
-                                </div>
-                                <button
-                                  onClick={() => {
-                                    setActiveTab("analysis");
-                                    if (!currentTrack?.processingStatus?.stage3_completed) {
-                                      handleGenerateAnalysis();
-                                    }
-                                  }}
-                                  className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-app-fg text-app-bg font-black uppercase tracking-[0.15em] text-[10px] transition-all hover:scale-105"
-                                >
-                                  <Brain size={12} />
-                                  <span>Run Song Breakdown</span>
-                                </button>
-                              </section>
-                            );
-                          }
+                              </div>
+                            </div>
+                          );
                         })()}
-                      </motion.div>
-                    ) : (
-                      /* If meaning is NOT available and we ARE loading it (lyrics or meaning) */
-                      isLoadingLyrics ? (
-                        <div className="flex flex-col items-center justify-center py-24 text-center space-y-6">
-                           <div className="relative w-24 h-24 flex items-center justify-center">
-                             <div className="absolute inset-0 border-4 border-app-card-border rounded-full" />
-                             <motion.div
-                               animate={{ rotate: 360 }}
-                               transition={{ 
-                                 duration: loadingStep === "searching" ? 2 : 1, 
-                                 repeat: Infinity, 
-                                 ease: "linear" 
-                               }}
-                               className="absolute inset-0 rounded-full border-4 border-t-transparent border-[var(--accent)]"
-                             />
-                             <div className="absolute inset-0 flex items-center justify-center">
-                               {loadingStep === "searching" ? (
-                                 <SearchCode className="text-[var(--accent)]" size={32} />
-                               ) : (
-                                 <Brain className="text-[var(--accent)]" size={32} />
-                               )}
-                             </div>
-                           </div>
-                           <div className="space-y-1">
-                             <h3 className="text-lg font-black text-app-fg uppercase tracking-widest leading-none">
-                               {loadingStep === "searching" ? "Finding Lyrics" : "Analyzing Meaning"}
-                             </h3>
-                             <p className="text-[10px] text-app-muted uppercase tracking-[0.2em]">
-                               {loadingStep === "searching" ? "Scanning Databases" : "Consulting Gemini AI"}
-                             </p>
-                           </div>
-                        </div>
-                      ) : (
-                        /* Default state: No meaning, not loading meaning specifically */
-                        <section className="p-8 rounded-[2.5rem] bg-app-card/60 border border-app-card-border shadow-app-card flex flex-col items-center text-center">
-                          <div className="w-16 h-16 rounded-2xl bg-app-accent/10 flex items-center justify-center text-app-accent mb-6">
-                            <Sparkles size={32} />
-                          </div>
-                          <h3 className="text-xl font-black text-app-fg mb-2">Analyze Song Meaning</h3>
-                          <p className="text-sm text-app-muted max-w-sm mb-8">
-                            Discover the hidden stories, emotions, and vocabulary secrets inside this track.
+                        
+                        {lyricsFetchError && (
+                          <p className="text-xs text-red-500 font-bold flex items-center justify-center gap-2 text-center p-4 rounded-xl bg-red-500/10 border border-red-500/20">
+                            <AlertTriangle size={14} />
+                            {lyricsFetchError}
                           </p>
-                          <button
-                            onClick={handleAnalyzeSong}
-                            className="group relative flex items-center gap-3 px-8 py-4 rounded-2xl bg-app-accent text-white font-black uppercase tracking-widest text-xs transition-all hover:scale-105 active:scale-95"
-                          >
-                            <Brain size={18} />
-                            <span>What is this song about?</span>
-                          </button>
-                          
-                          {lyricsFetchError && (
-                            <p className="mt-4 text-xs text-red-500 font-bold flex items-center gap-2">
-                              <AlertTriangle size={14} />
-                              {lyricsFetchError}
-                            </p>
-                          )}
-                        </section>
-                      )
+                        )}
+                      </motion.div>
                     )}
                   </div>
                 )}
