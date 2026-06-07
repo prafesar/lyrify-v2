@@ -100,7 +100,7 @@ export const StructuredAnalysisLecture: React.FC<StructuredAnalysisLectureProps>
   function getKindTitlePlaceholder(kind: BlockKind): string {
     switch (kind) {
       case 'overview': return 'Narrative & Song Overview';
-      case 'emotions': return 'Aesthetic Mood & Tone Analysis';
+      case 'emotions': return 'Aesthetic Mood & Tone Breakdown';
       case 'sections': return 'Key Song Sections';
       case 'lexical_groups': return 'Thematic Vocabulary Clusters';
       case 'takeaways': return 'Linguistic Insights & Grammar Study';
@@ -608,7 +608,7 @@ export const StructuredAnalysisLecture: React.FC<StructuredAnalysisLectureProps>
         <div className="border border-app-card-border/30 rounded-3xl p-6 flex flex-col md:flex-row items-center justify-between gap-6 mt-20" id="reset-lecture-block">
           <div className="space-y-1 text-center md:text-left select-none">
             <h5 className="text-[12px] font-black uppercase tracking-[0.18em] text-app-fg leading-none flex items-center justify-center md:justify-start gap-1">
-              <RefreshCw size={11} className="text-app-accent shrink-0" /> Rebuild Analysis Lecture
+              <RefreshCw size={11} className="text-app-accent shrink-0" /> Rebuild Breakdown Lecture
             </h5>
             <p className="text-[11px] text-app-fg opacity-40 max-w-sm font-medium leading-normal">
               Re-engage Gemini AI music specialists to reconstruct the structured language breakdown essay from the source lyrics block.

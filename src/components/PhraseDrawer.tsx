@@ -235,7 +235,7 @@ export default function PhraseDrawer({
 
               <div className="flex items-center justify-between mt-6 mb-4">
                 <div className="flex items-center gap-2">
-                  <span className="text-[11px] font-black uppercase tracking-widest opacity-60">Analysis Phrases</span>
+                  <span className="text-[11px] font-black uppercase tracking-widest opacity-60">Breakdown Phrases</span>
                 </div>
                 {activeTrack && setCurrentTrack && (
                   <button

@@ -312,7 +312,7 @@ export const AnalysisPhraseWorkspace: React.FC<AnalysisPhraseWorkspaceProps> = (
                 onClick={handleRegenerateAnalysis}
                 disabled={isGeneratingAnalysis}
                 className="flex items-center gap-1.5 px-4 py-3.5 bg-app-card border border-app-card-border text-app-fg opacity-60 hover:opacity-100 hover:text-orange-500 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-30"
-                title="Reset and regenerate analysis"
+                title="Reset and regenerate breakdown"
               >
                 <RefreshCw size={12} className={isGeneratingAnalysis ? "animate-spin" : ""} />
                 <span className="hidden sm:inline">Regenerate</span>
@@ -752,10 +752,10 @@ export const AnalysisPhraseWorkspace: React.FC<AnalysisPhraseWorkspaceProps> = (
           <div className="py-20 text-center space-y-4 rounded-[2rem] bg-app-card/25 border border-dashed border-app-card-border/60">
             <Sparkles size={40} className="mx-auto text-orange-500 opacity-20" />
             <p className="text-sm font-black text-app-fg opacity-40 uppercase tracking-widest">
-              No vocabulary analysis yet
+              No vocabulary breakdown yet
             </p>
             <p className="text-xs text-app-fg opacity-30 font-medium max-w-xs mx-auto">
-              This track has no generated or custom phrases yet. Add your first custom phrase or click Regenerate to start analyzing!
+              This track has no generated or custom phrases yet. Add your first custom phrase or click Regenerate to start breaking down!
             </p>
           </div>
         )}

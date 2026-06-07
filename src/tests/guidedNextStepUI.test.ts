@@ -29,7 +29,7 @@ describe('Guided next-step CTA-block tests for multiple key states', () => {
 
     const step = determineNextStep(trackMock, false);
     expect(step.type).toBe('GENERATE_ANALYSIS');
-    expect(step.label).toBe('Generate Deep Analysis');
+    expect(step.label).toBe('Generate Song Breakdown');
   });
 
   it('Transition 3: Correctly guides users to SAVE_FIRST_PHRASE when deep analysis completed but no track flashcard exists', () => {

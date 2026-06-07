@@ -66,7 +66,7 @@ export function buildTrackProgressViewModel(
   const stationIds: { id: TrackStationId; label: string }[] = [
     { id: 'opened', label: 'Preview' },
     { id: 'lyrics', label: 'Lyrics' },
-    { id: 'analysis', label: 'Analysis' },
+    { id: 'analysis', label: 'Breakdown' },
     { id: 'saved', label: 'Cards' },
     { id: 'review', label: 'Review' },
   ];
@@ -111,8 +111,8 @@ export function buildTrackProgressViewModel(
     ctaActionType = 'find_lyrics';
     motivationalMessage = 'Unlocks translation and shadowing.';
   } else if (currentStepId === 'analysis') {
-    statusText = 'Next step: unlock phrase analysis';
-    ctaLabel = 'Generate Analysis';
+    statusText = 'Next step: unlock song breakdown';
+    ctaLabel = 'Generate Breakdown';
     ctaActionType = 'generate_analysis';
     motivationalMessage = 'Unlock AI breakdown & grammar highlights.';
   } else if (currentStepId === 'saved') {

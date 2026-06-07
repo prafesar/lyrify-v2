@@ -2674,7 +2674,7 @@ export default function App() {
                                     className="flex items-center gap-2 text-app-accent hover:text-app-accent/80 font-black uppercase tracking-[0.15em] text-[10px] transition-all"
                                   >
                                     <Brain size={14} />
-                                    <span>Go to Analysis</span>
+                                    <span>Go to Breakdown</span>
                                   </button>
                                 </div>
                               </section>
@@ -2684,8 +2684,8 @@ export default function App() {
                               <section className="p-8 rounded-[2.5rem] bg-app-card/60 border border-app-card-border shadow-app-card flex flex-col gap-6 items-center text-center">
                                 <Brain size={32} className="text-app-accent/60" />
                                 <div>
-                                  <h3 className="text-sm font-black text-app-fg uppercase tracking-wider mb-1">Analysis not generated</h3>
-                                  <p className="text-xs text-app-fg opacity-60 max-w-xs">Run deep track analysis to extract key phrases.</p>
+                                  <h3 className="text-sm font-black text-app-fg uppercase tracking-wider mb-1">Breakdown not generated</h3>
+                                  <p className="text-xs text-app-fg opacity-60 max-w-xs">Run deep track breakdown to extract key phrases.</p>
                                 </div>
                                 <button
                                   onClick={() => {
@@ -2697,7 +2697,7 @@ export default function App() {
                                   className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-app-fg text-app-bg font-black uppercase tracking-[0.15em] text-[10px] transition-all hover:scale-105"
                                 >
                                   <Brain size={12} />
-                                  <span>Run Song Analysis</span>
+                                  <span>Run Song Breakdown</span>
                                 </button>
                               </section>
                             );
@@ -3117,7 +3117,7 @@ export default function App() {
                         </div>
                         <div className="space-y-2">
                           <h3 className="text-lg font-black text-app-fg uppercase tracking-widest text-center">
-                            {loadingStep === "searching" ? "Finding Lyrics" : loadingStep === "lecture" ? "Generating Lecture" : "Deep Analysis"}
+                            {loadingStep === "searching" ? "Finding Lyrics" : loadingStep === "lecture" ? "Generating Lecture" : "Deep Breakdown"}
                           </h3>
                           <div className="flex items-center justify-center gap-3">
                              <div className="flex gap-1">
@@ -3155,15 +3155,15 @@ export default function App() {
                           <Brain size={32} />
                         </div>
                         <div className="space-y-3">
-                          <h3 className="text-xl font-bold text-app-fg tracking-tight">No Analysis Yet</h3>
+                          <h3 className="text-xl font-bold text-app-fg tracking-tight">No Breakdown Yet</h3>
                           <p className="text-sm text-app-fg opacity-50 font-medium leading-relaxed px-4">
-                            Run AI-analysis to generate a structured lecture about the song, its meaning, emotions, and key vocabulary. Once created, you will be able to edit the content and save phrase cards.
+                            Run AI-breakdown to generate a structured lecture about the song, its meaning, emotions, and key vocabulary. Once created, you will be able to edit the content and save study cards.
                           </p>
                         </div>
 
                         {analysisError && (
                           <div id="analysis-error-banner" className="w-full p-5 rounded-[1.5rem] bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs text-center space-y-2">
-                            <p className="font-bold uppercase tracking-wider text-[10px]">Analysis Error</p>
+                            <p className="font-bold uppercase tracking-wider text-[10px]">Breakdown Error</p>
                             <p className="opacity-90">{analysisError}</p>
                           </div>
                         )}
@@ -3174,7 +3174,7 @@ export default function App() {
                             className="px-8 py-4 rounded-2xl bg-app-fg text-app-bg font-black uppercase tracking-[0.18em] text-[10px] shadow-xl hover:scale-[1.03] transition-all flex items-center gap-2.5 cursor-pointer hover:bg-app-fg-hover"
                           >
                             <Sparkles size={14} className="text-app-bg" />
-                            Generate AI Analysis
+                            Generate AI Breakdown
                           </button>
                         </div>
                       </div>
@@ -3207,7 +3207,7 @@ export default function App() {
                         </div>
                         <div className="space-y-2">
                           <h3 className="text-lg font-black text-app-fg uppercase tracking-widest text-center">
-                            {loadingStep === "searching" ? "Finding Lyrics" : loadingStep === "lecture" ? "Generating Lecture" : "Deep Analysis"}
+                            {loadingStep === "searching" ? "Finding Lyrics" : loadingStep === "lecture" ? "Generating Lecture" : "Deep Breakdown"}
                           </h3>
                           <div className="flex items-center justify-center gap-3">
                              <div className="flex gap-1">
@@ -3247,9 +3247,9 @@ export default function App() {
                           <Bookmark size={40} />
                         </div>
                         <div className="space-y-3">
-                          <h3 className="text-2xl font-bold text-app-fg">No Saved study phrases</h3>
+                          <h3 className="text-2xl font-bold text-app-fg">No Saved Study Phrases</h3>
                           <p className="text-app-fg opacity-40 max-w-sm mx-auto font-sans leading-normal">
-                            Run Deep Analysis first to automatically extract and analyze core vocabulary/phrases, or star verses on the Lyrics page to study specific lines.
+                            Run Song Breakdown first to browse core vocabulary and save phrase cards, or save phrases on the Lyrics/Breakdown pages to study.
                           </p>
                         </div>
                         <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
@@ -3258,7 +3258,7 @@ export default function App() {
                             className="px-10 py-5 rounded-3xl bg-app-fg text-app-bg font-black uppercase tracking-[0.2em] text-[10px] shadow-2xl hover:scale-105 transition-all flex items-center gap-3 cursor-pointer"
                           >
                             <Sparkles size={16} />
-                            Generate Phrase Cards
+                            Generate AI Breakdown
                           </button>
                         </div>
                       </div>

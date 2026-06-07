@@ -47,7 +47,7 @@ export function determineNextStep(
   if (!isAnalysisCompleted) {
     return {
       type: 'GENERATE_ANALYSIS',
-      label: 'Generate Deep Analysis',
+      label: 'Generate Song Breakdown',
       description: 'Run Gemini AI to translate lines and extract important vocabulary patterns.'
     };
   }
