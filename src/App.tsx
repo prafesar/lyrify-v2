@@ -3024,6 +3024,7 @@ export default function App() {
                           isGeneratingAnalysis={isGeneratingAnalysis}
                           handleRegenerateAnalysis={handleRegenerateAnalysis}
                           onOpenAssistantForPhrase={handleOpenAssistantForPhrase}
+                          onNavigateToTab={setActiveTab}
                         />
                       </motion.div>
                     ) : (
@@ -3034,7 +3035,7 @@ export default function App() {
                         <div className="space-y-3">
                           <h3 className="text-2xl font-bold text-app-fg">No Saved Study Phrases</h3>
                           <p className="text-app-fg opacity-40 max-w-sm mx-auto font-sans leading-normal">
-                            Run Song Breakdown first to browse core vocabulary and save phrase cards, or save phrases on the Lyrics/Breakdown pages to study.
+                            Generate the Song Breakdown first to explore important vocabulary, then save phrases to your cards to start studying!
                           </p>
                         </div>
                         <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">

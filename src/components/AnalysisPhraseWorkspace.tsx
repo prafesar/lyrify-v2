@@ -13,7 +13,8 @@ import {
   X, 
   MessageSquare,
   RefreshCw,
-  MoreVertical
+  MoreVertical,
+  Bookmark
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { Phrase, LyricsLine, TrackLyricsData } from "../services/musicService";
@@ -36,6 +37,7 @@ interface AnalysisPhraseWorkspaceProps {
   isGeneratingAnalysis?: boolean;
   handleRegenerateAnalysis?: () => void;
   onOpenAssistantForPhrase?: (phrase: Phrase) => void;
+  onNavigateToTab?: (tab: "preview" | "lyrics" | "analysis" | "cards") => void;
 }
 
 export const AnalysisPhraseWorkspace: React.FC<AnalysisPhraseWorkspaceProps> = ({
@@ -48,7 +50,8 @@ export const AnalysisPhraseWorkspace: React.FC<AnalysisPhraseWorkspaceProps> = (
   onUpdateTrack,
   isGeneratingAnalysis = false,
   handleRegenerateAnalysis,
-  onOpenAssistantForPhrase
+  onOpenAssistantForPhrase,
+  onNavigateToTab
 }) => {
   // Local state for Modals
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -749,14 +752,37 @@ export const AnalysisPhraseWorkspace: React.FC<AnalysisPhraseWorkspaceProps> = (
             </div>
           </div>
         ) : (
-          <div className="py-20 text-center space-y-4 rounded-[2rem] bg-app-card/25 border border-dashed border-app-card-border/60">
-            <Sparkles size={40} className="mx-auto text-orange-500 opacity-20" />
-            <p className="text-sm font-black text-app-fg opacity-40 uppercase tracking-widest">
-              No vocabulary breakdown yet
-            </p>
-            <p className="text-xs text-app-fg opacity-30 font-medium max-w-xs mx-auto">
-              This track has no generated or custom phrases yet. Add your first custom phrase or click Regenerate to start breaking down!
-            </p>
+          <div className="py-20 text-center space-y-6 rounded-[3rem] bg-app-card/25 border border-dashed border-app-card-border/60 max-w-lg mx-auto px-6 font-sans">
+            <Bookmark size={40} className="mx-auto text-orange-500 opacity-35" />
+            <div className="space-y-2">
+              <p className="text-sm font-black text-app-fg opacity-60 uppercase tracking-widest">
+                No Saved Cards Yet
+              </p>
+              <p className="text-xs text-app-fg opacity-40 font-medium leading-relaxed max-w-xs mx-auto">
+                This study space holds your custom bookmarks and saved phrases. Find and collect useful phrases from the Breakdown tab first to build your learning deck!
+              </p>
+            </div>
+            <div className="flex flex-col sm:flex-row gap-3 justify-center items-center select-none">
+              {onNavigateToTab && (
+                <button
+                  type="button"
+                  onClick={() => onNavigateToTab("analysis")}
+                  className="px-6 py-2.5 bg-orange-500 hover:bg-orange-600 font-bold tracking-tight text-xs text-white rounded-xl shadow-md transition-all active:scale-95 duration-150 cursor-pointer"
+                >
+                  Go to Breakdown
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  clearForm();
+                  setIsAddModalOpen(true);
+                }}
+                className="px-6 py-2.5 bg-app-card border border-app-card-border text-app-fg text-xs font-bold rounded-xl hover:bg-app-bg transition-all cursor-pointer"
+              >
+                Add Manual Phrase
+              </button>
+            </div>
           </div>
         )}
       </div>

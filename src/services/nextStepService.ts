@@ -57,7 +57,7 @@ export function determineNextStep(
     return {
       type: 'SAVE_FIRST_PHRASE',
       label: 'Save Your First Phrase',
-      description: 'Star difficult or interesting phrases inside lines to start learning them.'
+      description: 'Save difficult or interesting phrases from the Breakdown tab to start learning them.'
     };
   }
 
