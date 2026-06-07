@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { X, Plus, Check, Loader2, Sparkles, Quote, BookOpen, RefreshCw, CheckCircle2, Trash2, Edit3, Save } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { studyCardsRepository, PhraseStatus, Flashcard } from '../application';
+import { normalizePhraseKey } from '../services/cardService';
 import { saveTrackData } from '../services/musicService';
 import { addUserPhrase, editPhrase, deletePhrase } from '../services/lyricsAnalysisService';
 
@@ -132,7 +133,7 @@ export default function PhraseDrawer({
     setBusyId(text);
     
     try {
-      const existing = phraseMetadata.get(text);
+      const existing = phraseMetadata.get(normalizePhraseKey(text));
       if (action === 'add' || !existing || !existing.id) {
         await addPhraseToStudy({
           text,
@@ -161,7 +162,7 @@ export default function PhraseDrawer({
     const text = phrase.phrase || phrase.text;
     setBusyId(text);
     try {
-      const existing = phraseMetadata.get(text);
+      const existing = phraseMetadata.get(normalizePhraseKey(text));
       if (existing && existing.id) {
         await updatePhraseStatus(existing.id, 'known');
       } else {
@@ -215,7 +216,7 @@ export default function PhraseDrawer({
                   </div>
                   <h2 className="text-2xl font-bold font-serif leading-tight text-app-fg">{lineText}</h2>
                   {(() => {
-                    const lineMetadata = phraseMetadata.get(lineText);
+                    const lineMetadata = phraseMetadata.get(normalizePhraseKey(lineText));
                     const lineTranslation = lineMetadata?.translatedPhrase || phraseAnalysis?.lines?.[lineIndex]?.translation;
                     return lineTranslation ? (
                       <p className="text-lg text-app-fg opacity-60 font-serif italic mt-2">
@@ -304,7 +305,7 @@ export default function PhraseDrawer({
                 {linePhrases.length > 0 ? (
                   linePhrases.map((phrase: any, idx: number) => {
                     const text = phrase.phrase || phrase.text;
-                    const card = phraseMetadata.get(text);
+                    const card = phraseMetadata.get(normalizePhraseKey(text));
                     const isBusy = busyId === text;
                     const isEditing = editingId === phrase.id;
 

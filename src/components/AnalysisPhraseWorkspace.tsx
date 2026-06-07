@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { Phrase, LyricsLine, TrackLyricsData } from "../services/musicService";
-import { PhraseStatus } from "../services/cardService";
+import { PhraseStatus, normalizePhraseKey } from "../services/cardService";
 import { addUserPhrase, editPhrase, deletePhrase } from "../services/lyricsAnalysisService";
 
 interface AnalysisPhraseWorkspaceProps {
@@ -100,32 +100,36 @@ export const AnalysisPhraseWorkspace: React.FC<AnalysisPhraseWorkspaceProps> = (
     );
   };
 
-  // Extract all unique phrases across both track.phrases and nested lines phrases
+  // Extract only the explicitly study-saved unique phrases for this track from phraseMetadata
   const uniquePhrases = useMemo(() => {
     const list: Phrase[] = [];
     const seen = new Set<string>();
 
-    const addIfNew = (p: Phrase) => {
-      const key = (p.text || "").trim().toLowerCase();
+    const cardsForTrack = Array.from(phraseMetadata.values()).filter(
+      (card) =>
+        card.trackId === currentTrack.trackId &&
+        (card.status === "learning" || card.status === "known")
+    );
+
+    cardsForTrack.forEach((card) => {
+      const key = normalizePhraseKey(card.text);
       if (key && !seen.has(key)) {
         seen.add(key);
-        list.push(p);
+        list.push({
+          id: card.id || card.phraseId || `card-${card.text}`,
+          text: card.text,
+          translation: card.translation || "",
+          explanation: card.explanation || "",
+          type: (card as any).originType || (card as any).type || "phrase",
+          source: (card as any).entryType === "user" || (card as any).source === "user" ? "user" : "ai",
+          note: (card as any).note || card.userNote || "",
+          lineIds: card.lineId ? [card.lineId] : [],
+        } as Phrase);
       }
-    };
-
-    if (currentTrack.phrases) {
-      currentTrack.phrases.forEach(addIfNew);
-    }
-    if (currentTrack.lines) {
-      currentTrack.lines.forEach(line => {
-        if (line.phrases) {
-          line.phrases.forEach(addIfNew);
-        }
-      });
-    }
+    });
 
     return list;
-  }, [currentTrack]);
+  }, [currentTrack, phraseMetadata]);
 
   // Filter phrases based on searched query & filter states
   const filteredPhrases = useMemo(() => {
@@ -134,7 +138,7 @@ export const AnalysisPhraseWorkspace: React.FC<AnalysisPhraseWorkspaceProps> = (
     // Apply categorical filters
     if (activeFilter !== "all") {
       result = result.filter(phrase => {
-        const card = phraseMetadata.get(phrase.text);
+        const card = phraseMetadata.get(normalizePhraseKey(phrase.text));
         const currentStatus = card ? card.status : "new";
         
         switch (activeFilter) {
@@ -365,7 +369,7 @@ export const AnalysisPhraseWorkspace: React.FC<AnalysisPhraseWorkspaceProps> = (
         {filteredPhrases.length > 0 ? (
           <div className="grid gap-4">
             {filteredPhrases.map((item, idx) => {
-              const card = phraseMetadata.get(item.text);
+              const card = phraseMetadata.get(normalizePhraseKey(item.text));
               const currentStatus: PhraseStatus = card ? card.status : "new";
               const itemKey = item.id || item.text;
               const isExpanded = expandedPhraseKeys.has(itemKey);

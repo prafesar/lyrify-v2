@@ -8,6 +8,7 @@ import {
 } from "../application";
 import { type TrackLyricsData, type Phrase } from "../services/musicService";
 import { buildResumeViewModel } from "../services/resumeService";
+import { normalizePhraseKey } from "../services/cardService";
 
 export interface UseUserCardsResult {
   phraseMetadata: Map<string, Flashcard>;
@@ -64,7 +65,7 @@ export function useUserCards(recentTracks: any[]): UseUserCardsResult {
       const originKeyMeta = new Map<string, Flashcard>();
 
       cards.forEach((card) => {
-        meta.set(card.text, card);
+        meta.set(normalizePhraseKey(card.text), card);
         if (card.originKey) {
           originKeyMeta.set(card.originKey, card);
         }
@@ -131,7 +132,7 @@ export function useUserCards(recentTracks: any[]): UseUserCardsResult {
       }));
 
       for (const item of allToProcess) {
-        const existing = phraseMetadata.get(item.text);
+        const existing = phraseMetadata.get(normalizePhraseKey(item.text));
         if (!existing || !existing.id) {
           await studyCardsRepository.addPhraseToStudy({
             text: item.text,
@@ -209,7 +210,7 @@ export function useUserCards(recentTracks: any[]): UseUserCardsResult {
     currentTrack?: TrackLyricsData | null
   ) => {
     if (!currentTrack) return;
-    const existingCard = phraseMetadata.get(phrase);
+    const existingCard = phraseMetadata.get(normalizePhraseKey(phrase));
     if (existingCard) {
       try {
         await studyCardsRepository.updatePhraseStatus(existingCard.id, status);

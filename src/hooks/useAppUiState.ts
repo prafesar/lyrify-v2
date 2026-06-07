@@ -1,6 +1,7 @@
 import { useState, useCallback } from "react";
 import { type User } from "firebase/auth";
 import { type Flashcard, type PhraseStatus } from "../application";
+import { normalizePhraseKey } from "../services/cardService";
 import { userPreferencesRepository, aiClient } from "../application";
 import { isOnboardingCompleted } from "../services/onboardingService";
 import { NavigationCoordinator } from "../services/navigationService";
@@ -112,7 +113,7 @@ export function useAppUiState() {
       return;
     }
 
-    const existingMetadata = phraseMetadata.get(trimmedLine);
+    const existingMetadata = phraseMetadata.get(normalizePhraseKey(trimmedLine));
     const fullTransLines = fullTranslation?.split("\n") || [];
     const fullTrans = fullTransLines[currentIndex];
 
@@ -177,7 +178,7 @@ ${result.explanation}`);
     childCardsMap: Map<string, Flashcard[]>,
     lineIndex: number | null
   ) => {
-    const card = phraseMetadata.get(phraseText);
+    const card = phraseMetadata.get(normalizePhraseKey(phraseText));
     if (!card) return;
     const children = childCardsMap.get(phraseText) || [];
     setSelectedLineIndexForDrawer(lineIndex);
@@ -186,7 +187,7 @@ ${result.explanation}`);
       card,
       children,
       getLineStatus: (txt) => {
-        const c = phraseMetadata.get(txt);
+        const c = phraseMetadata.get(normalizePhraseKey(txt));
         return (c?.status || "new") as PhraseStatus;
       }
     });

@@ -15,7 +15,7 @@ import {
   Hash
 } from 'lucide-react';
 import { TrackLyricsData, StructuredLectureBlock, StructuredSectionPhrase } from '../services/musicService';
-import { PhraseStatus } from '../services/cardService';
+import { PhraseStatus, normalizePhraseKey } from '../services/cardService';
 import ReactMarkdown from 'react-markdown';
 
 interface StructuredAnalysisLectureProps {
@@ -260,7 +260,7 @@ export const StructuredAnalysisLecture: React.FC<StructuredAnalysisLectureProps>
 
   // Checking Card Database sync state
   const isPhraseSaved = (phraseText: string) => {
-    const key = phraseText.trim().toLowerCase();
+    const key = normalizePhraseKey(phraseText);
     const card = phraseMetadata?.get(key);
     return card && (card.status === 'learning' || card.status === 'known');
   };

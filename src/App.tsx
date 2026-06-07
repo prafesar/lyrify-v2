@@ -63,6 +63,7 @@ import {
 } from "./application";
 
 import { cn } from "./lib/utils";
+import { normalizePhraseKey } from "./services/cardService";
 import { auth, testDbConnection } from "./lib/firebase";
 import { onAuthStateChanged, type User } from "firebase/auth";
 
@@ -443,7 +444,7 @@ const LyricLine = ({
   if (!trimmedLine && isCompact) return null;
   if (!trimmedLine) return <div className="h-6" />;
 
-  const metadata = phraseMetadata.get(trimmedLine);
+  const metadata = phraseMetadata.get(normalizePhraseKey(trimmedLine));
   const userTrans = metadata?.translatedPhrase;
   const autoTrans = currentTrack?.lines?.[i]?.translation;
   const displayTranslation = userTrans || autoTrans;
@@ -1710,7 +1711,7 @@ export default function App() {
     if (!user || !currentTrack) return;
 
     try {
-      const existing = phraseMetadata.get(phrase);
+      const existing = phraseMetadata.get(normalizePhraseKey(phrase));
       if (existing && existing.id) {
         await studyCardsRepository.updatePhraseStatus(existing.id, status);
       } else {
@@ -4177,7 +4178,7 @@ export default function App() {
                     <button
                       onClick={() => {
                         if (editingLine) {
-                          const card = phraseMetadata.get(editingLine.original);
+                          const card = phraseMetadata.get(normalizePhraseKey(editingLine.original));
                           if (card) {
                             handleUpdateStatus(card, "known");
                           }
@@ -4191,7 +4192,7 @@ export default function App() {
                     <button
                       onClick={() => {
                         if (editingLine) {
-                          const card = phraseMetadata.get(editingLine.original);
+                          const card = phraseMetadata.get(normalizePhraseKey(editingLine.original));
                           if (card) {
                             handleUpdateStatus(card, "learning");
                           }
@@ -4247,85 +4248,81 @@ export default function App() {
                 transform: "translateY(-100%) translateY(-20px)",
               }}
             >
-              <div className="flex items-start justify-between gap-4 mb-2">
-                <p className="text-2xl font-serif leading-tight">
-                  {popoverData.phrase}
-                </p>
-                <div
-                  className={cn(
-                    "w-2 h-2 rounded-full",
-                    phraseMetadata.get(popoverData.phrase)?.status === "known"
-                      ? "bg-green-500"
-                      : phraseMetadata.get(popoverData.phrase)?.status ===
-                          "learning"
-                        ? "bg-orange-500"
-                        : "bg-sky-400",
-                  )}
-                />
-              </div>
-              <p className="text-base text-app-fg opacity-60 font-serif italic mb-4">
-                {popoverData.translation}
-              </p>
+              {(() => {
+                const popoverCard = phraseMetadata.get(normalizePhraseKey(popoverData.phrase));
+                const popoverStatus = popoverCard?.status || "new";
+                return (
+                  <>
+                    <div className="flex items-start justify-between gap-4 mb-2">
+                      <p className="text-2xl font-serif leading-tight">
+                        {popoverData.phrase}
+                      </p>
+                      <div
+                        className={cn(
+                          "w-2 h-2 rounded-full",
+                          popoverStatus === "known"
+                            ? "bg-green-500"
+                            : popoverStatus === "learning"
+                              ? "bg-orange-500"
+                              : "bg-sky-400",
+                        )}
+                      />
+                    </div>
+                    <p className="text-base text-app-fg opacity-60 font-serif italic mb-4">
+                      {popoverData.translation}
+                    </p>
 
-              {popoverData.explanation && (
-                <div className="text-xs opacity-80 mb-5 leading-relaxed prose prose-invert line-clamp-4">
-                  <ReactMarkdown>{popoverData.explanation}</ReactMarkdown>
-                </div>
-              )}
+                    {popoverData.explanation && (
+                      <div className="text-xs opacity-80 mb-5 leading-relaxed prose prose-invert line-clamp-4">
+                        <ReactMarkdown>{popoverData.explanation}</ReactMarkdown>
+                      </div>
+                    )}
 
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    const currentStatus = phraseMetadata.get(
-                      popoverData.phrase,
-                    )?.status;
-                    handlePopoverAction(
-                      popoverData.phrase,
-                      currentStatus === "learning" ? "new" : "learning",
-                      popoverData.translation,
-                      popoverData.explanation,
-                    );
-                    setPopoverData(null);
-                  }}
-                  className={cn(
-                    "py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all",
-                    phraseMetadata.get(popoverData.phrase)?.status ===
-                      "learning"
-                      ? "bg-orange-500/20 text-orange-500 border border-orange-500/20"
-                      : "bg-orange-500 text-white shadow-lg shadow-orange-500/20",
-                  )}
-                >
-                  {phraseMetadata.get(popoverData.phrase)?.status === "learning"
-                    ? "Learning"
-                    : "Learn"}
-                </button>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    const currentStatus = phraseMetadata.get(
-                      popoverData.phrase,
-                    )?.status;
-                    handlePopoverAction(
-                      popoverData.phrase,
-                      currentStatus === "known" ? "new" : "known",
-                      popoverData.translation,
-                      popoverData.explanation,
-                    );
-                    setPopoverData(null);
-                  }}
-                  className={cn(
-                    "py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all",
-                    phraseMetadata.get(popoverData.phrase)?.status === "known"
-                      ? "bg-green-500/20 text-green-500 border border-green-500/20"
-                      : "bg-green-500 text-white shadow-lg shadow-green-500/20",
-                  )}
-                >
-                  {phraseMetadata.get(popoverData.phrase)?.status === "known"
-                    ? "Known"
-                    : "Known"}
-                </button>
-              </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handlePopoverAction(
+                            popoverData.phrase,
+                            popoverStatus === "learning" ? "new" : "learning",
+                            popoverData.translation,
+                            popoverData.explanation,
+                          );
+                          setPopoverData(null);
+                        }}
+                        className={cn(
+                          "py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all",
+                          popoverStatus === "learning"
+                            ? "bg-orange-500/20 text-orange-500 border border-orange-500/20"
+                            : "bg-orange-500 text-white shadow-lg shadow-orange-500/20",
+                        )}
+                      >
+                        {popoverStatus === "learning" ? "Learning" : "Learn"}
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handlePopoverAction(
+                            popoverData.phrase,
+                            popoverStatus === "known" ? "new" : "known",
+                            popoverData.translation,
+                            popoverData.explanation,
+                          );
+                          setPopoverData(null);
+                        }}
+                        className={cn(
+                          "py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all",
+                          popoverStatus === "known"
+                            ? "bg-green-500/20 text-green-500 border border-green-500/20"
+                            : "bg-green-500 text-white shadow-lg shadow-green-500/20",
+                        )}
+                      >
+                        {popoverStatus === "known" ? "Known" : "Known"}
+                      </button>
+                    </div>
+                  </>
+                );
+              })()}
             </motion.div>
           </>
         )}

@@ -17,6 +17,11 @@ const CARDS_COLLECTION = 'cards';
 
 export type PhraseStatus = 'new' | 'learning' | 'known';
 
+export function normalizePhraseKey(text: string): string {
+  if (!text) return "";
+  return text.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
 export interface Phrase {
   id: string;
   text: string;

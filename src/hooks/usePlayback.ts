@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { type TrackLyricsData } from "../services/musicService";
 import { type Flashcard, userPreferencesRepository } from "../application";
+import { normalizePhraseKey } from "../services/cardService";
 import { SUPPORTED_LANGUAGES, getLocaleByName } from "../lib/languages";
 
 export interface UsePlaybackResult {
@@ -313,7 +314,7 @@ export function usePlayback(
       return;
     }
 
-    const metadata = phraseMetadata.get(currentLine);
+    const metadata = phraseMetadata.get(normalizePhraseKey(currentLine));
     if (skipKnownPhrases && metadata?.status === "known") {
       readNextLine(playbackLines, index + 1);
       return;
