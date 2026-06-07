@@ -116,7 +116,7 @@ export function buildTrackProgressViewModel(
     ctaActionType = 'generate_analysis';
     motivationalMessage = 'Unlock AI breakdown & grammar highlights.';
   } else if (currentStepId === 'saved') {
-    statusText = 'Save your first phrase to start building a study deck';
+    statusText = 'Save your first phrase from the Breakdown tab to build a study deck';
     ctaLabel = 'Save First Phrase';
     ctaActionType = 'save_phrase';
     motivationalMessage = 'One step to unlock study mode!';
