@@ -1,117 +1,108 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import { Music, Brain, Star, GraduationCap, ArrowRight, Loader2 } from 'lucide-react';
+import { Sparkles, FileText, Brain, CheckCircle2, Bookmark, ArrowRight, Check } from 'lucide-react';
 import { NextStepState } from '../services/nextStepService';
-import { cn } from '../lib/utils';
 
 interface NextStepCTAProps {
   state: NextStepState;
-  onClick: () => void;
-  isLoading?: boolean;
+  onExecute: (type: NextStepState['type']) => void;
+  onMarkCompleted?: () => void;
+  isExecuting?: boolean;
 }
 
-export const NextStepCTA: React.FC<NextStepCTAProps> = ({ state, onClick, isLoading = false }) => {
+export const NextStepCTA: React.FC<NextStepCTAProps> = ({
+  state,
+  onExecute,
+  onMarkCompleted,
+  isExecuting = false,
+}) => {
   const getIcon = () => {
     switch (state.type) {
       case 'FIND_LYRICS':
-        return <Music className="text-amber-500 shrink-0" size={18} />;
+        return <FileText size={18} className="text-app-accent" />;
       case 'GENERATE_ANALYSIS':
-        return <Brain className="text-app-accent shrink-0" size={18} />;
-      case 'SAVE_FIRST_PHRASE':
-        return <Star className="text-purple-500 shrink-0 animate-pulse" size={18} />;
+        return <Sparkles size={18} className="text-app-accent animate-pulse" />;
       case 'GO_TO_STUDY':
-        return <GraduationCap className="text-emerald-500 shrink-0" size={18} />;
+        return <Brain size={18} className="text-emerald-500 animate-pulse" />;
+      case 'SAVE_PHRASES':
+        return <Bookmark size={18} className="text-amber-500" />;
+      case 'TRACK_COMPLETE':
+        return <CheckCircle2 size={18} className="text-emerald-500" />;
+      default:
+        return null;
     }
   };
 
-  const getBadgeColors = () => {
+  const getIconBg = () => {
     switch (state.type) {
       case 'FIND_LYRICS':
-        return 'bg-amber-500/10 border-amber-500/20 text-amber-500';
       case 'GENERATE_ANALYSIS':
-        return 'bg-app-accent/10 border-app-accent/20 text-app-accent';
-      case 'SAVE_FIRST_PHRASE':
-        return 'bg-purple-500/10 border-purple-500/20 text-purple-600';
+        return 'bg-app-accent/10 text-app-accent';
       case 'GO_TO_STUDY':
-        return 'bg-emerald-500/10 border-emerald-500/20 text-emerald-600';
+      case 'TRACK_COMPLETE':
+        return 'bg-emerald-500/10 text-emerald-500';
+      case 'SAVE_PHRASES':
+        return 'bg-amber-500/10 text-amber-500';
+      default:
+        return 'bg-app-accent/10 text-app-accent';
     }
   };
 
-  const getButtonStyles = () => {
-    switch (state.type) {
-      case 'FIND_LYRICS':
-        return 'bg-amber-500 hover:bg-amber-600 text-white shadow-lg shadow-amber-500/20';
-      case 'GENERATE_ANALYSIS':
-        return 'bg-app-accent hover:bg-app-accent/90 text-white shadow-lg shadow-app-accent/20';
-      case 'SAVE_FIRST_PHRASE':
-        return 'bg-purple-600 hover:bg-purple-700 text-white shadow-lg shadow-purple-600/20';
-      case 'GO_TO_STUDY':
-        return 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-600/20';
-    }
-  };
-
-  const getStepNumber = () => {
-    switch (state.type) {
-      case 'FIND_LYRICS':
-        return 'Step 1';
-      case 'GENERATE_ANALYSIS':
-        return 'Step 2';
-      case 'SAVE_FIRST_PHRASE':
-        return 'Step 3';
-      case 'GO_TO_STUDY':
-        return 'Step 4';
+  const handleCardClick = () => {
+    if (!isExecuting) {
+      onExecute(state.type);
     }
   };
 
   return (
     <motion.div
-      id="guided-next-step-card"
-      initial={{ opacity: 0, y: 10 }}
+      id="next-step-cta-container"
+      initial={{ opacity: 0, y: 15 }}
       animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -10 }}
-      className="mb-6 w-full bg-app-card border border-app-card-border rounded-2xl p-4 sm:p-5 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 relative overflow-hidden"
+      exit={{ opacity: 0 }}
+      className="w-full max-w-xl"
     >
-      <div className="flex gap-3.5 items-start">
-        <div className={cn("p-2.5 rounded-xl border flex items-center justify-center shrink-0", getBadgeColors())}>
-          {getIcon()}
-        </div>
-        
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <span className={cn("inline-block px-1.5 py-0.5 rounded text-[9px] uppercase tracking-wider font-extrabold border leading-none", getBadgeColors())}>
-              {getStepNumber()}
-            </span>
-            <span className="text-[10px] font-bold text-app-muted uppercase tracking-widest">
-              Guided Next Step
-            </span>
+      <div
+        id="next-step-cta-card"
+        onClick={handleCardClick}
+        className="w-full group flex items-center justify-between gap-4 p-4 md:p-5 rounded-3xl cursor-pointer hover:bg-app-card/70 hover:scale-[1.002] active:scale-[0.995] transition-all bg-app-card border border-app-card-border shadow-md"
+      >
+        <div className="flex items-center gap-3.5 min-w-0 flex-1">
+          <div className={`p-3 ${getIconBg()} rounded-2xl shrink-0 shadow-sm group-hover:scale-105 transition-transform`}>
+            {getIcon()}
           </div>
-          <h4 className="font-extrabold text-sm text-app-fg block">
-            {state.label}
-          </h4>
-          <p className="text-xs text-app-muted font-sans leading-relaxed">
-            {state.description}
-          </p>
+          <div className="min-w-0 flex-1">
+            <span className="text-[9px] font-black uppercase tracking-wider text-app-accent block">
+              {state.type === 'TRACK_COMPLETE' ? 'Excellent Progress!' : 'NEXT STEP'}
+            </span>
+            <span className="text-sm md:text-base font-extrabold text-app-fg leading-tight block mt-0.5 transition-colors group-hover:text-app-accent">
+              {isExecuting ? 'Processing...' : state.label}
+            </span>
+            <span className="text-xs text-app-muted leading-relaxed block mt-1 font-semibold opacity-90">
+              {state.description}
+            </span>
+
+            {/* Aux button shown inside card for SAVE_PHRASES state to avoid nested click interference */}
+            {state.type === 'SAVE_PHRASES' && onMarkCompleted && (
+              <div className="mt-3 flex animate-in fade-in duration-200" onClick={(e) => e.stopPropagation()}>
+                <button
+                  type="button"
+                  onClick={onMarkCompleted}
+                  className="px-3.5 py-1.5 bg-transparent border border-app-card-border hover:bg-app-fg/5 text-app-muted hover:text-app-fg text-[10px] font-black uppercase tracking-wider rounded-xl active:scale-95 transition-all flex items-center gap-1 cursor-pointer"
+                >
+                  <Check size={12} />
+                  Done with breakdown
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Clean elegant right arrow icon that animates on container hover */}
+        <div className="shrink-0 flex items-center justify-center w-8 h-8 rounded-full bg-app-fg/5 text-app-fg border border-app-card-border group-hover:bg-app-accent group-hover:text-white group-hover:border-app-accent transition-all duration-300">
+          <ArrowRight size={14} className="transform group-hover:translate-x-0.5 transition-transform duration-300" />
         </div>
       </div>
-
-      <button
-        id="guided-next-step-action-btn"
-        onClick={onClick}
-        disabled={isLoading}
-        className={cn(
-          "w-full sm:w-auto px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2 shrink-0 border border-transparent disabled:opacity-50 disabled:pointer-events-none",
-          getButtonStyles()
-        )}
-      >
-        {isLoading ? (
-          <Loader2 className="animate-spin" size={14} />
-        ) : (
-          <>
-            <span>Proceed</span>
-            <ArrowRight size={14} />
-          </>
-        )}
-      </button>
     </motion.div>
   );
 };

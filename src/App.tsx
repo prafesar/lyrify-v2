@@ -90,6 +90,7 @@ import { setTransientTrack, popTransientTrack, initializeWebNavigation } from ".
 import { determineNextStep } from "./services/nextStepService";
 import { getTrackStudySummary } from "./services/trackSummaryService";
 import { TrackStudyBridge } from "./components/TrackStudyBridge";
+import { NextStepCTA } from "./components/NextStepCTA";
 const recordPhraseSaved = (date?: Date) => dailyTrackerRepository.recordPhraseSaved(date);
 const recordReviewCompleted = (date?: Date) => dailyTrackerRepository.recordReviewCompleted(date);
 import { buildTrackProgressViewModel } from "./services/trackProgressService";
@@ -767,16 +768,10 @@ export default function App() {
   // Derived memoized progress View Models
   const nextStepState = useMemo(() => {
     if (!currentTrack) return null;
-    const hasSavedCardsForTrack = Array.from(phraseMetadata.values()).some(
+    const cards = Array.from(phraseMetadata.values()).filter(
       (card) => card.trackId === currentTrack.trackId
     );
-    return determineNextStep(currentTrack, hasSavedCardsForTrack);
-  }, [currentTrack, phraseMetadata]);
-
-  const trackStudySummary = useMemo(() => {
-    if (!currentTrack) return null;
-    const cards = Array.from(phraseMetadata.values());
-    return getTrackStudySummary(cards, currentTrack.trackId);
+    return determineNextStep(currentTrack, cards, new Date());
   }, [currentTrack, phraseMetadata]);
 
   const trackProgressViewModel = useMemo(() => {
@@ -2318,15 +2313,36 @@ export default function App() {
                   </div>
                 )}
 
-                {trackStudySummary && (
+                {nextStepState && (
                   <div className="mb-6 px-3 sm:px-6">
-                    <TrackStudyBridge
-                      summary={trackStudySummary}
-                      onGoToStudy={() => {
-                        setStudyTrackId(currentTrack.trackId);
-                        goToStudy();
+                    <NextStepCTA
+                      state={nextStepState}
+                      isExecuting={isTranslating || isGeneratingAnalysis}
+                      onExecute={(actionType) => {
+                        if (actionType === 'FIND_LYRICS') {
+                          handleNextStepClickDirect();
+                        } else if (actionType === 'GENERATE_ANALYSIS') {
+                          handleNextStepClickDirect();
+                        } else if (actionType === 'SAVE_PHRASES') {
+                          setActiveTab('analysis'); // Переход на вкладку детального разбора песни
+                        } else if (actionType === 'GO_TO_STUDY') {
+                          setStudyTrackId(currentTrack.trackId);
+                          goToStudy();
+                        } else if (actionType === 'TRACK_COMPLETE') {
+                          setActiveTab('analysis');
+                        }
                       }}
-                      trackTitle={`${currentTrack.title} — ${currentTrack.artist}`}
+                      onMarkCompleted={async () => {
+                        if (currentTrack) {
+                          const updatedTrack = {
+                            ...currentTrack,
+                            breakdownCompleted: true,
+                          };
+                          setCurrentTrack(updatedTrack);
+                          await saveTrackData(currentTrack.trackId, updatedTrack);
+                          loadCommunityTracks();
+                        }
+                      }}
                     />
                   </div>
                 )}
@@ -3025,6 +3041,10 @@ export default function App() {
                           handleRegenerateAnalysis={handleRegenerateAnalysis}
                           onOpenAssistantForPhrase={handleOpenAssistantForPhrase}
                           onNavigateToTab={setActiveTab}
+                          onStartStudy={() => {
+                            setStudyTrackId(currentTrack.trackId);
+                            goToStudy();
+                          }}
                         />
                       </motion.div>
                     ) : (

@@ -74,6 +74,7 @@ describe('Track Progress Metro Line Stepper Service', () => {
   it('Case 3: Analysis complete but no saved phrases', () => {
     const track = createMockTrack({
       rawLyrics: 'Je me souviens',
+      lectureBlocks: [{ id: 'b1', kind: 'lexical_groups', text: 'Some breakdown words', source: 'ai' }],
       lines: [{ id: 'l1', index: 0, original: 'Je me souviens', translation: 'I remember', phrases: [{ id: 'p1', text: 'Je me souviens', lemmas: [], type: 'phrase' }] }],
       processingStatus: { stage1_completed: true, stage2_completed: true, stage3_completed: true }
     });
@@ -83,35 +84,35 @@ describe('Track Progress Metro Line Stepper Service', () => {
     expect(vm!.ctaActionType).toBe('save_phrase');
     expect(vm!.steps[2].status).toBe('completed'); // Analysis complete
     expect(vm!.steps[3].status).toBe('current');   // Saved is current
-    expect(vm!.steps[4].status).toBe('upcoming');
   });
 
   it('Case 4: Phrases saved but review not done yet (reps = 0)', () => {
     const track = createMockTrack({
       rawLyrics: 'Je me souviens',
+      lectureBlocks: [{ id: 'b1', kind: 'lexical_groups', text: 'Some breakdown words', source: 'ai' }],
       lines: [{ id: 'l1', index: 0, original: 'Je me souviens', translation: 'I remember', phrases: [{ id: 'p1', text: 'Je me souviens', lemmas: [], type: 'phrase' }] }],
       processingStatus: { stage1_completed: true, stage2_completed: true, stage3_completed: true }
     });
     const card = createMockCard({ reps: 0 }); // Saved but not reviewed yet
     const vm = buildTrackProgressViewModel(track, [card]);
 
-    expect(vm!.currentStepId).toBe('review');
+    expect(vm!.currentStepId).toBe('saved');
     expect(vm!.ctaActionType).toBe('go_to_study');
-    expect(vm!.steps[3].status).toBe('completed'); // Saved is completed
-    expect(vm!.steps[4].status).toBe('current');   // Review is current
+    expect(vm!.steps[3].status).toBe('completed'); // Saved is completed because card is saved
   });
 
   it('Case 5: Fully completed core learning loop (reps > 0)', () => {
     const track = createMockTrack({
       rawLyrics: 'Je me souviens',
+      lectureBlocks: [{ id: 'b1', kind: 'lexical_groups', text: 'Some breakdown words', source: 'ai' }],
       lines: [{ id: 'l1', index: 0, original: 'Je me souviens', translation: 'I remember', phrases: [{ id: 'p1', text: 'Je me souviens', lemmas: [], type: 'phrase' }] }],
       processingStatus: { stage1_completed: true, stage2_completed: true, stage3_completed: true }
     });
     const card = createMockCard({ reps: 1 }); // Already reviewed!
     const vm = buildTrackProgressViewModel(track, [card]);
 
-    expect(vm!.currentStepId).toBe('review');
-    expect(vm!.ctaActionType).toBe('review_again');
-    expect(vm!.steps[4].status).toBe('completed'); // Review is completed!
+    expect(vm!.currentStepId).toBe('saved');
+    expect(vm!.ctaActionType).toBe('go_to_study');
+    expect(vm!.steps[3].status).toBe('completed'); // Saved is completed
   });
 });

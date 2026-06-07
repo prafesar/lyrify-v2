@@ -38,6 +38,7 @@ interface AnalysisPhraseWorkspaceProps {
   handleRegenerateAnalysis?: () => void;
   onOpenAssistantForPhrase?: (phrase: Phrase) => void;
   onNavigateToTab?: (tab: "preview" | "lyrics" | "analysis" | "cards") => void;
+  onStartStudy?: () => void;
 }
 
 export const AnalysisPhraseWorkspace: React.FC<AnalysisPhraseWorkspaceProps> = ({
@@ -51,7 +52,8 @@ export const AnalysisPhraseWorkspace: React.FC<AnalysisPhraseWorkspaceProps> = (
   isGeneratingAnalysis = false,
   handleRegenerateAnalysis,
   onOpenAssistantForPhrase,
-  onNavigateToTab
+  onNavigateToTab,
+  onStartStudy
 }) => {
   // Local state for Modals
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -366,6 +368,34 @@ export const AnalysisPhraseWorkspace: React.FC<AnalysisPhraseWorkspaceProps> = (
           )}
         </div>
       </div>
+
+      {uniquePhrases.length > 0 && onStartStudy && (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="p-5 sm:p-6 rounded-[2rem] bg-emerald-500/[0.04] border border-emerald-500/15 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 shadow-sm"
+        >
+          <div className="space-y-1 text-left">
+            <span className="text-[9px] font-black tracking-widest text-emerald-600 uppercase block mb-0.5 animate-pulse">
+              Ready for Practice • Начни тренировку
+            </span>
+            <h4 className="text-base font-extrabold text-app-fg tracking-tight">
+              {uniquePhrases.length} saved phrase{uniquePhrases.length > 1 ? 's' : ''} in your deck
+            </h4>
+            <p className="text-[11px] sm:text-xs text-app-muted font-medium">
+              Review these items with active spaced repetition logic to memorize them forever.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onStartStudy}
+            className="px-5 py-3 bg-emerald-500 hover:bg-emerald-600 text-white hover:scale-[1.02] active:scale-[0.98] transition-all text-xs font-black uppercase tracking-wider rounded-xl cursor-pointer shadow-md shadow-emerald-500/15 shrink-0 flex items-center justify-center gap-1.5 self-start sm:self-center"
+          >
+            <CheckCircle2 size={14} />
+            Start Study / Учить
+          </button>
+        </motion.div>
+      )}
 
       {/* Phrases List */}
       <div>

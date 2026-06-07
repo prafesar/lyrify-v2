@@ -1,4 +1,12 @@
-export type NextStepType = 'FIND_LYRICS' | 'GENERATE_ANALYSIS' | 'SAVE_FIRST_PHRASE' | 'GO_TO_STUDY';
+import { TrackLyricsData } from './musicService';
+import { Flashcard } from './localCardService';
+
+export type NextStepType = 
+  | 'FIND_LYRICS' 
+  | 'GENERATE_ANALYSIS' 
+  | 'SAVE_PHRASES' 
+  | 'GO_TO_STUDY' 
+  | 'TRACK_COMPLETE';
 
 export interface NextStepState {
   type: NextStepType;
@@ -10,18 +18,9 @@ export interface NextStepState {
  * Pure selector/helper to determine the next step for a given track.
  */
 export function determineNextStep(
-  track: {
-    rawLyrics?: string;
-    processingStatus?: {
-      stage1_completed?: boolean;
-      stage2_completed?: boolean;
-      stage3_completed?: boolean;
-    };
-    lines?: Array<{
-      phrases?: any[];
-    }>;
-  } | null | undefined,
-  hasSavedCards: boolean
+  track: TrackLyricsData | null | undefined,
+  trackCards: Flashcard[],
+  now: Date = new Date()
 ): NextStepState {
   if (!track) {
     return {
@@ -32,39 +31,64 @@ export function determineNextStep(
   }
 
   // State 1: No lyrics
-  const hasLyrics = track.rawLyrics && track.rawLyrics.trim().length > 0;
+  const hasLyrics = !!(track.rawLyrics && track.rawLyrics.trim().length > 0);
   if (!hasLyrics) {
     return {
       type: 'FIND_LYRICS',
-      label: 'Find Lyrics & Phrases',
+      label: 'Get Lyrics',
       description: 'Fetch original lyrics and generate first preview.'
     };
   }
 
-  // State 2: Has lyrics, but no analysis/phrases yet
-  const hasPhrases = track.lines && track.lines.some(l => l.phrases && l.phrases.length > 0);
-  const isAnalysisCompleted = track.processingStatus?.stage3_completed && hasPhrases;
+  // State 2: Has lyrics, but no breakdown/analysis yet
+  const isAnalysisCompleted = !!(track.lectureBlocks && track.lectureBlocks.length > 0);
   if (!isAnalysisCompleted) {
     return {
       type: 'GENERATE_ANALYSIS',
-      label: 'Generate Song Breakdown',
+      label: 'Generate Breakdown',
       description: 'Run Gemini AI to translate lines and extract important vocabulary patterns.'
     };
   }
 
-  // State 3: Has analysis, but no saved cards for this track
-  if (!hasSavedCards) {
+  // State 3: Track has due cards
+  const dueCards = trackCards.filter(card => new Date(card.due).getTime() <= now.getTime());
+  if (dueCards.length > 0) {
     return {
-      type: 'SAVE_FIRST_PHRASE',
-      label: 'Save Your First Phrase',
-      description: 'Save difficult or interesting phrases from the Breakdown tab to start learning them.'
+      type: 'GO_TO_STUDY',
+      label: 'Start Study',
+      description: `You have ${dueCards.length} saved phrase${dueCards.length > 1 ? 's' : ''} ready to practice now.`
     };
   }
 
-  // State 4: Already has saved cards
+  // State 4: Check for unsaved phrases in Breakdown, unless user soft-completed it
+  const isSoftCompleted = !!(track as any).breakdownCompleted;
+  
+  const breakdownPhrases: string[] = [];
+  if (track.lectureBlocks) {
+    track.lectureBlocks.forEach(b => {
+      if (b.phrases) {
+        b.phrases.forEach(p => {
+          if (p.text) breakdownPhrases.push(p.text.trim().toLowerCase());
+        });
+      }
+    });
+  }
+
+  const savedPhraseTexts = new Set(trackCards.map(c => c.text.trim().toLowerCase()));
+  const hasUnsavedPhrases = breakdownPhrases.some(pText => !savedPhraseTexts.has(pText));
+
+  if (hasUnsavedPhrases && !isSoftCompleted) {
+    return {
+      type: 'SAVE_PHRASES',
+      label: 'Save Phrases',
+      description: 'Explore the Breakdown to select and save phrases to your cards.'
+    };
+  }
+
+  // State 5: Everything is saved or skipped, and nothing is due
   return {
-    type: 'GO_TO_STUDY',
-    label: 'Go to Study',
-    description: 'You have saved phrases for this track. Start practicing with spaced repetition!'
+    type: 'TRACK_COMPLETE',
+    label: 'Revisit Breakdown',
+    description: 'You completed this song breakdown! All cards are current, and nothing is due for review.'
   };
 }
