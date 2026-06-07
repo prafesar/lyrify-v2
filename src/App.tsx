@@ -2383,67 +2383,8 @@ export default function App() {
                       <motion.div
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
-                        className="space-y-6 max-w-2xl mx-auto w-full"
+                        className="space-y-6 max-w-xl mx-auto w-full text-left font-sans"
                       >
-                        {/* 1. Track Overview Header Card */}
-                        <section className="p-6 rounded-[2rem] bg-app-card/60 border border-app-card-border shadow-app-card flex flex-col sm:flex-row gap-6 items-center sm:items-start text-center sm:text-left relative overflow-hidden">
-                          {/* Left: Beautiful Cover Art / fallback Disc icon */}
-                          <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-2xl overflow-hidden relative shadow-lg bg-gradient-to-br from-app-card-border/40 to-app-card/10 border border-app-card-border flex items-center justify-center shrink-0 animate-fade-in">
-                            {currentTrack.coverUrl ? (
-                              <img 
-                                src={currentTrack.coverUrl} 
-                                alt={currentTrack.title}
-                                referrerPolicy="no-referrer"
-                                className="w-full h-full object-cover"
-                              />
-                            ) : (
-                              <Disc size={44} className="text-app-accent/60 " />
-                            )}
-                          </div>
-                          
-                          {/* Right: Info details */}
-                          <div className="flex-1 space-y-3 min-w-0">
-                            <div>
-                              <div className="flex items-center justify-center sm:justify-start gap-3">
-                                <span className="text-[9px] font-black uppercase tracking-widest px-2.5 py-0.5 rounded-full bg-app-accent/10 text-app-accent border border-app-accent/10">
-                                  Track Details
-                                </span>
-                                {renderDifficultyIndicator(currentTrack.difficulty, true)}
-                              </div>
-                              <h2 className="text-xl sm:text-2xl font-black text-app-fg tracking-tight font-sans mt-2 truncate">
-                                {currentTrack.title}
-                              </h2>
-                              <p className="text-sm font-medium text-app-fg opacity-60 font-sans mt-0.5 truncate">
-                                {currentTrack.artist} {currentTrack.album ? `— ${currentTrack.album}` : ""}
-                              </p>
-                            </div>
-
-                            {/* External Links Integration */}
-                            <div className="pt-2 border-t border-app-card-border/40">
-                              <p className="text-[9px] font-black uppercase tracking-wider text-app-muted/80 mb-2">External Resources</p>
-                              <div className="flex flex-wrap gap-1.5 justify-center sm:justify-start">
-                                {RESOURCE_TYPES.filter(r => ["youtube", "spotify", "apple", "genius"].includes(r.id)).map((resource) => {
-                                  const url = resource.getUrl(currentTrack as any);
-                                  const Icon = resource.icon;
-                                  return (
-                                    <a
-                                      key={resource.id}
-                                      href={url}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="flex items-center gap-1.5 px-3 py-1.5 border border-app-card-border/60 hover:border-app-accent/40 bg-app-card/20 hover:bg-app-accent/5 rounded-xl transition-all font-sans text-[10px] font-bold text-app-fg/70 hover:text-app-fg"
-                                    >
-                                      <Icon size={11} className={resource.color} />
-                                      <span>{resource.name}</span>
-                                    </a>
-                                  );
-                                })}
-                              </div>
-                            </div>
-                          </div>
-                        </section>
-
-                        {/* 2. Compact Status Summary & Main CTA */}
                         {(() => {
                           const hasLyrics = !!(currentTrack.rawLyrics && currentTrack.rawLyrics.trim().length > 0);
                           const hasPhrases = currentTrack.lines && currentTrack.lines.some((l: any) => l.phrases && l.phrases.length > 0);
@@ -2451,110 +2392,272 @@ export default function App() {
                           const trackCards = Array.from(phraseMetadata.values()).filter(card => card.trackId === currentTrack.trackId);
                           const savedCardsCount = trackCards.length;
 
-                          // Dynamic CTA mapping
-                          let ctaLabel = "";
-                          let ctaDescription = "";
-                          let ctaIcon = null;
-                          let ctaAction = () => {};
-                          let secondaryCtaLabel = "";
-                          let secondaryCtaAction = () => {};
-
-                          if (!hasLyrics) {
-                            ctaLabel = "Fetch Lyrics & Build Preview";
-                            ctaDescription = "Fetch original lines, pronunciation tracks, and start learning this song.";
-                            ctaIcon = <Sparkles size={16} />;
-                            ctaAction = handleAnalyzeSong;
-                          } else if (!hasBreakdown) {
-                            ctaLabel = "Unlock AI Breakdown";
-                            ctaDescription = "Generate interactive translation notes, thematic vocabulary highlights, and grammar breakdowns.";
-                            ctaIcon = <Brain size={16} />;
-                            ctaAction = () => {
-                              setActiveTab("analysis");
-                              handleGenerateAnalysis();
-                            };
-                            secondaryCtaLabel = "Read Original Lyrics";
-                            secondaryCtaAction = () => setActiveTab("lyrics");
-                          } else if (savedCardsCount === 0) {
-                            ctaLabel = "Explore Breakdown Phrases";
-                            ctaDescription = "Browse extracted keywords, learn important phrases and save study cards to your workspace.";
-                            ctaIcon = <Brain size={16} />;
-                            ctaAction = () => setActiveTab("analysis");
-                            secondaryCtaLabel = "Read Full Lyrics";
-                            secondaryCtaAction = () => setActiveTab("lyrics");
-                          } else {
-                            ctaLabel = "Practice Saved Cards";
-                            ctaDescription = `Start reviewing your deck with spaced repetition interval boxes.`;
-                            ctaIcon = <Bookmark size={16} />;
-                            ctaAction = () => setActiveTab("cards");
-                            secondaryCtaLabel = "View AI Breakdown";
-                            secondaryCtaAction = () => setActiveTab("analysis");
-                          }
-
                           return (
-                            <div className="grid gap-6">
-                              {/* Status Indicators Row */}
-                              <div className="p-5 rounded-[1.75rem] bg-app-card/40 border border-app-card-border/80 flex flex-col xs:flex-row divide-y xs:divide-y-0 xs:divide-x divide-app-card-border/30 text-center select-none">
-                                <div className="flex-1 py-1 px-2 flex flex-col items-center justify-center">
-                                  <span className="text-[10px] font-black uppercase tracking-wider text-app-muted">Lyrics Status</span>
-                                  <span className={cn(
-                                    "text-xs font-extrabold mt-1.5 flex items-center gap-1.5",
-                                    hasLyrics ? "text-emerald-500" : "text-amber-500"
-                                  )}>
-                                    <span className={cn("w-1.5 h-1.5 rounded-full", hasLyrics ? "bg-emerald-500" : "bg-amber-500 animate-pulse")} />
-                                    {hasLyrics ? "Available" : "Missing"}
-                                  </span>
-                                </div>
-                                <div className="flex-1 py-1 px-2 flex flex-col items-center justify-center">
-                                  <span className="text-[10px] font-black uppercase tracking-wider text-app-muted">Breakdown Status</span>
-                                  <span className={cn(
-                                    "text-xs font-extrabold mt-1.5 flex items-center gap-1.5",
-                                    hasBreakdown ? "text-emerald-500" : "text-amber-400"
-                                  )}>
-                                    <span className={cn("w-1.5 h-1.5 rounded-full", hasBreakdown ? "bg-emerald-500" : "bg-amber-400")} />
-                                    {hasBreakdown ? "Ready" : "Not Active"}
-                                  </span>
-                                </div>
-                                <div className="flex-1 py-1 px-2 flex flex-col items-center justify-center">
-                                  <span className="text-[10px] font-black uppercase tracking-wider text-app-muted">Study Cards</span>
-                                  <span className={cn(
-                                    "text-xs font-extrabold mt-1.5 flex items-center gap-1.5",
-                                    savedCardsCount > 0 ? "text-app-accent" : "text-app-muted"
-                                  )}>
-                                    <span className={cn("w-1.5 h-1.5 rounded-full", savedCardsCount > 0 ? "bg-app-accent" : "bg-app-muted/40")} />
-                                    {savedCardsCount === 1 ? "1 Saved Phrase" : savedCardsCount > 0 ? `${savedCardsCount} Saved Phrases` : "No Cards Yet"}
-                                  </span>
-                                </div>
-                              </div>
-
-                              {/* Consolidated Primary CTA Box */}
-                              <div className="p-8 rounded-[2.25rem] bg-gradient-to-b from-app-card/85 to-app-card/65 border border-app-card-border shadow-app-card flex flex-col items-center text-center space-y-6">
-                                <div className="space-y-2 max-w-md">
-                                  <h3 className="text-base font-black text-app-fg uppercase tracking-wider">
-                                    Next Recommended Step
-                                  </h3>
-                                  <p className="text-xs text-app-fg opacity-60 leading-relaxed font-sans font-medium">
-                                    {ctaDescription}
-                                  </p>
-                                </div>
-
-                                <div className="flex flex-col sm:flex-row gap-3 w-full justify-center">
-                                  {secondaryCtaLabel && (
-                                    <button
-                                      onClick={secondaryCtaAction}
-                                      className="px-6 py-3.5 rounded-2xl border border-app-card-border/80 hover:border-app-fg/20 bg-app-card/40 text-app-fg text-xs font-black uppercase tracking-widest transition-all cursor-pointer active:scale-95 text-center"
-                                    >
-                                      {secondaryCtaLabel}
-                                    </button>
+                            <div className="space-y-6">
+                              {/* 1. Unified Hero Block */}
+                              <section className="p-5 md:p-6 rounded-[1.75rem] bg-app-card border border-app-card-border shadow-md flex flex-col sm:flex-row gap-5 items-start text-left relative overflow-hidden select-none">
+                                {/* Left: Beautiful Cover Art */}
+                                <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl overflow-hidden relative shadow bg-gradient-to-br from-app-card-border/40 to-app-card/10 border border-app-card-border flex items-center justify-center shrink-0">
+                                  {currentTrack.coverUrl ? (
+                                    <img 
+                                      src={currentTrack.coverUrl} 
+                                      alt={currentTrack.title}
+                                      referrerPolicy="no-referrer"
+                                      className="w-full h-full object-cover"
+                                    />
+                                  ) : (
+                                    <Disc size={36} className="text-app-accent/60" />
                                   )}
-                                  <button
-                                    onClick={ctaAction}
-                                    className="flex items-center justify-center gap-2.5 px-8 py-3.5 rounded-2xl bg-app-accent hover:bg-app-accent/90 text-white text-xs font-black uppercase tracking-widest shadow-xl shadow-app-accent/10 hover:scale-[1.02] active:scale-95 transition-all cursor-pointer text-center"
+                                </div>
+                                
+                                {/* Right: Info details */}
+                                <div className="flex-1 space-y-3 min-w-0 text-left">
+                                  <div>
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <span className="text-[9px] font-black uppercase tracking-widest px-2.5 py-0.5 rounded-full bg-app-accent/10 text-app-accent border border-app-accent/10">
+                                        Track Details
+                                      </span>
+                                      {renderDifficultyIndicator(currentTrack.difficulty, true)}
+                                    </div>
+                                    <h2 className="text-lg sm:text-xl font-black text-app-fg tracking-tight font-sans mt-2 truncate">
+                                      {currentTrack.title}
+                                    </h2>
+                                    <p className="text-xs font-semibold text-app-muted font-sans mt-0.5 truncate">
+                                      {currentTrack.artist} {currentTrack.album ? `• ${currentTrack.album}` : ""}
+                                    </p>
+                                  </div>
+
+                                  {/* Compact integrated status pills */}
+                                  <div className="pt-2.5 border-t border-app-card-border/40 flex flex-wrap gap-1.5">
+                                    <span className={cn(
+                                      "inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider border",
+                                      hasLyrics 
+                                        ? "bg-emerald-500/5 text-emerald-500 border-emerald-500/15" 
+                                        : "bg-amber-500/5 text-amber-500 border-amber-500/15"
+                                    )}>
+                                      <span className={cn("w-1 h-1 rounded-full", hasLyrics ? "bg-emerald-500" : "bg-amber-500 animate-pulse")} />
+                                      {hasLyrics ? "Lyrics Loaded" : "Lyrics Missing"}
+                                    </span>
+
+                                    <span className={cn(
+                                      "inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider border",
+                                      hasBreakdown 
+                                        ? "bg-emerald-500/5 text-emerald-500 border-emerald-500/15" 
+                                        : "bg-amber-500/5 text-amber-500 border-amber-500/15"
+                                    )}>
+                                      <span className={cn("w-1 h-1 rounded-full", hasBreakdown ? "bg-emerald-500" : "bg-amber-400")} />
+                                      {hasBreakdown ? "Breakdown Ready" : "No Breakdown"}
+                                    </span>
+
+                                    <span className={cn(
+                                      "inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider border",
+                                      savedCardsCount > 0 
+                                        ? "bg-app-accent/5 text-app-accent border-app-accent/15" 
+                                        : "bg-app-muted/5 text-app-muted border-app-card-border/60"
+                                    )}>
+                                      <span className={cn("w-1 h-1 rounded-full", savedCardsCount > 0 ? "bg-app-accent" : "bg-app-muted/40")} />
+                                      {savedCardsCount === 1 ? "1 Card" : savedCardsCount > 0 ? `${savedCardsCount} Cards` : "0 Cards"}
+                                    </span>
+                                  </div>
+                                </div>
+                              </section>
+
+                              {/* 2. Quick Access Section */}
+                              <div className="space-y-3">
+                                <div className="flex items-center gap-2">
+                                  <Sparkles className="text-app-accent" size={13} />
+                                  <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-app-fg">
+                                    Quick Access • Быстрые действия
+                                  </h3>
+                                </div>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                  {/* Quick Action 1: Lyrics & Translation */}
+                                  <div
+                                    onClick={() => {
+                                      setActiveTab("lyrics");
+                                    }}
+                                    className={cn(
+                                      "relative group p-4 rounded-2xl border bg-app-card/60 transition-all active:scale-[0.985] flex items-center justify-between cursor-pointer select-none",
+                                      hasLyrics 
+                                        ? "border-app-card-border hover:bg-app-card hover:border-app-accent/30" 
+                                        : "border-app-card-border/40 opacity-70 hover:opacity-100 hover:bg-app-card/45"
+                                    )}
                                   >
-                                    {ctaIcon}
-                                    <span>{ctaLabel}</span>
-                                  </button>
+                                    <div className="flex items-center gap-3 min-w-0">
+                                      <div className={cn(
+                                        "p-2 rounded-xl shrink-0 transition-colors",
+                                        hasLyrics ? "bg-emerald-500/10 text-emerald-500 group-hover:bg-emerald-500/15" : "bg-app-muted/10 text-app-muted"
+                                      )}>
+                                        <FileText size={16} />
+                                      </div>
+                                      <div className="min-w-0 text-left">
+                                        <h4 className="text-xs font-black uppercase tracking-wider text-app-fg group-hover:text-app-accent transition-colors">
+                                          Original Lyrics
+                                        </h4>
+                                        <p className="text-[10px] text-app-muted truncate font-semibold mt-0.5">
+                                          {hasLyrics ? "Bilingual line-by-line mode" : "No lyrics loaded yet"}
+                                        </p>
+                                      </div>
+                                    </div>
+                                    <ChevronRight size={14} className="text-app-muted group-hover:text-app-accent group-hover:translate-x-0.5 transition-all shrink-0" />
+                                  </div>
+
+                                  {/* Quick Action 2: AI Breakdown */}
+                                  <div
+                                    onClick={() => {
+                                      setActiveTab("analysis");
+                                    }}
+                                    className={cn(
+                                      "relative group p-4 rounded-2xl border bg-app-card/60 transition-all active:scale-[0.985] flex items-center justify-between cursor-pointer select-none",
+                                      hasBreakdown 
+                                        ? "border-app-card-border hover:bg-app-card hover:border-app-accent/30" 
+                                        : "border-app-card-border/40 opacity-70 hover:opacity-100 hover:bg-app-card/45"
+                                    )}
+                                  >
+                                    <div className="flex items-center gap-3 min-w-0">
+                                      <div className={cn(
+                                        "p-2 rounded-xl shrink-0 transition-colors",
+                                        hasBreakdown ? "bg-amber-500/10 text-amber-500 group-hover:bg-amber-500/15" : "bg-app-muted/10 text-app-muted"
+                                      )}>
+                                        <Brain size={16} />
+                                      </div>
+                                      <div className="min-w-0 text-left">
+                                        <h4 className="text-xs font-black uppercase tracking-wider text-app-fg group-hover:text-app-accent transition-colors">
+                                          Grammar Notes
+                                        </h4>
+                                        <p className="text-[10px] text-app-muted truncate font-semibold mt-0.5">
+                                          {hasBreakdown ? "Study grammatical structures" : "Explore setup / run analysis"}
+                                        </p>
+                                      </div>
+                                    </div>
+                                    <ChevronRight size={14} className="text-app-muted group-hover:text-app-accent group-hover:translate-x-0.5 transition-all shrink-0" />
+                                  </div>
+
+                                  {/* Quick Action 3: Review Cards */}
+                                  <div
+                                    onClick={() => {
+                                      setActiveTab("cards");
+                                    }}
+                                    className={cn(
+                                      "relative group p-4 rounded-2xl border bg-app-card/60 transition-all active:scale-[0.985] flex items-center justify-between cursor-pointer select-none",
+                                      savedCardsCount > 0 
+                                        ? "border-app-card-border hover:bg-app-card hover:border-app-accent/30" 
+                                        : "border-app-card-border/40 opacity-70 hover:opacity-100 hover:bg-app-card/45"
+                                    )}
+                                  >
+                                    <div className="flex items-center gap-3 min-w-0">
+                                      <div className={cn(
+                                        "p-2 rounded-xl shrink-0 transition-colors",
+                                        savedCardsCount > 0 ? "bg-app-accent/10 text-app-accent group-hover:bg-app-accent/15" : "bg-app-muted/10 text-app-muted"
+                                      )}>
+                                        <Bookmark size={16} />
+                                      </div>
+                                      <div className="min-w-0 text-left">
+                                        <h4 className="text-xs font-black uppercase tracking-wider text-app-fg group-hover:text-app-accent transition-colors">
+                                          Interval Deck
+                                        </h4>
+                                        <p className="text-[10px] text-app-muted truncate font-semibold mt-0.5">
+                                          {savedCardsCount > 0 ? `${savedCardsCount} elements awaiting study` : "0 saved study cards"}
+                                        </p>
+                                      </div>
+                                    </div>
+                                    <ChevronRight size={14} className="text-app-muted group-hover:text-app-accent group-hover:translate-x-0.5 transition-all shrink-0" />
+                                  </div>
+
+                                  {/* Quick Action 4: External Media Link */}
+                                  {(() => {
+                                    const ytResource = RESOURCE_TYPES.find(r => r.id === "youtube");
+                                    const ytUrl = ytResource ? ytResource.getUrl(currentTrack as any) : null;
+                                    return (
+                                      <a
+                                        href={ytUrl || `https://www.youtube.com/results?search_query=${encodeURIComponent(currentTrack.artist + " " + currentTrack.title)}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="relative group p-4 rounded-2xl border border-app-card-border bg-app-card/60 transition-all active:scale-[0.985] flex items-center justify-between cursor-pointer select-none"
+                                      >
+                                        <div className="flex items-center gap-3 min-w-0">
+                                          <div className="p-2 rounded-xl shrink-0 bg-red-500/10 text-red-500 group-hover:bg-red-500/15 transition-colors">
+                                            <Youtube size={16} />
+                                          </div>
+                                          <div className="min-w-0 text-left">
+                                            <h4 className="text-xs font-black uppercase tracking-wider text-app-fg group-hover:text-red-500 transition-colors flex items-center gap-1.5">
+                                              Video & Clips <ExternalLink size={10} className="opacity-60" />
+                                            </h4>
+                                            <p className="text-[10px] text-app-muted truncate font-semibold mt-0.5">
+                                              Watch official YouTube source
+                                            </p>
+                                          </div>
+                                        </div>
+                                        <ChevronRight size={14} className="text-app-muted group-hover:text-red-500 group-hover:translate-x-0.5 transition-all shrink-0" />
+                                      </a>
+                                    );
+                                  })()}
+                                </div>
+
+                                {/* Auxiliary Resources Links */}
+                                <div className="pt-1.5 flex flex-wrap gap-2 items-center justify-start select-none">
+                                  <span className="text-[9px] font-black uppercase tracking-wider text-app-muted">Alternative links:</span>
+                                  {RESOURCE_TYPES.filter(r => ["spotify", "apple", "genius"].includes(r.id)).map((resource) => {
+                                    const url = resource.getUrl(currentTrack as any);
+                                    if (!url) return null;
+                                    const Icon = resource.icon;
+                                    return (
+                                      <a
+                                        key={resource.id}
+                                        href={url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl border border-app-card-border/60 hover:border-app-accent/30 bg-app-card/35 hover:bg-app-card transition-colors text-[9px] font-black uppercase tracking-wider text-app-muted hover:text-app-fg"
+                                      >
+                                        <Icon size={9} className={resource.color} />
+                                        <span>{resource.name}</span>
+                                      </a>
+                                    );
+                                  })}
                                 </div>
                               </div>
+
+                              {/* 3. Next step CTA */}
+                              {nextStepState && (
+                                <div className="space-y-3 pt-2">
+                                  <div className="flex items-center gap-2">
+                                    <Sparkles className="text-app-accent" size={13} />
+                                    <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-app-fg">
+                                      Next Practice • Начни сейчас
+                                    </h3>
+                                  </div>
+                                  <NextStepCTA
+                                    state={nextStepState}
+                                    isExecuting={isTranslating || isGeneratingAnalysis}
+                                    onExecute={(actionType) => {
+                                      if (actionType === 'FIND_LYRICS') {
+                                        handleNextStepClickDirect();
+                                      } else if (actionType === 'GENERATE_ANALYSIS') {
+                                        handleNextStepClickDirect();
+                                      } else if (actionType === 'SAVE_PHRASES') {
+                                        setActiveTab('analysis'); 
+                                      } else if (actionType === 'GO_TO_STUDY') {
+                                        setStudyTrackId(currentTrack.trackId);
+                                        goToStudy();
+                                      } else if (actionType === 'TRACK_COMPLETE') {
+                                        setActiveTab('analysis');
+                                      }
+                                    }}
+                                    onMarkCompleted={async () => {
+                                      if (currentTrack) {
+                                        const updatedTrack = {
+                                          ...currentTrack,
+                                          breakdownCompleted: true,
+                                        };
+                                        setCurrentTrack(updatedTrack);
+                                        await saveTrackData(currentTrack.trackId, updatedTrack);
+                                        loadCommunityTracks();
+                                      }
+                                    }}
+                                  />
+                                </div>
+                              )}
                             </div>
                           );
                         })()}
