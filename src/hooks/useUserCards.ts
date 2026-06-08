@@ -170,7 +170,8 @@ export function useUserCards(recentTracks: any[]): UseUserCardsResult {
     translation: string,
     explanation: string,
     status: PhraseStatus = "learning",
-    currentTrack?: TrackLyricsData | null
+    currentTrack?: TrackLyricsData | null,
+    type: string = "phrase"
   ) => {
     if (!currentTrack) return;
 
@@ -193,7 +194,7 @@ export function useUserCards(recentTracks: any[]): UseUserCardsResult {
         lineId: parentLine || "",
         explanation: explanation,
         lemmas: [],
-        type: "phrase"
+        type: type
       }, status);
       setDailyActivity(dailyTrackerRepository.recordPhraseSaved());
       await loadUserCards();
@@ -207,7 +208,8 @@ export function useUserCards(recentTracks: any[]): UseUserCardsResult {
     translation: string,
     explanation: string,
     status: PhraseStatus,
-    currentTrack?: TrackLyricsData | null
+    currentTrack?: TrackLyricsData | null,
+    type: string = "phrase"
   ) => {
     if (!currentTrack) return;
     const existingCard = phraseMetadata.get(normalizePhraseKey(phrase));
@@ -219,7 +221,7 @@ export function useUserCards(recentTracks: any[]): UseUserCardsResult {
         console.error(err);
       }
     } else {
-      await handleAddAnalysisPhrase(phrase, translation, explanation, status, currentTrack);
+      await handleAddAnalysisPhrase(phrase, translation, explanation, status, currentTrack, type);
     }
   }, [phraseMetadata, handleAddAnalysisPhrase, loadUserCards]);
 

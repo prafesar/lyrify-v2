@@ -127,6 +127,18 @@ export function usePlayback(
     if (isPreviewPlaying) {
       previewAudioRef.current.pause();
     } else {
+      // Clear/stop everything for learning/text-to-speech mode
+      window.speechSynthesis.cancel();
+      setIsReadingAll(false);
+      isReadingAllRef.current = false;
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.abort();
+        } catch (e) {}
+      }
+      setIsListeningForSpeech(false);
+      setShadowingFeedback("none");
+
       previewAudioRef.current.play();
       setHasStartedPreview(true);
     }
@@ -163,6 +175,12 @@ export function usePlayback(
 
   const speak = useCallback((text: string, onEnd?: () => void, lang?: string) => {
     window.speechSynthesis.cancel();
+
+    // Ensure sample audio is paused because we are entering learning audio (TTS/speech)
+    if (previewAudioRef.current && !previewAudioRef.current.paused) {
+      previewAudioRef.current.pause();
+      setIsPreviewPlaying(false);
+    }
 
     if (isMuted) {
       if (onEnd) onEnd();
@@ -378,6 +396,13 @@ export function usePlayback(
       setIsListeningForSpeech(false);
     } else {
       if (!currentTrack?.rawLyrics) return;
+
+      // Ensure sample audio is paused during consecutive readings
+      if (previewAudioRef.current && !previewAudioRef.current.paused) {
+        previewAudioRef.current.pause();
+        setIsPreviewPlaying(false);
+      }
+
       setIsReadingAll(true);
       isReadingAllRef.current = true;
 
@@ -427,6 +452,12 @@ export function usePlayback(
     if (isReadingAll) {
       setIsReadingAll(false);
       isReadingAllRef.current = false;
+    }
+
+    // Ensure sample audio is paused when stepping directly into a specific line
+    if (previewAudioRef.current && !previewAudioRef.current.paused) {
+      previewAudioRef.current.pause();
+      setIsPreviewPlaying(false);
     }
 
     window.speechSynthesis.cancel();

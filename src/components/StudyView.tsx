@@ -53,6 +53,13 @@ export default function StudyView({ onBack, initialTrackId, onReviewCompleted, o
     cultural_ref: 'Cultural References',
     vocabulary: 'Vocabulary',
     phrase: 'Phrases',
+    slang: 'Slang',
+    verb: 'Verbs',
+    grammar: 'Grammar',
+    cultural: 'Cultural',
+    core: 'Core Vocabulary',
+    colloquial: 'Colloquial',
+    advanced: 'Advanced'
   };
 
   const toggleParent = (phrase: string) => {
@@ -368,7 +375,7 @@ export default function StudyView({ onBack, initialTrackId, onReviewCompleted, o
               <select 
                 value={selectedLanguage}
                 onChange={(e) => setSelectedLanguage(e.target.value)}
-                className="px-4 py-2 rounded-xl bg-app-card border border-app-card-border text-xs font-black uppercase tracking-widest outline-none"
+                className="px-4 py-2 rounded-xl bg-app-card border border-app-card-border text-xs font-black uppercase tracking-widest outline-none cursor-pointer"
               >
                 <option key="lang-opt-all" value="all">All Languages</option>
                 {availableLanguages.map(l => <option key={`lang-opt-${l}`} value={l}>{l.toUpperCase()}</option>)}
@@ -377,24 +384,45 @@ export default function StudyView({ onBack, initialTrackId, onReviewCompleted, o
               <select 
                 value={selectedTrack}
                 onChange={(e) => setSelectedTrack(e.target.value)}
-                className="px-4 py-2 rounded-xl bg-app-card border border-app-card-border text-xs font-black uppercase tracking-widest outline-none max-w-[150px] truncate"
+                className="px-4 py-2 rounded-xl bg-app-card border border-app-card-border text-xs font-black uppercase tracking-widest outline-none max-w-[180px] sm:max-w-[240px] truncate cursor-pointer"
               >
                 <option key="track-opt-all" value="all">All Tracks</option>
                 {tracksList.map(t => <option key={`track-opt-${t.id}`} value={t.id}>{t.title}</option>)}
               </select>
+            </div>
 
-              <select 
-                value={selectedType}
-                onChange={(e) => setSelectedType(e.target.value)}
-                className="px-4 py-2 rounded-xl bg-app-card border border-app-card-border text-xs font-black uppercase tracking-widest outline-none"
-              >
-                <option key="type-opt-all" value="all">All Types</option>
+            {/* Tags scrolling carousel selector */}
+            <div className="flex flex-col gap-2">
+              <span className="text-[10px] font-black uppercase tracking-[0.15em] text-app-muted pl-0.5 select-none">Filter by Tag • Фильтр по тегам</span>
+              <div className="flex items-center gap-2 overflow-x-auto pb-1.5 scrollbar-hide -mx-4 px-4 sm:mx-0 sm:px-0">
+                <button
+                  type="button"
+                  onClick={() => setSelectedType('all')}
+                  className={cn(
+                    "px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all border whitespace-nowrap cursor-pointer active:scale-95",
+                    selectedType === 'all'
+                      ? "bg-app-fg text-app-bg border-app-fg shadow-lg"
+                      : "bg-app-card text-app-fg/60 border-app-card-border hover:border-app-accent/35 hover:text-app-fg"
+                  )}
+                >
+                  All tags
+                </button>
                 {availableTypes.map(t => (
-                  <option key={`type-opt-${t}`} value={t}>
+                  <button
+                    key={`type-chip-${t}`}
+                    type="button"
+                    onClick={() => setSelectedType(t)}
+                    className={cn(
+                      "px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all border whitespace-nowrap cursor-pointer active:scale-95",
+                      selectedType === t
+                        ? "bg-[var(--accent)] text-white border-[var(--accent)] shadow-md shadow-[var(--accent)]/15"
+                        : "bg-app-card text-app-fg/60 border-app-card-border hover:border-app-accent/35 hover:text-app-fg"
+                    )}
+                  >
                     {typeLabels[t] || t}
-                  </option>
+                  </button>
                 ))}
-              </select>
+              </div>
             </div>
             
             <div className="flex p-1 bg-app-card border border-app-card-border rounded-2xl w-full sm:w-fit overflow-x-auto scrollbar-hide">

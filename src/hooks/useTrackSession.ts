@@ -103,7 +103,7 @@ export interface UseTrackSessionResult {
     }
   ) => void;
 
-  handleManualLyricsSearch: () => Promise<void>;
+  handleManualLyricsSearch: (customArtist?: string, customTitle?: string) => Promise<void>;
   handleSelectLyricOption: (
     option: LyricOption, 
     targetLanguage: string,
@@ -412,12 +412,14 @@ export function useTrackSession(): UseTrackSessionResult {
     handleGenerateAnalysis(targetLanguage, callbacks, true);
   }, [handleGenerateAnalysis]);
 
-  const handleManualLyricsSearch = useCallback(async () => {
+  const handleManualLyricsSearch = useCallback(async (customArtist?: string, customTitle?: string) => {
     if (!currentTrack) return;
     setIsSearchingOptions(true);
     setLyricOptions([]);
     try {
-      const results = await searchLyricsOptions(currentTrack.artist, currentTrack.title);
+      const artist = customArtist !== undefined ? customArtist : currentTrack.artist;
+      const title = customTitle !== undefined ? customTitle : currentTrack.title;
+      const results = await searchLyricsOptions(artist, title);
       setLyricOptions(results);
     } catch (err) {
       console.error(err);

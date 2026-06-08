@@ -5,9 +5,9 @@ import { TrackProgressViewModel, TrackStationId } from '../services/trackProgres
 
 interface TrackProgressTrackerProps {
   viewModel: TrackProgressViewModel;
-  activeTab: 'preview' | 'lyrics' | 'cards' | 'analysis';
+  activeTab: 'lyrics' | 'cards' | 'analysis';
   onAction: (actionType: TrackProgressViewModel['ctaActionType']) => void;
-  onTabChange: (tab: 'preview' | 'lyrics' | 'cards' | 'analysis') => void;
+  onTabChange: (tab: 'lyrics' | 'cards' | 'analysis') => void;
 }
 
 export const TrackProgressTracker: React.FC<TrackProgressTrackerProps> = ({
@@ -21,10 +21,8 @@ export const TrackProgressTracker: React.FC<TrackProgressTrackerProps> = ({
   // Render icon for each station
   const getStationIcon = (id: string, size = 14) => {
     switch (id) {
-      case 'opened':
-        return <Music size={size} />;
       case 'lyrics':
-        return <FileText size={size} />;
+        return <Music size={size} />;
       case 'analysis':
         return <Sparkles size={size} />;
       case 'saved':
@@ -38,17 +36,16 @@ export const TrackProgressTracker: React.FC<TrackProgressTrackerProps> = ({
 
   // Check matching active visual tab
   const getIsViewing = (id: TrackStationId) => {
-    if (id === 'opened') return activeTab === 'preview';
     if (id === 'lyrics') return activeTab === 'lyrics';
     if (id === 'analysis') return activeTab === 'analysis';
     if (id === 'saved') return activeTab === 'cards';
     return false;
   };
 
-  // Calculate completed nodes for progress line (exclude first, opened is 0)
+  // Calculate completed nodes for progress line
   let activeSegmentsCount = 0;
   displayedSteps.forEach((step, idx) => {
-    if (step.status === 'completed' && idx > 0) {
+    if (step.status === 'completed') {
       activeSegmentsCount = idx;
     }
   });
@@ -83,7 +80,7 @@ export const TrackProgressTracker: React.FC<TrackProgressTrackerProps> = ({
           {displayedSteps.map((step) => {
             const isCompleted = step.status === 'completed';
             const isViewing = getIsViewing(step.id);
-            const isReady = isCompleted || step.id === 'opened';
+            const isReady = isCompleted;
 
             // Construct simple tooltip
             const tooltipText = isViewing
@@ -93,9 +90,7 @@ export const TrackProgressTracker: React.FC<TrackProgressTrackerProps> = ({
               : `${step.label} (Upcoming/Locked)`;
 
             const handleStationClick = () => {
-              if (step.id === 'opened') {
-                onTabChange('preview');
-              } else if (step.id === 'lyrics') {
+              if (step.id === 'lyrics') {
                 onTabChange('lyrics');
               } else if (step.id === 'analysis') {
                 onTabChange('analysis');
