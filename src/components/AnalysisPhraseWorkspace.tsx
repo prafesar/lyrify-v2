@@ -13,11 +13,12 @@ import {
   X, 
   MessageSquare,
   RefreshCw,
-  MoreVertical
+  MoreVertical,
+  Bookmark
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { Phrase, LyricsLine, TrackLyricsData } from "../services/musicService";
-import { PhraseStatus } from "../services/cardService";
+import { PhraseStatus, normalizePhraseKey } from "../services/cardService";
 import { addUserPhrase, editPhrase, deletePhrase } from "../services/lyricsAnalysisService";
 
 interface AnalysisPhraseWorkspaceProps {
@@ -36,6 +37,8 @@ interface AnalysisPhraseWorkspaceProps {
   isGeneratingAnalysis?: boolean;
   handleRegenerateAnalysis?: () => void;
   onOpenAssistantForPhrase?: (phrase: Phrase) => void;
+  onNavigateToTab?: (tab: "preview" | "lyrics" | "analysis" | "cards") => void;
+  onStartStudy?: () => void;
 }
 
 export const AnalysisPhraseWorkspace: React.FC<AnalysisPhraseWorkspaceProps> = ({
@@ -48,7 +51,9 @@ export const AnalysisPhraseWorkspace: React.FC<AnalysisPhraseWorkspaceProps> = (
   onUpdateTrack,
   isGeneratingAnalysis = false,
   handleRegenerateAnalysis,
-  onOpenAssistantForPhrase
+  onOpenAssistantForPhrase,
+  onNavigateToTab,
+  onStartStudy
 }) => {
   // Local state for Modals
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -100,32 +105,36 @@ export const AnalysisPhraseWorkspace: React.FC<AnalysisPhraseWorkspaceProps> = (
     );
   };
 
-  // Extract all unique phrases across both track.phrases and nested lines phrases
+  // Extract only the explicitly study-saved unique phrases for this track from phraseMetadata
   const uniquePhrases = useMemo(() => {
     const list: Phrase[] = [];
     const seen = new Set<string>();
 
-    const addIfNew = (p: Phrase) => {
-      const key = (p.text || "").trim().toLowerCase();
+    const cardsForTrack = Array.from(phraseMetadata.values()).filter(
+      (card) =>
+        card.trackId === currentTrack.trackId &&
+        (card.status === "learning" || card.status === "known")
+    );
+
+    cardsForTrack.forEach((card) => {
+      const key = normalizePhraseKey(card.text);
       if (key && !seen.has(key)) {
         seen.add(key);
-        list.push(p);
+        list.push({
+          id: card.id || card.phraseId || `card-${card.text}`,
+          text: card.text,
+          translation: card.translation || "",
+          explanation: card.explanation || "",
+          type: (card as any).originType || (card as any).type || "phrase",
+          source: (card as any).entryType === "user" || (card as any).source === "user" ? "user" : "ai",
+          note: (card as any).note || card.userNote || "",
+          lineIds: card.lineId ? [card.lineId] : [],
+        } as Phrase);
       }
-    };
-
-    if (currentTrack.phrases) {
-      currentTrack.phrases.forEach(addIfNew);
-    }
-    if (currentTrack.lines) {
-      currentTrack.lines.forEach(line => {
-        if (line.phrases) {
-          line.phrases.forEach(addIfNew);
-        }
-      });
-    }
+    });
 
     return list;
-  }, [currentTrack]);
+  }, [currentTrack, phraseMetadata]);
 
   // Filter phrases based on searched query & filter states
   const filteredPhrases = useMemo(() => {
@@ -134,7 +143,7 @@ export const AnalysisPhraseWorkspace: React.FC<AnalysisPhraseWorkspaceProps> = (
     // Apply categorical filters
     if (activeFilter !== "all") {
       result = result.filter(phrase => {
-        const card = phraseMetadata.get(phrase.text);
+        const card = phraseMetadata.get(normalizePhraseKey(phrase.text));
         const currentStatus = card ? card.status : "new";
         
         switch (activeFilter) {
@@ -308,7 +317,7 @@ export const AnalysisPhraseWorkspace: React.FC<AnalysisPhraseWorkspaceProps> = (
                 onClick={handleRegenerateAnalysis}
                 disabled={isGeneratingAnalysis}
                 className="flex items-center gap-1.5 px-4 py-3.5 bg-app-card border border-app-card-border text-app-fg opacity-60 hover:opacity-100 hover:text-orange-500 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-30"
-                title="Reset and regenerate analysis"
+                title="Reset and regenerate breakdown"
               >
                 <RefreshCw size={12} className={isGeneratingAnalysis ? "animate-spin" : ""} />
                 <span className="hidden sm:inline">Regenerate</span>
@@ -360,12 +369,40 @@ export const AnalysisPhraseWorkspace: React.FC<AnalysisPhraseWorkspaceProps> = (
         </div>
       </div>
 
+      {uniquePhrases.length > 0 && onStartStudy && (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="p-5 sm:p-6 rounded-[2rem] bg-emerald-500/[0.04] border border-emerald-500/15 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 shadow-sm"
+        >
+          <div className="space-y-1 text-left">
+            <span className="text-[9px] font-black tracking-widest text-emerald-600 uppercase block mb-0.5 animate-pulse">
+              Ready for Practice • Начни тренировку
+            </span>
+            <h4 className="text-base font-extrabold text-app-fg tracking-tight">
+              {uniquePhrases.length} saved phrase{uniquePhrases.length > 1 ? 's' : ''} in your deck
+            </h4>
+            <p className="text-[11px] sm:text-xs text-app-muted font-medium">
+              Review these items with active spaced repetition logic to memorize them forever.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onStartStudy}
+            className="px-5 py-3 bg-emerald-500 hover:bg-emerald-600 text-white hover:scale-[1.02] active:scale-[0.98] transition-all text-xs font-black uppercase tracking-wider rounded-xl cursor-pointer shadow-md shadow-emerald-500/15 shrink-0 flex items-center justify-center gap-1.5 self-start sm:self-center"
+          >
+            <CheckCircle2 size={14} />
+            Start Study / Учить
+          </button>
+        </motion.div>
+      )}
+
       {/* Phrases List */}
       <div>
         {filteredPhrases.length > 0 ? (
           <div className="grid gap-4">
             {filteredPhrases.map((item, idx) => {
-              const card = phraseMetadata.get(item.text);
+              const card = phraseMetadata.get(normalizePhraseKey(item.text));
               const currentStatus: PhraseStatus = card ? card.status : "new";
               const itemKey = item.id || item.text;
               const isExpanded = expandedPhraseKeys.has(itemKey);
@@ -745,14 +782,37 @@ export const AnalysisPhraseWorkspace: React.FC<AnalysisPhraseWorkspaceProps> = (
             </div>
           </div>
         ) : (
-          <div className="py-20 text-center space-y-4 rounded-[2rem] bg-app-card/25 border border-dashed border-app-card-border/60">
-            <Sparkles size={40} className="mx-auto text-orange-500 opacity-20" />
-            <p className="text-sm font-black text-app-fg opacity-40 uppercase tracking-widest">
-              No vocabulary analysis yet
-            </p>
-            <p className="text-xs text-app-fg opacity-30 font-medium max-w-xs mx-auto">
-              This track has no generated or custom phrases yet. Add your first custom phrase or click Regenerate to start analyzing!
-            </p>
+          <div className="py-20 text-center space-y-6 rounded-[3rem] bg-app-card/25 border border-dashed border-app-card-border/60 max-w-lg mx-auto px-6 font-sans">
+            <Bookmark size={40} className="mx-auto text-orange-500 opacity-35" />
+            <div className="space-y-2">
+              <p className="text-sm font-black text-app-fg opacity-60 uppercase tracking-widest">
+                No Saved Cards Yet
+              </p>
+              <p className="text-xs text-app-fg opacity-40 font-medium leading-relaxed max-w-xs mx-auto">
+                This study space holds your custom bookmarks and saved phrases. Find and collect useful phrases from the Breakdown tab first to build your learning deck!
+              </p>
+            </div>
+            <div className="flex flex-col sm:flex-row gap-3 justify-center items-center select-none">
+              {onNavigateToTab && (
+                <button
+                  type="button"
+                  onClick={() => onNavigateToTab("analysis")}
+                  className="px-6 py-2.5 bg-orange-500 hover:bg-orange-600 font-bold tracking-tight text-xs text-white rounded-xl shadow-md transition-all active:scale-95 duration-150 cursor-pointer"
+                >
+                  Go to Breakdown
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  clearForm();
+                  setIsAddModalOpen(true);
+                }}
+                className="px-6 py-2.5 bg-app-card border border-app-card-border text-app-fg text-xs font-bold rounded-xl hover:bg-app-bg transition-all cursor-pointer"
+              >
+                Add Manual Phrase
+              </button>
+            </div>
           </div>
         )}
       </div>

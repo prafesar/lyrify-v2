@@ -51,9 +51,9 @@ describe('Track Progress Metro Line Stepper Service', () => {
     expect(vm).not.toBeNull();
     expect(vm!.currentStepId).toBe('lyrics');
     expect(vm!.ctaActionType).toBe('find_lyrics');
-    expect(vm!.steps[0].status).toBe('completed'); // Opened is completed
-    expect(vm!.steps[1].status).toBe('current');   // Lyrics is current
-    expect(vm!.steps[2].status).toBe('upcoming');
+    expect(vm!.steps[0].status).toBe('current');   // Lyrics is current
+    expect(vm!.steps[1].status).toBe('upcoming');  // Analysis upcoming
+    expect(vm!.steps[2].status).toBe('upcoming');  // Saved upcoming
   });
 
   it('Case 2: Lyrics fetched but analysis is not ready', () => {
@@ -65,15 +65,15 @@ describe('Track Progress Metro Line Stepper Service', () => {
 
     expect(vm!.currentStepId).toBe('analysis');
     expect(vm!.ctaActionType).toBe('generate_analysis');
-    expect(vm!.steps[0].status).toBe('completed'); // Opened
-    expect(vm!.steps[1].status).toBe('completed'); // Lyrics
-    expect(vm!.steps[2].status).toBe('current');   // Analysis
-    expect(vm!.steps[3].status).toBe('upcoming');
+    expect(vm!.steps[0].status).toBe('completed'); // Lyrics
+    expect(vm!.steps[1].status).toBe('current');   // Analysis
+    expect(vm!.steps[2].status).toBe('upcoming');  // Saved
   });
 
   it('Case 3: Analysis complete but no saved phrases', () => {
     const track = createMockTrack({
       rawLyrics: 'Je me souviens',
+      lectureBlocks: [{ id: 'b1', kind: 'lexical_groups', text: 'Some breakdown words', source: 'ai' }],
       lines: [{ id: 'l1', index: 0, original: 'Je me souviens', translation: 'I remember', phrases: [{ id: 'p1', text: 'Je me souviens', lemmas: [], type: 'phrase' }] }],
       processingStatus: { stage1_completed: true, stage2_completed: true, stage3_completed: true }
     });
@@ -81,37 +81,38 @@ describe('Track Progress Metro Line Stepper Service', () => {
 
     expect(vm!.currentStepId).toBe('saved');
     expect(vm!.ctaActionType).toBe('save_phrase');
-    expect(vm!.steps[2].status).toBe('completed'); // Analysis complete
-    expect(vm!.steps[3].status).toBe('current');   // Saved is current
-    expect(vm!.steps[4].status).toBe('upcoming');
+    expect(vm!.steps[0].status).toBe('completed'); // Lyrics
+    expect(vm!.steps[1].status).toBe('completed'); // Analysis complete
+    expect(vm!.steps[2].status).toBe('current');   // Saved is current
   });
 
   it('Case 4: Phrases saved but review not done yet (reps = 0)', () => {
     const track = createMockTrack({
       rawLyrics: 'Je me souviens',
+      lectureBlocks: [{ id: 'b1', kind: 'lexical_groups', text: 'Some breakdown words', source: 'ai' }],
       lines: [{ id: 'l1', index: 0, original: 'Je me souviens', translation: 'I remember', phrases: [{ id: 'p1', text: 'Je me souviens', lemmas: [], type: 'phrase' }] }],
       processingStatus: { stage1_completed: true, stage2_completed: true, stage3_completed: true }
     });
     const card = createMockCard({ reps: 0 }); // Saved but not reviewed yet
     const vm = buildTrackProgressViewModel(track, [card]);
 
-    expect(vm!.currentStepId).toBe('review');
+    expect(vm!.currentStepId).toBe('saved');
     expect(vm!.ctaActionType).toBe('go_to_study');
-    expect(vm!.steps[3].status).toBe('completed'); // Saved is completed
-    expect(vm!.steps[4].status).toBe('current');   // Review is current
+    expect(vm!.steps[2].status).toBe('completed'); // Saved is completed because card is saved
   });
 
   it('Case 5: Fully completed core learning loop (reps > 0)', () => {
     const track = createMockTrack({
       rawLyrics: 'Je me souviens',
+      lectureBlocks: [{ id: 'b1', kind: 'lexical_groups', text: 'Some breakdown words', source: 'ai' }],
       lines: [{ id: 'l1', index: 0, original: 'Je me souviens', translation: 'I remember', phrases: [{ id: 'p1', text: 'Je me souviens', lemmas: [], type: 'phrase' }] }],
       processingStatus: { stage1_completed: true, stage2_completed: true, stage3_completed: true }
     });
     const card = createMockCard({ reps: 1 }); // Already reviewed!
     const vm = buildTrackProgressViewModel(track, [card]);
 
-    expect(vm!.currentStepId).toBe('review');
-    expect(vm!.ctaActionType).toBe('review_again');
-    expect(vm!.steps[4].status).toBe('completed'); // Review is completed!
+    expect(vm!.currentStepId).toBe('saved');
+    expect(vm!.ctaActionType).toBe('go_to_study');
+    expect(vm!.steps[2].status).toBe('completed'); // Saved is completed
   });
 });

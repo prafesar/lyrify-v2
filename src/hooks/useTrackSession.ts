@@ -39,7 +39,7 @@ export interface UseTrackSessionResult {
   
   setCurrentTrack: React.Dispatch<React.SetStateAction<TrackLyricsData | null>>;
   setIsLoadingLyrics: React.Dispatch<React.SetStateAction<boolean>>;
-  setLoadingStep: React.Dispatch<React.SetStateAction<"searching" | "meaning" | "analyzing" | "translating" | "idle">>;
+  setLoadingStep: React.Dispatch<React.SetStateAction<"searching" | "meaning" | "analyzing" | "translating" | "lecture" | "idle">>;
   setLyricsFetchError: React.Dispatch<React.SetStateAction<string | null>>;
   setAnalysisError: React.Dispatch<React.SetStateAction<string | null>>;
   setManualLyrics: React.Dispatch<React.SetStateAction<string>>;
@@ -103,7 +103,7 @@ export interface UseTrackSessionResult {
     }
   ) => void;
 
-  handleManualLyricsSearch: () => Promise<void>;
+  handleManualLyricsSearch: (customArtist?: string, customTitle?: string) => Promise<void>;
   handleSelectLyricOption: (
     option: LyricOption, 
     targetLanguage: string,
@@ -134,7 +134,7 @@ export interface UseTrackSessionResult {
 export function useTrackSession(): UseTrackSessionResult {
   const [currentTrack, setCurrentTrack] = useState<TrackLyricsData | null>(null);
   const [isLoadingLyrics, setIsLoadingLyrics] = useState(false);
-  const [loadingStep, setLoadingStep] = useState<"searching" | "meaning" | "analyzing" | "translating" | "idle">("idle");
+  const [loadingStep, setLoadingStep] = useState<"searching" | "meaning" | "analyzing" | "translating" | "lecture" | "idle">("idle");
   const [lyricsFetchError, setLyricsFetchError] = useState<string | null>(null);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [manualLyrics, setManualLyrics] = useState("");
@@ -412,12 +412,14 @@ export function useTrackSession(): UseTrackSessionResult {
     handleGenerateAnalysis(targetLanguage, callbacks, true);
   }, [handleGenerateAnalysis]);
 
-  const handleManualLyricsSearch = useCallback(async () => {
+  const handleManualLyricsSearch = useCallback(async (customArtist?: string, customTitle?: string) => {
     if (!currentTrack) return;
     setIsSearchingOptions(true);
     setLyricOptions([]);
     try {
-      const results = await searchLyricsOptions(currentTrack.artist, currentTrack.title);
+      const artist = customArtist !== undefined ? customArtist : currentTrack.artist;
+      const title = customTitle !== undefined ? customTitle : currentTrack.title;
+      const results = await searchLyricsOptions(artist, title);
       setLyricOptions(results);
     } catch (err) {
       console.error(err);
