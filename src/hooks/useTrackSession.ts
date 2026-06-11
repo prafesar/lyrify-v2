@@ -221,6 +221,17 @@ export function useTrackSession(): UseTrackSessionResult {
     } catch (err: any) {
       console.error("Manual fetch/meaning failed:", err);
       setLyricsFetchError(err.message || "Failed to fetch song data.");
+      
+      // Load from local SQLite cache to pick up raw lyrics if they were successfully fetched/saved
+      try {
+        const cached = trackSessionFacade.trackCacheRepository.getCachedTrackData(currentTrack.trackId);
+        if (cached) {
+          console.log("Restoring track data with fetched raw lyrics from local cache:", cached);
+          setCurrentTrack(cached);
+        }
+      } catch (cacheErr) {
+        console.error("Failed to restore from local cache:", cacheErr);
+      }
     } finally {
       setIsLoadingLyrics(false);
       setLoadingStep("idle");

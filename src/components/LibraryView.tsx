@@ -342,62 +342,125 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
               {/* SECTION 1: SELECTED TRACKS (Favorites) */}
               {(activeFilter === 'all' || activeFilter === 'tracks') && (
                 <div className="space-y-3">
-                  <div className="flex items-center justify-between px-1">
-                    <div className="flex items-center gap-1.5 text-app-accent">
-                      <Star size={16} fill="currentColor" />
-                      <h2 className="text-sm font-black uppercase tracking-[0.15em] text-app-fg leading-none">Favorite Tracks</h2>
+                  {activeFilter === 'all' ? (
+                    <button
+                      type="button"
+                      onClick={() => setActiveFilter('tracks')}
+                      className="flex items-center gap-1.5 text-app-fg hover:text-app-accent group select-none text-left cursor-pointer"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Star size={16} fill="currentColor" className="text-app-accent" />
+                        <h2 className="text-sm font-black uppercase tracking-[0.13em] leading-none">Favorite Tracks</h2>
+                      </div>
+                      <ChevronRight 
+                        size={16} 
+                        className="text-app-fg opacity-40 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" 
+                      />
+                    </button>
+                  ) : (
+                    <div className="flex items-center justify-between px-1">
+                      <div className="flex items-center gap-1.5 text-app-accent">
+                        <Star size={16} fill="currentColor" />
+                        <h2 className="text-sm font-black uppercase tracking-[0.15em] text-app-fg leading-none">Favorite Tracks</h2>
+                      </div>
+                      <span className="text-[10px] font-black text-app-muted uppercase bg-app-fg/5 px-2 py-1 rounded-lg">
+                        {filteredFavorites.length}
+                      </span>
                     </div>
-                    <span className="text-[10px] font-black text-app-muted uppercase bg-app-fg/5 px-2 py-1 rounded-lg">
-                      {filteredFavorites.length}
-                    </span>
-                  </div>
+                  )}
 
                   {filteredFavorites.length > 0 ? (
-                    <div className="space-y-2">
-                      {filteredFavorites.map((track) => (
-                        <div
-                          key={`fav-${track.id}`}
-                          onClick={() => onTrackSelect(track)}
-                          className="w-full flex items-center justify-between p-3.5 rounded-2xl bg-app-card border border-app-card-border shadow-sm active:scale-[0.99] transition-all hover:bg-opacity-80 group cursor-pointer"
-                        >
-                          <div className="flex items-center gap-3.5 overflow-hidden flex-1 select-none">
-                            {track.coverUrl ? (
-                              <img
-                                src={track.coverUrl}
-                                className="w-11 h-11 rounded-xl object-cover shadow"
-                                alt={track.title}
-                                referrerPolicy="no-referrer"
-                              />
-                            ) : (
-                              <div className="w-11 h-11 rounded-xl bg-app-fg/5 border border-app-card-border flex items-center justify-center text-app-fg/30 shrink-0 animate-pulse">
-                                <Disc size={18} />
+                    activeFilter === 'all' ? (
+                      /* 3x3 HORIZONTAL SCROLLABLE GRID */
+                      <div className="grid grid-rows-3 grid-flow-col auto-cols-[85%] sm:auto-cols-[340px] md:auto-cols-[380px] gap-x-4 gap-y-3.5 overflow-x-auto pb-4 scrollbar-hide snap-x snap-mandatory">
+                        {filteredFavorites.slice(0, 9).map((track) => (
+                          <div
+                            key={`fav-cell-${track.id}`}
+                            onClick={() => onTrackSelect(track)}
+                            className="flex items-center justify-between p-3 rounded-2xl bg-app-card border border-app-card-border shadow-sm active:scale-[0.98] transition-all hover:bg-opacity-80 group cursor-pointer snap-start h-[76px]"
+                          >
+                            <div className="flex items-center gap-3.5 overflow-hidden flex-1 select-none">
+                              {track.coverUrl ? (
+                                <img
+                                  src={track.coverUrl}
+                                  className="w-12 h-12 rounded-xl object-cover shadow-md shrink-0"
+                                  alt={track.title}
+                                  referrerPolicy="no-referrer"
+                                />
+                              ) : (
+                                <div className="w-12 h-12 rounded-xl bg-app-fg/5 border border-app-card-border flex items-center justify-center text-app-fg/30 shrink-0">
+                                  <Disc size={18} />
+                                </div>
+                              )}
+                              <div className="text-left overflow-hidden leading-tight">
+                                <span className="font-bold text-app-fg text-[13.5px] leading-tight block truncate group-hover:text-app-accent transition-colors mb-0.5">
+                                  {track.title}
+                                </span>
+                                <span className="text-xs text-app-muted truncate block">
+                                  {track.artist}
+                                </span>
                               </div>
-                            )}
-                            <div className="text-left overflow-hidden">
-                              <span className="font-bold text-app-fg text-[14px] leading-tight block truncate group-hover:text-app-accent transition-colors">
-                                {track.title}
-                              </span>
-                              <span className="text-xs text-app-muted truncate block mt-0.5">
-                                {track.artist}
-                              </span>
+                            </div>
+                            <div className="flex items-center shrink-0 ml-2" onClick={e => e.stopPropagation()}>
+                              <button
+                                type="button"
+                                onClick={() => setMenuTrack(track)}
+                                className="p-1.5 text-app-muted hover:text-app-fg rounded-full hover:bg-app-fg/5"
+                              >
+                                <MoreVertical size={16} />
+                              </button>
                             </div>
                           </div>
+                        ))}
+                      </div>
+                    ) : (
+                      /* STANDARD FULL PAGE LIST VIEW */
+                      <div className="space-y-2">
+                        {filteredFavorites.map((track) => (
+                          <div
+                            key={`fav-${track.id}`}
+                            onClick={() => onTrackSelect(track)}
+                            className="w-full flex items-center justify-between p-3.5 rounded-2xl bg-app-card border border-app-card-border shadow-sm active:scale-[0.99] transition-all hover:bg-opacity-80 group cursor-pointer"
+                          >
+                            <div className="flex items-center gap-3.5 overflow-hidden flex-1 select-none">
+                              {track.coverUrl ? (
+                                <img
+                                  src={track.coverUrl}
+                                  className="w-11 h-11 rounded-xl object-cover shadow"
+                                  alt={track.title}
+                                  referrerPolicy="no-referrer"
+                                />
+                              ) : (
+                                <div className="w-11 h-11 rounded-xl bg-app-fg/5 border border-app-card-border flex items-center justify-center text-app-fg/30 shrink-0">
+                                  <Disc size={18} />
+                                </div>
+                              )}
+                              <div className="text-left overflow-hidden">
+                                <span className="font-bold text-app-fg text-[14px] leading-tight block truncate group-hover:text-app-accent transition-colors">
+                                  {track.title}
+                                </span>
+                                <span className="text-xs text-app-muted truncate block mt-0.5">
+                                  {track.artist}
+                                </span>
+                              </div>
+                            </div>
 
-                          <div className="flex items-center gap-1">
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setMenuTrack(track);
-                              }}
-                              className="p-2 text-app-muted hover:text-app-fg hover:bg-app-fg/5 rounded-full transition-all active:scale-90"
-                            >
-                              <MoreVertical size={16} />
-                            </button>
+                            <div className="flex items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setMenuTrack(track);
+                                }}
+                                className="p-2 text-app-muted hover:text-app-fg hover:bg-app-fg/5 rounded-full transition-all active:scale-90"
+                              >
+                                <MoreVertical size={16} />
+                              </button>
+                            </div>
                           </div>
-                        </div>
-                      ))}
-                    </div>
+                        ))}
+                      </div>
+                    )
                   ) : (
                     <div className="text-center py-10 px-4 rounded-2xl border border-dashed border-app-card-border opacity-60 bg-app-card/20 text-xs text-app-muted">
                       {searchQuery ? "No tracks match your search" : "No favorite songs in your library yet. Add them from the track menu!"}
@@ -409,46 +472,101 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
               {/* SECTION: PLAYLISTS SECTION (Moved up after Favorite Tracks) */}
               {(activeFilter === 'all' || activeFilter === 'playlists') && (
                 <div className="space-y-4">
-                  <div className="flex items-center justify-between px-1">
-                    <h2 className="text-sm font-black uppercase tracking-[0.15em] text-app-fg opacity-80 leading-none">Playlists</h2>
-                    <span className="text-[10px] font-black text-app-muted uppercase">
-                      {filteredPlaylists.length}
-                    </span>
-                  </div>
+                  {activeFilter === 'all' ? (
+                    <button
+                      type="button"
+                      onClick={() => setActiveFilter('playlists')}
+                      className="flex items-center gap-1.5 text-app-fg hover:text-app-accent group select-none text-left cursor-pointer"
+                    >
+                      <div className="flex items-center gap-2">
+                        <FolderHeart size={16} className="text-app-accent animate-pulse" />
+                        <h2 className="text-sm font-black uppercase tracking-[0.13em] leading-none">Playlists</h2>
+                      </div>
+                      <ChevronRight 
+                        size={16} 
+                        className="text-app-fg opacity-40 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" 
+                      />
+                    </button>
+                  ) : (
+                    <div className="flex items-center justify-between px-1">
+                      <h2 className="text-sm font-black uppercase tracking-[0.15em] text-app-fg opacity-80 leading-none">Playlists</h2>
+                      <span className="text-[10px] font-black text-app-muted uppercase">
+                        {filteredPlaylists.length}
+                      </span>
+                    </div>
+                  )}
 
                   {filteredPlaylists.length > 0 ? (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      {filteredPlaylists.map((playlist) => (
-                        <div
-                          key={playlist.id}
-                          onClick={() => setSelectedPlaylist(playlist)}
-                          className="w-full flex items-center justify-between p-3.5 rounded-2xl bg-app-card border border-app-card-border hover:border-app-accent/30 shadow-sm active:scale-[0.99] transition-all hover:bg-opacity-85 group cursor-pointer"
-                        >
-                          <div className="flex items-center gap-4 flex-1 overflow-hidden select-none">
-                            {renderPlaylistCover(playlist)}
-                            <div className="text-left overflow-hidden">
-                              <span className="font-bold text-app-fg text-[14px] leading-tight block truncate group-hover:text-app-accent transition-colors">
-                                {playlist.name}
-                              </span>
-                              <span className="text-xs text-app-muted block mt-0.5">
-                                {playlist.tracks?.length || 0} songs • {playlist.tracks?.length > 0 ? `${playlist.tracks.length * 3} min` : "empty"}
-                              </span>
+                    activeFilter === 'all' ? (
+                      /* 3x3 HORIZONTAL SCROLLABLE GRID */
+                      <div className="grid grid-rows-3 grid-flow-col auto-cols-[85%] sm:auto-cols-[340px] md:auto-cols-[380px] gap-x-4 gap-y-3.5 overflow-x-auto pb-4 scrollbar-hide snap-x snap-mandatory">
+                        {filteredPlaylists.slice(0, 9).map((playlist) => (
+                          <div
+                            key={`playlist-cell-${playlist.id}`}
+                            onClick={() => setSelectedPlaylist(playlist)}
+                            className="flex items-center justify-between p-3 rounded-2xl bg-app-card border border-app-card-border shadow-sm active:scale-[0.98] transition-all hover:bg-opacity-80 group cursor-pointer snap-start h-[76px]"
+                          >
+                            <div className="flex items-center gap-3.5 overflow-hidden flex-1 select-none">
+                              <div className="w-12 h-12 shrink-0">
+                                {renderPlaylistCover(playlist)}
+                              </div>
+                              <div className="text-left overflow-hidden leading-tight">
+                                <span className="font-bold text-app-fg text-[13.5px] leading-tight block truncate group-hover:text-app-accent transition-colors mb-0.5">
+                                  {playlist.name}
+                                </span>
+                                <span className="text-xs text-app-muted block">
+                                  {playlist.tracks?.length || 0} songs • {playlist.tracks?.length > 0 ? `${playlist.tracks.length * 3} min` : "empty"}
+                                </span>
+                              </div>
+                            </div>
+                            <div className="flex items-center shrink-0 ml-2" onClick={e => e.stopPropagation()}>
+                              <button
+                                type="button"
+                                onClick={() => handleDeletePlaylist(playlist.id)}
+                                className="p-1.5 text-app-muted hover:text-red-500 rounded-full hover:bg-red-500/5 transition-all"
+                                title="Delete playlist"
+                              >
+                                <Trash2 size={16} />
+                              </button>
                             </div>
                           </div>
+                        ))}
+                      </div>
+                    ) : (
+                      /* STANDARD FULL PAGE LIST VIEW */
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {filteredPlaylists.map((playlist) => (
+                          <div
+                            key={playlist.id}
+                            onClick={() => setSelectedPlaylist(playlist)}
+                            className="w-full flex items-center justify-between p-3.5 rounded-2xl bg-app-card border border-app-card-border hover:border-app-accent/30 shadow-sm active:scale-[0.99] transition-all hover:bg-opacity-85 group cursor-pointer"
+                          >
+                            <div className="flex items-center gap-4 flex-1 overflow-hidden select-none">
+                              {renderPlaylistCover(playlist)}
+                              <div className="text-left overflow-hidden">
+                                <span className="font-bold text-app-fg text-[14px] leading-tight block truncate group-hover:text-app-accent transition-colors">
+                                  {playlist.name}
+                                </span>
+                                <span className="text-xs text-app-muted block mt-0.5">
+                                  {playlist.tracks?.length || 0} songs • {playlist.tracks?.length > 0 ? `${playlist.tracks.length * 3} min` : "empty"}
+                                </span>
+                              </div>
+                            </div>
 
-                          <div className="flex gap-1" onClick={e => e.stopPropagation()}>
-                            <button
-                              type="button"
-                              onClick={() => handleDeletePlaylist(playlist.id)}
-                              className="p-2 text-app-muted hover:text-red-500 rounded-full hover:bg-red-500/5 transition-all"
-                              title="Delete playlist"
-                            >
-                              <Trash2 size={16} />
-                            </button>
+                            <div className="flex gap-1" onClick={e => e.stopPropagation()}>
+                              <button
+                                type="button"
+                                onClick={() => handleDeletePlaylist(playlist.id)}
+                                className="p-2 text-app-muted hover:text-red-500 rounded-full hover:bg-red-500/5 transition-all"
+                                title="Delete playlist"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            </div>
                           </div>
-                        </div>
-                      ))}
-                    </div>
+                        ))}
+                      </div>
+                    )
                   ) : (
                     <div className="text-center py-10 px-4 rounded-3xl border border-dashed border-app-card-border opacity-60 bg-app-card/20 text-xs text-app-muted flex flex-col items-center gap-3">
                       <Disc size={36} className="opacity-30 text-app-accent-hover" />

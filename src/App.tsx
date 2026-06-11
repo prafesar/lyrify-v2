@@ -734,6 +734,42 @@ export default function App() {
     handleLineClick
   } = usePlayback(currentTrack, phraseMetadata, targetLanguage);
 
+  const [albumPreviewPlayingId, setAlbumPreviewPlayingId] = useState<string | null>(null);
+  const albumAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  const handlePlayAlbumTrackPreview = (track: Track) => {
+    if (albumPreviewPlayingId === track.id) {
+      if (albumAudioRef.current) {
+        albumAudioRef.current.pause();
+      }
+      setAlbumPreviewPlayingId(null);
+      return;
+    }
+
+    if (albumAudioRef.current) {
+      albumAudioRef.current.pause();
+      albumAudioRef.current = null;
+    }
+
+    if (previewAudioRef.current) {
+      previewAudioRef.current.pause();
+    }
+    setHasStartedPreview(false);
+    setIsPreviewPlaying(false);
+
+    if (track.audioUrl) {
+      const audio = new Audio(track.audioUrl);
+      albumAudioRef.current = audio;
+      audio.play().catch(err => console.error("Failed to play preview:", err));
+      setAlbumPreviewPlayingId(track.id);
+      audio.onended = () => {
+        setAlbumPreviewPlayingId(null);
+      };
+    } else {
+      console.warn("No preview audio URL found on this track");
+    }
+  };
+
   const [lyricsSearchTitle, setLyricsSearchTitle] = useState("");
   const [lyricsSearchArtist, setLyricsSearchArtist] = useState("");
 
@@ -750,6 +786,11 @@ export default function App() {
       if (previewAudioRef.current) {
         previewAudioRef.current.pause();
       }
+      if (albumAudioRef.current) {
+        albumAudioRef.current.pause();
+        albumAudioRef.current = null;
+      }
+      setAlbumPreviewPlayingId(null);
       window.speechSynthesis.cancel();
       setHasStartedPreview(false);
       setIsPreviewPlaying(false);
@@ -761,6 +802,11 @@ export default function App() {
     if (previewAudioRef.current) {
       previewAudioRef.current.pause();
     }
+    if (albumAudioRef.current) {
+      albumAudioRef.current.pause();
+      albumAudioRef.current = null;
+    }
+    setAlbumPreviewPlayingId(null);
     window.speechSynthesis.cancel();
     setHasStartedPreview(false);
     setIsPreviewPlaying(false);
@@ -1782,98 +1828,100 @@ export default function App() {
               )}
 
               {/* Search Bar */}
-              <div className="mb-6">
-                <form onSubmit={handleSearch} className="relative group">
-                  <Search
-                    size={20}
-                    className="absolute left-4 top-1/2 -translate-y-1/2 text-app-fg opacity-20 group-focus-within:text-[var(--accent)] transition-colors"
-                  />
-                  <input
-                    type="text"
-                    value={searchQuery}
-                    onFocus={() => setIsSearchInputFocused(true)}
-                    onBlur={() => setTimeout(() => setIsSearchInputFocused(false), 200)}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder={
-                      searchEntityType === "musicTrack" ? "Search tracks..." :
-                      searchEntityType === "album" ? "Search albums..." :
-                      "Search artists..."
-                    }
-                    className="w-full bg-app-card border border-app-card-border shadow-app-card rounded-2xl py-5 pl-12 pr-12 text-lg font-medium outline-none transition-all focus:border-app-accent/50"
-                  />
-                  <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-2">
-                    {isSearching ? (
-                      <div
-                        className="w-4 h-4 border-2 border-t-transparent rounded-full animate-spin"
-                        style={{
-                          borderColor: "var(--accent)",
-                          borderTopColor: "transparent",
-                        }}
-                      />
-                    ) : (
-                      (searchQuery || searchResults.length > 0 || artistDetails || albumDetails) && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSearchQuery("");
-                            setSearchResults([]);
-                            setArtistDetails(null);
-                            setAlbumDetails(null);
+              {!artistDetails && !albumDetails && (
+                <div className="mb-6">
+                  <form onSubmit={handleSearch} className="relative group">
+                    <Search
+                      size={20}
+                      className="absolute left-4 top-1/2 -translate-y-1/2 text-app-fg opacity-20 group-focus-within:text-[var(--accent)] transition-colors"
+                    />
+                    <input
+                      type="text"
+                      value={searchQuery}
+                      onFocus={() => setIsSearchInputFocused(true)}
+                      onBlur={() => setTimeout(() => setIsSearchInputFocused(false), 200)}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      placeholder={
+                        searchEntityType === "musicTrack" ? "Search tracks..." :
+                        searchEntityType === "album" ? "Search albums..." :
+                        "Search artists..."
+                      }
+                      className="w-full bg-app-card border border-app-card-border shadow-app-card rounded-2xl py-5 pl-12 pr-12 text-lg font-medium outline-none transition-all focus:border-app-accent/50"
+                    />
+                    <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                      {isSearching ? (
+                        <div
+                          className="w-4 h-4 border-2 border-t-transparent rounded-full animate-spin"
+                          style={{
+                            borderColor: "var(--accent)",
+                            borderTopColor: "transparent",
                           }}
-                          className="p-1 hover:bg-app-fg/10 rounded-full transition-colors text-app-fg opacity-40 hover:opacity-100"
-                        >
-                          <X size={20} />
-                        </button>
-                      )
-                    )}
-                  </div>
-
-                  <AnimatePresence>
-                    {isSearchInputFocused && searchHistory.length > 0 && !searchResults.length && (
-                      <motion.div
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: 10 }}
-                        className="absolute left-0 right-0 top-[calc(100%+8px)] bg-app-card border border-app-card-border rounded-2xl shadow-2xl z-50 overflow-hidden"
-                      >
-                        <div className="p-3 border-b border-app-card-border flex items-center justify-between">
-                          <span className="text-[10px] font-black uppercase tracking-widest opacity-30 ml-2">Recent Searches</span>
-                          <button 
+                        />
+                      ) : (
+                        (searchQuery || searchResults.length > 0) && (
+                          <button
                             type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSearchHistory([]);
-                              userPreferencesRepository.removePreference("lyrify_search_history");
+                            onClick={() => {
+                              setSearchQuery("");
+                              setSearchResults([]);
+                              setArtistDetails(null);
+                              setAlbumDetails(null);
                             }}
-                            className="text-[10px] font-black uppercase tracking-widest text-red-500/50 hover:text-red-500 px-2 py-1"
+                            className="p-1 hover:bg-app-fg/10 rounded-full transition-colors text-app-fg opacity-40 hover:opacity-100"
                           >
-                            Clear
+                            <X size={20} />
                           </button>
-                        </div>
-                        <div className="max-h-[300px] overflow-y-auto">
-                          {searchHistory.map((h, i) => (
-                            <button
-                              key={i}
+                        )
+                      )}
+                    </div>
+
+                    <AnimatePresence>
+                      {isSearchInputFocused && searchHistory.length > 0 && !searchResults.length && (
+                        <motion.div
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: 10 }}
+                          className="absolute left-0 right-0 top-[calc(100%+8px)] bg-app-card border border-app-card-border rounded-2xl shadow-2xl z-50 overflow-hidden"
+                        >
+                          <div className="p-3 border-b border-app-card-border flex items-center justify-between">
+                            <span className="text-[10px] font-black uppercase tracking-widest opacity-30 ml-2">Recent Searches</span>
+                            <button 
                               type="button"
-                              onClick={() => handleSearch(undefined, h)}
-                              className="w-full text-left px-5 py-3 hover:bg-app-fg/5 transition-colors flex items-center justify-between group/hist"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSearchHistory([]);
+                                userPreferencesRepository.removePreference("lyrify_search_history");
+                              }}
+                              className="text-[10px] font-black uppercase tracking-widest text-red-500/50 hover:text-red-500 px-2 py-1"
                             >
-                              <div className="flex items-center gap-3">
-                                <Search size={14} className="opacity-20 group-hover/hist:opacity-100 transition-opacity" />
-                                <span className="font-medium">{h}</span>
-                              </div>
-                              <ArrowUpLeft size={14} className="opacity-0 group-hover/hist:opacity-20 -rotate-45" />
+                              Clear
                             </button>
-                          ))}
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </form>
-              </div>
+                          </div>
+                          <div className="max-h-[300px] overflow-y-auto">
+                            {searchHistory.map((h, i) => (
+                              <button
+                                key={i}
+                                type="button"
+                                onClick={() => handleSearch(undefined, h)}
+                                className="w-full text-left px-5 py-3 hover:bg-app-fg/5 transition-colors flex items-center justify-between group/hist"
+                              >
+                                <div className="flex items-center gap-3">
+                                  <Search size={14} className="opacity-20 group-hover/hist:opacity-100 transition-opacity" />
+                                  <span className="font-medium">{h}</span>
+                                </div>
+                                <ArrowUpLeft size={14} className="opacity-0 group-hover/hist:opacity-20 -rotate-45" />
+                              </button>
+                            ))}
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </form>
+                </div>
+              )}
 
               {/* Entity Tabs */}
-              {searchResults.length > 0 && (
+              {!artistDetails && !albumDetails && searchResults.length > 0 && (
                 <div className="flex items-center gap-1 mb-8 p-1 bg-app-fg/5 rounded-2xl w-fit">
                   {(
                     [
@@ -1994,6 +2042,22 @@ export default function App() {
                         >
                           {albumDetails.album.artist}
                         </button>
+                        <div className="flex gap-3 items-center mt-2">
+                          {(() => {
+                            const url = albumDetails.album.appleMusicUrl || `https://music.apple.com/search?term=${encodeURIComponent(albumDetails.album.title + ' ' + albumDetails.album.artist)}`;
+                            return (
+                              <a
+                                href={url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-app-card-border bg-app-card/35 hover:bg-app-card transition-colors text-[10px] font-bold uppercase tracking-wider text-app-muted hover:text-app-fg"
+                              >
+                                <Music size={11} className="text-pink-500" />
+                                <span>Apple Music</span>
+                              </a>
+                            );
+                          })()}
+                        </div>
                         <p className="text-[10px] font-black uppercase tracking-widest mt-4 opacity-50">
                           {albumDetails.album.trackCount || 0} Tracks • {albumDetails.album.releaseDate ? new Date(albumDetails.album.releaseDate).getFullYear() : "N/A"}
                         </p>
@@ -2002,23 +2066,69 @@ export default function App() {
 
                     <div className="bg-app-card border border-app-card-border rounded-3xl overflow-hidden shadow-app-card">
                       {albumDetails.tracks.length > 0 ? (
-                        albumDetails.tracks.map((track, idx) => (
-                          <button
-                            key={`${track.id || 'track'}_${idx}`}
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              navigateToTrack(track);
-                            }}
-                            className="w-full flex items-center gap-4 px-6 py-4 hover:bg-app-fg/5 transition-colors text-left border-b border-app-card-border last:border-0"
-                          >
-                            <span className="text-xs font-black opacity-20 w-4">{idx + 1}</span>
-                            <div className="flex-1 min-w-0">
-                              <p className="font-bold text-app-fg truncate">{track.title}</p>
-                            </div>
-                            <ChevronRight size={16} className="text-app-fg/20" />
-                          </button>
-                        ))
+                        albumDetails.tracks.map((track, idx) => {
+                          const isThisPlaying = albumPreviewPlayingId === track.id;
+                          return (
+                            <button
+                              key={`${track.id || 'track'}_${idx}`}
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigateToTrack(track);
+                              }}
+                              className="w-full flex items-center gap-4 px-6 py-4 hover:bg-app-fg/5 transition-colors text-left border-b border-app-card-border last:border-0"
+                            >
+                              <span className="text-xs font-black opacity-20 w-4 shrink-0">{idx + 1}</span>
+                              
+                              <div
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handlePlayAlbumTrackPreview(track);
+                                }}
+                                className={cn(
+                                  "p-2 rounded-full transition-all flex items-center justify-center shrink-0 border cursor-pointer active:scale-95",
+                                  isThisPlaying
+                                    ? "bg-pink-500 text-white border-pink-500 scale-105 shadow-md shadow-pink-500/20"
+                                    : "bg-app-bg text-app-fg/40 border-app-card-border hover:text-app-fg hover:border-app-fg/35"
+                                )}
+                              >
+                                {isThisPlaying ? (
+                                  <Pause size={10} fill="currentColor" />
+                                ) : (
+                                  <Play size={10} className="ml-0.5" fill="currentColor" />
+                                )}
+                              </div>
+
+                              <div className="flex-1 min-w-0 flex items-center gap-2">
+                                <AnimatePresence>
+                                  {isThisPlaying && (
+                                    <motion.div
+                                      initial={{ opacity: 0, scale: 0.8, x: -10 }}
+                                      animate={{ opacity: 1, scale: 1, x: 0 }}
+                                      exit={{ opacity: 0, scale: 0.8, x: -10 }}
+                                      transition={{ duration: 0.2 }}
+                                      className="shrink-0"
+                                    >
+                                      <a
+                                        href={track.appleMusicUrl || `https://music.apple.com/search?term=${encodeURIComponent(track.title + ' ' + track.artist)}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        onClick={(e) => {
+                                          e.stopPropagation(); // prevent card click
+                                        }}
+                                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl border border-pink-500/20 bg-pink-500/5 text-pink-500 hover:bg-pink-500/10 transition-colors text-[9px] font-bold uppercase tracking-wider"
+                                      >
+                                        <Music size={9} className="fill-none mr-0.5" />
+                                        <span>Apple Music</span>
+                                      </a>
+                                    </motion.div>
+                                  )}
+                                </AnimatePresence>
+                                <p className="font-bold text-app-fg truncate leading-none py-1">{track.title}</p>
+                              </div>
+                            </button>
+                          );
+                        })
                       ) : (
                         <div className="py-12 text-center opacity-40">
                           <Music size={40} className="mx-auto mb-3 opacity-20" />
@@ -2079,7 +2189,21 @@ export default function App() {
                             />
                           </button>
                         </div>
-                        <p className="text-sm text-app-muted uppercase tracking-widest">{artistDetails.artist.genre}</p>
+                        <p className="text-sm text-app-muted uppercase tracking-widest mb-2.5">{artistDetails.artist.genre}</p>
+                        {(() => {
+                          const url = artistDetails.artist.appleMusicUrl || artistDetails.artist.artistLinkUrl || `https://music.apple.com/search?term=${encodeURIComponent(artistDetails.artist.name)}`;
+                          return (
+                            <a
+                              href={url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-app-card-border bg-app-card/35 hover:bg-app-card transition-colors text-[10px] font-bold uppercase tracking-wider text-app-muted hover:text-app-fg"
+                            >
+                              <Music size={11} className="text-pink-500" />
+                              <span>Apple Music</span>
+                            </a>
+                          );
+                        })()}
                       </div>
                     </div>
 
@@ -2528,10 +2652,13 @@ export default function App() {
                   <div className="mb-6 px-3 sm:px-6">
                     <NextStepCTA
                       state={nextStepState}
-                      isExecuting={isTranslating || isGeneratingAnalysis}
+                      isExecuting={isTranslating || isGeneratingAnalysis || isLoadingLyrics}
+                      loadingStep={loadingStep}
                       onExecute={(actionType) => {
-                        if (actionType === 'FIND_LYRICS') {
-                          handleNextStepClickDirect();
+                        if (actionType === 'GET_LYRICS' || actionType === 'FIND_LYRICS') {
+                          handleAnalyzeSong();
+                        } else if (actionType === 'TRANSLATE_LYRICS') {
+                          handleAnalyzeSong();
                         } else if (actionType === 'GENERATE_ANALYSIS') {
                           setActiveTab('analysis');
                           handleGenerateAnalysis();
@@ -2973,10 +3100,13 @@ export default function App() {
                                   </div>
                                   <NextStepCTA
                                     state={nextStepState}
-                                    isExecuting={isTranslating || isGeneratingAnalysis}
+                                    isExecuting={isTranslating || isGeneratingAnalysis || isLoadingLyrics}
+                                    loadingStep={loadingStep}
                                     onExecute={(actionType) => {
-                                      if (actionType === 'FIND_LYRICS') {
-                                        handleNextStepClickDirect();
+                                      if (actionType === 'GET_LYRICS' || actionType === 'FIND_LYRICS') {
+                                        handleAnalyzeSong();
+                                      } else if (actionType === 'TRANSLATE_LYRICS') {
+                                        handleAnalyzeSong();
                                       } else if (actionType === 'GENERATE_ANALYSIS') {
                                         setActiveTab('analysis');
                                         handleGenerateAnalysis();
