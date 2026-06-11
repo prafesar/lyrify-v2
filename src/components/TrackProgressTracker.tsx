@@ -107,14 +107,6 @@ export const TrackProgressTracker: React.FC<TrackProgressTrackerProps> = ({
                 className="flex flex-col items-center relative cursor-pointer focus:outline-none group w-12 shrink-0 select-none"
                 id={`metro-station-${step.id}`}
               >
-                {/* Custom Hover Tooltip */}
-                <div className="absolute bottom-full mb-2 hidden group-hover:flex flex-col items-center pointer-events-none z-50 animate-in fade-in slide-in-from-bottom-1 duration-150">
-                  <div className="bg-app-fg text-app-bg text-[10px] font-black uppercase tracking-wider px-3 py-1.5 rounded-xl shadow-xl whitespace-nowrap leading-tight border border-app-card-border/10">
-                    {tooltipText}
-                  </div>
-                  <div className="w-2 h-2 bg-app-fg rotate-45 -mt-1 border-r border-b border-app-card-border/10" />
-                </div>
-
                 {/* Station circle node */}
                 <div className="relative h-9 w-9 z-10 flex items-center justify-center transform group-hover:scale-105 active:scale-95 transition-all duration-150">
                   {/* Solid backdrop mask to completely block the line underneath */}

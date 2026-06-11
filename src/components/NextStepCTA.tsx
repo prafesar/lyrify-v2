@@ -65,7 +65,7 @@ export const NextStepCTA: React.FC<NextStepCTAProps> = ({
       <div
         id="next-step-cta-card"
         onClick={handleCardClick}
-        className="w-full group flex items-center justify-between gap-4 p-4 md:p-5 rounded-3xl cursor-pointer hover:bg-app-card/70 hover:scale-[1.002] active:scale-[0.995] transition-all bg-app-card border border-app-card-border shadow-md"
+        className="w-full group flex items-center justify-between gap-4 p-4 md:p-5 rounded-3xl cursor-pointer hover:bg-app-card/70 hover:scale-[1.002] active:scale-[0.995] transition-all bg-app-card border border-app-card-border"
       >
         <div className="flex items-center gap-3.5 min-w-0 flex-1">
           <div className={`p-3 ${getIconBg()} rounded-2xl shrink-0 shadow-sm group-hover:scale-105 transition-transform`}>

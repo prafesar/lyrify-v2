@@ -159,19 +159,34 @@ export function useTrackSession(): UseTrackSessionResult {
     setLyricsFetchError(null);
     setManualLyrics("");
     callbacks.onSelectClear();
-    callbacks.setActiveTab("preview");
+    callbacks.setActiveTab("lyrics");
 
     const initialTrack = await trackSessionFacade.selectTrack(track, targetLanguage, {
       onMetadataUpdate: (updated) => {
-        setCurrentTrack((prev) => (prev && prev.trackId === updated.trackId ? updated : prev));
+        setCurrentTrack((prev) => {
+          if (!prev || prev.trackId === updated.trackId) {
+            return { ...prev, ...updated };
+          }
+          return prev;
+        });
       },
       onCacheUpdate: (updated) => {
-        setCurrentTrack((prev) => (prev && prev.trackId === updated.trackId ? updated : prev));
+        setCurrentTrack((prev) => {
+          if (!prev || prev.trackId === updated.trackId) {
+            return { ...prev, ...updated };
+          }
+          return prev;
+        });
       }
     });
 
     callbacks.recordTrackExploredAction();
-    setCurrentTrack(initialTrack);
+    setCurrentTrack((prev) => {
+      if (prev && prev.trackId === initialTrack.trackId) {
+        return { ...initialTrack, ...prev };
+      }
+      return initialTrack;
+    });
     callbacks.setView("lyrics");
     try {
       callbacks.updateRecentTracks(recentHistoryRepository.getRecentTracks());

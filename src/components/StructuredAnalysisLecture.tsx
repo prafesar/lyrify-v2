@@ -507,11 +507,11 @@ export const StructuredAnalysisLecture: React.FC<StructuredAnalysisLectureProps>
                           {/* Phrase Text & Translation */}
                           <div className="flex-1 min-w-0 pr-1">
                             <div className="flex flex-wrap items-baseline gap-x-2">
-                              <span className="font-sans text-sm sm:text-base font-extrabold text-app-fg tracking-tight leading-snug">
+                              <span className="font-serif text-[17px] md:text-[19px] text-app-accent leading-snug">
                                 {phrase.text}
                               </span>
                             </div>
-                            <p className="text-xs sm:text-sm text-app-muted font-medium mt-0.5 leading-snug">
+                            <p className="font-serif text-[17px] md:text-[19px] text-app-muted mt-0.5 leading-snug">
                               {phrase.translation}
                             </p>
                           </div>
@@ -545,6 +545,15 @@ export const StructuredAnalysisLecture: React.FC<StructuredAnalysisLectureProps>
                               className="overflow-hidden"
                             >
                               <div className="pt-3.5 mt-3 border-t border-app-card-border/40 space-y-3.5" onClick={(e) => e.stopPropagation()}>
+                                {/* Example usage */}
+                                {phrase.studyExample && (
+                                  <div className="pl-4 border-l-2 border-app-card-border/55 py-0.5">
+                                    <p className="font-serif text-[17px] md:text-[19px] text-app-muted/90 italic leading-relaxed">
+                                      "{phrase.studyExample}"
+                                    </p>
+                                  </div>
+                                )}
+
                                 {/* Tags layer (chips) */}
                                 <div className="flex flex-wrap gap-2 items-center">
                                   {/* Type badge */}
@@ -566,16 +575,6 @@ export const StructuredAnalysisLecture: React.FC<StructuredAnalysisLectureProps>
                                     </span>
                                   )}
                                 </div>
-
-                                {/* Example usage */}
-                                {phrase.studyExample && (
-                                  <div className="bg-app-bg border border-app-card-border/40 rounded-xl p-3.5 space-y-1.5">
-                                    <p className="text-[9px] font-black uppercase tracking-[0.16em] text-app-muted leading-none">Context Example • Пример использования</p>
-                                    <p className="text-xs sm:text-[13px] font-bold text-app-fg tracking-tight leading-relaxed italic pr-2">
-                                      "{phrase.studyExample}"
-                                    </p>
-                                  </div>
-                                )}
 
                                 {/* Editor Action row only */}
                                 <div className="flex items-center justify-between pt-2 border-t border-app-card-border/20">
