@@ -159,19 +159,34 @@ export function useTrackSession(): UseTrackSessionResult {
     setLyricsFetchError(null);
     setManualLyrics("");
     callbacks.onSelectClear();
-    callbacks.setActiveTab("preview");
+    callbacks.setActiveTab("lyrics");
 
     const initialTrack = await trackSessionFacade.selectTrack(track, targetLanguage, {
       onMetadataUpdate: (updated) => {
-        setCurrentTrack((prev) => (prev && prev.trackId === updated.trackId ? updated : prev));
+        setCurrentTrack((prev) => {
+          if (!prev || prev.trackId === updated.trackId) {
+            return { ...prev, ...updated };
+          }
+          return prev;
+        });
       },
       onCacheUpdate: (updated) => {
-        setCurrentTrack((prev) => (prev && prev.trackId === updated.trackId ? updated : prev));
+        setCurrentTrack((prev) => {
+          if (!prev || prev.trackId === updated.trackId) {
+            return { ...prev, ...updated };
+          }
+          return prev;
+        });
       }
     });
 
     callbacks.recordTrackExploredAction();
-    setCurrentTrack(initialTrack);
+    setCurrentTrack((prev) => {
+      if (prev && prev.trackId === initialTrack.trackId) {
+        return { ...initialTrack, ...prev };
+      }
+      return initialTrack;
+    });
     callbacks.setView("lyrics");
     try {
       callbacks.updateRecentTracks(recentHistoryRepository.getRecentTracks());
@@ -206,6 +221,17 @@ export function useTrackSession(): UseTrackSessionResult {
     } catch (err: any) {
       console.error("Manual fetch/meaning failed:", err);
       setLyricsFetchError(err.message || "Failed to fetch song data.");
+      
+      // Load from local SQLite cache to pick up raw lyrics if they were successfully fetched/saved
+      try {
+        const cached = trackSessionFacade.trackCacheRepository.getCachedTrackData(currentTrack.trackId);
+        if (cached) {
+          console.log("Restoring track data with fetched raw lyrics from local cache:", cached);
+          setCurrentTrack(cached);
+        }
+      } catch (cacheErr) {
+        console.error("Failed to restore from local cache:", cacheErr);
+      }
     } finally {
       setIsLoadingLyrics(false);
       setLoadingStep("idle");

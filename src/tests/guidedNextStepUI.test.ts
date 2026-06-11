@@ -24,7 +24,7 @@ describe('Guided next-step CTA-block tests for multiple key states', () => {
     ...opts,
   });
 
-  it('Transition 1: Correctly guides users to FIND_LYRICS when lyrics are missing', () => {
+  it('Transition 1: Correctly guides users to GET_LYRICS when lyrics are missing', () => {
     const trackMock = {
       title: 'Mon Amour',
       artist: 'Stromae',
@@ -34,7 +34,7 @@ describe('Guided next-step CTA-block tests for multiple key states', () => {
     } as any;
 
     const step = determineNextStep(trackMock, []);
-    expect(step.type).toBe('FIND_LYRICS');
+    expect(step.type).toBe('GET_LYRICS');
     expect(step.label).toBe('Get Lyrics');
   });
 

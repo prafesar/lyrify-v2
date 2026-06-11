@@ -24,8 +24,8 @@ export interface UseUserCardsResult {
   getLineStatus: (line: string) => "new" | "learning" | "known";
   handleUpdateStatusLocal: (card: Flashcard, status: PhraseStatus) => Promise<void>;
   handleAddLineWithComponents: (line: string, index: number, status?: PhraseStatus, currentTrack?: TrackLyricsData | null, getPhrasesForLine?: (lineIdx: number) => Phrase[]) => Promise<void>;
-  handleAddAnalysisPhrase: (phrase: string, translation: string, explanation: string, status?: PhraseStatus, currentTrack?: TrackLyricsData | null) => Promise<void>;
-  handleSetAnalysisPhraseStatus: (phrase: string, translation: string, explanation: string, status: PhraseStatus, currentTrack?: TrackLyricsData | null) => Promise<void>;
+  handleAddAnalysisPhrase: (phrase: string, translation: string, explanation: string, status?: PhraseStatus, currentTrack?: TrackLyricsData | null, type?: string) => Promise<void>;
+  handleSetAnalysisPhraseStatus: (phrase: string, translation: string, explanation: string, status: PhraseStatus, currentTrack?: TrackLyricsData | null, type?: string) => Promise<void>;
   recordPhraseSavedAction: () => void;
   recordReviewCompletedAction: () => void;
   recordTrackExploredAction: () => void;

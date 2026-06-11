@@ -2,7 +2,9 @@ import { TrackLyricsData } from './musicService';
 import { Flashcard } from './localCardService';
 
 export type NextStepType = 
-  | 'FIND_LYRICS' 
+  | 'GET_LYRICS'
+  | 'FIND_LYRICS'
+  | 'TRANSLATE_LYRICS'
   | 'GENERATE_ANALYSIS' 
   | 'SAVE_PHRASES' 
   | 'GO_TO_STUDY' 
@@ -24,9 +26,9 @@ export function determineNextStep(
 ): NextStepState {
   if (!track) {
     return {
-      type: 'FIND_LYRICS',
-      label: 'Find Lyrics & Phrases',
-      description: 'Search for lyrics to start learning.'
+      type: 'GET_LYRICS',
+      label: 'Get Lyrics',
+      description: 'Search and fetch original lyrics for this song.'
     };
   }
 
@@ -34,9 +36,21 @@ export function determineNextStep(
   const hasLyrics = !!(track.rawLyrics && track.rawLyrics.trim().length > 0);
   if (!hasLyrics) {
     return {
-      type: 'FIND_LYRICS',
+      type: 'GET_LYRICS',
       label: 'Get Lyrics',
-      description: 'Fetch original lyrics and generate first preview.'
+      description: 'Search and fetch original lyrics for this song.'
+    };
+  }
+
+  // State 1.5: Has lyrics, but no translation/meaning/stage2 completed yet
+  const isStage2Completed = !!(track.processingStatus && track.processingStatus.stage2_completed) ||
+    !!(track.meaning && track.lines && track.lines.some(l => l.translation && l.translation.trim().length > 0));
+
+  if (!isStage2Completed) {
+    return {
+      type: 'TRANSLATE_LYRICS',
+      label: 'Translate Lyric',
+      description: 'Translate original lyrics and analyze meaning using Gemini AI.'
     };
   }
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Play,
@@ -11,6 +11,9 @@ import {
   Plus,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
+  ChevronUp,
+  Menu,
   ArrowUpLeft,
   X,
   User as UserIcon,
@@ -731,6 +734,42 @@ export default function App() {
     handleLineClick
   } = usePlayback(currentTrack, phraseMetadata, targetLanguage);
 
+  const [albumPreviewPlayingId, setAlbumPreviewPlayingId] = useState<string | null>(null);
+  const albumAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  const handlePlayAlbumTrackPreview = (track: Track) => {
+    if (albumPreviewPlayingId === track.id) {
+      if (albumAudioRef.current) {
+        albumAudioRef.current.pause();
+      }
+      setAlbumPreviewPlayingId(null);
+      return;
+    }
+
+    if (albumAudioRef.current) {
+      albumAudioRef.current.pause();
+      albumAudioRef.current = null;
+    }
+
+    if (previewAudioRef.current) {
+      previewAudioRef.current.pause();
+    }
+    setHasStartedPreview(false);
+    setIsPreviewPlaying(false);
+
+    if (track.audioUrl) {
+      const audio = new Audio(track.audioUrl);
+      albumAudioRef.current = audio;
+      audio.play().catch(err => console.error("Failed to play preview:", err));
+      setAlbumPreviewPlayingId(track.id);
+      audio.onended = () => {
+        setAlbumPreviewPlayingId(null);
+      };
+    } else {
+      console.warn("No preview audio URL found on this track");
+    }
+  };
+
   const [lyricsSearchTitle, setLyricsSearchTitle] = useState("");
   const [lyricsSearchArtist, setLyricsSearchArtist] = useState("");
 
@@ -747,6 +786,11 @@ export default function App() {
       if (previewAudioRef.current) {
         previewAudioRef.current.pause();
       }
+      if (albumAudioRef.current) {
+        albumAudioRef.current.pause();
+        albumAudioRef.current = null;
+      }
+      setAlbumPreviewPlayingId(null);
       window.speechSynthesis.cancel();
       setHasStartedPreview(false);
       setIsPreviewPlaying(false);
@@ -758,12 +802,93 @@ export default function App() {
     if (previewAudioRef.current) {
       previewAudioRef.current.pause();
     }
+    if (albumAudioRef.current) {
+      albumAudioRef.current.pause();
+      albumAudioRef.current = null;
+    }
+    setAlbumPreviewPlayingId(null);
     window.speechSynthesis.cancel();
     setHasStartedPreview(false);
     setIsPreviewPlaying(false);
     setIsReadingAll(false);
     setIsResourcesExpanded(false);
+    setIsToolbarVisible(true);
+    lastScrollYRef.current = 0;
   }, [currentTrack?.trackId]);
+
+  // Scroll and Visibility states for the header block
+  const [isToolbarVisible, setIsToolbarVisible] = useState(true);
+  const [isScrolledDown, setIsScrolledDown] = useState(false);
+  const lastScrollYRef = useRef(0);
+  const lastUserScrollInteractionTimeRef = useRef(0);
+  const resourcesContainerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = resourcesContainerRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (!entry.isIntersecting) {
+          setIsResourcesExpanded(false);
+        }
+      },
+      { threshold: 0 }
+    );
+    observer.observe(el);
+    return () => {
+      observer.unobserve(el);
+    };
+  }, []);
+
+  const registerUserScrollInteraction = (e?: React.SyntheticEvent) => {
+    if (e && e.type === "mousedown") {
+      const target = e.target as HTMLElement;
+      if (
+        target.closest("button") || 
+        target.closest("input") || 
+        target.closest("a") || 
+        target.closest("[role='button']")
+      ) {
+        return;
+      }
+    }
+    lastUserScrollInteractionTimeRef.current = Date.now();
+  };
+
+  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const container = e.currentTarget;
+    if (!container) return;
+    const currentScrollY = container.scrollTop;
+    
+    // Scrolled down past 120px threshold
+    const scrolled = currentScrollY > 120;
+    setIsScrolledDown(scrolled);
+
+    if (scrolled) {
+      const prevScrollY = lastScrollYRef.current;
+      const diff = Math.abs(currentScrollY - prevScrollY);
+      
+      const isInputFocused = document.activeElement && (
+        document.activeElement.tagName === "INPUT" || 
+        document.activeElement.tagName === "TEXTAREA"
+      );
+
+      const isUserScroll = (Date.now() - lastUserScrollInteractionTimeRef.current) < 1200;
+
+      // If there is active manual user scrolling and the toolbar is open, collapse it
+      if (diff > 5 && isToolbarVisible && isUserScroll) {
+        if (isInputFocused) {
+          (document.activeElement as HTMLElement)?.blur();
+        }
+        setIsToolbarVisible(false);
+      }
+    } else {
+      // Always show inline at the top of the content
+      setIsToolbarVisible(true);
+    }
+    
+    lastScrollYRef.current = currentScrollY;
+  };
 
   // Learning Assistant Panel States
   const [isAssistantOpen, setIsAssistantOpen] = useState(false);
@@ -1282,7 +1407,12 @@ export default function App() {
         getPhrasesForLine={getPhrasesForLine}
         lineRefs={lineRefs}
         renderHighlightedText={(line, phrases) => renderHighlightedText(line, phrases)}
-        handleLineClick={(line, i) => handleLineClick(line, i)}
+        handleLineClick={(line, i) => {
+          handleLineClick(line, i);
+          if (isToolbarVisible && isScrolledDown) {
+            setIsToolbarVisible(false);
+          }
+        }}
         isSaving={isSaving}
         isListeningForSpeech={isListeningForSpeech}
         shadowingFeedback={shadowingFeedback}
@@ -1576,7 +1706,7 @@ export default function App() {
       </div>
 
       {/* Header */}
-      <header className="relative z-20 flex items-center justify-between px-6 py-3.5 border-b border-app-card-border backdrop-blur-xl bg-app-card">
+      <header className="relative z-40 flex items-center justify-between px-6 py-3.5 border-b border-app-card-border backdrop-blur-xl bg-app-card">
         <button
           onClick={goToExplore}
           className="flex items-center gap-3.5 hover:opacity-90 active:scale-[0.98] transition-all cursor-pointer text-left focus:outline-none"
@@ -1698,98 +1828,100 @@ export default function App() {
               )}
 
               {/* Search Bar */}
-              <div className="mb-6">
-                <form onSubmit={handleSearch} className="relative group">
-                  <Search
-                    size={20}
-                    className="absolute left-4 top-1/2 -translate-y-1/2 text-app-fg opacity-20 group-focus-within:text-[var(--accent)] transition-colors"
-                  />
-                  <input
-                    type="text"
-                    value={searchQuery}
-                    onFocus={() => setIsSearchInputFocused(true)}
-                    onBlur={() => setTimeout(() => setIsSearchInputFocused(false), 200)}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder={
-                      searchEntityType === "musicTrack" ? "Search tracks..." :
-                      searchEntityType === "album" ? "Search albums..." :
-                      "Search artists..."
-                    }
-                    className="w-full bg-app-card border border-app-card-border shadow-app-card rounded-2xl py-5 pl-12 pr-12 text-lg font-medium outline-none transition-all focus:border-app-accent/50"
-                  />
-                  <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-2">
-                    {isSearching ? (
-                      <div
-                        className="w-4 h-4 border-2 border-t-transparent rounded-full animate-spin"
-                        style={{
-                          borderColor: "var(--accent)",
-                          borderTopColor: "transparent",
-                        }}
-                      />
-                    ) : (
-                      (searchQuery || searchResults.length > 0 || artistDetails || albumDetails) && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSearchQuery("");
-                            setSearchResults([]);
-                            setArtistDetails(null);
-                            setAlbumDetails(null);
+              {!artistDetails && !albumDetails && (
+                <div className="mb-6">
+                  <form onSubmit={handleSearch} className="relative group">
+                    <Search
+                      size={20}
+                      className="absolute left-4 top-1/2 -translate-y-1/2 text-app-fg opacity-20 group-focus-within:text-[var(--accent)] transition-colors"
+                    />
+                    <input
+                      type="text"
+                      value={searchQuery}
+                      onFocus={() => setIsSearchInputFocused(true)}
+                      onBlur={() => setTimeout(() => setIsSearchInputFocused(false), 200)}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      placeholder={
+                        searchEntityType === "musicTrack" ? "Search tracks..." :
+                        searchEntityType === "album" ? "Search albums..." :
+                        "Search artists..."
+                      }
+                      className="w-full bg-app-card border border-app-card-border shadow-app-card rounded-2xl py-5 pl-12 pr-12 text-lg font-medium outline-none transition-all focus:border-app-accent/50"
+                    />
+                    <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                      {isSearching ? (
+                        <div
+                          className="w-4 h-4 border-2 border-t-transparent rounded-full animate-spin"
+                          style={{
+                            borderColor: "var(--accent)",
+                            borderTopColor: "transparent",
                           }}
-                          className="p-1 hover:bg-app-fg/10 rounded-full transition-colors text-app-fg opacity-40 hover:opacity-100"
-                        >
-                          <X size={20} />
-                        </button>
-                      )
-                    )}
-                  </div>
-
-                  <AnimatePresence>
-                    {isSearchInputFocused && searchHistory.length > 0 && !searchResults.length && (
-                      <motion.div
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: 10 }}
-                        className="absolute left-0 right-0 top-[calc(100%+8px)] bg-app-card border border-app-card-border rounded-2xl shadow-2xl z-50 overflow-hidden"
-                      >
-                        <div className="p-3 border-b border-app-card-border flex items-center justify-between">
-                          <span className="text-[10px] font-black uppercase tracking-widest opacity-30 ml-2">Recent Searches</span>
-                          <button 
+                        />
+                      ) : (
+                        (searchQuery || searchResults.length > 0) && (
+                          <button
                             type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSearchHistory([]);
-                              userPreferencesRepository.removePreference("lyrify_search_history");
+                            onClick={() => {
+                              setSearchQuery("");
+                              setSearchResults([]);
+                              setArtistDetails(null);
+                              setAlbumDetails(null);
                             }}
-                            className="text-[10px] font-black uppercase tracking-widest text-red-500/50 hover:text-red-500 px-2 py-1"
+                            className="p-1 hover:bg-app-fg/10 rounded-full transition-colors text-app-fg opacity-40 hover:opacity-100"
                           >
-                            Clear
+                            <X size={20} />
                           </button>
-                        </div>
-                        <div className="max-h-[300px] overflow-y-auto">
-                          {searchHistory.map((h, i) => (
-                            <button
-                              key={i}
+                        )
+                      )}
+                    </div>
+
+                    <AnimatePresence>
+                      {isSearchInputFocused && searchHistory.length > 0 && !searchResults.length && (
+                        <motion.div
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: 10 }}
+                          className="absolute left-0 right-0 top-[calc(100%+8px)] bg-app-card border border-app-card-border rounded-2xl shadow-2xl z-50 overflow-hidden"
+                        >
+                          <div className="p-3 border-b border-app-card-border flex items-center justify-between">
+                            <span className="text-[10px] font-black uppercase tracking-widest opacity-30 ml-2">Recent Searches</span>
+                            <button 
                               type="button"
-                              onClick={() => handleSearch(undefined, h)}
-                              className="w-full text-left px-5 py-3 hover:bg-app-fg/5 transition-colors flex items-center justify-between group/hist"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSearchHistory([]);
+                                userPreferencesRepository.removePreference("lyrify_search_history");
+                              }}
+                              className="text-[10px] font-black uppercase tracking-widest text-red-500/50 hover:text-red-500 px-2 py-1"
                             >
-                              <div className="flex items-center gap-3">
-                                <Search size={14} className="opacity-20 group-hover/hist:opacity-100 transition-opacity" />
-                                <span className="font-medium">{h}</span>
-                              </div>
-                              <ArrowUpLeft size={14} className="opacity-0 group-hover/hist:opacity-20 -rotate-45" />
+                              Clear
                             </button>
-                          ))}
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </form>
-              </div>
+                          </div>
+                          <div className="max-h-[300px] overflow-y-auto">
+                            {searchHistory.map((h, i) => (
+                              <button
+                                key={i}
+                                type="button"
+                                onClick={() => handleSearch(undefined, h)}
+                                className="w-full text-left px-5 py-3 hover:bg-app-fg/5 transition-colors flex items-center justify-between group/hist"
+                              >
+                                <div className="flex items-center gap-3">
+                                  <Search size={14} className="opacity-20 group-hover/hist:opacity-100 transition-opacity" />
+                                  <span className="font-medium">{h}</span>
+                                </div>
+                                <ArrowUpLeft size={14} className="opacity-0 group-hover/hist:opacity-20 -rotate-45" />
+                              </button>
+                            ))}
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </form>
+                </div>
+              )}
 
               {/* Entity Tabs */}
-              {searchResults.length > 0 && (
+              {!artistDetails && !albumDetails && searchResults.length > 0 && (
                 <div className="flex items-center gap-1 mb-8 p-1 bg-app-fg/5 rounded-2xl w-fit">
                   {(
                     [
@@ -1910,6 +2042,22 @@ export default function App() {
                         >
                           {albumDetails.album.artist}
                         </button>
+                        <div className="flex gap-3 items-center mt-2">
+                          {(() => {
+                            const url = albumDetails.album.appleMusicUrl || `https://music.apple.com/search?term=${encodeURIComponent(albumDetails.album.title + ' ' + albumDetails.album.artist)}`;
+                            return (
+                              <a
+                                href={url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-app-card-border bg-app-card/35 hover:bg-app-card transition-colors text-[10px] font-bold uppercase tracking-wider text-app-muted hover:text-app-fg"
+                              >
+                                <Music size={11} className="text-pink-500" />
+                                <span>Apple Music</span>
+                              </a>
+                            );
+                          })()}
+                        </div>
                         <p className="text-[10px] font-black uppercase tracking-widest mt-4 opacity-50">
                           {albumDetails.album.trackCount || 0} Tracks • {albumDetails.album.releaseDate ? new Date(albumDetails.album.releaseDate).getFullYear() : "N/A"}
                         </p>
@@ -1918,23 +2066,69 @@ export default function App() {
 
                     <div className="bg-app-card border border-app-card-border rounded-3xl overflow-hidden shadow-app-card">
                       {albumDetails.tracks.length > 0 ? (
-                        albumDetails.tracks.map((track, idx) => (
-                          <button
-                            key={`${track.id || 'track'}_${idx}`}
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              navigateToTrack(track);
-                            }}
-                            className="w-full flex items-center gap-4 px-6 py-4 hover:bg-app-fg/5 transition-colors text-left border-b border-app-card-border last:border-0"
-                          >
-                            <span className="text-xs font-black opacity-20 w-4">{idx + 1}</span>
-                            <div className="flex-1 min-w-0">
-                              <p className="font-bold text-app-fg truncate">{track.title}</p>
-                            </div>
-                            <ChevronRight size={16} className="text-app-fg/20" />
-                          </button>
-                        ))
+                        albumDetails.tracks.map((track, idx) => {
+                          const isThisPlaying = albumPreviewPlayingId === track.id;
+                          return (
+                            <button
+                              key={`${track.id || 'track'}_${idx}`}
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigateToTrack(track);
+                              }}
+                              className="w-full flex items-center gap-4 px-6 py-4 hover:bg-app-fg/5 transition-colors text-left border-b border-app-card-border last:border-0"
+                            >
+                              <span className="text-xs font-black opacity-20 w-4 shrink-0">{idx + 1}</span>
+                              
+                              <div
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handlePlayAlbumTrackPreview(track);
+                                }}
+                                className={cn(
+                                  "p-2 rounded-full transition-all flex items-center justify-center shrink-0 border cursor-pointer active:scale-95",
+                                  isThisPlaying
+                                    ? "bg-pink-500 text-white border-pink-500 scale-105 shadow-md shadow-pink-500/20"
+                                    : "bg-app-bg text-app-fg/40 border-app-card-border hover:text-app-fg hover:border-app-fg/35"
+                                )}
+                              >
+                                {isThisPlaying ? (
+                                  <Pause size={10} fill="currentColor" />
+                                ) : (
+                                  <Play size={10} className="ml-0.5" fill="currentColor" />
+                                )}
+                              </div>
+
+                              <div className="flex-1 min-w-0 flex items-center gap-2">
+                                <AnimatePresence>
+                                  {isThisPlaying && (
+                                    <motion.div
+                                      initial={{ opacity: 0, scale: 0.8, x: -10 }}
+                                      animate={{ opacity: 1, scale: 1, x: 0 }}
+                                      exit={{ opacity: 0, scale: 0.8, x: -10 }}
+                                      transition={{ duration: 0.2 }}
+                                      className="shrink-0"
+                                    >
+                                      <a
+                                        href={track.appleMusicUrl || `https://music.apple.com/search?term=${encodeURIComponent(track.title + ' ' + track.artist)}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        onClick={(e) => {
+                                          e.stopPropagation(); // prevent card click
+                                        }}
+                                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl border border-pink-500/20 bg-pink-500/5 text-pink-500 hover:bg-pink-500/10 transition-colors text-[9px] font-bold uppercase tracking-wider"
+                                      >
+                                        <Music size={9} className="fill-none mr-0.5" />
+                                        <span>Apple Music</span>
+                                      </a>
+                                    </motion.div>
+                                  )}
+                                </AnimatePresence>
+                                <p className="font-bold text-app-fg truncate leading-none py-1">{track.title}</p>
+                              </div>
+                            </button>
+                          );
+                        })
                       ) : (
                         <div className="py-12 text-center opacity-40">
                           <Music size={40} className="mx-auto mb-3 opacity-20" />
@@ -1995,7 +2189,21 @@ export default function App() {
                             />
                           </button>
                         </div>
-                        <p className="text-sm text-app-muted uppercase tracking-widest">{artistDetails.artist.genre}</p>
+                        <p className="text-sm text-app-muted uppercase tracking-widest mb-2.5">{artistDetails.artist.genre}</p>
+                        {(() => {
+                          const url = artistDetails.artist.appleMusicUrl || artistDetails.artist.artistLinkUrl || `https://music.apple.com/search?term=${encodeURIComponent(artistDetails.artist.name)}`;
+                          return (
+                            <a
+                              href={url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-app-card-border bg-app-card/35 hover:bg-app-card transition-colors text-[10px] font-bold uppercase tracking-wider text-app-muted hover:text-app-fg"
+                            >
+                              <Music size={11} className="text-pink-500" />
+                              <span>Apple Music</span>
+                            </a>
+                          );
+                        })()}
                       </div>
                     </div>
 
@@ -2170,13 +2378,32 @@ export default function App() {
               initial={{ opacity: 0, x: 50 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -50 }}
-              className="flex-1 flex flex-col overflow-hidden"
+              className="flex-1 flex flex-col overflow-hidden relative"
             >
+              {/* Floating Trigger button at top center below the header */}
+              {isScrolledDown && !isToolbarVisible && (
+                <div className="absolute top-4 left-1/2 -translate-x-1/2 z-40 animate-in fade-in zoom-in duration-200">
+                  <button
+                    type="button"
+                    onClick={() => setIsToolbarVisible(true)}
+                    className="w-10 h-10 rounded-full bg-app-card border border-app-card-border/90 hover:bg-app-accent hover:text-white hover:border-transparent transition-all shadow-md hover:shadow-lg active:scale-95 flex items-center justify-center text-app-fg"
+                    title="Show Practice Tracker & Search"
+                  >
+                    <Menu size={18} />
+                  </button>
+                </div>
+              )}
+
               <div
                 ref={scrollContainerRef}
-                className="flex-1 overflow-y-auto px-4 sm:px-8 pt-6 sm:pt-8 pb-12 scrollbar-hide relative w-full max-w-5xl mx-auto"
+                onScroll={handleScroll}
+                onWheel={registerUserScrollInteraction}
+                onTouchStart={registerUserScrollInteraction}
+                onTouchMove={registerUserScrollInteraction}
+                onMouseDown={registerUserScrollInteraction}
+                className="flex-1 overflow-y-auto px-4 sm:px-8 pt-0 sm:pt-0 pb-12 scrollbar-hide relative w-full max-w-5xl mx-auto"
               >
-                <div className="mb-2 px-3 sm:px-6 animate-in fade-in duration-300">
+                <div className="mb-2 px-3 sm:px-6 pt-6 sm:pt-8 animate-in fade-in duration-300">
                   {isLoadingLyrics && (
                     <div className="flex items-center justify-end h-6 mb-1">
                       <div className={cn(
@@ -2200,77 +2427,6 @@ export default function App() {
                   
                   <div className="pt-0 pb-1">
                     <div className="flex flex-col gap-4 select-none">
-                      {/* Button Row: play sample & resources with wrap support, left-aligned at the top */}
-                      <div className="flex flex-wrap items-center gap-1.5 px-0.5 select-none">
-                        <button
-                          type="button"
-                          onClick={togglePreviewAudio}
-                          className={cn(
-                            "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all text-[9px] font-bold uppercase tracking-wider active:scale-95 border animate-fade-in shrink-0",
-                            isPreviewPlaying 
-                              ? "bg-[var(--accent)] text-white border-[var(--accent)]" 
-                              : "bg-app-fg/5 text-app-fg hover:bg-app-fg/10 border-transparent"
-                          )}
-                        >
-                          {isPreviewPlaying ? (
-                            <>
-                              <Pause size={8} fill="currentColor" />
-                              <span>Playing Sample</span>
-                            </>
-                          ) : (
-                            <>
-                              <Play size={8} className="ml-0.5" fill="currentColor" />
-                              <span>Play Sample</span>
-                            </>
-                          )}
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => setIsResourcesExpanded(!isResourcesExpanded)}
-                          className="w-6 h-6 rounded-lg border border-app-card-border bg-app-card/30 flex items-center justify-center text-app-fg opacity-60 hover:opacity-100 hover:bg-app-fg/5 transition-all active:scale-95 cursor-pointer shrink-0"
-                          title={isResourcesExpanded ? "Collapse resources" : "Expand resources"}
-                        >
-                          {isResourcesExpanded ? <ChevronLeft size={10} /> : <ChevronRight size={10} />}
-                        </button>
-
-                        <div className="flex flex-wrap items-center gap-1.5">
-                          <AnimatePresence initial={false}>
-                            {RESOURCE_TYPES.filter(r => ["youtube", "spotify", "apple", "genius"].includes(r.id)).map((resource) => {
-                              const url = resource.getUrl(currentTrack as any);
-                              if (!url) return null;
-
-                              // Show if strictly expanded, OR if playing preview and it is apple music
-                              const shouldEmit = isResourcesExpanded || (isPreviewPlaying && resource.id === "apple");
-                              if (!shouldEmit) return null;
-
-                              const Icon = resource.icon;
-                              return (
-                                <motion.a
-                                  key={resource.id}
-                                  initial={{ opacity: 0, scale: 0.9, x: -10 }}
-                                  animate={{ opacity: 1, scale: 1, x: 0 }}
-                                  exit={{ opacity: 0, scale: 0.9, x: -10 }}
-                                  transition={{ duration: 0.2 }}
-                                  href={url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className={cn(
-                                    "inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-app-card-border bg-app-card/35 hover:bg-app-card transition-colors text-[8px] font-black uppercase tracking-wider shrink-0",
-                                    resource.id === "apple" && isPreviewPlaying
-                                      ? "text-red-500 border-red-500/30 bg-red-500/[0.03]"
-                                      : "text-app-muted hover:text-app-fg"
-                                  )}
-                                >
-                                  <Icon size={8} className={resource.color} />
-                                  <span>{resource.name}</span>
-                                </motion.a>
-                              );
-                            })}
-                          </AnimatePresence>
-                        </div>
-                      </div>
-
                       <div className="flex gap-4 sm:gap-6 items-start">
                         {/* Left Column: Cover with Absolute Back button above top left */}
                         <div className="relative group shrink-0">
@@ -2386,40 +2542,123 @@ export default function App() {
                           </div>
                         </div>
                       </div>
+
+                      {/* Button Row: play sample & resources with robust wrap & expand animation */}
+                      <div 
+                        ref={resourcesContainerRef}
+                        className="flex flex-wrap items-center gap-2 px-0.5 select-none"
+                      >
+                        {/* 1. Play Button (made larger: text-[11px], px-3.5, py-2, icon size 11, outline style) */}
+                        <button
+                          type="button"
+                          onClick={togglePreviewAudio}
+                          className={cn(
+                            "inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl transition-all text-[11px] font-medium uppercase tracking-wider active:scale-95 border animate-fade-in shrink-0",
+                            isPreviewPlaying 
+                              ? "bg-[var(--accent)]/10 text-[var(--accent)] border-[var(--accent)] hover:bg-[var(--accent)]/20" 
+                              : "bg-transparent text-[var(--accent)] border-[var(--accent)]/30 hover:border-[var(--accent)] hover:bg-[var(--accent)]/[0.04]"
+                          )}
+                        >
+                          {isPreviewPlaying ? (
+                            <>
+                              <Pause size={11} fill="currentColor" />
+                              <span>Playing</span>
+                            </>
+                          ) : (
+                            <>
+                              <Play size={11} className="ml-0.5" fill="currentColor" />
+                              <span>Sample</span>
+                            </>
+                          )}
+                        </button>
+
+                        {/* List of chips */}
+                        <div className="flex flex-wrap items-center gap-2">
+                          {/* Apple Music chip is always visible */}
+                          {(() => {
+                            const appleResource = RESOURCE_TYPES.find(r => r.id === "apple");
+                            const url = appleResource ? appleResource.getUrl(currentTrack as any) : null;
+                            if (!url) return null;
+                            const Icon = appleResource.icon;
+                            return (
+                              <a
+                                href={url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className={cn(
+                                  "inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-app-card-border bg-app-card/35 hover:bg-app-card transition-colors text-[10px] font-medium uppercase tracking-wider shrink-0",
+                                  isPreviewPlaying
+                                    ? "text-red-500 border-red-500/30 bg-red-500/[0.03]"
+                                    : "text-app-muted hover:text-app-fg"
+                                )}
+                              >
+                                <Icon size={11} className={appleResource.color} />
+                                <span>Apple Music</span>
+                              </a>
+                            );
+                          })()}
+
+                          {/* Expand Button if collapsed: displayed right after Apple Music chip */}
+                          {!isResourcesExpanded && (
+                            <button
+                              type="button"
+                              onClick={() => setIsResourcesExpanded(true)}
+                              className="w-8 h-8 rounded-xl border border-app-card-border bg-app-card/30 flex items-center justify-center text-app-fg opacity-65 hover:opacity-100 hover:bg-app-fg/5 transition-all active:scale-95 cursor-pointer shrink-0"
+                              title="Expand resources"
+                            >
+                              <ChevronRight size={14} />
+                            </button>
+                          )}
+
+                          {/* YouTube, Spotify, Genius are visible if expanded */}
+                          {isResourcesExpanded && (
+                            <>
+                              {RESOURCE_TYPES.filter(r => ["youtube", "spotify", "genius"].includes(r.id)).map((resource) => {
+                                const url = resource.getUrl(currentTrack as any);
+                                if (!url) return null;
+                                const Icon = resource.icon;
+                                return (
+                                  <a
+                                    key={resource.id}
+                                    href={url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-app-card-border bg-app-card/35 hover:bg-app-card transition-colors text-[10px] font-medium uppercase tracking-wider text-app-muted hover:text-app-fg shrink-0"
+                                  >
+                                    <Icon size={11} className={resource.color} />
+                                    <span>{resource.name}</span>
+                                  </a>
+                                );
+                              })}
+
+                              {/* Collapse Button if expanded: displayed at the end of all chips */}
+                              <button
+                                type="button"
+                                onClick={() => setIsResourcesExpanded(false)}
+                                className="w-8 h-8 rounded-xl border border-app-card-border bg-app-card/30 flex items-center justify-center text-app-fg opacity-65 hover:opacity-100 hover:bg-app-fg/5 transition-all active:scale-95 cursor-pointer shrink-0"
+                                title="Collapse resources"
+                              >
+                                <ChevronLeft size={14} />
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
-
-                {trackProgressViewModel && (
-                  <div className="mb-6 px-3 sm:px-6">
-                    <TrackProgressTracker
-                      viewModel={trackProgressViewModel}
-                      activeTab={activeTab === "preview" ? "lyrics" : activeTab}
-                      onAction={(actionType) => {
-                        if (actionType === 'find_lyrics') {
-                          handleNextStepClickDirect();
-                        } else if (actionType === 'generate_analysis') {
-                          handleNextStepClickDirect();
-                        } else if (actionType === 'save_phrase') {
-                          setActiveTab('cards');
-                        } else if (actionType === 'go_to_study' || actionType === 'review_again') {
-                          setStudyTrackId(currentTrack.trackId);
-                          goToStudy();
-                        }
-                      }}
-                      onTabChange={(tab) => setActiveTab(tab)}
-                    />
-                  </div>
-                )}
 
                 {nextStepState && (
                   <div className="mb-6 px-3 sm:px-6">
                     <NextStepCTA
                       state={nextStepState}
-                      isExecuting={isTranslating || isGeneratingAnalysis}
+                      isExecuting={isTranslating || isGeneratingAnalysis || isLoadingLyrics}
+                      loadingStep={loadingStep}
                       onExecute={(actionType) => {
-                        if (actionType === 'FIND_LYRICS') {
-                          handleNextStepClickDirect();
+                        if (actionType === 'GET_LYRICS' || actionType === 'FIND_LYRICS') {
+                          handleAnalyzeSong();
+                        } else if (actionType === 'TRANSLATE_LYRICS') {
+                          handleAnalyzeSong();
                         } else if (actionType === 'GENERATE_ANALYSIS') {
                           setActiveTab('analysis');
                           handleGenerateAnalysis();
@@ -2446,6 +2685,138 @@ export default function App() {
                     />
                   </div>
                 )}
+
+                {trackProgressViewModel && isToolbarVisible && (
+                  <div 
+                    className="sticky top-[-1px] z-30 -mx-4 px-4 sm:-mx-8 sm:px-8 py-3 bg-app-bg/95 backdrop-blur-md transition-all duration-300 ease-in-out mb-6"
+                  >
+                    <div className="max-w-5xl mx-auto px-3 sm:px-6 flex flex-col gap-3">
+                      <TrackProgressTracker
+                        viewModel={trackProgressViewModel}
+                        activeTab={activeTab === "preview" ? "lyrics" : activeTab}
+                        onAction={(actionType) => {
+                          if (actionType === 'find_lyrics') {
+                            handleNextStepClickDirect();
+                          } else if (actionType === 'generate_analysis') {
+                            handleNextStepClickDirect();
+                          } else if (actionType === 'save_phrase') {
+                            setActiveTab('cards');
+                          } else if (actionType === 'go_to_study' || actionType === 'review_again') {
+                            setStudyTrackId(currentTrack.trackId);
+                            goToStudy();
+                          }
+                        }}
+                        onTabChange={(tab) => setActiveTab(tab)}
+                      />
+
+                      {/* Search & Switches Toolbar on one unified line */}
+                      {activeTab === "lyrics" && currentTrack.rawLyrics && (
+                        <div className="flex items-center justify-between gap-2 sm:gap-3 relative w-full border-t border-app-card-border/10 pt-3 animate-in fade-in slide-in-from-top-1 duration-200">
+                          {/* Search Input */}
+                          <div className="flex-1 min-w-0 relative flex h-10 items-center bg-app-card border border-app-card-border rounded-[1.25rem] px-2.5 sm:px-3.5 focus-within:border-app-accent/50 transition-all">
+                            <Search size={16} className="text-app-fg opacity-40 shrink-0 mr-1.5 sm:mr-2.5" />
+                            <input
+                              type="text"
+                              placeholder="Search lyrics..."
+                              value={trackSearchQuery}
+                              onChange={(e) => setTrackSearchQuery(e.target.value)}
+                              className="flex-1 min-w-0 bg-transparent text-sm font-semibold text-app-fg placeholder-app-fg/30 focus:outline-none font-sans"
+                            />
+                            {trackSearchQuery && (
+                              <button
+                                onClick={() => setTrackSearchQuery("")}
+                                className="text-app-fg opacity-45 hover:opacity-100 transition-opacity ml-1.5 shrink-0"
+                              >
+                                <X size={14} />
+                              </button>
+                            )}
+                          </div>
+
+                          {/* Control panel / Switches */}
+                          <div className="flex items-center gap-1 bg-app-card border border-app-card-border rounded-xl p-1 shadow-sm shrink-0 h-10">
+                            {(() => {
+                              const srcLangObj = SUPPORTED_LANGUAGES.find(l => 
+                                l.name.toLowerCase() === (currentTrack?.sourceLanguage || "English").toLowerCase() ||
+                                l.code.toLowerCase() === (currentTrack?.sourceLanguage || "English").toLowerCase()
+                              );
+                              const srcLangCode = srcLangObj ? srcLangObj.code : "EN";
+
+                              const targetLangObj = SUPPORTED_LANGUAGES.find(l => 
+                                l.name.toLowerCase() === (targetLanguage || "Russian").toLowerCase() ||
+                                l.code.toLowerCase() === (targetLanguage || "Russian").toLowerCase()
+                              );
+                              const targetLangCode = targetLangObj ? targetLangObj.code : "RU";
+
+                              const isSrcActive = lyricsDisplayMode === "lyrics" || lyricsDisplayMode === "both";
+                              const isTargetActive = lyricsDisplayMode === "translation" || lyricsDisplayMode === "both";
+
+                              const btnBase = "w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-200 outline-none select-none cursor-pointer relative active:scale-95 text-[10px] font-black tracking-wider";
+                              const activeClass = "bg-app-accent text-white shadow-md font-black border-transparent";
+                              const inactiveClass = "text-app-fg opacity-65 hover:opacity-100 hover:bg-app-fg/5";
+
+                              return (
+                                <>
+                                  {/* Source Lang Button */}
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      if (isSrcActive) {
+                                        if (!isTargetActive) return; // cannot turn off both
+                                        handleSetLyricsDisplayMode("translation");
+                                      } else {
+                                        handleSetLyricsDisplayMode("both");
+                                      }
+                                    }}
+                                    title={`Toggle ${currentTrack?.sourceLanguage || "Original"} Lyrics`}
+                                    className={cn(btnBase, isSrcActive ? activeClass : inactiveClass)}
+                                  >
+                                    <span>{srcLangCode}</span>
+                                  </button>
+
+                                  {/* Target Lang Button */}
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      if (isTargetActive) {
+                                        if (!isSrcActive) return; // cannot turn off both
+                                        handleSetLyricsDisplayMode("lyrics");
+                                      } else {
+                                        handleSetLyricsDisplayMode("both");
+                                      }
+                                    }}
+                                    title={`Toggle ${targetLanguage || "Target"} Translation`}
+                                    className={cn(btnBase, isTargetActive ? activeClass : inactiveClass)}
+                                  >
+                                    <span>{targetLangCode}</span>
+                                  </button>
+
+                                  {/* Vertical Divider inside Panel */}
+                                  <div className="w-[1px] h-4 bg-app-card-border/40 mx-0.5" />
+
+                                  {/* Star/Favorites Filter Button */}
+                                  <button
+                                    type="button"
+                                    onClick={handleToggleStarFilter}
+                                    title="Show Starred Lines Only"
+                                    className="w-8 h-8 rounded-lg flex items-center justify-center transition-all hover:scale-110 active:scale-90"
+                                  >
+                                    {isStarFilterActive ? (
+                                      <Star size={16} className="fill-amber-400 text-amber-500 drop-shadow-sm" />
+                                    ) : (
+                                      <Star size={16} className="text-app-fg/20 hover:text-amber-500/80 transition-all" />
+                                    )}
+                                  </button>
+                                </>
+                              );
+                            })()}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+
 
                 {false && (
                   <div className="flex flex-col gap-8 pb-32 px-3 sm:px-6">
@@ -2729,10 +3100,13 @@ export default function App() {
                                   </div>
                                   <NextStepCTA
                                     state={nextStepState}
-                                    isExecuting={isTranslating || isGeneratingAnalysis}
+                                    isExecuting={isTranslating || isGeneratingAnalysis || isLoadingLyrics}
+                                    loadingStep={loadingStep}
                                     onExecute={(actionType) => {
-                                      if (actionType === 'FIND_LYRICS') {
-                                        handleNextStepClickDirect();
+                                      if (actionType === 'GET_LYRICS' || actionType === 'FIND_LYRICS') {
+                                        handleAnalyzeSong();
+                                      } else if (actionType === 'TRANSLATE_LYRICS') {
+                                        handleAnalyzeSong();
                                       } else if (actionType === 'GENERATE_ANALYSIS') {
                                         setActiveTab('analysis');
                                         handleGenerateAnalysis();
@@ -2776,115 +3150,6 @@ export default function App() {
 
                 {activeTab === "lyrics" && (
                   <div className="flex flex-col gap-1 pb-32">
-                    {/* Unified Search and Control Toolbar */}
-                    {currentTrack.rawLyrics && (
-                      <>
-                        {/* Row 1: Search Input (Static - scrolls naturally, does not stick) */}
-                        <div className="px-3 sm:px-6 mb-3">
-                          <div className="relative flex items-center min-w-0 bg-app-card border border-app-card-border rounded-[1.25rem] p-1.5 focus-within:border-app-accent/50 transition-all">
-                            <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-app-fg opacity-40">
-                              <Search size={18} />
-                            </div>
-                            <input
-                              type="text"
-                              placeholder="Search original text or translations..."
-                              value={trackSearchQuery}
-                              onChange={(e) => setTrackSearchQuery(e.target.value)}
-                              className="w-full pl-10 pr-8 py-2 bg-transparent text-base md:text-lg font-medium text-app-fg placeholder-app-fg/30 focus:outline-none font-sans"
-                            />
-                            {trackSearchQuery && (
-                              <button
-                                onClick={() => setTrackSearchQuery("")}
-                                className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-app-fg opacity-45 hover:opacity-100 transition-opacity"
-                              >
-                                <X size={14} />
-                              </button>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Row 2: Control panel (Sticky, compact, aligned to the right edge of the lyric block) */}
-                        <div className="sticky top-0 z-40 bg-transparent pointer-events-none py-1 mb-2 flex justify-end px-3 sm:px-6">
-                          <div className="flex items-center gap-1 bg-app-card/95 backdrop-blur-md border border-app-card-border rounded-xl p-1 shadow-md shrink-0 pointer-events-auto">
-                            {(() => {
-                              const srcLangObj = SUPPORTED_LANGUAGES.find(l => 
-                                l.name.toLowerCase() === (currentTrack?.sourceLanguage || "English").toLowerCase() ||
-                                l.code.toLowerCase() === (currentTrack?.sourceLanguage || "English").toLowerCase()
-                              );
-                              const srcLangCode = srcLangObj ? srcLangObj.code : "EN";
-
-                              const targetLangObj = SUPPORTED_LANGUAGES.find(l => 
-                                l.name.toLowerCase() === (targetLanguage || "Russian").toLowerCase() ||
-                                l.code.toLowerCase() === (targetLanguage || "Russian").toLowerCase()
-                              );
-                              const targetLangCode = targetLangObj ? targetLangObj.code : "RU";
-
-                              const isSrcActive = lyricsDisplayMode === "lyrics" || lyricsDisplayMode === "both";
-                              const isTargetActive = lyricsDisplayMode === "translation" || lyricsDisplayMode === "both";
-
-                              const btnBase = "w-9 h-9 rounded-lg flex items-center justify-center transition-all duration-200 outline-none select-none cursor-pointer relative active:scale-95 text-xs font-bold";
-                              const activeClass = "bg-app-accent text-white shadow-md font-black border-transparent";
-                              const inactiveClass = "text-app-fg opacity-65 hover:opacity-100 hover:bg-app-fg/5";
-
-                              return (
-                                <>
-                                  {/* Source Lang Button */}
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      if (isSrcActive) {
-                                        if (!isTargetActive) return; // cannot turn off both
-                                        handleSetLyricsDisplayMode("translation");
-                                      } else {
-                                        handleSetLyricsDisplayMode("both");
-                                      }
-                                    }}
-                                    title={`Toggle ${currentTrack?.sourceLanguage || "Original"} Lyrics`}
-                                    className={cn(btnBase, isSrcActive ? activeClass : inactiveClass)}
-                                  >
-                                    <span className="text-[10px] font-black uppercase tracking-wider">{srcLangCode}</span>
-                                  </button>
-
-                                  {/* Target Lang Button */}
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      if (isTargetActive) {
-                                        if (!isSrcActive) return; // cannot turn off both
-                                        handleSetLyricsDisplayMode("lyrics");
-                                      } else {
-                                        handleSetLyricsDisplayMode("both");
-                                      }
-                                    }}
-                                    title={`Toggle ${targetLanguage || "Target"} Translation`}
-                                    className={cn(btnBase, isTargetActive ? activeClass : inactiveClass)}
-                                  >
-                                    <span className="text-[10px] font-black uppercase tracking-wider">{targetLangCode}</span>
-                                  </button>
-
-                                  {/* Vertical Divider inside Panel */}
-                                  <div className="w-[1px] h-5 bg-app-card-border/40 mx-1" />
-
-                                  {/* Star/Favorites Filter Button */}
-                                  <button
-                                    type="button"
-                                    onClick={handleToggleStarFilter}
-                                    title="Show Starred Lines Only"
-                                    className="w-9 h-9 rounded-lg flex items-center justify-center transition-all hover:scale-110 active:scale-90"
-                                  >
-                                    {isStarFilterActive ? (
-                                      <Star size={20} className="fill-amber-400 text-amber-500 drop-shadow-sm" />
-                                    ) : (
-                                      <Star size={20} className="text-app-fg/20 hover:text-amber-500/80 transition-all" />
-                                    )}
-                                  </button>
-                                </>
-                              );
-                            })()}
-                          </div>
-                        </div>
-                      </>
-                    )}
 
                     {currentTrack.rawLyrics ? (() => {
                       let linesToRender = currentTrack.lines || [];

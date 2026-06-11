@@ -24,13 +24,13 @@ describe('nextStepService unit tests', () => {
     ...opts,
   });
 
-  it('identifies FIND_LYRICS when track is null or undefined', () => {
+  it('identifies GET_LYRICS when track is null or undefined', () => {
     const result = determineNextStep(null, []);
-    expect(result.type).toBe('FIND_LYRICS');
-    expect(result.label).toContain('Find Lyrics');
+    expect(result.type).toBe('GET_LYRICS');
+    expect(result.label).toContain('Get Lyrics');
   });
 
-  it('identifies FIND_LYRICS when track has empty lyrics', () => {
+  it('identifies GET_LYRICS when track has empty lyrics', () => {
     const track = {
       trackId: 'track-1',
       artist: 'Charles Aznavour',
@@ -41,7 +41,7 @@ describe('nextStepService unit tests', () => {
       lastUpdated: 0,
     } as any;
     const result = determineNextStep(track, []);
-    expect(result.type).toBe('FIND_LYRICS');
+    expect(result.type).toBe('GET_LYRICS');
   });
 
   it('identifies GENERATE_ANALYSIS when track has lyrics but no lectureBlocks', () => {
@@ -51,7 +51,7 @@ describe('nextStepService unit tests', () => {
       title: 'La Bohème',
       rawLyrics: 'La vie en Rose\n Quand elle me prend...',
       lines: [],
-      processingStatus: { stage1_completed: true, stage2_completed: false, stage3_completed: false },
+      processingStatus: { stage1_completed: true, stage2_completed: true, stage3_completed: false },
       lastUpdated: 0,
     } as any;
     const result = determineNextStep(track, []);

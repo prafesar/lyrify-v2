@@ -312,17 +312,6 @@ export const AnalysisPhraseWorkspace: React.FC<AnalysisPhraseWorkspaceProps> = (
 
           {/* Action Buttons */}
           <div className="flex items-center gap-3 shrink-0">
-            {handleRegenerateAnalysis && (
-              <button
-                onClick={handleRegenerateAnalysis}
-                disabled={isGeneratingAnalysis}
-                className="flex items-center gap-1.5 px-4 py-3.5 bg-app-card border border-app-card-border text-app-fg opacity-60 hover:opacity-100 hover:text-orange-500 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-30"
-                title="Reset and regenerate breakdown"
-              >
-                <RefreshCw size={12} className={isGeneratingAnalysis ? "animate-spin" : ""} />
-                <span className="hidden sm:inline">Regenerate</span>
-              </button>
-            )}
             <button
               onClick={() => {
                 clearForm();

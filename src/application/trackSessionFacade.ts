@@ -204,6 +204,9 @@ export class TrackSessionFacade {
         lines: this.lyricsProvider.splitLyricsIntoLines(trackData.trackId, lyrics),
         processingStatus: { ...trackData.processingStatus, stage1_completed: true }
       };
+
+      // intermediate save of fetched raw lyrics
+      this.trackCacheRepository.saveTrackData(trackData.trackId, trackData);
     }
 
     if (onStepChange) onStepChange("meaning");
@@ -224,37 +227,44 @@ export class TrackSessionFacade {
         appleMusicUrl: trackData.appleMusicUrl
       };
 
-      const [result, translationsResult] = await Promise.all([
-        this.aiClient.fetchTrackMeaning(lyrics || "", metadata),
-        this.aiClient.getLineTranslations(lyrics || "", trackKey, targetLanguage)
-      ]);
-      
-      const langKey = targetLanguage.toLowerCase().trim();
-      let meaning = result.meanings.en;
-      if (langKey === 'spanish') meaning = result.meanings.es;
-      if (langKey === 'russian') meaning = result.meanings.ru;
-      if (langKey === 'polish') meaning = result.meanings.pl;
+      try {
+        const [result, translationsResult] = await Promise.all([
+          this.aiClient.fetchTrackMeaning(lyrics || "", metadata),
+          this.aiClient.getLineTranslations(lyrics || "", trackKey, targetLanguage)
+        ]);
+        
+        const langKey = targetLanguage.toLowerCase().trim();
+        let meaning = result.meanings.en;
+        if (langKey === 'spanish') meaning = result.meanings.es;
+        if (langKey === 'russian') meaning = result.meanings.ru;
+        if (langKey === 'polish') meaning = result.meanings.pl;
 
-      const updatedLines = trackData.lines.map((line, idx) => {
-        const matched = translationsResult[idx] || translationsResult.find((t: any) => t.originalText === line.original);
-        return {
-          ...line,
-          translation: matched ? matched.translation : (line.translation || ""),
-          language: matched ? matched.language : (line.language || "en")
+        const updatedLines = trackData.lines.map((line, idx) => {
+          const matched = translationsResult[idx] || translationsResult.find((t: any) => t.originalText === line.original);
+          return {
+            ...line,
+            translation: matched ? matched.translation : (line.translation || ""),
+            language: matched ? matched.language : (line.language || "en")
+          };
+        });
+
+        trackData = {
+          ...trackData,
+          meaning,
+          meanings: result.meanings,
+          difficulty: result.difficulty,
+          promptVersion: ANALYSIS_PROMPT_VERSION,
+          translationPromptVersion: TRANSLATION_PROMPT_VERSION,
+          sourceLanguage: result.originalLanguage || trackData.sourceLanguage,
+          lines: updatedLines,
+          processingStatus: { ...trackData.processingStatus, stage2_completed: true }
         };
-      });
-
-      trackData = {
-        ...trackData,
-        meaning,
-        meanings: result.meanings,
-        difficulty: result.difficulty,
-        promptVersion: ANALYSIS_PROMPT_VERSION,
-        translationPromptVersion: TRANSLATION_PROMPT_VERSION,
-        sourceLanguage: result.originalLanguage || trackData.sourceLanguage,
-        lines: updatedLines,
-        processingStatus: { ...trackData.processingStatus, stage2_completed: true }
-      };
+      } catch (llmError) {
+        console.error("LLM translation failed, but raw lyrics are successfully saved:", llmError);
+        // Ensure raw lyrics are persistently saved
+        this.trackCacheRepository.saveTrackData(trackData.trackId, trackData);
+        throw llmError;
+      }
     } else {
       // Meaning cached, but reload translations to confirm accuracy or ensure they're loaded
       const translationsResult = await this.aiClient.getLineTranslations(lyrics || "", trackKey, targetLanguage);
