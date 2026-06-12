@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Play, Pause, Volume2, VolumeX, Music, ExternalLink } from "lucide-react";
 import { cn } from "../lib/utils";
+import { useTranslation } from "../lib/i18n";
 
 interface ITunesPlayerProps {
   audioUrl: string;
@@ -18,6 +19,7 @@ export default function ITunesPlayer({
   coverUrl,
   appleMusicUrl,
 }: ITunesPlayerProps) {
+  const { t } = useTranslation();
   const [isPlaying, setIsPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -80,7 +82,7 @@ export default function ITunesPlayer({
            <div className="flex items-center gap-2">
               <div className="w-2 h-2 rounded-full bg-[var(--accent)] animate-pulse" />
               <span className="text-[10px] font-black uppercase tracking-[0.2em] text-app-accent">
-                iTunes Preview
+                {t('itunes.previewTitle')}
               </span>
            </div>
            {appleMusicUrl && (
@@ -90,7 +92,7 @@ export default function ITunesPlayer({
                rel="noopener noreferrer"
                className="text-[9px] font-bold uppercase tracking-widest opacity-40 hover:opacity-100 flex items-center gap-1 transition-all"
              >
-               View on iTunes <ExternalLink size={10} />
+               {t('itunes.viewOnItunes')} <ExternalLink size={10} />
              </a>
            )}
         </div>
@@ -159,10 +161,10 @@ export default function ITunesPlayer({
               className="h-3 md:h-4"
               referrerPolicy="no-referrer"
             />
-            <span className="text-[9px] font-medium tracking-tight">Music Preview</span>
+            <span className="text-[9px] font-medium tracking-tight">{t('itunes.musicPreview')}</span>
           </div>
           <p className="text-[8px] leading-tight text-app-muted text-right max-w-[200px]">
-            Provided as a promotional summary. Full track available on the iTunes Store.
+            {t('itunes.promotionalSummary')}
           </p>
         </div>
       </div>

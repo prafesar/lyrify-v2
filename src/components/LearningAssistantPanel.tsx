@@ -6,6 +6,7 @@ import {
 import ReactMarkdown from "react-markdown";
 import { TrackLyricsData, Phrase } from "../services/musicService";
 import { aiClient } from "../application";
+import { useTranslation } from "../lib/i18n";
 
 export interface LearningAssistantPanelProps {
   isOpen: boolean;
@@ -42,6 +43,7 @@ export const LearningAssistantPanel: React.FC<LearningAssistantPanelProps> = ({
   existingPhrases,
   speak
 }) => {
+  const { t } = useTranslation();
   const [userQuestion, setUserQuestion] = useState("");
   const [activePreset, setActivePreset] = useState<string | null>(null);
   
@@ -83,11 +85,11 @@ export const LearningAssistantPanel: React.FC<LearningAssistantPanelProps> = ({
 
   // Presets List
   const presetsList = [
-    { id: "vocabulary", label: "Explain vocabulary", desc: "Key collocations & words" },
-    { id: "grammar", label: "Explain grammar", desc: "Sentence structure & conjugations" },
-    { id: "useful", label: "Find useful phrases", desc: "Convert lyrics into speech blocks" },
-    { id: "b2", label: "Explain at B2", desc: "Mid-level vocabulary explanations" },
-    { id: "cultural", label: "Cultural context", desc: "Metaphors & country context" }
+    { id: "vocabulary", label: t('assistant.vocabularyLabel'), desc: t('assistant.vocabularyDesc') },
+    { id: "grammar", label: t('assistant.grammarLabel'), desc: t('assistant.grammarDesc') },
+    { id: "useful", label: t('assistant.usefulLabel'), desc: t('assistant.usefulDesc') },
+    { id: "b2", label: t('assistant.b2Label'), desc: t('assistant.b2Desc') },
+    { id: "cultural", label: t('assistant.culturalLabel'), desc: t('assistant.culturalDesc') }
   ];
 
   // Helper to trigger voice over
@@ -128,7 +130,7 @@ export const LearningAssistantPanel: React.FC<LearningAssistantPanelProps> = ({
       setSuggestedPhrases(response.suggestedPhrases || []);
     } catch (err: any) {
       console.error(err);
-      setError(err?.message || "An error occurred while generating learning feedback. Please try again.");
+      setError(err?.message || t('common.error'));
     } finally {
       setIsLoading(false);
     }
@@ -224,9 +226,9 @@ export const LearningAssistantPanel: React.FC<LearningAssistantPanelProps> = ({
               <Brain size={20} />
             </div>
             <div>
-              <h2 className="text-base font-bold text-app-fg tracking-tight">CantoLex Assistant</h2>
+              <h2 className="text-base font-bold text-app-fg tracking-tight">{t('assistant.title')}</h2>
               <span className="text-[10px] font-black tracking-widest text-orange-500 font-bold block uppercase">
-                Study Phrase / Follow-up
+                {t('assistant.subtitle')}
               </span>
             </div>
           </div>
@@ -244,7 +246,7 @@ export const LearningAssistantPanel: React.FC<LearningAssistantPanelProps> = ({
           {/* 1. Context Preview card */}
           <div className="p-5 rounded-2xl bg-app-bg/50 border border-border space-y-3">
             <span className="text-[9px] uppercase font-black tracking-widest text-app-fg opacity-30 block">
-              Linguistic Anchor
+              {t('assistant.anchor')}
             </span>
 
             {phraseContext && (
@@ -262,12 +264,12 @@ export const LearningAssistantPanel: React.FC<LearningAssistantPanelProps> = ({
                 {track.lines && (
                   <div className="pt-2 border-t border-app-card-border/30">
                     <span className="text-[8px] uppercase tracking-wider text-app-fg opacity-35 block mb-1 font-sans">
-                      Lyrics Context
+                      {t('assistant.lyricsContext')}
                     </span>
                     <p className="text-xs font-sans text-app-fg opacity-45 leading-relaxed">
                       "{track.lines.find(l => phraseContext.lineIds?.includes(l.lineId || ""))?.original || 
                         track.lines.find(l => l.original.toLowerCase().includes(phraseContext.text.toLowerCase()))?.original || 
-                        "Linking metadata contextual lines..."}"
+                        t('assistant.linkingMetadata')}"
                     </p>
                   </div>
                 )}
@@ -280,7 +282,7 @@ export const LearningAssistantPanel: React.FC<LearningAssistantPanelProps> = ({
           {/* 2. Interactive user inputs/presets when not loading */}
           <div className="space-y-4">
             <span className="text-[9px] uppercase font-black tracking-widest text-app-fg opacity-35 block">
-              Interactive Prompts
+              {t('assistant.interactivePrompts')}
             </span>
 
             {/* Quick preset buttons */}
@@ -310,7 +312,7 @@ export const LearningAssistantPanel: React.FC<LearningAssistantPanelProps> = ({
                 <textarea
                   rows={2}
                   maxLength={300}
-                  placeholder="Ask about nuances, grammar, synonyms, register, or usage of this phrase..."
+                  placeholder={t('assistant.inputPlaceholder')}
                   value={userQuestion}
                   onChange={(e) => setUserQuestion(e.target.value)}
                   disabled={isLoading}
@@ -326,7 +328,7 @@ export const LearningAssistantPanel: React.FC<LearningAssistantPanelProps> = ({
                   onClick={() => handleAskAI()}
                   disabled={isLoading || !userQuestion.trim()}
                   className="absolute right-3.5 bottom-3.5 w-8 h-8 rounded-xl bg-orange-500 hover:bg-orange-600 font-bold transition-all flex items-center justify-center text-white disabled:bg-app-fg/10 disabled:text-app-fg/30 shadow-md enabled:hover:scale-105 enabled:active:scale-95 duration-150"
-                  title="Ask assistant"
+                  title={t('assistant.title')}
                 >
                   <Send size={14} />
                 </button>
@@ -345,8 +347,8 @@ export const LearningAssistantPanel: React.FC<LearningAssistantPanelProps> = ({
               >
                 <Loader2 size={36} className="text-orange-500 animate-spin" />
                 <div className="text-center space-y-1">
-                  <p className="text-sm font-black text-app-fg uppercase tracking-wider">Analyzing Lyrics</p>
-                  <p className="text-xs text-app-fg opacity-40 max-w-xs mx-auto">Consulting Gemini to break down grammar structures and suggest collocations...</p>
+                  <p className="text-sm font-black text-app-fg uppercase tracking-wider">{t('assistant.analyzingTitle')}</p>
+                  <p className="text-xs text-app-fg opacity-40 max-w-xs mx-auto">{t('assistant.analyzingDesc')}</p>
                 </div>
               </motion.div>
             )}
@@ -360,14 +362,14 @@ export const LearningAssistantPanel: React.FC<LearningAssistantPanelProps> = ({
               >
                 <HelpCircle size={30} className="text-red-500 mx-auto opacity-70" />
                 <div>
-                  <h4 className="text-sm font-bold text-app-fg">Linguistic Analysis Suspended</h4>
+                  <h4 className="text-sm font-bold text-app-fg">{t('assistant.errorTitle')}</h4>
                   <p className="text-xs text-app-fg opacity-40 max-w-sm mx-auto mt-1 leading-relaxed">{error}</p>
                 </div>
                 <button
                   onClick={() => handleAskAI(activePreset || undefined)}
                   className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-xl text-xs font-bold transition-colors active:scale-95 duration-150"
                 >
-                  Retry analysis
+                  {t('assistant.retryBtn')}
                 </button>
               </motion.div>
             )}
@@ -384,7 +386,7 @@ export const LearningAssistantPanel: React.FC<LearningAssistantPanelProps> = ({
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="text-[9px] uppercase font-black tracking-widest text-orange-500 font-bold block">
-                    AI tutor feedback
+                    {t('assistant.tutorFeedback')}
                   </span>
                   {speak && (
                     <button
@@ -395,10 +397,10 @@ export const LearningAssistantPanel: React.FC<LearningAssistantPanelProps> = ({
                           ? "bg-orange-500/10 border-orange-500/20 text-orange-500" 
                           : "bg-app-bg border-app-card-border/40 text-app-fg opacity-65 hover:opacity-100 hover:border-app-card-border"
                       }`}
-                      title="Read explanation text"
+                      title={t('assistant.speakText')}
                     >
                       <Volume2 size={12} className={isSpeaking ? "animate-pulse" : ""} />
-                      <span>{isSpeaking ? "Speaking" : "Speak text"}</span>
+                      <span>{isSpeaking ? t('assistant.speaking') : t('assistant.speakText')}</span>
                     </button>
                   )}
                 </div>
@@ -418,10 +420,10 @@ export const LearningAssistantPanel: React.FC<LearningAssistantPanelProps> = ({
                     <div className="space-y-4">
                       <div className="flex items-center justify-between">
                         <span className="text-[10px] uppercase font-black tracking-widest text-[#f97316] font-bold block">
-                          Suggested Vocabulary Chunks ({pendingSuggestions.length})
+                          {t('assistant.suggestedTitle', { count: pendingSuggestions.length })}
                         </span>
                         <span className="text-[8px] font-medium text-app-fg opacity-30 font-sans">
-                          Click Accept to add to your study list
+                          {t('assistant.suggestedTip')}
                         </span>
                       </div>
 
@@ -439,13 +441,13 @@ export const LearningAssistantPanel: React.FC<LearningAssistantPanelProps> = ({
                                 /* Inline Edit Mode interface */
                                 <div className="space-y-3 font-sans">
                                   <span className="text-[8px] font-black uppercase text-orange-500 tracking-wider">
-                                    Edit block detail
+                                    {t('assistant.editDetail')}
                                   </span>
                                   
                                   <div className="space-y-2.5">
                                     <div>
                                       <label className="text-[9px] font-bold text-app-fg opacity-40 block mb-1">
-                                        Vocabulary chunk
+                                        {t('assistant.vocabChunk')}
                                       </label>
                                       <input
                                         type="text"
@@ -457,7 +459,7 @@ export const LearningAssistantPanel: React.FC<LearningAssistantPanelProps> = ({
 
                                     <div>
                                       <label className="text-[9px] font-bold text-app-fg opacity-40 block mb-1">
-                                        Target language translation
+                                        {t('assistant.targetTranslation')}
                                       </label>
                                       <input
                                         type="text"
@@ -469,7 +471,7 @@ export const LearningAssistantPanel: React.FC<LearningAssistantPanelProps> = ({
 
                                     <div>
                                       <label className="text-[9px] font-bold text-app-fg opacity-40 block mb-1">
-                                        Clarification / Notes
+                                        {t('assistant.clarificationNotes')}
                                       </label>
                                       <textarea
                                         rows={2}
@@ -484,13 +486,13 @@ export const LearningAssistantPanel: React.FC<LearningAssistantPanelProps> = ({
                                         onClick={() => saveEditedPhrase(originalIndex)}
                                         className="px-3.5 py-1.5 bg-orange-500 text-white rounded-xl text-[xxs] font-bold uppercase tracking-wider hover:bg-orange-600 transition-colors"
                                       >
-                                        Save
+                                        {t('assistant.saveBtn')}
                                       </button>
                                       <button
                                         onClick={() => setEditingIndex(null)}
                                         className="px-3.5 py-1.5 bg-app-card border border-app-card-border text-app-fg opacity-70 hover:opacity-100 rounded-xl text-[xxs] font-bold uppercase tracking-wider transition-all"
                                       >
-                                        Cancel
+                                        {t('assistant.cancelBtn')}
                                       </button>
                                     </div>
                                   </div>
@@ -521,17 +523,17 @@ export const LearningAssistantPanel: React.FC<LearningAssistantPanelProps> = ({
                                     <button
                                       onClick={() => startEditingPhrase(originalIndex, item)}
                                       className="w-8 h-8 rounded-lg bg-app-card border border-app-card-border/50 hover:border-app-card-border text-app-fg opacity-60 hover:opacity-100 transition-all flex items-center justify-center font-sans"
-                                      title="Inline edit before accept"
+                                      title={t('assistant.editDetail')}
                                     >
                                       <Edit2 size={12} />
                                     </button>
                                     <button
                                       onClick={() => handleAcceptSuggested(item, originalIndex)}
                                       className="px-3 py-1.5 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-[10px] font-black uppercase tracking-wider transition-all flex items-center gap-1 shadow-sm active:scale-95 duration-150 font-sans"
-                                      title="Accept suggested phrase"
+                                      title={t('assistant.acceptBtn')}
                                     >
                                       <Plus size={12} className="stroke-[3]" />
-                                      <span>Accept</span>
+                                      <span>{t('assistant.acceptBtn')}</span>
                                     </button>
                                     <button
                                       onClick={() => handleRejectSuggested(item.text)}
@@ -556,7 +558,7 @@ export const LearningAssistantPanel: React.FC<LearningAssistantPanelProps> = ({
                       <div className="flex items-center justify-between">
                         <span className="text-[10px] uppercase font-black tracking-widest text-green-600 font-bold block flex items-center gap-1 font-sans">
                           <CheckCircle2 size={12} className="text-green-500" />
-                          Saved to Study List ({acceptedSuggestions.length})
+                          {t('assistant.savedTitle', { count: acceptedSuggestions.length })}
                         </span>
                       </div>
 
@@ -589,7 +591,7 @@ export const LearningAssistantPanel: React.FC<LearningAssistantPanelProps> = ({
                               <div className="flex items-center gap-1.5 shrink-0 self-center">
                                 <div className="px-2.5 py-1.5 rounded-xl border border-green-500/10 bg-green-500/5 text-green-600 flex items-center gap-1 text-[10px] uppercase tracking-wider font-sans font-black">
                                   <Check size={11} className="stroke-[3]" />
-                                  <span>Added</span>
+                                  <span>{t('assistant.addedBadge')}</span>
                                 </div>
                               </div>
                             </div>

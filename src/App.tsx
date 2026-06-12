@@ -77,6 +77,7 @@ import { LearningAssistantPanel } from "./components/LearningAssistantPanel";
 import { acceptSuggestedPhrase, addUserPhrase, editPhrase } from "./services/lyricsAnalysisService";
 import { LibraryView } from "./components/LibraryView";
 import LanguageSelector from "./components/LanguageSelector";
+import { useTranslation } from "./lib/i18n";
 import {
   type TrackLyricsData,
   type LyricOption,
@@ -470,6 +471,7 @@ const mapTrackLyricsDataToTrack = (data: TrackLyricsData): Track => ({
 });
 
 export default function App() {
+  const { t } = useTranslation();
   const [user, setUser] = useState<User | null>(null);
   const [studyTrackId, setStudyTrackId] = useState<string | undefined>(undefined);
   const [dbConnectionError, setDbConnectionError] = useState(false);

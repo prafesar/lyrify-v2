@@ -2,6 +2,7 @@ import React from 'react';
 import { motion } from 'motion/react';
 import { GraduationCap, ArrowRight, Music, Clock, PlayCircle } from 'lucide-react';
 import { ResumeViewModel } from '../services/resumeService';
+import { useTranslation } from '../lib/i18n';
 
 interface ResumeStudyBlockProps {
   viewModel: ResumeViewModel;
@@ -14,6 +15,7 @@ export const ResumeStudyBlock: React.FC<ResumeStudyBlockProps> = ({
   onResumeTrack,
   onResumeStudy,
 }) => {
+  const { t } = useTranslation();
   const isStudy = viewModel.type === 'study';
 
   const handleClick = () => {
@@ -22,6 +24,46 @@ export const ResumeStudyBlock: React.FC<ResumeStudyBlockProps> = ({
     } else if (viewModel.trackingTrack) {
       onResumeTrack(viewModel.trackingTrack);
     }
+  };
+
+  const getLocalizedTitle = () => {
+    if (viewModel.title === "Resume Learning") {
+      return t("resumeStudy.resumeLearning");
+    }
+    return viewModel.title;
+  };
+
+  const getLocalizedSubtitle = () => {
+    const subtitle = viewModel.subtitle;
+    if (!subtitle) return "";
+    
+    // Split into track title and status
+    const parts = subtitle.split(" — ");
+    if (parts.length < 2) return subtitle;
+    
+    const trackQuote = parts[0]; // "«Track Title»"
+    const statusText = parts[1];
+    
+    // Match the English phrases
+    let localizedStatus = statusText;
+    if (statusText === "Continue exploring lyrics and pronunciation.") {
+      localizedStatus = t("resumeStudy.statusExplore");
+    } else if (statusText === "Lyrics are loaded. Try generating a full AI analysis!") {
+      localizedStatus = t("resumeStudy.statusLyricsLoaded");
+    } else if (statusText === "AI analysis is ready. Read lyrics and practice shadowing!") {
+      localizedStatus = t("resumeStudy.statusAnalysisReady");
+    } else {
+      const match = statusText.match(/You saved (\d+) phrases? from this track\./);
+      if (match) {
+        const count = parseInt(match[1], 10);
+        localizedStatus = t("resumeStudy.statusSavedPhrases", { 
+          count, 
+          plural: count > 1 ? "s" : "" 
+        });
+      }
+    }
+    
+    return `${trackQuote} — ${localizedStatus}`;
   };
 
   return (
@@ -71,21 +113,21 @@ export const ResumeStudyBlock: React.FC<ResumeStudyBlockProps> = ({
         <div className="space-y-1 min-w-0">
           <div className="flex items-center gap-2">
             <span className="text-[9px] font-black uppercase tracking-[0.2em] text-app-accent leading-none">
-              Continue Learning
+              {t('resumeStudy.continueLearning')}
             </span>
             <span className="flex h-1 w-1 rounded-full bg-app-accent/40" />
             <span className="text-[9px] text-app-muted font-bold flex items-center gap-1">
               <Clock size={9} />
-              <span>Returning Session</span>
+              <span>{t('resumeStudy.returningSession')}</span>
             </span>
           </div>
           
           <h2 className="text-sm md:text-base font-extrabold text-app-fg tracking-tight leading-snug transition-colors group-hover:text-app-accent">
-            {viewModel.title}
+            {getLocalizedTitle()}
           </h2>
           
           <p className="text-xs text-app-muted font-semibold line-clamp-2 leading-relaxed opacity-90">
-            {viewModel.subtitle}
+            {getLocalizedSubtitle()}
           </p>
         </div>
       </div>

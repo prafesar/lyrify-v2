@@ -3,12 +3,16 @@ import { motion } from 'motion/react';
 import { Sparkles, X, Languages, Globe, GraduationCap, Headphones } from 'lucide-react';
 import { type OnboardingDemoTrack } from '../services/onboardingService';
 
+import { useTranslation } from '../lib/i18n';
+
 interface OnboardingHeroProps {
   onSelectTrack?: (track: OnboardingDemoTrack) => void;
   onDismiss: () => void;
 }
 
 export const OnboardingHero: React.FC<OnboardingHeroProps> = ({ onDismiss }) => {
+  const { t, uiLanguage } = useTranslation();
+
   return (
     <motion.div
       id="onboarding-hero-block"
@@ -32,7 +36,7 @@ export const OnboardingHero: React.FC<OnboardingHeroProps> = ({ onDismiss }) => 
         id="onboarding-dismiss-btn"
         onClick={onDismiss}
         className="absolute top-6 right-6 p-2.5 text-app-muted hover:text-app-fg hover:bg-app-fg/5 rounded-2xl transition-all border border-transparent hover:border-app-card-border/60 active:scale-90 cursor-pointer z-20"
-        title="Hide onboarding"
+        title={t('onboarding.closeTooltip')}
       >
         <X size={20} />
       </button>
@@ -45,7 +49,7 @@ export const OnboardingHero: React.FC<OnboardingHeroProps> = ({ onDismiss }) => 
           className="inline-flex items-center gap-2 px-4 py-1.5 bg-app-accent/8 border border-app-accent/20 rounded-full text-app-accent text-[11px] font-black uppercase tracking-[0.2em] mb-6"
         >
           <Sparkles size={13} className="animate-pulse" />
-          <span>Guest-First Language Mastery</span>
+          <span>{t('onboarding.badge')}</span>
         </motion.div>
 
         <motion.h1 
@@ -54,7 +58,7 @@ export const OnboardingHero: React.FC<OnboardingHeroProps> = ({ onDismiss }) => 
           transition={{ delay: 0.15, duration: 0.4 }}
           className="text-3xl md:text-5xl font-black text-app-fg tracking-tight leading-[1.1] mb-4 max-w-3xl"
         >
-          Master Languages Through <span className="text-app-accent relative inline-block">Songs<span className="absolute left-0 right-0 bottom-1 h-1.5 bg-app-accent/15 rounded-full" /></span>
+          {t('onboarding.titlePre')}<span className="text-app-accent relative inline-block">{t('onboarding.titleWord')}<span className="absolute left-0 right-0 bottom-1 h-1.5 bg-app-accent/15 rounded-full" /></span>
         </motion.h1>
         
         <motion.p 
@@ -63,7 +67,7 @@ export const OnboardingHero: React.FC<OnboardingHeroProps> = ({ onDismiss }) => 
           transition={{ delay: 0.2, duration: 0.4 }}
           className="text-sm md:text-base text-app-muted font-sans leading-relaxed max-w-2xl mb-10 opacity-90"
         >
-          Welcome to <span className="font-bold text-app-fg text-app-accent">CantoLex</span>! We believe authentic lyrics are the absolute best way to absorb natural accent, slang, and grammar. Analyse nuances, study curated explanations, and start singing. Everything is fully functional instantly as a guest.
+          {t('onboarding.subtitle')}
         </motion.p>
 
         {/* Highlighted Value Cards Grid (USP) - Larger, More Attractive Design */}
@@ -79,10 +83,10 @@ export const OnboardingHero: React.FC<OnboardingHeroProps> = ({ onDismiss }) => 
               <Languages size={24} className="text-app-accent" />
             </div>
             <h3 className="font-extrabold text-sm md:text-base text-app-fg mb-2 leading-tight group-hover:text-app-accent transition-colors">
-              Deep Lyric Translations
+              {t('onboarding.cardTranslationTitle')}
             </h3>
             <p className="text-xs md:text-sm text-app-muted leading-relaxed opacity-90">
-              Go beyond cold word-by-word dictionaries. Discover slang, figurative meanings, metaphors, and native cultural contexts.
+              {t('onboarding.cardTranslationDesc')}
             </p>
           </div>
 
@@ -92,10 +96,10 @@ export const OnboardingHero: React.FC<OnboardingHeroProps> = ({ onDismiss }) => 
               <GraduationCap size={24} className="text-app-accent" />
             </div>
             <h3 className="font-extrabold text-sm md:text-base text-app-fg mb-2 leading-tight group-hover:text-app-accent transition-colors">
-              Interactive Flashcards
+              {t('onboarding.cardFlashcardsTitle')}
             </h3>
             <p className="text-xs md:text-sm text-app-muted leading-relaxed opacity-90">
-              Save catchy idioms or grammatical lines straight into your premium 5-box Spaced Repetition deck. Review locally anytime.
+              {t('onboarding.cardFlashcardsDesc')}
             </p>
           </div>
 
@@ -105,15 +109,15 @@ export const OnboardingHero: React.FC<OnboardingHeroProps> = ({ onDismiss }) => 
               <Headphones size={24} className="text-app-accent" />
             </div>
             <h3 className="font-extrabold text-sm md:text-base text-app-fg mb-2 leading-tight group-hover:text-app-accent transition-colors">
-              Mic Shadowing & Audios
+              {t('onboarding.cardShadowingTitle')}
             </h3>
             <p className="text-xs md:text-sm text-app-muted leading-relaxed opacity-90">
-              Unlock targeted practice loops. Train pronunciation using your mic, listen to real-time snippets, and build true mouth-muscle memory.
+              {t('onboarding.cardShadowingDesc')}
             </p>
           </div>
         </motion.div>
 
-        {/* Premium "Let's dance" closed action CTA */}
+        {/* Premium CTA */}
         <motion.div
           initial={{ scale: 0.95, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
@@ -124,7 +128,7 @@ export const OnboardingHero: React.FC<OnboardingHeroProps> = ({ onDismiss }) => 
             onClick={onDismiss}
             className="px-8 py-4 bg-app-accent hover:bg-app-accent/95 hover:scale-[1.03] active:scale-[0.98] text-white text-sm font-black uppercase tracking-widest rounded-2xl shadow-lg shadow-app-accent/15 hover:shadow-app-accent/25 transition-all flex items-center gap-2.5 cursor-pointer group select-none"
           >
-            <span>Let's dance</span>
+            <span>{t('onboarding.cta')}</span>
             <span className="transition-transform group-hover:rotate-12 group-hover:scale-115 duration-300 text-lg">💃</span>
           </button>
         </motion.div>

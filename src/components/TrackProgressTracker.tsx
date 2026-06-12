@@ -18,7 +18,7 @@ export const TrackProgressTracker: React.FC<TrackProgressTrackerProps> = ({
   onTabChange,
 }) => {
   const { steps } = viewModel;
-  const { uiLanguage } = useTranslation();
+  const { t } = useTranslation();
 
   // Render icon for each station
   const getStationIcon = (id: string, size = 14) => {
@@ -35,17 +35,11 @@ export const TrackProgressTracker: React.FC<TrackProgressTrackerProps> = ({
   };
 
   const getLocalizedStepLabel = (id: TrackStationId) => {
-    if (uiLanguage === 'ru') {
-      switch (id) {
-        case 'lyrics': return 'Текст';
-        case 'analysis': return 'Разбор';
-        case 'saved': return 'Карточки';
-      }
-    }
     switch (id) {
-      case 'lyrics': return 'Lyrics';
-      case 'analysis': return 'Breakdown';
-      case 'saved': return 'Cards';
+      case 'lyrics': return t('trackProgress.stationLyrics');
+      case 'analysis': return t('trackProgress.stationAnalysis');
+      case 'saved': return t('trackProgress.stationCards');
+      default: return '';
     }
   };
 
@@ -102,10 +96,10 @@ export const TrackProgressTracker: React.FC<TrackProgressTrackerProps> = ({
             // Construct simple tooltip
             const localizedStepName = getLocalizedStepLabel(step.id);
             const tooltipText = isViewing
-              ? (uiLanguage === 'ru' ? `${localizedStepName} (Текущий экран)` : `${localizedStepName} (Current View)`)
+              ? t('trackProgress.tooltipCurrent', { name: localizedStepName })
               : isReady
-              ? (uiLanguage === 'ru' ? `${localizedStepName} (Смотреть)` : `${localizedStepName} (Click to open)`)
-              : (uiLanguage === 'ru' ? `${localizedStepName} (Готовится)` : `${localizedStepName} (Upcoming/Locked)`);
+              ? t('trackProgress.tooltipView', { name: localizedStepName })
+              : t('trackProgress.tooltipLocked', { name: localizedStepName });
 
             const handleStationClick = () => {
               if (step.id === 'lyrics') {

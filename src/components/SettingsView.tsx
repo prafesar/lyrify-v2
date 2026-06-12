@@ -113,10 +113,10 @@ export default function SettingsView({ user, targetLanguage, setTargetLanguage, 
               onChange={(e) => setTheme(e.target.value)}
               className="bg-transparent text-sm font-bold text-app-fg outline-none text-right cursor-pointer"
             >
-              <option value="dark" className="bg-app-bg text-app-fg">Dark</option>
-              <option value="light" className="bg-app-bg text-app-fg">Light</option>
-              <option value="solarized" className="bg-app-bg text-app-fg">Solarized</option>
-              <option value="solarized-emerald" className="bg-app-bg text-app-fg">Solarized Emerald</option>
+              <option value="dark" className="bg-app-bg text-app-fg">{t('settings.themeDark')}</option>
+              <option value="light" className="bg-app-bg text-app-fg">{t('settings.themeLight')}</option>
+              <option value="solarized" className="bg-app-bg text-app-fg">{t('settings.themeSolarized')}</option>
+              <option value="solarized-emerald" className="bg-app-bg text-app-fg">{t('settings.themeSolarizedEmerald')}</option>
             </select>
           </div>
         </div>

@@ -2,6 +2,7 @@ import React from 'react';
 import { motion } from 'motion/react';
 import { Target, Search, Bookmark, Brain, ArrowRight, Play, Trophy, ChevronDown } from 'lucide-react';
 import { DailyProgressSummary } from '../application';
+import { useTranslation } from '../lib/i18n';
 
 interface DailyProgressBlockProps {
   summary: DailyProgressSummary;
@@ -20,6 +21,7 @@ export const DailyProgressBlock: React.FC<DailyProgressBlockProps> = ({
   hasCurrentTrack,
   mode = 'all',
 }) => {
+  const { t } = useTranslation();
   const {
     tracksExplored,
     tracksExploredTarget,
@@ -48,36 +50,36 @@ export const DailyProgressBlock: React.FC<DailyProgressBlockProps> = ({
     switch (recommendedNextAction) {
       case 'explore':
         return {
-          title: 'Explore a Track',
-          desc: 'Search for a song and load its lyrics to start today’s journey.',
-          buttonText: 'Find Songs',
+          title: t('dailyProgress.exploreTrackTitle'),
+          desc: t('dailyProgress.exploreTrackDesc'),
+          buttonText: t('dailyProgress.exploreTrackBtn'),
           icon: <Search size={18} className="text-app-accent" />,
           action: onNavigateToExplore,
         };
       case 'save':
         return {
-          title: 'Save New Phrases',
+          title: t('dailyProgress.savePhrasesTitle'),
           desc: hasCurrentTrack 
-            ? 'Open lyrics view and save at least 3 phrases to practice.' 
-            : 'Explore any track and bookmark words or phrases.',
-          buttonText: hasCurrentTrack ? 'Go to Lyrics' : 'Explore Tracks',
+            ? t('dailyProgress.savePhrasesDesc') 
+            : t('dailyProgress.savePhrasesDescGuest'),
+          buttonText: hasCurrentTrack ? t('dailyProgress.savePhrasesBtnLyrics') : t('dailyProgress.savePhrasesBtnExplore'),
           icon: <Bookmark size={18} className="text-amber-500" />,
           action: hasCurrentTrack ? onNavigateToCurrentTrack : onNavigateToExplore,
         };
       case 'review':
         return {
-          title: 'Review Cards',
-          desc: 'Train with your saved flashcards in the Study Hub.',
-          buttonText: 'Study Hub',
+          title: t('dailyProgress.reviewCardsTitle'),
+          desc: t('dailyProgress.reviewCardsDesc'),
+          buttonText: t('dailyProgress.reviewCardsBtn'),
           icon: <Brain size={18} className="text-app-accent" />,
           action: onNavigateToStudy,
         };
       case 'done':
       default:
         return {
-          title: 'Daily Goal Complete!',
-          desc: 'Outstanding! You have completed all of your training targets for today.',
-          buttonText: 'Keep Studying',
+          title: t('dailyProgress.goalCompleteTitle'),
+          desc: t('dailyProgress.goalCompleteDesc'),
+          buttonText: t('dailyProgress.goalCompleteBtn'),
           icon: <Trophy size={18} className="text-app-accent animate-bounce" />,
           action: onNavigateToStudy,
         };
@@ -106,46 +108,46 @@ export const DailyProgressBlock: React.FC<DailyProgressBlockProps> = ({
   const stations = [
     {
       id: 'start',
-      label: 'Start',
+      label: t('dailyProgress.start'),
       status: 'completed' as const,
-      subtitle: 'Ready',
-      tooltip: 'Start of Day: Daily track is opened',
+      subtitle: t('dailyProgress.ready'),
+      tooltip: t('dailyProgress.startTooltip'),
       action: onNavigateToExplore,
     },
     {
       id: 'explore',
-      label: 'Explore',
+      label: t('dailyProgress.explore'),
       status: (tracksExplored >= tracksExploredTarget
         ? 'completed'
         : recommendedNextAction === 'explore'
         ? 'current'
         : 'upcoming') as 'completed' | 'current' | 'upcoming',
       subtitle: `${tracksExplored}/${tracksExploredTarget}`,
-      tooltip: `Step 1: Explore Track (${tracksExplored}/${tracksExploredTarget})`,
+      tooltip: t('dailyProgress.exploreStepTooltip', { count: tracksExplored, target: tracksExploredTarget }),
       action: onNavigateToExplore,
     },
     {
       id: 'save',
-      label: 'Save',
+      label: t('dailyProgress.save'),
       status: (phrasesSaved >= phrasesSavedTarget
         ? 'completed'
         : recommendedNextAction === 'save'
         ? 'current'
         : 'upcoming') as 'completed' | 'current' | 'upcoming',
       subtitle: `${phrasesSaved}/${phrasesSavedTarget}`,
-      tooltip: `Step 2: Save Phrases (${phrasesSaved}/${phrasesSavedTarget})`,
+      tooltip: t('dailyProgress.saveStepTooltip', { count: phrasesSaved, target: phrasesSavedTarget }),
       action: hasCurrentTrack ? onNavigateToCurrentTrack : onNavigateToExplore,
     },
     {
       id: 'review',
-      label: 'Review',
+      label: t('dailyProgress.review'),
       status: (reviewsCompleted >= reviewsCompletedTarget
         ? 'completed'
         : recommendedNextAction === 'review'
         ? 'current'
         : 'upcoming') as 'completed' | 'current' | 'upcoming',
       subtitle: `${reviewsCompleted}/${reviewsCompletedTarget}`,
-      tooltip: `Step 3: Review Cards (${reviewsCompleted}/${reviewsCompletedTarget})`,
+      tooltip: t('dailyProgress.reviewStepTooltip', { count: reviewsCompleted, target: reviewsCompletedTarget }),
       action: onNavigateToStudy,
     },
   ];
@@ -174,7 +176,7 @@ export const DailyProgressBlock: React.FC<DailyProgressBlockProps> = ({
           <div className="flex items-center gap-2">
             <Target size={14} className="text-app-accent" />
             <h3 className="text-xs font-black uppercase tracking-[0.2em] text-app-fg">
-              Next Goal
+              {t('dailyProgress.nextGoal')}
             </h3>
           </div>
           
@@ -188,7 +190,7 @@ export const DailyProgressBlock: React.FC<DailyProgressBlockProps> = ({
               </div>
               <div className="min-w-0">
                 <span className="text-[9px] font-black uppercase tracking-wider text-app-accent block">
-                  {isGoalAchieved ? 'Perfect Streak!' : 'RECOMMENDED TARGET'}
+                  {isGoalAchieved ? t('dailyProgress.perfectStreak') : t('dailyProgress.recommendedTarget')}
                 </span>
                 <span className="text-sm md:text-base font-extrabold text-app-fg leading-tight block mt-0.5 transition-colors group-hover:text-app-accent">
                   {rec.title}
@@ -218,11 +220,11 @@ export const DailyProgressBlock: React.FC<DailyProgressBlockProps> = ({
             <div className="flex items-center gap-2">
               <Trophy size={14} className={`${isGoalAchieved ? 'text-yellow-500 animate-pulse' : 'text-app-muted'} opacity-85 group-hover/toggle:text-app-accent transition-colors`} />
               <h3 className="text-xs font-black uppercase tracking-[0.2em] text-app-muted group-hover/toggle:text-app-fg transition-colors">
-                Daily Milestones {isGoalAchieved && <span className="text-[9px] text-green-500 font-bold ml-1.5 uppercase tracking-wider font-sans bg-green-500/10 px-2 py-0.5 rounded-full">Completed</span>}
+                {t('dailyProgress.dailyMilestones')} {isGoalAchieved && <span className="text-[9px] text-green-500 font-bold ml-1.5 uppercase tracking-wider font-sans bg-green-500/10 px-2 py-0.5 rounded-full">{t('dailyProgress.completed')}</span>}
               </h3>
             </div>
             <div className="flex items-center gap-2.5 text-[10px] font-black text-app-muted uppercase tracking-wider group-hover/toggle:text-app-fg transition-colors">
-              <span>Goal Progress: <span className="text-app-accent font-extrabold">{overallProgressPercentage}%</span></span>
+              <span>{t('dailyProgress.goalProgress', { num: overallProgressPercentage })}</span>
               <motion.span
                 animate={{ rotate: isCollapsed ? 0 : 180 }}
                 transition={{ duration: 0.2 }}
