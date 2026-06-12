@@ -6,6 +6,7 @@ import { studyCardsRepository, PhraseStatus, Flashcard } from '../application';
 import { normalizePhraseKey } from '../services/cardService';
 import { saveTrackData } from '../services/musicService';
 import { addUserPhrase, editPhrase, deletePhrase } from '../services/lyricsAnalysisService';
+import { useTranslation } from '../lib/i18n';
 
 const addPhraseToStudy = (phraseData: any, status?: PhraseStatus) => studyCardsRepository.addPhraseToStudy(phraseData, status);
 const updatePhraseStatus = (cardId: string, status: PhraseStatus) => studyCardsRepository.updatePhraseStatus(cardId, status);
@@ -44,6 +45,7 @@ export default function PhraseDrawer({
   setCurrentTrack
 }: PhraseDrawerProps) {
   const [busyId, setBusyId] = useState<string | null>(null);
+  const { t, uiLanguage } = useTranslation();
 
   // States for adding a custom user phrase
   const [isAdding, setIsAdding] = useState(false);
@@ -103,7 +105,10 @@ export default function PhraseDrawer({
   };
 
   const handleDeletePhraseClick = (phraseId: string) => {
-    if (confirm("Are you sure you want to remove this phrase?") && activeTrack && setCurrentTrack) {
+    const confirmationMsg = uiLanguage === 'ru' 
+      ? "Вы уверены, что хотите удалить эту фразу?" 
+      : "Are you sure you want to remove this phrase?";
+    if (confirm(confirmationMsg) && activeTrack && setCurrentTrack) {
       const updatedTrack = deletePhrase(activeTrack, phraseId);
       saveTrackData(activeTrack.trackId, updatedTrack);
       setCurrentTrack(updatedTrack);
@@ -121,9 +126,9 @@ export default function PhraseDrawer({
 
   const getStatusLabel = (status?: PhraseStatus) => {
     switch (status) {
-      case 'known': return 'Known';
-      case 'learning': return 'Learning';
-      default: return 'Add to Study';
+      case 'known': return uiLanguage === 'ru' ? 'Знаю' : 'Known';
+      case 'learning': return uiLanguage === 'ru' ? 'Учу' : 'Learning';
+      default: return uiLanguage === 'ru' ? 'В архив' : 'Add to Study';
     }
   };
 
@@ -212,7 +217,9 @@ export default function PhraseDrawer({
                     <div className="w-6 h-6 rounded-lg bg-[var(--accent)]/10 flex items-center justify-center text-[var(--accent)]">
                       <Sparkles size={12} />
                     </div>
-                    <span className="text-[10px] font-black uppercase tracking-widest opacity-60">Line Phrases</span>
+                    <span className="text-[10px] font-black uppercase tracking-widest opacity-60">
+                      {uiLanguage === 'ru' ? 'Графика строки' : 'Line Phrases'}
+                    </span>
                   </div>
                   <h2 className="text-2xl font-bold font-serif leading-tight text-app-fg">{lineText}</h2>
                   {(() => {
@@ -235,7 +242,9 @@ export default function PhraseDrawer({
 
               <div className="flex items-center justify-between mt-6 mb-4">
                 <div className="flex items-center gap-2">
-                  <span className="text-[11px] font-black uppercase tracking-widest opacity-60">Breakdown Phrases</span>
+                  <span className="text-[11px] font-black uppercase tracking-widest opacity-60">
+                    {uiLanguage === 'ru' ? 'Список выражений' : 'Breakdown Phrases'}
+                  </span>
                 </div>
                 {activeTrack && setCurrentTrack && (
                   <button
@@ -248,7 +257,7 @@ export default function PhraseDrawer({
                     )}
                   >
                     {isAdding ? <X size={12} strokeWidth={3} /> : <Plus size={12} strokeWidth={3} />}
-                    <span>{isAdding ? "Cancel" : "Add custom phrase"}</span>
+                    <span>{isAdding ? t('common.cancel') : (uiLanguage === 'ru' ? 'Добавить фразу' : 'Add custom phrase')}</span>
                   </button>
                 )}
               </div>
@@ -262,7 +271,9 @@ export default function PhraseDrawer({
                   className="mb-6 p-5 rounded-3xl border border-app-card-border bg-app-fg/5 space-y-4"
                 >
                   <div>
-                    <label className="block text-[8px] uppercase font-black tracking-widest text-app-fg/50 mb-1">Phrase *</label>
+                    <label className="block text-[8px] uppercase font-black tracking-widest text-app-fg/50 mb-1">
+                      {uiLanguage === 'ru' ? 'Фраза *' : 'Phrase *'}
+                    </label>
                     <input
                       type="text"
                       required
@@ -273,7 +284,9 @@ export default function PhraseDrawer({
                     />
                   </div>
                   <div>
-                    <label className="block text-[8px] uppercase font-black tracking-widest text-app-fg/50 mb-1">Translation *</label>
+                    <label className="block text-[8px] uppercase font-black tracking-widest text-app-fg/50 mb-1">
+                      {uiLanguage === 'ru' ? 'Перевод *' : 'Translation *'}
+                    </label>
                     <input
                       type="text"
                       required
@@ -284,7 +297,9 @@ export default function PhraseDrawer({
                     />
                   </div>
                   <div>
-                    <label className="block text-[8px] uppercase font-black tracking-widest text-app-fg/50 mb-1">Explanation (Optional)</label>
+                    <label className="block text-[8px] uppercase font-black tracking-widest text-app-fg/50 mb-1">
+                      {uiLanguage === 'ru' ? 'Пояснение (опционально)' : 'Explanation (Optional)'}
+                    </label>
                     <textarea
                       placeholder="e.g. Phrasal verb or specific contextual meaning"
                       value={newExplanation}
@@ -296,7 +311,7 @@ export default function PhraseDrawer({
                     type="submit"
                     className="w-full py-2 bg-app-accent text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-app-accent/90 transition-all text-center"
                   >
-                    Save Custom Phrase
+                    {uiLanguage === 'ru' ? 'Сохранить свою фразу' : 'Save Custom Phrase'}
                   </button>
                 </motion.form>
               )}
@@ -320,7 +335,9 @@ export default function PhraseDrawer({
                         {isEditing ? (
                           <div className="space-y-3">
                             <div className="flex items-center justify-between">
-                              <span className="text-[9px] font-black uppercase tracking-widest text-[var(--accent)]">Editing Phrase</span>
+                              <span className="text-[9px] font-black uppercase tracking-widest text-[var(--accent)]">
+                                {uiLanguage === 'ru' ? 'Изменение детали' : 'Editing Phrase'}
+                              </span>
                               <div className="flex gap-2">
                                 <button
                                   onClick={() => handleEditPhraseSubmit(phrase.id)}
@@ -340,11 +357,11 @@ export default function PhraseDrawer({
                             </div>
                             
                             <div>
-                              <h4 className="text-sm font-bold text-app-fg opacity-60">Phrase: {text}</h4>
+                              <h4 className="text-sm font-bold text-app-fg opacity-60">{uiLanguage === 'ru' ? 'Выражение' : 'Phrase'}: {text}</h4>
                             </div>
 
                             <div>
-                              <label className="block text-[8px] uppercase font-bold text-app-fg/40 mb-1">Translation</label>
+                              <label className="block text-[8px] uppercase font-bold text-app-fg/40 mb-1">{uiLanguage === 'ru' ? 'Перевод' : 'Translation'}</label>
                               <input
                                 type="text"
                                 value={editTranslationText}
@@ -354,7 +371,7 @@ export default function PhraseDrawer({
                             </div>
 
                             <div>
-                              <label className="block text-[8px] uppercase font-bold text-app-fg/40 mb-1">Explanation</label>
+                              <label className="block text-[8px] uppercase font-bold text-app-fg/40 mb-1">{uiLanguage === 'ru' ? 'Объяснение' : 'Explanation'}</label>
                               <textarea
                                 value={editExplanationText}
                                 onChange={(e) => setEditExplanationText(e.target.value)}
@@ -370,12 +387,12 @@ export default function PhraseDrawer({
                                   <h4 className="text-lg font-bold text-app-fg leading-tight">{text}</h4>
                                   {phrase.source === 'user' ? (
                                     <span className="text-[8px] px-2 py-0.5 rounded-full bg-orange-500/10 text-orange-600 font-extrabold uppercase tracking-wide">
-                                      Custom Phrase
+                                      {uiLanguage === 'ru' ? 'Своя фраза' : 'Custom Phrase'}
                                     </span>
                                   ) : (
                                     <span className="text-[8px] px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-600 font-extrabold uppercase tracking-wide flex items-center gap-0.5">
                                       <Sparkles size={8} className="fill-blue-600/35" />
-                                      <span>AI Phrase</span>
+                                      <span>{uiLanguage === 'ru' ? 'AI фразa' : 'AI Phrase'}</span>
                                     </span>
                                   )}
                                 </div>
@@ -417,7 +434,9 @@ export default function PhraseDrawer({
                                     )}
                                   >
                                     {isBusy ? <RefreshCw size={12} className="animate-spin" /> : getStatusIcon(card.status)}
-                                    <span>{card.status}</span>
+                                    <span>{uiLanguage === 'ru' 
+                                      ? (card.status === 'known' ? 'Знаю' : 'Изучаю') 
+                                      : card.status}</span>
                                   </button>
                                 ) : (
                                   <div className="flex items-center gap-1.5 shrink-0">
@@ -425,7 +444,7 @@ export default function PhraseDrawer({
                                       onClick={() => handleMarkKnown(phrase)}
                                       disabled={isBusy}
                                       className="p-2 rounded-xl bg-green-500/10 text-green-500 hover:bg-green-500 hover:text-white transition-all active:scale-95 shadow-sm"
-                                      title="Mark as Known"
+                                      title={uiLanguage === 'ru' ? "Знаю" : "Mark as Known"}
                                     >
                                       {isBusy ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
                                     </button>
@@ -433,7 +452,7 @@ export default function PhraseDrawer({
                                       onClick={() => handleAction(phrase, 'add')}
                                       disabled={isBusy}
                                       className="p-2 rounded-xl bg-orange-500/10 text-orange-600 hover:bg-orange-500 hover:text-white transition-all active:scale-95 shadow-sm"
-                                      title="Add to Study"
+                                      title={uiLanguage === 'ru' ? "Учить" : "Add to Study"}
                                     >
                                       {isBusy ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
                                     </button>
@@ -445,7 +464,9 @@ export default function PhraseDrawer({
                               <div className="mt-2 pt-3 border-t border-app-fg/5">
                                 <div className="flex items-center gap-2 mb-1.5 opacity-40">
                                   <Quote size={10} />
-                                  <span className="text-[9px] font-black uppercase tracking-widest">Meaning</span>
+                                  <span className="text-[9px] font-black uppercase tracking-widest">
+                                    {uiLanguage === 'ru' ? 'Контекст' : 'Meaning'}
+                                  </span>
                                 </div>
                                 <p className="text-xs text-app-fg opacity-60 leading-relaxed font-sans">
                                   {phrase.explanation}
@@ -463,10 +484,13 @@ export default function PhraseDrawer({
                       <BookOpen size={32} />
                     </div>
                     <div className="space-y-1">
-                      <h3 className="font-bold text-app-fg opacity-60">No phrases identified</h3>
+                      <h3 className="font-bold text-app-fg opacity-60">
+                        {uiLanguage === 'ru' ? 'Материалы не найдены' : 'No phrases identified'}
+                      </h3>
                       <p className="text-sm text-app-fg opacity-40 leading-relaxed">
-                        We haven't analyzed the individual phrases for this line yet. 
-                        Try adding a phrase using the button above.
+                        {uiLanguage === 'ru' 
+                          ? 'Мы еще не проанализировали отдельные фразы для этой строки. Попробуйте добавить с помощью кнопки выше.'
+                          : "We haven't analyzed the individual phrases for this line yet. Try adding a phrase using the button above."}
                       </p>
                     </div>
                   </div>

@@ -1,124 +1,137 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import { Sparkles, Music, X, Languages, Globe, GraduationCap } from 'lucide-react';
-import { ONBOARDING_DEMO_TRACKS, type OnboardingDemoTrack } from '../services/onboardingService';
+import { Sparkles, X, Languages, Globe, GraduationCap, Headphones } from 'lucide-react';
+import { type OnboardingDemoTrack } from '../services/onboardingService';
+
+import { useTranslation } from '../lib/i18n';
 
 interface OnboardingHeroProps {
-  onSelectTrack: (track: OnboardingDemoTrack) => void;
+  onSelectTrack?: (track: OnboardingDemoTrack) => void;
   onDismiss: () => void;
 }
 
-export const OnboardingHero: React.FC<OnboardingHeroProps> = ({ onSelectTrack, onDismiss }) => {
+export const OnboardingHero: React.FC<OnboardingHeroProps> = ({ onDismiss }) => {
+  const { t, uiLanguage } = useTranslation();
+
   return (
     <motion.div
       id="onboarding-hero-block"
-      initial={{ opacity: 0, y: -15 }}
+      initial={{ opacity: 0, y: -20 }}
       animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -15 }}
-      transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-      className="mb-8 w-full bg-app-card border border-app-card-border rounded-3xl p-6 md:p-8 shadow-app-card relative overflow-hidden"
+      exit={{ opacity: 0, y: -20 }}
+      transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+      className="mb-10 w-full bg-app-card border border-app-card-border rounded-[2.5rem] p-8 md:p-12 shadow-app-card relative overflow-hidden"
     >
-      {/* Decorative gradient spot */}
-      <div className="absolute top-0 right-0 w-64 h-64 bg-radial from-app-accent/10 to-transparent rounded-full -mr-20 -mt-20 pointer-events-none blur-xl" />
+      {/* Decorative gradient spots for ambient landing Vibe */}
+      <div 
+        className="absolute top-0 right-0 w-[450px] h-[450px] bg-radial from-app-accent/12 via-app-accent/3 to-transparent rounded-full -mr-32 -mt-32 pointer-events-none blur-[60px] animate-pulse" 
+        style={{ animationDuration: '6s' }} 
+      />
+      <div 
+        className="absolute -bottom-24 -left-12 w-[350px] h-[350px] bg-radial from-violet-500/8 to-transparent rounded-full pointer-events-none blur-[50px]" 
+      />
 
-      {/* Dismiss Button */}
+      {/* Close button with premium look */}
       <button
         id="onboarding-dismiss-btn"
         onClick={onDismiss}
-        className="absolute top-4 right-4 p-2 text-app-muted hover:text-app-fg hover:bg-app-fg/5 rounded-full transition-all"
-        title="Hide onboarding"
+        className="absolute top-6 right-6 p-2.5 text-app-muted hover:text-app-fg hover:bg-app-fg/5 rounded-2xl transition-all border border-transparent hover:border-app-card-border/60 active:scale-90 cursor-pointer z-20"
+        title={t('onboarding.closeTooltip')}
       >
-        <X size={18} />
+        <X size={20} />
       </button>
 
-      <div className="max-w-3xl relative z-10">
-        <div className="inline-flex items-center gap-2 px-3 py-1 bg-app-accent/10 border border-app-accent/20 rounded-full text-app-accent text-[10px] font-black uppercase tracking-widest mb-4">
-          <Sparkles size={12} />
-          Guest-First Onboarding
-        </div>
+      <div className="relative z-10 flex flex-col items-center text-center max-w-4xl mx-auto">
+        <motion.div 
+          initial={{ scale: 0.9, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ delay: 0.1, duration: 0.4 }}
+          className="inline-flex items-center gap-2 px-4 py-1.5 bg-app-accent/8 border border-app-accent/20 rounded-full text-app-accent text-[11px] font-black uppercase tracking-[0.2em] mb-6"
+        >
+          <Sparkles size={13} className="animate-pulse" />
+          <span>{t('onboarding.badge')}</span>
+        </motion.div>
 
-        <h1 className="text-2xl md:text-3xl font-black text-app-fg tracking-tight mb-3">
-          Master Languages Through Music
-        </h1>
+        <motion.h1 
+          initial={{ y: 10, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ delay: 0.15, duration: 0.4 }}
+          className="text-3xl md:text-5xl font-black text-app-fg tracking-tight leading-[1.1] mb-4 max-w-3xl"
+        >
+          {t('onboarding.titlePre')}<span className="text-app-accent relative inline-block">{t('onboarding.titleWord')}<span className="absolute left-0 right-0 bottom-1 h-1.5 bg-app-accent/15 rounded-full" /></span>
+        </motion.h1>
         
-        <p className="text-sm md:text-base text-app-muted font-sans leading-relaxed mb-6">
-          Welcome to <span className="font-bold text-app-fg">CantoLex</span>! We believe songs are the absolute best way to learn accent, slang, and grammar. 
-          Analyze translation nuances line-by-line, study curated grammar breakdowns, and practice lyrics shadowing. 
-          Everything is fully functional as a guest without registration.
-        </p>
+        <motion.p 
+          initial={{ y: 10, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ delay: 0.2, duration: 0.4 }}
+          className="text-sm md:text-base text-app-muted font-sans leading-relaxed max-w-2xl mb-10 opacity-90"
+        >
+          {t('onboarding.subtitle')}
+        </motion.p>
 
-        {/* Highlighted Value Cards Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-          <div className="flex gap-3 items-start p-4 rounded-2xl bg-app-bg/50 border border-app-card-border">
-            <Languages className="text-app-accent shrink-0 mt-0.5" size={18} />
-            <div>
-              <h3 className="font-bold text-xs text-app-fg mb-1">Deep Lyric Translations</h3>
-              <p className="text-[11px] text-app-muted leading-snug">Understand figurative expressions, idioms & cultural contexts.</p>
+        {/* Highlighted Value Cards Grid (USP) - Larger, More Attractive Design */}
+        <motion.div 
+          initial={{ y: 15, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ delay: 0.25, duration: 0.5 }}
+          className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full mb-10 text-left"
+        >
+          {/* Card 1 */}
+          <div className="flex flex-col items-center text-center p-6 md:p-8 rounded-[2rem] bg-app-bg/40 border border-app-card-border/80 hover:border-app-accent/20 hover:bg-app-card/85 transition-all duration-300 hover:scale-[1.03] group shadow-sm hover:shadow-md">
+            <div className="w-14 h-14 rounded-2xl bg-app-accent/10 text-app-accent flex items-center justify-center mb-5 transition-transform group-hover:scale-110 duration-300 shadow-inner">
+              <Languages size={24} className="text-app-accent" />
             </div>
+            <h3 className="font-extrabold text-sm md:text-base text-app-fg mb-2 leading-tight group-hover:text-app-accent transition-colors">
+              {t('onboarding.cardTranslationTitle')}
+            </h3>
+            <p className="text-xs md:text-sm text-app-muted leading-relaxed opacity-90">
+              {t('onboarding.cardTranslationDesc')}
+            </p>
           </div>
-          <div className="flex gap-3 items-start p-4 rounded-2xl bg-app-bg/50 border border-app-card-border">
-            <GraduationCap className="text-app-accent shrink-0 mt-0.5" size={18} />
-            <div>
-              <h3 className="font-bold text-xs text-app-fg mb-1">Interactive Flashcards</h3>
-              <p className="text-[11px] text-app-muted leading-snug">Save difficult phrasal structures to space-repetition decks.</p>
-            </div>
-          </div>
-          <div className="flex gap-3 items-start p-4 rounded-2xl bg-app-bg/50 border border-app-card-border">
-            <Globe className="text-app-accent shrink-0 mt-0.5" size={18} />
-            <div>
-              <h3 className="font-bold text-xs text-app-fg mb-1">100% Client-First</h3>
-              <p className="text-[11px] text-app-muted leading-snug">Build progress locally, completely free of sign-up blocks.</p>
-            </div>
-          </div>
-        </div>
 
-        {/* Curated CTA Selection */}
-        <div>
-          <h2 className="text-xs font-black uppercase tracking-[0.2em] text-app-muted mb-4 block">
-            Select a Featured Track Below to Get Started:
-          </h2>
-          
-          <div className="flex flex-col sm:flex-row gap-4">
-            {ONBOARDING_DEMO_TRACKS.map((demo) => (
-              <button
-                key={demo.id}
-                id={`onboarding-demo-${demo.id}`}
-                onClick={() => onSelectTrack(demo)}
-                className="flex items-center gap-4 p-3 pr-5 bg-app-bg border border-app-card-border rounded-2xl hover:border-app-accent/30 hover:shadow-md hover:scale-[1.01] transition-all text-left group shrink-0"
-              >
-                <div className="relative">
-                  {demo.coverUrl && demo.coverUrl !== "" ? (
-                    <img
-                      src={demo.coverUrl}
-                      alt={demo.title}
-                      className="w-12 h-12 rounded-xl object-cover shadow-sm group-hover:scale-105 transition-transform duration-300"
-                      referrerPolicy="no-referrer"
-                    />
-                  ) : (
-                    <div className="w-12 h-12 rounded-xl bg-app-fg/5 border border-app-card-border flex items-center justify-center text-app-fg/30 shrink-0">
-                      <Music size={14} />
-                    </div>
-                  )}
-                  <div className="absolute inset-0 bg-black/20 flex items-center justify-center opacity-0 group-hover:opacity-100 rounded-xl transition-opacity">
-                    <Music size={14} className="text-white animate-pulse" />
-                  </div>
-                </div>
-                
-                <div>
-                  <p className="font-bold text-sm text-app-fg group-hover:text-app-accent transition-colors">
-                    {demo.title}
-                  </p>
-                  <p className="text-xs text-app-muted mb-1">
-                    {demo.artist}
-                  </p>
-                  <span className="inline-block px-1.5 py-0.5 bg-app-card border border-app-card-border rounded text-[9px] uppercase tracking-wider font-extrabold text-app-muted">
-                    {demo.sourceLanguage} • {demo.difficulty}
-                  </span>
-                </div>
-              </button>
-            ))}
+          {/* Card 2 */}
+          <div className="flex flex-col items-center text-center p-6 md:p-8 rounded-[2rem] bg-app-bg/40 border border-app-card-border/80 hover:border-app-accent/20 hover:bg-app-card/85 transition-all duration-300 hover:scale-[1.03] group shadow-sm hover:shadow-md">
+            <div className="w-14 h-14 rounded-2xl bg-app-accent/10 text-app-accent flex items-center justify-center mb-5 transition-transform group-hover:scale-110 duration-300 shadow-inner">
+              <GraduationCap size={24} className="text-app-accent" />
+            </div>
+            <h3 className="font-extrabold text-sm md:text-base text-app-fg mb-2 leading-tight group-hover:text-app-accent transition-colors">
+              {t('onboarding.cardFlashcardsTitle')}
+            </h3>
+            <p className="text-xs md:text-sm text-app-muted leading-relaxed opacity-90">
+              {t('onboarding.cardFlashcardsDesc')}
+            </p>
           </div>
-        </div>
+
+          {/* Card 3 */}
+          <div className="flex flex-col items-center text-center p-6 md:p-8 rounded-[2rem] bg-app-bg/40 border border-app-card-border/80 hover:border-app-accent/20 hover:bg-app-card/85 transition-all duration-300 hover:scale-[1.03] group shadow-sm hover:shadow-md">
+            <div className="w-14 h-14 rounded-2xl bg-app-accent/10 text-app-accent flex items-center justify-center mb-5 transition-transform group-hover:scale-110 duration-300 shadow-inner">
+              <Headphones size={24} className="text-app-accent" />
+            </div>
+            <h3 className="font-extrabold text-sm md:text-base text-app-fg mb-2 leading-tight group-hover:text-app-accent transition-colors">
+              {t('onboarding.cardShadowingTitle')}
+            </h3>
+            <p className="text-xs md:text-sm text-app-muted leading-relaxed opacity-90">
+              {t('onboarding.cardShadowingDesc')}
+            </p>
+          </div>
+        </motion.div>
+
+        {/* Premium CTA */}
+        <motion.div
+          initial={{ scale: 0.95, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ delay: 0.35, duration: 0.4 }}
+          className="flex justify-center w-full"
+        >
+          <button
+            onClick={onDismiss}
+            className="px-8 py-4 bg-app-accent hover:bg-app-accent/95 hover:scale-[1.03] active:scale-[0.98] text-white text-sm font-black uppercase tracking-widest rounded-2xl shadow-lg shadow-app-accent/15 hover:shadow-app-accent/25 transition-all flex items-center gap-2.5 cursor-pointer group select-none"
+          >
+            <span>{t('onboarding.cta')}</span>
+            <span className="transition-transform group-hover:rotate-12 group-hover:scale-115 duration-300 text-lg">💃</span>
+          </button>
+        </motion.div>
       </div>
     </motion.div>
   );

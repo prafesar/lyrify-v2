@@ -2,6 +2,7 @@ import React from 'react';
 import { motion } from 'motion/react';
 import { Music, FileText, Sparkles, Bookmark } from 'lucide-react';
 import { TrackProgressViewModel, TrackStationId } from '../services/trackProgressService';
+import { useTranslation } from '../lib/i18n';
 
 interface TrackProgressTrackerProps {
   viewModel: TrackProgressViewModel;
@@ -17,6 +18,7 @@ export const TrackProgressTracker: React.FC<TrackProgressTrackerProps> = ({
   onTabChange,
 }) => {
   const { steps } = viewModel;
+  const { t } = useTranslation();
 
   // Render icon for each station
   const getStationIcon = (id: string, size = 14) => {
@@ -29,6 +31,15 @@ export const TrackProgressTracker: React.FC<TrackProgressTrackerProps> = ({
         return <Bookmark size={size} />;
       default:
         return null;
+    }
+  };
+
+  const getLocalizedStepLabel = (id: TrackStationId) => {
+    switch (id) {
+      case 'lyrics': return t('trackProgress.stationLyrics');
+      case 'analysis': return t('trackProgress.stationAnalysis');
+      case 'saved': return t('trackProgress.stationCards');
+      default: return '';
     }
   };
 
@@ -83,11 +94,12 @@ export const TrackProgressTracker: React.FC<TrackProgressTrackerProps> = ({
             const isReady = isCompleted;
 
             // Construct simple tooltip
+            const localizedStepName = getLocalizedStepLabel(step.id);
             const tooltipText = isViewing
-              ? `${step.label} (Current View)`
+              ? t('trackProgress.tooltipCurrent', { name: localizedStepName })
               : isReady
-              ? `${step.label} (Click to open)`
-              : `${step.label} (Upcoming/Locked)`;
+              ? t('trackProgress.tooltipView', { name: localizedStepName })
+              : t('trackProgress.tooltipLocked', { name: localizedStepName });
 
             const handleStationClick = () => {
               if (step.id === 'lyrics') {
@@ -106,11 +118,12 @@ export const TrackProgressTracker: React.FC<TrackProgressTrackerProps> = ({
                 onClick={handleStationClick}
                 className="flex flex-col items-center relative cursor-pointer focus:outline-none group w-12 shrink-0 select-none"
                 id={`metro-station-${step.id}`}
+                title={tooltipText}
               >
                 {/* Station circle node */}
                 <div className="relative h-9 w-9 z-10 flex items-center justify-center transform group-hover:scale-105 active:scale-95 transition-all duration-150">
                   {/* Solid backdrop mask to completely block the line underneath */}
-                  <div className="absolute inset-0 rounded-full bg-app-bg pointer-events-none" />
+                   <div className="absolute inset-0 rounded-full bg-app-bg pointer-events-none" />
 
                   {isViewing ? (
                     <div className="absolute inset-0 rounded-full bg-app-accent text-white border-2 border-app-accent flex items-center justify-center shadow-lg shadow-app-accent/25 z-10">
@@ -118,7 +131,7 @@ export const TrackProgressTracker: React.FC<TrackProgressTrackerProps> = ({
                     </div>
                   ) : isReady ? (
                     <div className="absolute inset-0 rounded-full bg-app-card border-2 border-app-accent/40 text-app-accent flex items-center justify-center shadow-sm group-hover:border-app-accent transition-all z-10 overflow-hidden">
-                      {/* Subtle high-contrast hover blend container to avoid transparency issues */}
+                      {/* Subtle hover blend container to avoid transparency issues */}
                       <div className="absolute inset-0 bg-app-accent/[0.04] group-hover:bg-app-accent/[0.08] transition-colors pointer-events-none" />
                       <span className="relative z-10 flex items-center justify-center">
                         {getStationIcon(step.id, 14)}
@@ -144,7 +157,7 @@ export const TrackProgressTracker: React.FC<TrackProgressTrackerProps> = ({
                         : 'text-[9px] text-app-muted opacity-50 font-medium group-hover:text-app-fg group-hover:opacity-75'
                     }`}
                   >
-                    {step.label}
+                    {localizedStepName}
                   </span>
                   
                   {/* Small static indicator line instead of bouncing/blinking dot */}

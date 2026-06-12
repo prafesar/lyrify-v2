@@ -55,7 +55,7 @@ export function determineNextStep(
   }
 
   // State 2: Has lyrics, but no breakdown/analysis yet
-  const isAnalysisCompleted = !!(track.lectureBlocks && track.lectureBlocks.length > 0);
+  const isAnalysisCompleted = !!(track.lectureBlocks && track.lectureBlocks.length > 0 && !track.lectureBlocks.some(b => b.id === 'fallback-overview'));
   if (!isAnalysisCompleted) {
     return {
       type: 'GENERATE_ANALYSIS',

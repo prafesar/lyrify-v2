@@ -3,6 +3,7 @@ import {
   Brain, Check, Plus, Trash2, Edit2, Sparkles, X, MessageSquare, MoreVertical
 } from "lucide-react";
 import { cn } from "../lib/utils";
+import { useTranslation } from "../lib/i18n";
 
 // Dictionary of available tags for autocomplete suggestions
 const AVAILABLE_TAGS = [
@@ -118,6 +119,7 @@ export const LineWorkspace = ({
   onClose,
   isCompact = false,
 }: LineWorkspaceProps) => {
+  const { t } = useTranslation();
   // Line Data from Track
   const cachedExpl = currentTrack?.lines?.[i]?.explanation || null;
   const initialMyExpl = cachedExpl?.myExplanation || "";
@@ -485,7 +487,7 @@ export const LineWorkspace = ({
             "w-full bg-transparent border-none focus:outline-none font-serif italic text-app-fg opacity-40 transition-all duration-300 ml-1 mt-0.5 leading-snug p-0 resize-none overflow-hidden",
             isCompact ? "text-xs" : "text-base"
           )}
-          placeholder="Add line translation/meaning..."
+          placeholder={t('lineWorkspace.translationPlaceholder')}
         />
       </div>
 
@@ -514,7 +516,7 @@ export const LineWorkspace = ({
                       id={`note-textarea-${item.id}`}
                       autoFocus
                       defaultValue={item.text || ""}
-                      placeholder="Commentary or explanation details..."
+                      placeholder={t('lineWorkspace.commentaryPlaceholder')}
                       onInput={(e) => {
                         const target = e.target as HTMLTextAreaElement;
                         target.style.height = "auto";
@@ -560,7 +562,7 @@ export const LineWorkspace = ({
                         "italic font-light select-none font-serif text-app-fg/20",
                         isCompact ? "text-xs" : "text-base"
                       )}>
-                        Empty note. Click to comment...
+                        {t('lineWorkspace.emptyNote')}
                       </span>
                     )}
                   </div>
@@ -576,7 +578,7 @@ export const LineWorkspace = ({
                         setActiveMenuId(activeMenuId === item.id ? null : item.id);
                       }}
                       className="p-1 rounded text-app-fg/30 hover:bg-app-fg/5 hover:text-app-fg transition-colors cursor-pointer"
-                      title="Options"
+                      title={t('lineWorkspace.options')}
                     >
                       <MoreVertical size={13} />
                     </button>
@@ -600,7 +602,7 @@ export const LineWorkspace = ({
                             className="w-full flex items-center gap-1.5 px-2.5 py-1.5 text-red-500 hover:bg-red-500/5 hover:text-red-500 rounded bg-transparent border-none text-left cursor-pointer font-sans"
                           >
                             <Trash2 size={12} />
-                            <span>Delete</span>
+                            <span>{t('common.delete')}</span>
                           </button>
                         </div>
                       </>
@@ -636,10 +638,10 @@ export const LineWorkspace = ({
                 {/* Two separate lines: original phrase and translation */}
                 <div className="flex flex-col gap-2 w-full">
                   <div className="flex items-center gap-2">
-                    <span className="text-app-fg/30 text-xs font-mono select-none">◦</span>
+                     <span className="text-app-fg/30 text-xs font-mono select-none">◦</span>
                     <textarea
                       id={`original-input-${item.id}`}
-                      placeholder="Word or phrase"
+                      placeholder={t('lineWorkspace.wordPlaceholder')}
                       defaultValue={item.original || ""}
                       autoFocus={!item.original}
                       onInput={(e) => {
@@ -671,7 +673,7 @@ export const LineWorkspace = ({
                   <div className="flex items-center gap-2 pl-4">
                     <textarea
                       id={`translation-input-${item.id}`}
-                      placeholder="Translation"
+                      placeholder={t('lineWorkspace.translationPlaceholder2')}
                       defaultValue={item.translation || ""}
                       onInput={(e) => {
                         const target = e.target as HTMLTextAreaElement;
@@ -728,7 +730,7 @@ export const LineWorkspace = ({
 
                   {/* Complete study card state tags */}
                   <div className="text-[10px] text-app-fg/30 font-medium select-none lowercase">
-                    {item.source === "ai" ? "ai recommendation" : "manual phrase"}
+                    {item.source === "ai" ? t('lineWorkspace.aiRecommendation') : t('lineWorkspace.manualPhrase')}
                   </div>
                 </div>
 
@@ -765,13 +767,13 @@ export const LineWorkspace = ({
                 <span className="text-app-fg/20 font-black shrink-0 select-none font-mono text-base mr-0.5">◦</span>
                 
                 <span className="font-semibold text-app-fg/40 group-hover/item:text-app-fg/75 transition-colors break-words">
-                  {phraseText || <span className="text-app-fg/20 lowercase italic font-normal">[unsigned word]</span>}
+                  {phraseText || <span className="text-app-fg/20 lowercase italic font-normal">{t('lineWorkspace.unsignedWord')}</span>}
                 </span>
 
                 <span className="text-app-fg/20 font-light select-none">—</span>
 
                 <span className="text-app-fg/40 group-hover/item:text-app-fg/75 transition-colors break-words">
-                  {translationText || <span className="text-app-fg/20 lowercase italic font-normal">[unsigned translation]</span>}
+                  {translationText || <span className="text-app-fg/20 lowercase italic font-normal">{t('lineWorkspace.unsignedTranslation')}</span>}
                 </span>
 
                 {/* Subdued category and tag text labels */}
@@ -804,7 +806,7 @@ export const LineWorkspace = ({
                       : "bg-transparent text-app-fg/40 hover:text-emerald-500 border-transparent hover:bg-emerald-500/5"
                   )}
                 >
-                  Know
+                  {t('lineWorkspace.know')}
                 </button>
                 <button
                   type="button"
@@ -823,7 +825,7 @@ export const LineWorkspace = ({
                       : "bg-transparent text-app-fg/40 hover:text-orange-500 border-transparent hover:bg-orange-500/5"
                   )}
                 >
-                  Learn
+                  {t('lineWorkspace.learn')}
                 </button>
 
                 {/* Vertical menu with 3-dots */}
@@ -835,7 +837,7 @@ export const LineWorkspace = ({
                       setActiveMenuId(activeMenuId === item.id ? null : item.id);
                     }}
                     className="p-1.5 rounded-lg text-app-fg/30 hover:bg-app-fg/5 hover:text-app-fg transition-colors cursor-pointer"
-                    title="Options"
+                    title={t('lineWorkspace.options')}
                   >
                     <MoreVertical size={13} />
                   </button>
@@ -869,7 +871,7 @@ export const LineWorkspace = ({
                                 : "text-app-fg/70 hover:bg-app-fg/5"
                             )}
                           >
-                            <span>Know</span>
+                            <span>{t('lineWorkspace.know')}</span>
                             {isAlreadyInDictionary && existingCard?.status === "known" && <Check size={12} />}
                           </button>
                           <button
@@ -890,7 +892,7 @@ export const LineWorkspace = ({
                                 : "text-app-fg/70 hover:bg-app-fg/5"
                             )}
                           >
-                            <span>Learn</span>
+                            <span>{t('lineWorkspace.learn')}</span>
                             {isAlreadyInDictionary && existingCard?.status === "learning" && <Check size={12} />}
                           </button>
                         </div>
@@ -905,7 +907,7 @@ export const LineWorkspace = ({
                           className="w-full flex items-center gap-1.5 px-2.5 py-1.5 text-red-500 hover:bg-red-500/5 hover:text-red-500 rounded bg-transparent border-none text-left cursor-pointer font-sans font-medium"
                         >
                           <Trash2 size={12} />
-                          <span>Delete</span>
+                          <span>{t('common.delete')}</span>
                         </button>
                       </div>
                     </>
@@ -929,7 +931,7 @@ export const LineWorkspace = ({
             onClick={handleAiComplement}
             className="underline font-bold text-red-600 hover:text-red-500 cursor-pointer text-xs"
           >
-            Retry
+            {t('common.retry')}
           </button>
         </div>
       )}
@@ -946,7 +948,7 @@ export const LineWorkspace = ({
           id={`btn-add-phrase-${i}`}
           type="button"
           onClick={handleAddPhrase}
-          title="Add Phrase"
+          title={t('lineWorkspace.addPhraseTooltip')}
           className="p-2 rounded-xl transition-all hover:scale-120 active:scale-90 text-app-fg/30 hover:text-[var(--accent)] hover:bg-app-fg/5 cursor-pointer duration-200"
         >
           <Plus size={20} className="stroke-[2.5]" />
@@ -956,7 +958,7 @@ export const LineWorkspace = ({
           id={`btn-add-note-${i}`}
           type="button"
           onClick={handleAddNote}
-          title="Add Note"
+          title={t('lineWorkspace.addNoteTooltip')}
           className="p-2 rounded-xl transition-all hover:scale-120 active:scale-90 text-app-fg/30 hover:text-[var(--accent)] hover:bg-app-fg/5 cursor-pointer duration-200"
         >
           <MessageSquare size={20} className="stroke-[2]" />
@@ -967,7 +969,7 @@ export const LineWorkspace = ({
           type="button"
           onClick={handleAiComplement}
           disabled={isLoadingExplanation}
-          title={cachedExpl ? "Regenerate AI Explanation" : "Explain with AI"}
+          title={cachedExpl ? t('lineWorkspace.regenerateAiTooltip') : t('lineWorkspace.explainWithAiTooltip')}
           className="p-2 rounded-xl transition-all hover:scale-125 active:scale-90 disabled:opacity-50 cursor-pointer duration-200 text-purple-600/40 hover:text-purple-600 dark:text-purple-400/40 dark:hover:text-purple-400 hover:bg-purple-500/5 ml-1"
         >
           {isLoadingExplanation ? (

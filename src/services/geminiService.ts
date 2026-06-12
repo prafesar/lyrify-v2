@@ -2135,6 +2135,34 @@ export function normalizeStructuredLecture(
 }
 
 
+export async function getCachedStructuredLecture(
+  lyrics: string,
+  title: string,
+  artist: string,
+  targetLanguage: string
+): Promise<StructuredLectureBlock[] | null> {
+  const trackKey = await computeTrackKey(title, [artist]);
+  const lyricsHash = await computeLyricsHash(lyrics);
+  const targetLanguageCode = getTargetLangCode2Letter(targetLanguage);
+  const docId = `lecture_${trackKey}_${lyricsHash}_${targetLanguageCode}_v${LECTURE_PROMPT_VERSION}`;
+
+  try {
+    const cacheRef = doc(db, 'lecture_analysis_cache', docId);
+    const cacheSnap = await getDoc(cacheRef);
+    if (cacheSnap.exists()) {
+      const cachedBlocks = cacheSnap.data().lectureBlocks as StructuredLectureBlock[];
+      if (cachedBlocks && cachedBlocks.length > 0) {
+        console.log(`[Cache Hit - Read Only] Lecture Analysis for "${title}" - "${artist}" (${targetLanguageCode})`);
+        return cachedBlocks;
+      }
+    }
+  } catch (err) {
+    console.error("Cache read error in getCachedStructuredLecture:", err);
+  }
+  return null;
+}
+
+
 export async function fetchStructuredLecture(
   lyrics: string,
   title: string,

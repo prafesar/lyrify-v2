@@ -7,37 +7,35 @@ import { DailyProgressSummary } from '../application';
 import { shouldShowOnboarding } from '../services/onboardingService';
 import { SUPPORTED_LANGUAGES } from '../lib/languages';
 import { OnboardingHero } from './OnboardingHero';
+import { useTranslation } from '../lib/i18n';
 
 interface TracksHomeShellProps {
   onboardingCompleted: boolean;
   recentTracks: Track[];
   onSelectOnboardingTrack: (track: Track) => void;
   onDismissOnboarding: () => void;
-
   resumeViewModel: ResumeViewModel | null;
   onTrackSelect: (track: Track) => void;
   onNavigateToStudy: () => void;
-
   dailyProgressSummary: DailyProgressSummary;
   currentTrack: TrackLyricsData | null;
   onNavigateToLyrics: () => void;
-
   dynamicTracks: Track[];
   isLoadingTracks: boolean;
   onTrackMenuOpen?: (track: Track) => void;
 }
 
-const renderDifficultyIndicator = (difficulty?: string, hideLabel: boolean = false) => {
+const renderDifficultyIndicator = (difficulty?: string, hideLabel: boolean = false, tKey?: (key: string) => string) => {
   if (!difficulty) return null;
   
   let bars: { color: string; active: boolean }[] = [];
   const diff = difficulty.toLowerCase();
   
-  if (diff === 'beginner') {
+  if (diff === 'beginner' || diff === 'новичок') {
     bars = [{ color: 'bg-green-500', active: true }, { color: 'bg-zinc-700', active: false }, { color: 'bg-zinc-700', active: false }];
-  } else if (diff === 'intermediate') {
+  } else if (diff === 'intermediate' || diff === 'средний') {
     bars = [{ color: 'bg-yellow-500', active: true }, { color: 'bg-yellow-500', active: true }, { color: 'bg-zinc-700', active: false }];
-  } else if (diff === 'advanced') {
+  } else if (diff === 'advanced' || diff === 'продвинутый') {
     bars = [{ color: 'bg-red-500', active: true }, { color: 'bg-red-500', active: true }, { color: 'bg-red-500', active: true }];
   } else {
     return null;
@@ -65,15 +63,12 @@ export const TracksHomeShell: React.FC<TracksHomeShellProps> = ({
   recentTracks,
   onSelectOnboardingTrack,
   onDismissOnboarding,
-
   resumeViewModel,
   onTrackSelect,
   onNavigateToStudy,
-
   dailyProgressSummary,
   currentTrack,
   onNavigateToLyrics,
-
   dynamicTracks,
   isLoadingTracks,
   onTrackMenuOpen,
@@ -82,6 +77,7 @@ export const TracksHomeShell: React.FC<TracksHomeShellProps> = ({
   const [selectedLanguages, setSelectedLanguages] = useState<string[]>([]);
   const [isLangPanelOpen, setIsLangPanelOpen] = useState<boolean>(false);
   const [communityDifficultyFilter, setCommunityDifficultyFilter] = useState<string>('All');
+  const { t, uiLanguage } = useTranslation();
 
   const toggleLang = (langName: string) => {
     setSelectedLanguages(prev => 
@@ -129,14 +125,18 @@ export const TracksHomeShell: React.FC<TracksHomeShellProps> = ({
                 className="flex items-center gap-1.5 text-xs font-black uppercase tracking-widest text-app-muted hover:text-app-fg transition-colors cursor-pointer"
               >
                 <X size={15} />
-                <span>Back to Home</span>
+                <span>{uiLanguage === 'ru' ? 'Назад' : 'Back to Home'}</span>
               </button>
             </div>
 
             <div className="flex items-center justify-between px-1">
               <div>
-                <h1 className="text-xl font-black text-app-fg tracking-tight">Recent Tracks</h1>
-                <p className="text-xs text-app-muted">Your practice history and most recently studied songs</p>
+                <h1 className="text-xl font-black text-app-fg tracking-tight">
+                  {uiLanguage === 'ru' ? 'Недавние треки' : 'Recent Tracks'}
+                </h1>
+                <p className="text-xs text-app-muted">
+                  {uiLanguage === 'ru' ? 'История практики и недавно прослушанные песни' : 'Your practice history and most recently studied songs'}
+                </p>
               </div>
               <span className="text-[10px] font-black text-app-muted uppercase bg-app-fg/5 px-2.5 py-1 rounded-lg">
                 {recentTracks.length}
@@ -173,7 +173,7 @@ export const TracksHomeShell: React.FC<TracksHomeShellProps> = ({
                           </p>
                           {track.difficulty && (
                             <div className="shrink-0 flex items-center">
-                              {renderDifficultyIndicator(track.difficulty, true)}
+                              {renderDifficultyIndicator(track.difficulty, true, t)}
                             </div>
                           )}
                         </div>
@@ -193,7 +193,7 @@ export const TracksHomeShell: React.FC<TracksHomeShellProps> = ({
               ) : (
                 <div className="text-center py-16 px-6 rounded-3xl border border-dashed border-app-card-border opacity-40 italic bg-app-card/30">
                   <Search size={40} className="mx-auto mb-4 opacity-20" />
-                  No recent tracks yet.
+                  {uiLanguage === 'ru' ? 'Нет недавних треков.' : 'No recent tracks yet.'}
                 </div>
               )}
             </div>
@@ -213,20 +213,26 @@ export const TracksHomeShell: React.FC<TracksHomeShellProps> = ({
                 className="flex items-center gap-1.5 text-xs font-black uppercase tracking-widest text-app-muted hover:text-app-fg transition-colors cursor-pointer"
               >
                 <X size={15} />
-                <span>Back to Home</span>
+                <span>{uiLanguage === 'ru' ? 'Назад' : 'Back to Home'}</span>
               </button>
             </div>
 
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
-                <h1 className="text-xl font-black text-app-fg tracking-tight">Community Tracks</h1>
-                <p className="text-xs text-app-muted">Trending songs in target languages shared by members</p>
+                <h1 className="text-xl font-black text-app-fg tracking-tight">
+                  {uiLanguage === 'ru' ? 'Все песни' : 'Community Tracks'}
+                </h1>
+                <p className="text-xs text-app-muted">
+                  {uiLanguage === 'ru' ? 'Популярные песни для изучения языков, добавленные сообществом' : 'Trending songs in target languages shared by members'}
+                </p>
               </div>
 
               {/* Filters shown elegantly in the detailed page */}
               <div className="flex flex-wrap items-center gap-3 animate-in fade-in duration-200">
                 <div className="flex items-center gap-2">
-                  <span className="text-[9px] font-black text-app-muted uppercase tracking-widest leading-none">Language:</span>
+                  <span className="text-[9px] font-black text-app-muted uppercase tracking-widest leading-none">
+                    {uiLanguage === 'ru' ? 'ЯЗЫК:' : 'LANGUAGE:'}
+                  </span>
                   <button
                     type="button"
                     onClick={() => setIsLangPanelOpen(!isLangPanelOpen)}
@@ -238,10 +244,10 @@ export const TracksHomeShell: React.FC<TracksHomeShellProps> = ({
                   >
                     <span>
                       {selectedLanguages.length === 0 
-                        ? 'All' 
+                        ? (uiLanguage === 'ru' ? 'Все' : 'All') 
                         : selectedLanguages.length === 1 
                         ? selectedLanguages[0] 
-                        : `${selectedLanguages.length} Selected`}
+                        : `${selectedLanguages.length} ${uiLanguage === 'ru' ? 'выбрано' : 'Selected'}`}
                     </span>
                     <ChevronDown 
                       size={12} 
@@ -250,16 +256,18 @@ export const TracksHomeShell: React.FC<TracksHomeShellProps> = ({
                   </button>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-[9px] font-black text-app-muted uppercase tracking-widest leading-none">Difficulty:</span>
+                  <span className="text-[9px] font-black text-app-muted uppercase tracking-widest leading-none">
+                    {uiLanguage === 'ru' ? 'СЛОЖНОСТЬ:' : 'DIFFICULTY:'}
+                  </span>
                   <select 
                     value={communityDifficultyFilter}
                     onChange={(e) => setCommunityDifficultyFilter(e.target.value)}
-                    className="bg-app-card border border-app-card-border rounded-xl px-2.5 py-1.5 text-[10px] font-bold text-app-fg outline-none focus:ring-1 focus:ring-accent transition-all appearance-none cursor-pointer"
+                    className="bg-app-card border border-app-card-border rounded-xl px-2.5 py-1.5 text-[10px] font-bold text-app-fg outline-none focus:ring-1 focus:ring-accent transition-all appearance-none cursor-pointer text-center"
                   >
-                    <option value="All">All</option>
-                    <option value="beginner">Beginner</option>
-                    <option value="intermediate">Intermediate</option>
-                    <option value="advanced">Advanced</option>
+                    <option value="All">{uiLanguage === 'ru' ? 'Все' : 'All'}</option>
+                    <option value="beginner">{uiLanguage === 'ru' ? 'Новичок' : 'Beginner'}</option>
+                    <option value="intermediate">{uiLanguage === 'ru' ? 'Средний' : 'Intermediate'}</option>
+                    <option value="advanced">{uiLanguage === 'ru' ? 'Продвинутый' : 'Advanced'}</option>
                   </select>
                 </div>
               </div>
@@ -270,7 +278,7 @@ export const TracksHomeShell: React.FC<TracksHomeShellProps> = ({
               <div className="w-full bg-app-card border border-app-card-border rounded-3xl p-4 md:p-5 flex flex-col gap-3 select-none">
                 <div className="flex items-center justify-between">
                   <span className="text-[9px] font-black text-app-muted uppercase tracking-widest leading-none">
-                    Filter by Languages:
+                    {uiLanguage === 'ru' ? 'Фильтр по языкам:' : 'Filter by Languages:'}
                   </span>
                   {selectedLanguages.length > 0 && (
                     <button
@@ -279,7 +287,7 @@ export const TracksHomeShell: React.FC<TracksHomeShellProps> = ({
                       className="text-[9.5px] font-black text-red-500 uppercase tracking-widest hover:text-red-600 transition-colors flex items-center gap-1 cursor-pointer"
                     >
                       <X size={11} strokeWidth={2.5} />
-                      Clear Selection ({selectedLanguages.length})
+                      {uiLanguage === 'ru' ? `Очистить фильтр (${selectedLanguages.length})` : `Clear Selection (${selectedLanguages.length})`}
                     </button>
                   )}
                 </div>
@@ -311,7 +319,7 @@ export const TracksHomeShell: React.FC<TracksHomeShellProps> = ({
                 <div className="space-y-4">
                   {[1, 2, 3, 4].map(i => (
                     <div key={i} className="w-full h-24 rounded-3xl bg-app-card border border-app-card-border animate-pulse flex items-center px-4 gap-4">
-                      <div className="w-16 h-16 rounded-2xl bg-app-fg/10" />
+                      <div className="w-16 h-16 rounded-2xl bg-app-fg/10 shrink-0" />
                       <div className="space-y-2 flex-1">
                         <div className="h-4 w-1/2 bg-app-fg/10 rounded" />
                         <div className="h-3 w-1/3 bg-app-fg/10 rounded" />
@@ -353,7 +361,7 @@ export const TracksHomeShell: React.FC<TracksHomeShellProps> = ({
                           </p>
                           {track.difficulty && (
                             <div className="flex items-center shrink-0">
-                              {renderDifficultyIndicator(track.difficulty, true)}
+                              {renderDifficultyIndicator(track.difficulty, true, t)}
                             </div>
                           )}
                         </div>
@@ -373,7 +381,7 @@ export const TracksHomeShell: React.FC<TracksHomeShellProps> = ({
               ) : (
                 <div className="text-center py-12 px-6 rounded-3xl border border-dashed border-app-card-border opacity-40 italic bg-app-card/30">
                   <Music size={40} className="mx-auto mb-4 opacity-20" />
-                  No tracks found matching your filters.
+                  {uiLanguage === 'ru' ? 'Песен по вашим фильтрам не найдено.' : 'No tracks found matching your filters.'}
                 </div>
               )}
             </div>
@@ -387,7 +395,92 @@ export const TracksHomeShell: React.FC<TracksHomeShellProps> = ({
             exit={{ opacity: 0 }}
             className="space-y-10"
           >
-            {/* BLOCK 1: RECENT TRACKS */}
+            {/* BLOCK 1: COMMUNITY TRACKS */}
+            <div className="space-y-3">
+              <button
+                type="button"
+                onClick={() => setExpandedSection('community')}
+                className="flex items-center gap-1.5 text-app-fg hover:text-app-accent group select-none text-left cursor-pointer"
+              >
+                <div className="flex items-center gap-2">
+                  <Globe size={16} className="text-app-accent" />
+                  <h2 className="text-sm font-black uppercase tracking-[0.13em] leading-none">
+                    {uiLanguage === 'ru' ? 'Все песни' : 'Community'}
+                  </h2>
+                </div>
+                <ChevronRight 
+                  size={16} 
+                  className="text-app-fg opacity-40 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" 
+                />
+              </button>
+
+              {isLoadingTracks ? (
+                <div className="grid grid-rows-3 grid-flow-col auto-cols-[85%] sm:auto-cols-[340px] md:auto-cols-[380px] gap-x-4 gap-y-3.5 overflow-x-auto pb-4 scrollbar-hide snap-x snap-mandatory">
+                  {Array.from({ length: 9 }).map((_, i) => (
+                    <div key={i} className="h-[76px] w-full rounded-2xl bg-app-card border border-app-card-border animate-pulse flex items-center px-3 gap-3">
+                      <div className="w-12 h-12 rounded-xl bg-app-fg/10 shrink-0" />
+                      <div className="space-y-1.5 flex-1">
+                        <div className="h-3.5 w-2/3 bg-app-fg/10 rounded" />
+                        <div className="h-2.5 w-1/2 bg-app-fg/10 rounded" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : filteredCommunityTracks.length > 0 ? (
+                <div className="grid grid-rows-3 grid-flow-col auto-cols-[85%] sm:auto-cols-[340px] md:auto-cols-[380px] gap-x-4 gap-y-3.5 overflow-x-auto pb-4 scrollbar-hide snap-x snap-mandatory">
+                  {filteredCommunityTracks.slice(0, 9).map((track) => (
+                    <div
+                      key={`comm-cell-${track.id}`}
+                      onClick={() => onTrackSelect(track)}
+                      className="flex items-center justify-between p-3 rounded-2xl bg-app-card border border-app-card-border shadow-sm active:scale-[0.98] transition-all hover:bg-opacity-80 group cursor-pointer snap-start h-[76px]"
+                    >
+                      <div className="flex items-center gap-3 flex-1 min-w-0">
+                        {track.coverUrl ? (
+                          <img
+                            src={track.coverUrl}
+                            className="w-12 h-12 rounded-xl object-cover shadow-md shrink-0"
+                            referrerPolicy="no-referrer"
+                          />
+                        ) : (
+                          <div className="w-12 h-12 rounded-xl bg-app-fg/5 flex items-center justify-center text-app-fg/20 shrink-0 border border-app-card-border">
+                            <Disc size={20} />
+                          </div>
+                         )}
+                        <div className="text-left min-w-0 flex-1 leading-tight">
+                          <div className="flex items-center gap-1.5 mb-0.5">
+                            <p className="font-bold text-app-fg text-[13.5px] truncate group-hover:text-app-accent transition-colors">
+                              {track.title}
+                            </p>
+                            <span className="text-[7.5px] font-black uppercase px-1 rounded bg-app-fg/10 text-app-fg opacity-60 shrink-0">
+                              {track.sourceLanguage}
+                            </span>
+                          </div>
+                          <p className="text-xs text-app-muted truncate">
+                            {track.artist}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center shrink-0 ml-2" onClick={e => e.stopPropagation()}>
+                        <button
+                          type="button"
+                          onClick={() => onTrackMenuOpen?.(track)}
+                          className="p-1.5 text-app-muted hover:text-app-fg rounded-full hover:bg-app-fg/5"
+                        >
+                          <MoreVertical size={16} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-10 px-6 rounded-3xl border border-dashed border-app-card-border opacity-40 italic bg-app-card/30">
+                  <Music size={30} className="mx-auto mb-2 opacity-20" />
+                  {uiLanguage === 'ru' ? 'В сообществе пока нет песен.' : 'No songs in community yet.'}
+                </div>
+              )}
+            </div>
+
+            {/* BLOCK 2: RECENT TRACKS */}
             <div className="space-y-3">
               <button
                 type="button"
@@ -396,7 +489,9 @@ export const TracksHomeShell: React.FC<TracksHomeShellProps> = ({
               >
                 <div className="flex items-center gap-2">
                   <History size={16} className="text-app-accent" fill="none" />
-                  <h2 className="text-sm font-black uppercase tracking-[0.13em] leading-none">Recent</h2>
+                  <h2 className="text-sm font-black uppercase tracking-[0.13em] leading-none">
+                    {uiLanguage === 'ru' ? 'Недавние' : 'Recent'}
+                  </h2>
                 </div>
                 <ChevronRight 
                   size={16} 
@@ -448,90 +543,7 @@ export const TracksHomeShell: React.FC<TracksHomeShellProps> = ({
               ) : (
                 <div className="text-center py-10 px-6 rounded-3xl border border-dashed border-app-card-border opacity-40 italic bg-app-card/30">
                   <Search size={30} className="mx-auto mb-2 opacity-20" />
-                  No recent tracks yet. Search above to begin study!
-                </div>
-              )}
-            </div>
-
-            {/* BLOCK 2: COMMUNITY TRACKS */}
-            <div className="space-y-3">
-              <button
-                type="button"
-                onClick={() => setExpandedSection('community')}
-                className="flex items-center gap-1.5 text-app-fg hover:text-app-accent group select-none text-left cursor-pointer"
-              >
-                <div className="flex items-center gap-2">
-                  <Globe size={16} className="text-app-accent" />
-                  <h2 className="text-sm font-black uppercase tracking-[0.13em] leading-none">Community</h2>
-                </div>
-                <ChevronRight 
-                  size={16} 
-                  className="text-app-fg opacity-40 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" 
-                />
-              </button>
-
-              {isLoadingTracks ? (
-                <div className="grid grid-rows-3 grid-flow-col auto-cols-[85%] sm:auto-cols-[340px] md:auto-cols-[380px] gap-x-4 gap-y-3.5 overflow-x-auto pb-4 scrollbar-hide snap-x snap-mandatory">
-                  {Array.from({ length: 9 }).map((_, i) => (
-                    <div key={i} className="h-[76px] w-full rounded-2xl bg-app-card border border-app-card-border animate-pulse flex items-center px-3 gap-3">
-                      <div className="w-12 h-12 rounded-xl bg-app-fg/10 shrink-0" />
-                      <div className="space-y-1.5 flex-1">
-                        <div className="h-3.5 w-2/3 bg-app-fg/10 rounded" />
-                        <div className="h-2.5 w-1/2 bg-app-fg/10 rounded" />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : filteredCommunityTracks.length > 0 ? (
-                <div className="grid grid-rows-3 grid-flow-col auto-cols-[85%] sm:auto-cols-[340px] md:auto-cols-[380px] gap-x-4 gap-y-3.5 overflow-x-auto pb-4 scrollbar-hide snap-x snap-mandatory">
-                  {filteredCommunityTracks.slice(0, 9).map((track) => (
-                    <div
-                      key={`comm-cell-${track.id}`}
-                      onClick={() => onTrackSelect(track)}
-                      className="flex items-center justify-between p-3 rounded-2xl bg-app-card border border-app-card-border shadow-sm active:scale-[0.98] transition-all hover:bg-opacity-80 group cursor-pointer snap-start h-[76px]"
-                    >
-                      <div className="flex items-center gap-3 flex-1 min-w-0">
-                        {track.coverUrl ? (
-                          <img
-                            src={track.coverUrl}
-                            className="w-12 h-12 rounded-xl object-cover shadow-md shrink-0"
-                            referrerPolicy="no-referrer"
-                          />
-                        ) : (
-                          <div className="w-12 h-12 rounded-xl bg-app-fg/5 flex items-center justify-center text-app-fg/20 shrink-0 border border-app-card-border">
-                            <Disc size={20} />
-                          </div>
-                        )}
-                        <div className="text-left min-w-0 flex-1 leading-tight">
-                          <div className="flex items-center gap-1.5 mb-0.5">
-                            <p className="font-bold text-app-fg text-[13.5px] truncate group-hover:text-app-accent transition-colors">
-                              {track.title}
-                            </p>
-                            <span className="text-[7.5px] font-black uppercase px-1 rounded bg-app-fg/10 text-app-fg opacity-60 shrink-0">
-                              {track.sourceLanguage}
-                            </span>
-                          </div>
-                          <p className="text-xs text-app-muted truncate">
-                            {track.artist}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center shrink-0 ml-2" onClick={e => e.stopPropagation()}>
-                        <button
-                          type="button"
-                          onClick={() => onTrackMenuOpen?.(track)}
-                          className="p-1.5 text-app-muted hover:text-app-fg rounded-full hover:bg-app-fg/5"
-                        >
-                          <MoreVertical size={16} />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-10 px-6 rounded-3xl border border-dashed border-app-card-border opacity-40 italic bg-app-card/30">
-                  <Music size={30} className="mx-auto mb-2 opacity-20" />
-                  No songs in community yet.
+                  {uiLanguage === 'ru' ? 'Нет недавних треков. Воспользуйтесь поиском выше!' : 'No recent tracks yet. Search above to begin study!'}
                 </div>
               )}
             </div>

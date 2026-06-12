@@ -2,6 +2,7 @@ import React from 'react';
 import { motion } from 'motion/react';
 import { Sparkles, FileText, Brain, CheckCircle2, Bookmark, ArrowRight, Check, Search, RefreshCw, Loader2 } from 'lucide-react';
 import { NextStepState } from '../services/nextStepService';
+import { useTranslation } from '../lib/i18n';
 
 interface NextStepCTAProps {
   state: NextStepState;
@@ -18,6 +19,7 @@ export const NextStepCTA: React.FC<NextStepCTAProps> = ({
   isExecuting = false,
   loadingStep = 'idle',
 }) => {
+  const { t } = useTranslation();
   const getIcon = () => {
     if (isExecuting) {
       return (
@@ -92,34 +94,78 @@ export const NextStepCTA: React.FC<NextStepCTAProps> = ({
     switch (loadingStep) {
       case 'searching':
         return {
-          title: 'Finding Lyrics',
-          desc: 'Searching original lyrics database'
+          title: t('nextStep.findingLyrics'),
+          desc: t('nextStep.findingLyricsDesc')
         };
       case 'meaning':
       case 'translating':
         return {
-          title: 'Translating Lyrics',
-          desc: 'Analyzing track meaning & translating lines with Gemini AI'
+          title: t('nextStep.translatingLyrics'),
+          desc: t('nextStep.translatingLyricsDesc')
         };
       case 'analyzing':
         return {
-          title: 'Analyzing Track',
-          desc: 'Processing grammatical analysis using Gemini AI'
+          title: t('nextStep.analyzingTrack'),
+          desc: t('nextStep.analyzingTrackDesc')
         };
       case 'lecture':
         return {
-          title: 'Generating Lecture',
-          desc: 'Structuring vocabulary & educational explanations'
+          title: t('nextStep.generatingLecture'),
+          desc: t('nextStep.generatingLectureDesc')
         };
       default:
         return {
-          title: 'Processing...',
-          desc: 'Consulting Gemini AI and preparing materials'
+          title: t('nextStep.processing'),
+          desc: t('nextStep.processingDesc')
         };
     }
   };
 
-  const currentText = isExecuting ? getExecutingText() : { title: state.label, desc: state.description };
+  const getNonExecutingText = () => {
+    switch (state.type) {
+      case 'GET_LYRICS':
+      case 'FIND_LYRICS':
+        return {
+          title: t('nextStep.getLyricsLabel'),
+          desc: t('nextStep.getLyricsDesc')
+        };
+      case 'TRANSLATE_LYRICS':
+        return {
+          title: t('nextStep.translateLyricLabel'),
+          desc: t('nextStep.translateLyricDesc')
+        };
+      case 'GENERATE_ANALYSIS':
+        return {
+          title: t('nextStep.generateBreakdownLabel'),
+          desc: t('nextStep.generateBreakdownDesc')
+        };
+      case 'GO_TO_STUDY': {
+        const dueCountMatch = state.description.match(/You have (\d+) saved phrases? ready to practice/i);
+        const dueCount = dueCountMatch ? parseInt(dueCountMatch[1], 10) : 0;
+        return {
+          title: t('nextStep.startStudyLabel'),
+          desc: t('nextStep.startStudyDesc', { count: dueCount, plural: dueCount > 1 ? 's' : '' })
+        };
+      }
+      case 'SAVE_PHRASES':
+        return {
+          title: t('nextStep.savePhrasesLabel'),
+          desc: t('nextStep.savePhrasesDesc')
+        };
+      case 'TRACK_COMPLETE':
+        return {
+          title: t('nextStep.revisitBreakdownLabel'),
+          desc: t('nextStep.revisitBreakdownDesc')
+        };
+      default:
+        return {
+          title: state.label,
+          desc: state.description
+        };
+    }
+  };
+
+  const currentText = isExecuting ? getExecutingText() : getNonExecutingText();
 
   return (
     <motion.div
@@ -144,12 +190,12 @@ export const NextStepCTA: React.FC<NextStepCTAProps> = ({
           </div>
           <div className="min-w-0 flex-1">
             <span className="text-[9px] font-black uppercase tracking-wider text-app-accent block">
-              {state.type === 'TRACK_COMPLETE' ? 'Excellent Progress!' : (isExecuting ? 'ACTIVE PROCESSING' : 'NEXT STEP')}
+              {state.type === 'TRACK_COMPLETE' ? t('nextStep.excellentProgress') : (isExecuting ? t('nextStep.activeProcessing') : t('nextStep.nextStepLabel'))}
             </span>
             <span className={`text-sm md:text-base font-extrabold text-app-fg leading-tight block mt-0.5 transition-colors ${!isExecuting && 'group-hover:text-app-accent'}`}>
               {currentText.title}
             </span>
-            <span className="text-xs text-app-muted leading-relaxed block mt-1 font-semibold opacity-90 truncate md:whitespace-normal">
+            <span className="text-xs text-app-muted leading-relaxed block mt-1 font-semibold opacity-90 whitespace-normal break-words">
               {currentText.desc}
               {isExecuting && (
                 <motion.span
@@ -161,20 +207,6 @@ export const NextStepCTA: React.FC<NextStepCTAProps> = ({
                 </motion.span>
               )}
             </span>
-
-            {/* Aux button shown inside card for SAVE_PHRASES state to avoid nested click interference */}
-            {state.type === 'SAVE_PHRASES' && onMarkCompleted && !isExecuting && (
-              <div className="mt-3 flex animate-in fade-in duration-200" onClick={(e) => e.stopPropagation()}>
-                <button
-                  type="button"
-                  onClick={onMarkCompleted}
-                  className="px-3.5 py-1.5 bg-transparent border border-app-card-border hover:bg-app-fg/5 text-app-muted hover:text-app-fg text-[10px] font-black uppercase tracking-wider rounded-xl active:scale-95 transition-all flex items-center gap-1 cursor-pointer"
-                >
-                   <Check size={12} />
-                   Done with breakdown
-                </button>
-              </div>
-            )}
           </div>
         </div>
 

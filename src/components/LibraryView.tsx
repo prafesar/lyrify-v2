@@ -8,6 +8,7 @@ import { Track, Artist, Album } from '../constants';
 import { libraryRepository } from '../application';
 import { sqliteService } from '../services/sqliteService';
 import { cn } from '../lib/utils';
+import { useTranslation } from '../lib/i18n';
 
 interface LibraryViewProps {
   onTrackSelect: (track: Track) => void;
@@ -24,6 +25,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
   onNavigateToStudy,
   recentTracks,
 }) => {
+  const { t } = useTranslation();
   // Library States
   const [favorites, setFavorites] = useState<Track[]>([]);
   const [favoriteArtists, setFavoriteArtists] = useState<Artist[]>([]);
@@ -135,7 +137,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
 
   // Delete Playlist
   const handleDeletePlaylist = async (playlistId: string) => {
-    if (!confirm("Are you sure you want to delete this playlist?")) return;
+    if (!confirm(t('library.deletePlaylistConfirm'))) return;
     try {
       await libraryRepository.deletePlaylist(playlistId);
       if (selectedPlaylist?.id === playlistId) {
@@ -158,11 +160,40 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
     );
   }, [favorites, searchQuery]);
 
+  // Dynamic automatic playlists based on user favorites' sourceLanguage
+  const autoPlaylists = useMemo(() => {
+    const groups: Record<string, Track[]> = {};
+    favorites.forEach(track => {
+      const lang = track.sourceLanguage || "English";
+      if (!groups[lang]) {
+        groups[lang] = [];
+      }
+      groups[lang].push(track);
+    });
+
+    return Object.entries(groups).map(([lang, tracks]) => ({
+      id: `auto-lang-${lang}`,
+      name: `${lang} Favorites`,
+      tracks: tracks,
+      isAuto: true,
+      language: lang
+    }));
+  }, [favorites]);
+
+  const allPlaylists = useMemo(() => {
+    return [...autoPlaylists, ...playlists];
+  }, [autoPlaylists, playlists]);
+
+  const activeSelectedPlaylist = useMemo(() => {
+    if (!selectedPlaylist) return null;
+    return allPlaylists.find(p => p.id === selectedPlaylist.id) || null;
+  }, [selectedPlaylist, allPlaylists]);
+
   const filteredPlaylists = useMemo(() => {
-    if (!searchQuery.trim()) return playlists;
+    if (!searchQuery.trim()) return allPlaylists;
     const query = searchQuery.toLowerCase();
-    return playlists.filter(p => p.name.toLowerCase().includes(query));
-  }, [playlists, searchQuery]);
+    return allPlaylists.filter(p => p.name.toLowerCase().includes(query));
+  }, [allPlaylists, searchQuery]);
 
   const filteredArtists = useMemo(() => {
     if (!searchQuery.trim()) return favoriteArtists;
@@ -228,7 +259,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
   return (
     <div className="w-full flex-1 overflow-y-auto px-6 pt-6 pb-32 max-w-5xl mx-auto scrollbar-hide" id="cantolex-library-view-main">
       <AnimatePresence mode="wait">
-        {!selectedPlaylist ? (
+        {!activeSelectedPlaylist ? (
           <motion.div
             key="library-root"
             initial={{ opacity: 0 }}
@@ -239,13 +270,13 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
             {/* Header Title & Minimal Settings Indicator */}
             <div className="flex items-center justify-between">
               <div>
-                <h1 className="text-2xl font-black text-app-fg tracking-tight">My Library</h1>
-                <p className="text-xs text-app-muted">Your personal language learning library of songs</p>
+                <h1 className="text-2xl font-black text-app-fg tracking-tight">{t('library.title')}</h1>
+                <p className="text-xs text-app-muted">{t('library.subtitle')}</p>
               </div>
               <button 
                 onClick={() => setIsCreatingPlaylist(true)} 
                 className="w-10 h-10 rounded-full bg-app-accent/10 hover:bg-app-accent hover:text-white transition-all flex items-center justify-center text-app-accent font-bold"
-                title="Create playlist"
+                title={t('library.newPlaylist')}
               >
                 <Plus size={18} />
               </button>
@@ -261,7 +292,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search favorites, playlists, artists..."
+                placeholder={t('library.searchPlaceholder')}
                 className="w-full pl-11 pr-10 py-3 rounded-2xl bg-app-card border border-app-card-border text-sm outline-none focus:border-app-accent focus:ring-1 focus:ring-app-accent/30 transition-all text-app-fg shadow-sm"
               />
               {searchQuery && (
@@ -287,11 +318,11 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                       : "bg-app-card border-app-card-border text-app-muted hover:text-app-fg"
                   )}
                 >
-                  {filter === 'all' && 'All'}
-                  {filter === 'tracks' && 'Songs'}
-                  {filter === 'playlists' && 'Playlists'}
-                  {filter === 'artists' && 'Artists'}
-                  {filter === 'albums' && 'Albums'}
+                  {filter === 'all' && t('library.filterAll')}
+                  {filter === 'tracks' && t('library.filterSongs')}
+                  {filter === 'playlists' && t('library.filterPlaylists')}
+                  {filter === 'artists' && t('library.filterArtists')}
+                  {filter === 'albums' && t('library.filterAlbums')}
                 </button>
               ))}
             </div>
@@ -307,7 +338,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                 >
                   <form onSubmit={handleCreatePlaylist} className="flex flex-col gap-3">
                     <div className="flex justify-between items-center">
-                      <span className="text-[10px] font-black uppercase tracking-widest text-app-muted">New Playlist</span>
+                      <span className="text-[10px] font-black uppercase tracking-widest text-app-muted">{t('library.newPlaylist')}</span>
                       <button 
                         type="button" 
                         onClick={() => setIsCreatingPlaylist(false)}
@@ -321,7 +352,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                         type="text" 
                         value={newPlaylistName}
                         onChange={(e) => setNewPlaylistName(e.target.value)}
-                        placeholder="Playlist name..."
+                        placeholder={t('library.playlistNamePlaceholder')}
                         autoFocus
                         className="flex-1 px-4 py-2.5 rounded-xl bg-app-bg border border-app-card-border text-sm outline-none focus:border-app-accent/50 text-app-fg"
                       />
@@ -329,7 +360,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                         type="submit" 
                         className="px-5 rounded-xl bg-app-accent text-white text-xs font-bold uppercase hover:bg-opacity-90 active:scale-95 transition-all"
                       >
-                        Create
+                        {t('library.createBtn')}
                       </button>
                     </div>
                   </form>
@@ -350,7 +381,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                     >
                       <div className="flex items-center gap-2">
                         <Star size={16} fill="currentColor" className="text-app-accent" />
-                        <h2 className="text-sm font-black uppercase tracking-[0.13em] leading-none">Favorite Tracks</h2>
+                        <h2 className="text-sm font-black uppercase tracking-[0.13em] leading-none">{t('library.favoriteTracks')}</h2>
                       </div>
                       <ChevronRight 
                         size={16} 
@@ -361,7 +392,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                     <div className="flex items-center justify-between px-1">
                       <div className="flex items-center gap-1.5 text-app-accent">
                         <Star size={16} fill="currentColor" />
-                        <h2 className="text-sm font-black uppercase tracking-[0.15em] text-app-fg leading-none">Favorite Tracks</h2>
+                        <h2 className="text-sm font-black uppercase tracking-[0.15em] text-app-fg leading-none">{t('library.favoriteTracks')}</h2>
                       </div>
                       <span className="text-[10px] font-black text-app-muted uppercase bg-app-fg/5 px-2 py-1 rounded-lg">
                         {filteredFavorites.length}
@@ -463,7 +494,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                     )
                   ) : (
                     <div className="text-center py-10 px-4 rounded-2xl border border-dashed border-app-card-border opacity-60 bg-app-card/20 text-xs text-app-muted">
-                      {searchQuery ? "No tracks match your search" : "No favorite songs in your library yet. Add them from the track menu!"}
+                      {searchQuery ? t('library.noMatchSearch') : t('library.noFavoritesYet')}
                     </div>
                   )}
                 </div>
@@ -480,7 +511,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                     >
                       <div className="flex items-center gap-2">
                         <FolderHeart size={16} className="text-app-accent animate-pulse" />
-                        <h2 className="text-sm font-black uppercase tracking-[0.13em] leading-none">Playlists</h2>
+                        <h2 className="text-sm font-black uppercase tracking-[0.13em] leading-none">{t('library.filterPlaylists')}</h2>
                       </div>
                       <ChevronRight 
                         size={16} 
@@ -489,7 +520,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                     </button>
                   ) : (
                     <div className="flex items-center justify-between px-1">
-                      <h2 className="text-sm font-black uppercase tracking-[0.15em] text-app-fg opacity-80 leading-none">Playlists</h2>
+                      <h2 className="text-sm font-black uppercase tracking-[0.15em] text-app-fg opacity-80 leading-none">{t('library.filterPlaylists')}</h2>
                       <span className="text-[10px] font-black text-app-muted uppercase">
                         {filteredPlaylists.length}
                       </span>
@@ -511,23 +542,39 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                                 {renderPlaylistCover(playlist)}
                               </div>
                               <div className="text-left overflow-hidden leading-tight">
-                                <span className="font-bold text-app-fg text-[13.5px] leading-tight block truncate group-hover:text-app-accent transition-colors mb-0.5">
-                                  {playlist.name}
-                                </span>
+                                <div className="flex items-center gap-1.5 overflow-hidden">
+                                  <span className="font-bold text-app-fg text-[13.5px] leading-tight block truncate group-hover:text-app-accent transition-colors mb-0.5">
+                                    {playlist.name}
+                                  </span>
+                                  {playlist.isAuto && (
+                                    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-[8px] font-black tracking-widest uppercase bg-app-accent/10 text-app-accent shrink-0">
+                                      <Sparkles size={8} /> {t('library.autoPlaylistBadge')}
+                                    </span>
+                                  )}
+                                </div>
                                 <span className="text-xs text-app-muted block">
-                                  {playlist.tracks?.length || 0} songs • {playlist.tracks?.length > 0 ? `${playlist.tracks.length * 3} min` : "empty"}
+                                  {t('library.songsCount', {
+                                    count: playlist.tracks?.length || 0,
+                                    time: playlist.tracks?.length > 0 ? t('library.minutesLabel', { count: playlist.tracks.length * 3 }) : t('library.emptyPlaylist')
+                                  })}
                                 </span>
                               </div>
                             </div>
                             <div className="flex items-center shrink-0 ml-2" onClick={e => e.stopPropagation()}>
-                              <button
-                                type="button"
-                                onClick={() => handleDeletePlaylist(playlist.id)}
-                                className="p-1.5 text-app-muted hover:text-red-500 rounded-full hover:bg-red-500/5 transition-all"
-                                title="Delete playlist"
-                              >
-                                <Trash2 size={16} />
-                              </button>
+                              {!playlist.isAuto ? (
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeletePlaylist(playlist.id)}
+                                  className="p-1.5 text-app-muted hover:text-red-500 rounded-full hover:bg-red-500/5 transition-all"
+                                  title="Delete playlist"
+                                >
+                                  <Trash2 size={16} />
+                                </button>
+                              ) : (
+                                <div className="p-1.5 text-app-muted" title="Automatic playlist">
+                                  <Sparkles size={16} className="text-app-accent/40" />
+                                </div>
+                              )}
                             </div>
                           </div>
                         ))}
@@ -544,24 +591,40 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                             <div className="flex items-center gap-4 flex-1 overflow-hidden select-none">
                               {renderPlaylistCover(playlist)}
                               <div className="text-left overflow-hidden">
-                                <span className="font-bold text-app-fg text-[14px] leading-tight block truncate group-hover:text-app-accent transition-colors">
-                                  {playlist.name}
-                                </span>
+                                <div className="flex items-center gap-1.5 overflow-hidden">
+                                  <span className="font-bold text-app-fg text-[14px] leading-tight block truncate group-hover:text-app-accent transition-colors">
+                                    {playlist.name}
+                                  </span>
+                                  {playlist.isAuto && (
+                                    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-[8px] font-black tracking-widest uppercase bg-app-accent/10 text-app-accent shrink-0">
+                                      <Sparkles size={8} /> {t('library.autoPlaylistBadge')}
+                                    </span>
+                                  )}
+                                </div>
                                 <span className="text-xs text-app-muted block mt-0.5">
-                                  {playlist.tracks?.length || 0} songs • {playlist.tracks?.length > 0 ? `${playlist.tracks.length * 3} min` : "empty"}
+                                  {t('library.songsCount', {
+                                    count: playlist.tracks?.length || 0,
+                                    time: playlist.tracks?.length > 0 ? t('library.minutesLabel', { count: playlist.tracks.length * 3 }) : t('library.emptyPlaylist')
+                                  })}
                                 </span>
                               </div>
                             </div>
 
                             <div className="flex gap-1" onClick={e => e.stopPropagation()}>
-                              <button
-                                type="button"
-                                onClick={() => handleDeletePlaylist(playlist.id)}
-                                className="p-2 text-app-muted hover:text-red-500 rounded-full hover:bg-red-500/5 transition-all"
-                                title="Delete playlist"
-                              >
-                                <Trash2 size={16} />
-                              </button>
+                              {!playlist.isAuto ? (
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeletePlaylist(playlist.id)}
+                                  className="p-2 text-app-muted hover:text-red-500 rounded-full hover:bg-red-500/5 transition-all"
+                                  title="Delete playlist"
+                                >
+                                  <Trash2 size={16} />
+                                </button>
+                              ) : (
+                                <div className="p-2 text-app-muted" title="Automatic playlist">
+                                  <Sparkles size={16} className="text-app-accent/40" />
+                                </div>
+                              )}
                             </div>
                           </div>
                         ))}
@@ -570,13 +633,13 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                   ) : (
                     <div className="text-center py-10 px-4 rounded-3xl border border-dashed border-app-card-border opacity-60 bg-app-card/20 text-xs text-app-muted flex flex-col items-center gap-3">
                       <Disc size={36} className="opacity-30 text-app-accent-hover" />
-                      <span>You have no created playlists yet.</span>
+                      <span>{t('library.noPlaylistsYet')}</span>
                       <button
                         type="button"
                         onClick={() => setIsCreatingPlaylist(true)}
                         className="px-4 py-2 border border-app-accent text-app-accent bg-app-accent/5 hover:bg-app-accent hover:text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all"
                       >
-                        Create first playlist
+                        {t('library.createFirstPlaylist')}
                       </button>
                     </div>
                   )}
@@ -587,7 +650,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
               {(activeFilter === 'all' || activeFilter === 'artists') && (
                 <div className="space-y-3">
                   <div className="flex items-center justify-between px-1">
-                    <h2 className="text-sm font-black uppercase tracking-[0.15em] text-app-fg opacity-80 leading-none">Favorite Artists</h2>
+                    <h2 className="text-sm font-black uppercase tracking-[0.15em] text-app-fg opacity-80 leading-none">{t('library.favoriteArtists')}</h2>
                     <span className="text-[10px] font-black text-app-muted uppercase">
                       {filteredArtists.length}
                     </span>
@@ -625,7 +688,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                     </div>
                   ) : (
                     <div className="text-center py-8 rounded-2xl border border-dashed border-app-card-border opacity-60 bg-app-card/20 text-xs text-app-muted">
-                      Artists will appear automatically from your favorite artists! Add them manually to see them here.
+                      {t('library.noArtistsYet')}
                     </div>
                   )}
                 </div>
@@ -635,7 +698,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
               {(activeFilter === 'all' || activeFilter === 'albums') && filteredAlbums.length > 0 && (
                 <div className="space-y-3">
                   <div className="flex items-center justify-between px-1">
-                    <h2 className="text-sm font-black uppercase tracking-[0.15em] text-app-fg opacity-80 leading-none">Favorite Albums</h2>
+                    <h2 className="text-sm font-black uppercase tracking-[0.15em] text-app-fg opacity-80 leading-none">{t('library.favoriteAlbums')}</h2>
                     <span className="text-[10px] font-black text-app-muted uppercase">
                       {filteredAlbums.length}
                     </span>
@@ -691,36 +754,50 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                 className="flex items-center gap-1.5 text-xs font-black uppercase tracking-widest text-app-muted hover:text-app-fg transition-colors"
               >
                 <X size={15} />
-                <span>Back to playlists</span>
+                <span>{t('library.backToPlaylists')}</span>
               </button>
 
-              <button
-                onClick={() => handleDeletePlaylist(selectedPlaylist.id)}
-                className="flex items-center gap-1 text-xs font-black uppercase tracking-widest text-red-500 hover:text-red-600 hover:bg-red-500/5 px-2.5 py-1 rounded-xl transition-all"
-              >
-                <Trash2 size={13} />
-                <span>Delete</span>
-              </button>
+              {!activeSelectedPlaylist.isAuto && (
+                <button
+                  onClick={() => handleDeletePlaylist(activeSelectedPlaylist.id)}
+                  className="flex items-center gap-1 text-xs font-black uppercase tracking-widest text-red-500 hover:text-red-600 hover:bg-red-500/5 px-2.5 py-1 rounded-xl transition-all"
+                >
+                  <Trash2 size={13} />
+                  <span>{t('library.deleteBtn')}</span>
+                </button>
+              )}
             </div>
 
             {/* Playlist Title & Meta card */}
             <div className="flex items-center gap-4 p-5 rounded-3xl bg-app-card border border-app-card-border shadow">
-              {renderPlaylistCover(selectedPlaylist)}
+              {renderPlaylistCover(activeSelectedPlaylist)}
               <div className="overflow-hidden select-none">
-                <span className="text-[9px] font-black text-app-accent uppercase tracking-widest block mb-1">PLAYLIST</span>
-                <h1 className="text-xl font-bold text-app-fg leading-tight truncate">{selectedPlaylist.name}</h1>
+                <span className="text-[9px] font-black text-app-accent uppercase tracking-widest block mb-1">
+                  {activeSelectedPlaylist.isAuto ? t('library.automaticPlaylistLabel') : t('library.playlistLabel')}
+                </span>
+                <h1 className="text-xl font-bold text-app-fg leading-tight truncate flex items-center gap-2">
+                  {activeSelectedPlaylist.name}
+                  {activeSelectedPlaylist.isAuto && (
+                    <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-md text-[9px] font-black tracking-widest uppercase bg-app-accent/10 text-app-accent">
+                      <Sparkles size={10} fill="currentColor" className="text-app-accent animate-pulse" /> {t('library.autoPlaylistBadge')}
+                    </span>
+                  )}
+                </h1>
                 <p className="text-xs text-app-muted mt-1 leading-none">
-                  Total: {selectedPlaylist.tracks?.length || 0} songs • {selectedPlaylist.tracks?.length > 0 ? `${selectedPlaylist.tracks.length * 3} minutes track length` : "no tracks"}
+                  {t('library.playlistTotalTracks', {
+                    count: activeSelectedPlaylist.tracks?.length || 0,
+                    time: activeSelectedPlaylist.tracks?.length > 0 ? activeSelectedPlaylist.tracks.length * 3 : t('library.playlistTotalTracksNone')
+                  })}
                 </p>
               </div>
             </div>
 
             {/* Tracks listing */}
             <div className="space-y-2.5">
-              <span className="text-[10px] font-black text-app-muted uppercase tracking-widest leading-none block px-1">Tracks in Playlist</span>
+              <span className="text-[10px] font-black text-app-muted uppercase tracking-widest leading-none block px-1">{t('library.tracksInPlaylist')}</span>
               
-              {selectedPlaylist.tracks && selectedPlaylist.tracks.length > 0 ? (
-                selectedPlaylist.tracks.map((track: Track, idx: number) => (
+              {activeSelectedPlaylist.tracks && activeSelectedPlaylist.tracks.length > 0 ? (
+                activeSelectedPlaylist.tracks.map((track: Track, idx: number) => (
                   <div
                     key={`plt-${track.id}-${idx}`}
                     onClick={() => onTrackSelect(track)}
@@ -750,14 +827,16 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                     </div>
 
                     <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveTrackFromPlaylist(selectedPlaylist.id, track.id || track.trackId)}
-                        className="p-2 text-app-muted hover:text-red-500 hover:bg-red-500/5 rounded-full transition-all"
-                        title="Remove from playlist"
-                      >
-                        <Trash2 size={15} />
-                      </button>
+                      {!activeSelectedPlaylist.isAuto && (
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveTrackFromPlaylist(activeSelectedPlaylist.id, track.id || track.trackId)}
+                          className="p-2 text-app-muted hover:text-red-500 hover:bg-red-500/5 rounded-full transition-all"
+                          title="Remove from playlist"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={() => setMenuTrack(track)}
@@ -771,8 +850,8 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
               ) : (
                 <div className="text-center py-16 px-4 rounded-3xl border border-dashed border-app-card-border opacity-50 bg-app-card/10 text-xs text-app-muted flex flex-col items-center gap-2">
                   <Music size={30} className="text-app-accent opacity-30" />
-                  <span>No songs in this playlist yet.</span>
-                  <span className="opacity-60 text-[10px]">Add songs from the home tab or search, using the three-dot menu!</span>
+                  <span>{t('library.noTracksInPlaylistYet')}</span>
+                  <span className="opacity-60 text-[10px]">{t('library.addSongsTip')}</span>
                 </div>
               )}
             </div>
@@ -847,7 +926,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                     className="w-full py-3.5 px-4 bg-app-accent hover:bg-opacity-95 text-white font-bold rounded-2xl flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
                   >
                     <Play size={16} fill="currentColor" />
-                    <span>Open / Study Song</span>
+                    <span>{t('library.openStudySong')}</span>
                   </button>
 
                   <button
@@ -861,11 +940,11 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                         className={cn(isTrackFavorite(menuTrack.id || menuTrack.trackId) ? "text-app-accent fill-app-accent" : "text-app-fg opacity-40")} 
                       />
                       <span>
-                        {isTrackFavorite(menuTrack.id || menuTrack.trackId) ? "Remove from Favorites" : "Add to Favorites"}
+                        {isTrackFavorite(menuTrack.id || menuTrack.trackId) ? t('library.removeFromFavorites') : t('library.addToFavorites')}
                       </span>
                     </div>
                     {isTrackFavorite(menuTrack.id || menuTrack.trackId) && (
-                      <span className="text-[10px] font-black uppercase text-app-accent tracking-wider bg-app-accent/10 px-2 py-0.5 rounded">In Favorites</span>
+                      <span className="text-[10px] font-black uppercase text-app-accent tracking-wider bg-app-accent/10 px-2 py-0.5 rounded">{t('library.inFavoritesBadge')}</span>
                     )}
                   </button>
 
@@ -875,7 +954,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                     className="w-full py-3.5 px-4 bg-app-card border border-app-card-border hover:bg-app-fg/5 text-app-fg font-extrabold rounded-2xl flex items-center gap-2 transition-all"
                   >
                     <ListMusic size={16} className="text-app-fg opacity-40" />
-                    <span>Add to playlist...</span>
+                    <span>{t('library.addToPlaylist')}</span>
                   </button>
 
                   <button
@@ -886,7 +965,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                     }}
                     className="w-full py-3 px-4 text-xs font-black uppercase tracking-widest text-app-muted hover:text-app-fg mt-2"
                   >
-                    Cancel
+                    {t('common.cancel')}
                   </button>
                 </div>
               ) : (
@@ -898,9 +977,9 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                       onClick={() => setIsAddToPlaylistOpen(false)}
                       className="text-xs font-black text-app-accent uppercase tracking-wider flex items-center gap-1"
                     >
-                      <span>Back</span>
+                      <span>{t('library.backToPlaylists')}</span>
                     </button>
-                    <span className="text-xs font-black text-app-fg uppercase tracking-wider">Select playlist</span>
+                    <span className="text-xs font-black text-app-fg uppercase tracking-wider">{t('library.newPlaylist')}</span>
                     <div className="w-10 h-2" />
                   </div>
 
@@ -925,17 +1004,22 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                             {hasTrack ? (
                               <div className="flex items-center gap-1 shrink-0 text-green-500 font-bold text-xs uppercase tracking-wider">
                                 <Check size={14} strokeWidth={2.5} />
-                                <span>Added</span>
+                                <span>{t('library.inFavoritesBadge')}</span>
                               </div>
                             ) : (
-                              <span className="text-[10px] text-app-muted shrink-0 font-bold uppercase">{playlist.tracks?.length || 0} songs</span>
+                              <span className="text-[10px] text-app-muted shrink-0 font-bold uppercase">
+                                {t('library.songsCount', {
+                                  count: playlist.tracks?.length || 0,
+                                  time: ''
+                                }).replace('•', '').trim()}
+                              </span>
                             )}
                           </button>
                         );
                       })
                     ) : (
                       <div className="text-center py-6 text-xs text-app-muted">
-                        No playlists yet. Go back and create a new playlist first!
+                        {t('library.noPlaylistsAvailable')}
                       </div>
                     )}
                   </div>
