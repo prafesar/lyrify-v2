@@ -180,4 +180,28 @@ describe('nextStepService unit tests', () => {
     const result = determineNextStep(track, [], dummyDate);
     expect(result.type).toBe('TRACK_COMPLETE');
   });
+
+  it('proposes GENERATE_ANALYSIS when block has only fallback-overview', () => {
+    const track = {
+      trackId: 'track-1',
+      artist: 'Charles Aznavour',
+      title: 'La Bohème',
+      rawLyrics: 'La vie en Rose\n Quand elle me prend...',
+      lectureBlocks: [
+        {
+          id: 'fallback-overview',
+          kind: 'overview',
+          title: 'Song Overview',
+          text: 'some raw fallback text',
+          phrases: [],
+        },
+      ],
+      lines: [],
+      processingStatus: { stage1_completed: true, stage2_completed: true, stage3_completed: false },
+      lastUpdated: 0,
+    } as any;
+
+    const result = determineNextStep(track, [], dummyDate);
+    expect(result.type).toBe('GENERATE_ANALYSIS');
+  });
 });

@@ -387,73 +387,7 @@ export const TracksHomeShell: React.FC<TracksHomeShellProps> = ({
             exit={{ opacity: 0 }}
             className="space-y-10"
           >
-            {/* BLOCK 1: RECENT TRACKS */}
-            <div className="space-y-3">
-              <button
-                type="button"
-                onClick={() => setExpandedSection('recent')}
-                className="flex items-center gap-1.5 text-app-fg hover:text-app-accent group select-none text-left cursor-pointer"
-              >
-                <div className="flex items-center gap-2">
-                  <History size={16} className="text-app-accent" fill="none" />
-                  <h2 className="text-sm font-black uppercase tracking-[0.13em] leading-none">Recent</h2>
-                </div>
-                <ChevronRight 
-                  size={16} 
-                  className="text-app-fg opacity-40 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" 
-                />
-              </button>
-
-              {recentTracks.length > 0 ? (
-                <div className="grid grid-rows-3 grid-flow-col auto-cols-[85%] sm:auto-cols-[340px] md:auto-cols-[380px] gap-x-4 gap-y-3.5 overflow-x-auto pb-4 scrollbar-hide snap-x snap-mandatory">
-                  {recentTracks.slice(0, 9).map((track) => (
-                    <div
-                      key={`recent-cell-${track.id}`}
-                      onClick={() => onTrackSelect(track)}
-                      className="flex items-center justify-between p-3 rounded-2xl bg-app-card border border-app-card-border shadow-sm active:scale-[0.98] transition-all hover:bg-opacity-80 group cursor-pointer snap-start h-[76px]"
-                    >
-                      <div className="flex items-center gap-3 flex-1 min-w-0">
-                        {track.coverUrl ? (
-                          <img
-                            src={track.coverUrl}
-                            className="w-12 h-12 rounded-xl object-cover shadow-md shrink-0"
-                            referrerPolicy="no-referrer"
-                          />
-                        ) : (
-                          <div className="w-12 h-12 rounded-xl bg-app-fg/5 flex items-center justify-center text-app-fg/20 shrink-0 border border-app-card-border">
-                            <Disc size={20} />
-                          </div>
-                        )}
-                        <div className="text-left min-w-0 flex-1 leading-tight">
-                          <p className="font-bold text-app-fg text-[13.5px] truncate group-hover:text-app-accent transition-colors mb-0.5">
-                            {track.title}
-                          </p>
-                          <p className="text-xs text-app-muted truncate">
-                            {track.artist}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center shrink-0 ml-2" onClick={e => e.stopPropagation()}>
-                        <button
-                          type="button"
-                          onClick={() => onTrackMenuOpen?.(track)}
-                          className="p-1.5 text-app-muted hover:text-app-fg rounded-full hover:bg-app-fg/5"
-                        >
-                          <MoreVertical size={16} />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-10 px-6 rounded-3xl border border-dashed border-app-card-border opacity-40 italic bg-app-card/30">
-                  <Search size={30} className="mx-auto mb-2 opacity-20" />
-                  No recent tracks yet. Search above to begin study!
-                </div>
-              )}
-            </div>
-
-            {/* BLOCK 2: COMMUNITY TRACKS */}
+            {/* BLOCK 1: COMMUNITY TRACKS */}
             <div className="space-y-3">
               <button
                 type="button"
@@ -532,6 +466,72 @@ export const TracksHomeShell: React.FC<TracksHomeShellProps> = ({
                 <div className="text-center py-10 px-6 rounded-3xl border border-dashed border-app-card-border opacity-40 italic bg-app-card/30">
                   <Music size={30} className="mx-auto mb-2 opacity-20" />
                   No songs in community yet.
+                </div>
+              )}
+            </div>
+
+            {/* BLOCK 2: RECENT TRACKS */}
+            <div className="space-y-3">
+              <button
+                type="button"
+                onClick={() => setExpandedSection('recent')}
+                className="flex items-center gap-1.5 text-app-fg hover:text-app-accent group select-none text-left cursor-pointer"
+              >
+                <div className="flex items-center gap-2">
+                  <History size={16} className="text-app-accent" fill="none" />
+                  <h2 className="text-sm font-black uppercase tracking-[0.13em] leading-none">Recent</h2>
+                </div>
+                <ChevronRight 
+                  size={16} 
+                  className="text-app-fg opacity-40 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" 
+                />
+              </button>
+
+              {recentTracks.length > 0 ? (
+                <div className="grid grid-rows-3 grid-flow-col auto-cols-[85%] sm:auto-cols-[340px] md:auto-cols-[380px] gap-x-4 gap-y-3.5 overflow-x-auto pb-4 scrollbar-hide snap-x snap-mandatory">
+                  {recentTracks.slice(0, 9).map((track) => (
+                    <div
+                      key={`recent-cell-${track.id}`}
+                      onClick={() => onTrackSelect(track)}
+                      className="flex items-center justify-between p-3 rounded-2xl bg-app-card border border-app-card-border shadow-sm active:scale-[0.98] transition-all hover:bg-opacity-80 group cursor-pointer snap-start h-[76px]"
+                    >
+                      <div className="flex items-center gap-3 flex-1 min-w-0">
+                        {track.coverUrl ? (
+                          <img
+                            src={track.coverUrl}
+                            className="w-12 h-12 rounded-xl object-cover shadow-md shrink-0"
+                            referrerPolicy="no-referrer"
+                          />
+                        ) : (
+                          <div className="w-12 h-12 rounded-xl bg-app-fg/5 flex items-center justify-center text-app-fg/20 shrink-0 border border-app-card-border">
+                            <Disc size={20} />
+                          </div>
+                        )}
+                        <div className="text-left min-w-0 flex-1 leading-tight">
+                          <p className="font-bold text-app-fg text-[13.5px] truncate group-hover:text-app-accent transition-colors mb-0.5">
+                            {track.title}
+                          </p>
+                          <p className="text-xs text-app-muted truncate">
+                            {track.artist}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center shrink-0 ml-2" onClick={e => e.stopPropagation()}>
+                        <button
+                          type="button"
+                          onClick={() => onTrackMenuOpen?.(track)}
+                          className="p-1.5 text-app-muted hover:text-app-fg rounded-full hover:bg-app-fg/5"
+                        >
+                          <MoreVertical size={16} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-10 px-6 rounded-3xl border border-dashed border-app-card-border opacity-40 italic bg-app-card/30">
+                  <Search size={30} className="mx-auto mb-2 opacity-20" />
+                  No recent tracks yet. Search above to begin study!
                 </div>
               )}
             </div>

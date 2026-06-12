@@ -285,6 +285,36 @@ export const StructuredAnalysisLecture: React.FC<StructuredAnalysisLectureProps>
     speak(phraseText);
   };
 
+  const isFallbackError = useMemo(() => {
+    return blocks.some(b => b.id === 'fallback-overview');
+  }, [blocks]);
+
+  if (isFallbackError) {
+    return (
+      <div className="w-full font-sans text-app-fg py-16 px-6 flex flex-col items-center text-center max-w-md mx-auto space-y-6" id="structured-lecture-error">
+        <div className="w-16 h-16 rounded-[1.5rem] bg-red-500/10 border border-red-500/20 flex items-center justify-center text-red-500 animate-pulse">
+          <HelpCircle size={32} />
+        </div>
+        <div className="space-y-3">
+          <h3 className="text-lg font-black tracking-tight text-app-fg">Breakdown Failed</h3>
+          <p className="text-sm text-app-muted font-medium leading-relaxed">
+            Произошла ошибка при генерации разбора. Пожалуйста, попробуйте позже.
+          </p>
+        </div>
+        {handleRegenerateAnalysis && (
+          <button
+            type="button"
+            onClick={handleRegenerateAnalysis}
+            className="flex items-center gap-2.5 px-6 py-3 bg-app-accent hover:bg-app-accent/95 cursor-pointer text-white rounded-2xl text-xs font-black uppercase tracking-widest transition-all hover:scale-[1.03] shadow-md shadow-app-accent/15"
+          >
+            <RefreshCw size={14} />
+            Regenerate Breakdown
+          </button>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="w-full font-sans text-app-fg select-text leading-relaxed pb-32" id="structured-lecture-analysis">
       
@@ -623,7 +653,7 @@ export const StructuredAnalysisLecture: React.FC<StructuredAnalysisLectureProps>
             onClick={handleRegenerateAnalysis}
             className="flex items-center gap-2 px-5 py-2.5 bg-app-fg hover:bg-app-fg-hover cursor-pointer text-app-bg rounded-xl text-[10px] font-black uppercase tracking-wider transition-all hover:scale-[1.03]"
           >
-            Regenerate Essay
+            Regenerate Breakdown
           </button>
         </div>
       )}

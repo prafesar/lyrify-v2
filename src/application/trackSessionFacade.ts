@@ -5,6 +5,7 @@ import { DailyTrackerRepositoryPort } from "./ports/dailyTrackerRepositoryPort";
 import { LyricsProviderPort } from "./ports/lyricsProviderPort";
 import { MusicMetadataPort } from "./ports/musicMetadataPort";
 import { TrackLyricsData, Track } from "../services/musicService";
+import { getCachedStructuredLecture } from "../services/geminiService";
 
 export class TrackSessionFacade {
   constructor(
@@ -68,6 +69,11 @@ export class TrackSessionFacade {
         ...track,
         difficulty: updatedCached.difficulty || track.difficulty
       });
+
+      // Background check if no lecture blocks exist but lyrics do
+      if ((!updatedCached.lectureBlocks || updatedCached.lectureBlocks.length === 0) && updatedCached.rawLyrics) {
+        this.checkAndLoadCachedLecture(trackId, updatedCached.rawLyrics, updatedCached.title, updatedCached.artist, targetLanguage, callbacks.onCacheUpdate);
+      }
 
       return updatedCached;
     }
@@ -169,6 +175,11 @@ export class TrackSessionFacade {
           this.trackCacheRepository.saveTrackData(trackId, updated);
           if (callbacks.onCacheUpdate) {
             callbacks.onCacheUpdate(updated);
+          }
+
+          // Background check if no lecture blocks exist but lyrics do
+          if (updated.rawLyrics) {
+            this.checkAndLoadCachedLecture(trackId, updated.rawLyrics, updated.title, updated.artist, targetLanguage, callbacks.onCacheUpdate);
           }
         }
       })
@@ -463,6 +474,37 @@ export class TrackSessionFacade {
     this.trackCacheRepository.saveTrackData(updatedTrack.trackId, updatedTrack);
     await this.aiClient.saveTrackToSharedCache(updatedTrack).catch(e => console.error("Firestore cache upload failed:", e));
     return updatedTrack;
+  }
+
+  /**
+   * Helper to fetch for cached lecture blocks on Firestore and load them if present.
+   */
+  private checkAndLoadCachedLecture(
+    trackId: string,
+    rawLyrics: string,
+    title: string,
+    artist: string,
+    targetLanguage: string,
+    onUpdate?: (updated: TrackLyricsData) => void
+  ) {
+    if (!rawLyrics) return;
+    getCachedStructuredLecture(rawLyrics, title, artist, targetLanguage)
+      .then(blocks => {
+        if (blocks && blocks.length > 0) {
+          const currentCached = this.trackCacheRepository.getCachedTrack(trackId);
+          if (currentCached) {
+            const updated = {
+              ...currentCached,
+              lectureBlocks: blocks
+            };
+            this.trackCacheRepository.saveTrackData(trackId, updated);
+            if (onUpdate) {
+              onUpdate(updated);
+            }
+          }
+        }
+      })
+      .catch(err => console.error("[TrackSessionFacade] checkAndLoadCachedLecture failed:", err));
   }
 }
 

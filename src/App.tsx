@@ -1741,6 +1741,20 @@ export default function App() {
             )}
           </button>
         </div>
+
+        {/* Floating Trigger button overlapping header and main content */}
+        {view === "lyrics" && isScrolledDown && !isToolbarVisible && (
+          <div className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 z-50 animate-in fade-in zoom-in duration-200">
+            <button
+              type="button"
+              onClick={() => setIsToolbarVisible(true)}
+              className="w-10 h-10 rounded-full bg-app-card border border-app-card-border/90 hover:bg-app-accent hover:text-white hover:border-transparent transition-all shadow-md hover:shadow-lg active:scale-95 flex items-center justify-center text-app-fg"
+              title="Show Practice Tracker & Search"
+            >
+              <Menu size={18} />
+            </button>
+          </div>
+        )}
       </header>
 
       {/* Main Content Area */}
@@ -2380,20 +2394,6 @@ export default function App() {
               exit={{ opacity: 0, x: -50 }}
               className="flex-1 flex flex-col overflow-hidden relative"
             >
-              {/* Floating Trigger button at top center below the header */}
-              {isScrolledDown && !isToolbarVisible && (
-                <div className="absolute top-4 left-1/2 -translate-x-1/2 z-40 animate-in fade-in zoom-in duration-200">
-                  <button
-                    type="button"
-                    onClick={() => setIsToolbarVisible(true)}
-                    className="w-10 h-10 rounded-full bg-app-card border border-app-card-border/90 hover:bg-app-accent hover:text-white hover:border-transparent transition-all shadow-md hover:shadow-lg active:scale-95 flex items-center justify-center text-app-fg"
-                    title="Show Practice Tracker & Search"
-                  >
-                    <Menu size={18} />
-                  </button>
-                </div>
-              )}
-
               <div
                 ref={scrollContainerRef}
                 onScroll={handleScroll}

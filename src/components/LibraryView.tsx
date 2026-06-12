@@ -158,11 +158,40 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
     );
   }, [favorites, searchQuery]);
 
+  // Dynamic automatic playlists based on user favorites' sourceLanguage
+  const autoPlaylists = useMemo(() => {
+    const groups: Record<string, Track[]> = {};
+    favorites.forEach(track => {
+      const lang = track.sourceLanguage || "English";
+      if (!groups[lang]) {
+        groups[lang] = [];
+      }
+      groups[lang].push(track);
+    });
+
+    return Object.entries(groups).map(([lang, tracks]) => ({
+      id: `auto-lang-${lang}`,
+      name: `${lang} Favorites`,
+      tracks: tracks,
+      isAuto: true,
+      language: lang
+    }));
+  }, [favorites]);
+
+  const allPlaylists = useMemo(() => {
+    return [...autoPlaylists, ...playlists];
+  }, [autoPlaylists, playlists]);
+
+  const activeSelectedPlaylist = useMemo(() => {
+    if (!selectedPlaylist) return null;
+    return allPlaylists.find(p => p.id === selectedPlaylist.id) || null;
+  }, [selectedPlaylist, allPlaylists]);
+
   const filteredPlaylists = useMemo(() => {
-    if (!searchQuery.trim()) return playlists;
+    if (!searchQuery.trim()) return allPlaylists;
     const query = searchQuery.toLowerCase();
-    return playlists.filter(p => p.name.toLowerCase().includes(query));
-  }, [playlists, searchQuery]);
+    return allPlaylists.filter(p => p.name.toLowerCase().includes(query));
+  }, [allPlaylists, searchQuery]);
 
   const filteredArtists = useMemo(() => {
     if (!searchQuery.trim()) return favoriteArtists;
@@ -228,7 +257,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
   return (
     <div className="w-full flex-1 overflow-y-auto px-6 pt-6 pb-32 max-w-5xl mx-auto scrollbar-hide" id="cantolex-library-view-main">
       <AnimatePresence mode="wait">
-        {!selectedPlaylist ? (
+        {!activeSelectedPlaylist ? (
           <motion.div
             key="library-root"
             initial={{ opacity: 0 }}
@@ -511,23 +540,36 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                                 {renderPlaylistCover(playlist)}
                               </div>
                               <div className="text-left overflow-hidden leading-tight">
-                                <span className="font-bold text-app-fg text-[13.5px] leading-tight block truncate group-hover:text-app-accent transition-colors mb-0.5">
-                                  {playlist.name}
-                                </span>
+                                <div className="flex items-center gap-1.5 overflow-hidden">
+                                  <span className="font-bold text-app-fg text-[13.5px] leading-tight block truncate group-hover:text-app-accent transition-colors mb-0.5">
+                                    {playlist.name}
+                                  </span>
+                                  {playlist.isAuto && (
+                                    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-[8px] font-black tracking-widest uppercase bg-app-accent/10 text-app-accent shrink-0">
+                                      <Sparkles size={8} /> Auto
+                                    </span>
+                                  )}
+                                </div>
                                 <span className="text-xs text-app-muted block">
                                   {playlist.tracks?.length || 0} songs • {playlist.tracks?.length > 0 ? `${playlist.tracks.length * 3} min` : "empty"}
                                 </span>
                               </div>
                             </div>
                             <div className="flex items-center shrink-0 ml-2" onClick={e => e.stopPropagation()}>
-                              <button
-                                type="button"
-                                onClick={() => handleDeletePlaylist(playlist.id)}
-                                className="p-1.5 text-app-muted hover:text-red-500 rounded-full hover:bg-red-500/5 transition-all"
-                                title="Delete playlist"
-                              >
-                                <Trash2 size={16} />
-                              </button>
+                              {!playlist.isAuto ? (
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeletePlaylist(playlist.id)}
+                                  className="p-1.5 text-app-muted hover:text-red-500 rounded-full hover:bg-red-500/5 transition-all"
+                                  title="Delete playlist"
+                                >
+                                  <Trash2 size={16} />
+                                </button>
+                              ) : (
+                                <div className="p-1.5 text-app-muted" title="Automatic playlist">
+                                  <Sparkles size={16} className="text-app-accent/40" />
+                                </div>
+                              )}
                             </div>
                           </div>
                         ))}
@@ -544,9 +586,16 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                             <div className="flex items-center gap-4 flex-1 overflow-hidden select-none">
                               {renderPlaylistCover(playlist)}
                               <div className="text-left overflow-hidden">
-                                <span className="font-bold text-app-fg text-[14px] leading-tight block truncate group-hover:text-app-accent transition-colors">
-                                  {playlist.name}
-                                </span>
+                                <div className="flex items-center gap-1.5 overflow-hidden">
+                                  <span className="font-bold text-app-fg text-[14px] leading-tight block truncate group-hover:text-app-accent transition-colors">
+                                    {playlist.name}
+                                  </span>
+                                  {playlist.isAuto && (
+                                    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-[8px] font-black tracking-widest uppercase bg-app-accent/10 text-app-accent shrink-0">
+                                      <Sparkles size={8} /> Auto
+                                    </span>
+                                  )}
+                                </div>
                                 <span className="text-xs text-app-muted block mt-0.5">
                                   {playlist.tracks?.length || 0} songs • {playlist.tracks?.length > 0 ? `${playlist.tracks.length * 3} min` : "empty"}
                                 </span>
@@ -554,14 +603,20 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                             </div>
 
                             <div className="flex gap-1" onClick={e => e.stopPropagation()}>
-                              <button
-                                type="button"
-                                onClick={() => handleDeletePlaylist(playlist.id)}
-                                className="p-2 text-app-muted hover:text-red-500 rounded-full hover:bg-red-500/5 transition-all"
-                                title="Delete playlist"
-                              >
-                                <Trash2 size={16} />
-                              </button>
+                              {!playlist.isAuto ? (
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeletePlaylist(playlist.id)}
+                                  className="p-2 text-app-muted hover:text-red-500 rounded-full hover:bg-red-500/5 transition-all"
+                                  title="Delete playlist"
+                                >
+                                  <Trash2 size={16} />
+                                </button>
+                              ) : (
+                                <div className="p-2 text-app-muted" title="Automatic playlist">
+                                  <Sparkles size={16} className="text-app-accent/40" />
+                                </div>
+                              )}
                             </div>
                           </div>
                         ))}
@@ -694,23 +749,34 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                 <span>Back to playlists</span>
               </button>
 
-              <button
-                onClick={() => handleDeletePlaylist(selectedPlaylist.id)}
-                className="flex items-center gap-1 text-xs font-black uppercase tracking-widest text-red-500 hover:text-red-600 hover:bg-red-500/5 px-2.5 py-1 rounded-xl transition-all"
-              >
-                <Trash2 size={13} />
-                <span>Delete</span>
-              </button>
+              {!activeSelectedPlaylist.isAuto && (
+                <button
+                  onClick={() => handleDeletePlaylist(activeSelectedPlaylist.id)}
+                  className="flex items-center gap-1 text-xs font-black uppercase tracking-widest text-red-500 hover:text-red-600 hover:bg-red-500/5 px-2.5 py-1 rounded-xl transition-all"
+                >
+                  <Trash2 size={13} />
+                  <span>Delete</span>
+                </button>
+              )}
             </div>
 
             {/* Playlist Title & Meta card */}
             <div className="flex items-center gap-4 p-5 rounded-3xl bg-app-card border border-app-card-border shadow">
-              {renderPlaylistCover(selectedPlaylist)}
+              {renderPlaylistCover(activeSelectedPlaylist)}
               <div className="overflow-hidden select-none">
-                <span className="text-[9px] font-black text-app-accent uppercase tracking-widest block mb-1">PLAYLIST</span>
-                <h1 className="text-xl font-bold text-app-fg leading-tight truncate">{selectedPlaylist.name}</h1>
+                <span className="text-[9px] font-black text-app-accent uppercase tracking-widest block mb-1">
+                  {activeSelectedPlaylist.isAuto ? "AUTOMATIC PLAYLIST" : "PLAYLIST"}
+                </span>
+                <h1 className="text-xl font-bold text-app-fg leading-tight truncate flex items-center gap-2">
+                  {activeSelectedPlaylist.name}
+                  {activeSelectedPlaylist.isAuto && (
+                    <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-md text-[9px] font-black tracking-widest uppercase bg-app-accent/10 text-app-accent">
+                      <Sparkles size={10} fill="currentColor" className="text-app-accent animate-pulse" /> Auto
+                    </span>
+                  )}
+                </h1>
                 <p className="text-xs text-app-muted mt-1 leading-none">
-                  Total: {selectedPlaylist.tracks?.length || 0} songs • {selectedPlaylist.tracks?.length > 0 ? `${selectedPlaylist.tracks.length * 3} minutes track length` : "no tracks"}
+                  Total: {activeSelectedPlaylist.tracks?.length || 0} songs • {activeSelectedPlaylist.tracks?.length > 0 ? `${activeSelectedPlaylist.tracks.length * 3} minutes track length` : "no tracks"}
                 </p>
               </div>
             </div>
@@ -719,8 +785,8 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
             <div className="space-y-2.5">
               <span className="text-[10px] font-black text-app-muted uppercase tracking-widest leading-none block px-1">Tracks in Playlist</span>
               
-              {selectedPlaylist.tracks && selectedPlaylist.tracks.length > 0 ? (
-                selectedPlaylist.tracks.map((track: Track, idx: number) => (
+              {activeSelectedPlaylist.tracks && activeSelectedPlaylist.tracks.length > 0 ? (
+                activeSelectedPlaylist.tracks.map((track: Track, idx: number) => (
                   <div
                     key={`plt-${track.id}-${idx}`}
                     onClick={() => onTrackSelect(track)}
@@ -750,14 +816,16 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                     </div>
 
                     <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveTrackFromPlaylist(selectedPlaylist.id, track.id || track.trackId)}
-                        className="p-2 text-app-muted hover:text-red-500 hover:bg-red-500/5 rounded-full transition-all"
-                        title="Remove from playlist"
-                      >
-                        <Trash2 size={15} />
-                      </button>
+                      {!activeSelectedPlaylist.isAuto && (
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveTrackFromPlaylist(activeSelectedPlaylist.id, track.id || track.trackId)}
+                          className="p-2 text-app-muted hover:text-red-500 hover:bg-red-500/5 rounded-full transition-all"
+                          title="Remove from playlist"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={() => setMenuTrack(track)}

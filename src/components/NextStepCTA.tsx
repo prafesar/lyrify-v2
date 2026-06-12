@@ -149,7 +149,7 @@ export const NextStepCTA: React.FC<NextStepCTAProps> = ({
             <span className={`text-sm md:text-base font-extrabold text-app-fg leading-tight block mt-0.5 transition-colors ${!isExecuting && 'group-hover:text-app-accent'}`}>
               {currentText.title}
             </span>
-            <span className="text-xs text-app-muted leading-relaxed block mt-1 font-semibold opacity-90 truncate md:whitespace-normal">
+            <span className="text-xs text-app-muted leading-relaxed block mt-1 font-semibold opacity-90 whitespace-normal break-words">
               {currentText.desc}
               {isExecuting && (
                 <motion.span
@@ -161,20 +161,6 @@ export const NextStepCTA: React.FC<NextStepCTAProps> = ({
                 </motion.span>
               )}
             </span>
-
-            {/* Aux button shown inside card for SAVE_PHRASES state to avoid nested click interference */}
-            {state.type === 'SAVE_PHRASES' && onMarkCompleted && !isExecuting && (
-              <div className="mt-3 flex animate-in fade-in duration-200" onClick={(e) => e.stopPropagation()}>
-                <button
-                  type="button"
-                  onClick={onMarkCompleted}
-                  className="px-3.5 py-1.5 bg-transparent border border-app-card-border hover:bg-app-fg/5 text-app-muted hover:text-app-fg text-[10px] font-black uppercase tracking-wider rounded-xl active:scale-95 transition-all flex items-center gap-1 cursor-pointer"
-                >
-                   <Check size={12} />
-                   Done with breakdown
-                </button>
-              </div>
-            )}
           </div>
         </div>
 
