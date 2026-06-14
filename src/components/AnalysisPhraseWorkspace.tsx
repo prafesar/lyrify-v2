@@ -37,7 +37,6 @@ interface AnalysisPhraseWorkspaceProps {
   onUpdateTrack: (updatedTrack: TrackLyricsData) => Promise<void>;
   isGeneratingAnalysis?: boolean;
   handleRegenerateAnalysis?: () => void;
-  onOpenAssistantForPhrase?: (phrase: Phrase) => void;
   onNavigateToTab?: (tab: "preview" | "lyrics" | "analysis" | "cards") => void;
   onStartStudy?: () => void;
 }
@@ -52,7 +51,6 @@ export const AnalysisPhraseWorkspace: React.FC<AnalysisPhraseWorkspaceProps> = (
   onUpdateTrack,
   isGeneratingAnalysis = false,
   handleRegenerateAnalysis,
-  onOpenAssistantForPhrase,
   onNavigateToTab,
   onStartStudy
 }) => {
@@ -766,22 +764,6 @@ export const AnalysisPhraseWorkspace: React.FC<AnalysisPhraseWorkspaceProps> = (
                                 </span>
                               )}
                             </div>
-
-                            {/* Action drawers: Ask AI */}
-                            {onOpenAssistantForPhrase && (
-                              <div className="pt-3 border-t border-app-card-border/40 flex items-center justify-end text-xs gap-3">
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    onOpenAssistantForPhrase(item);
-                                  }}
-                                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-orange-500 hover:bg-orange-600 hover:scale-[1.02] text-white active:scale-[0.98] transition-all text-[9.5px] font-black uppercase tracking-widest shadow-sm shadow-orange-500/10 cursor-pointer"
-                                >
-                                  <MessageSquare size={11} className="animated-none select-none" />
-                                  <span>{uiLanguage === 'ru' ? 'Спросить ассистента' : 'Ask Assistant'}</span>
-                                </button>
-                              </div>
-                            )}
                           </>
                         )}
                       </div>

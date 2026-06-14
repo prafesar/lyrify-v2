@@ -73,7 +73,6 @@ import { onAuthStateChanged, type User } from "firebase/auth";
 import StudyView from "./components/StudyView";
 import SettingsView from "./components/SettingsView";
 import PhraseDrawer from "./components/PhraseDrawer";
-import { LearningAssistantPanel } from "./components/LearningAssistantPanel";
 import { acceptSuggestedPhrase, addUserPhrase, editPhrase } from "./services/lyricsAnalysisService";
 import { LibraryView } from "./components/LibraryView";
 import LanguageSelector from "./components/LanguageSelector";
@@ -892,43 +891,9 @@ export default function App() {
     lastScrollYRef.current = currentScrollY;
   };
 
-  // Learning Assistant Panel States
-  const [isAssistantOpen, setIsAssistantOpen] = useState(false);
   const [isResourcesExpanded, setIsResourcesExpanded] = useState(false);
-  const [assistantPhraseContext, setAssistantPhraseContext] = useState<{ text: string; translation?: string; explanation?: string; lineIds?: string[] } | undefined>(undefined);
-
-  const handleAcceptSuggestedPhraseInApp = async (
-    phraseText: string,
-    translation: string,
-    explanation?: string,
-    type?: string,
-    lineIds?: string[]
-  ) => {
-    if (!currentTrack) return;
-    const updatedTrack = acceptSuggestedPhrase(
-      currentTrack,
-      phraseText,
-      translation,
-      explanation,
-      type,
-      lineIds
-    );
-    await saveTrackData(currentTrack.trackId, updatedTrack);
-    setCurrentTrack(updatedTrack);
-    loadUserCards();
-  };
 
   const [trackSearchQuery, setTrackSearchQuery] = useState("");
-
-  const handleOpenAssistantForPhrase = useCallback((phrase: { text: string; translation?: string; explanation?: string; lineIds?: string[] }) => {
-    setAssistantPhraseContext({
-      text: phrase.text,
-      translation: phrase.translation,
-      explanation: phrase.explanation,
-      lineIds: phrase.lineIds
-    });
-    setIsAssistantOpen(true);
-  }, []);
 
   // Derived memoized progress View Models
   const nextStepState = useMemo(() => {
@@ -3510,7 +3475,6 @@ export default function App() {
                           }}
                           isGeneratingAnalysis={isGeneratingAnalysis}
                           handleRegenerateAnalysis={handleRegenerateAnalysis}
-                          onOpenAssistantForPhrase={handleOpenAssistantForPhrase}
                           onNavigateToTab={setActiveTab}
                           onStartStudy={() => {
                             setStudyTrackId(currentTrack.trackId);
@@ -4629,21 +4593,6 @@ export default function App() {
               })()}
             </motion.div>
           </>
-        )}
-      </AnimatePresence>
-
-      <AnimatePresence>
-        {isAssistantOpen && currentTrack && assistantPhraseContext && (
-          <LearningAssistantPanel
-            isOpen={isAssistantOpen}
-            onClose={() => setIsAssistantOpen(false)}
-            track={currentTrack}
-            phraseContext={assistantPhraseContext}
-            targetLanguage={targetLanguage}
-            onAcceptPhrase={handleAcceptSuggestedPhraseInApp}
-            existingPhrases={currentTrack.lines ? currentTrack.lines.flatMap((l: any) => l.phrases || []) : []}
-            speak={speak}
-          />
         )}
       </AnimatePresence>
 
