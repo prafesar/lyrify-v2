@@ -280,9 +280,9 @@ export const PhraseCard: React.FC<PhraseCardProps> = ({
                 {/* Explanation text */}
                 {explanation && (
                   <div className="pl-4 border-l-2 border-app-card-border">
-                    <div className="markdown-body">
+                    <div className="markdown-body text-base text-app-fg opacity-75 leading-relaxed font-sans font-medium">
                       {highlightedExplanation || (
-                        <ReactMarkdown className="text-base text-app-fg opacity-75 leading-relaxed font-sans font-medium">
+                        <ReactMarkdown>
                           {explanation}
                         </ReactMarkdown>
                       )}
