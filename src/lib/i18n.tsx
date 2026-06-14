@@ -121,10 +121,23 @@ export interface TranslationDictionary {
     noMatchingLyricLines: string;
     clearSearch: string;
     fetchingDetails: string;
+    searchPlaceholder: string;
+    lyricsNotFound: string;
+    manualEntry: string;
+    retryAiSearch: string;
+    saveAndAnalyze: string;
+    lyricsAreMissing: string;
+    missingLyricsDesc: string;
+    findLyricsPhrases: string;
+    enterManually: string;
+    lyricAuthors: string;
   };
   tracks: {
     title: string;
     searchPlaceholder: string;
+    searchTracks: string;
+    searchAlbums: string;
+    searchArtists: string;
     customLyrics: string;
     searchNoResults: string;
     weeklyChallenge: string;
@@ -553,10 +566,23 @@ const en: TranslationDictionary = {
     noMatchingLyricLines: 'No matching lyric lines.',
     clearSearch: 'Clear Search',
     fetchingDetails: 'Fetching details...',
+    searchPlaceholder: 'Search lyrics...',
+    lyricsNotFound: 'Lyrics not found',
+    manualEntry: 'Manual Entry',
+    retryAiSearch: 'Retry AI search',
+    saveAndAnalyze: 'Save & Analyze',
+    lyricsAreMissing: 'Lyrics are missing',
+    missingLyricsDesc: "We haven't fetched the original text for this song yet.",
+    findLyricsPhrases: 'Find Lyrics & Phrases',
+    enterManually: 'Enter Manually',
+    lyricAuthors: 'Lyric Authors',
   },
   tracks: {
     title: 'Explore Tracks',
     searchPlaceholder: 'Search songs, artists, or paste iTunes/Apple Music link...',
+    searchTracks: 'Search tracks...',
+    searchAlbums: 'Search albums...',
+    searchArtists: 'Search artists...',
     customLyrics: 'Or analyze your own lyrics...',
     searchNoResults: 'No tracks found. Try searching for something else or paste a direct iTunes track link!',
     weeklyChallenge: 'Weekly Language Challenge',
@@ -985,10 +1011,23 @@ const ru: TranslationDictionary = {
     noMatchingLyricLines: 'Нет подходящих строк текста.',
     clearSearch: 'Сбросить поиск',
     fetchingDetails: 'Получение сведений...',
+    searchPlaceholder: 'Поиск по тексту...',
+    lyricsNotFound: 'Текст не найден',
+    manualEntry: 'Ручной ввод',
+    retryAiSearch: 'Повторить AI-поиск',
+    saveAndAnalyze: 'Сохранить и анализировать',
+    lyricsAreMissing: 'Текст отсутствует',
+    missingLyricsDesc: 'Оригинальный текст для этой песни еще не был загружен.',
+    findLyricsPhrases: 'Найти текст и фразы',
+    enterManually: 'Ввести вручную',
+    lyricAuthors: 'Авторы текста',
   },
   tracks: {
     title: 'Поиск песен',
     searchPlaceholder: 'Ищите песни, артистов или вставьте ссылку iTunes/Apple Music...',
+    searchTracks: 'Поиск треков...',
+    searchAlbums: 'Поиск альбомов...',
+    searchArtists: 'Поиск исполнителей...',
     customLyrics: 'Или проанализируйте свой собственный текст...',
     searchNoResults: 'Песен не найдено. Попробуйте поискать что-то другое или вставьте прямую ссылку iTunes!',
     weeklyChallenge: 'Еженедельный языковой вызов',

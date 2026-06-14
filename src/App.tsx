@@ -1858,9 +1858,9 @@ export default function App() {
                       onBlur={() => setTimeout(() => setIsSearchInputFocused(false), 200)}
                       onChange={(e) => setSearchQuery(e.target.value)}
                       placeholder={
-                        searchEntityType === "musicTrack" ? "Search tracks..." :
-                        searchEntityType === "album" ? "Search albums..." :
-                        "Search artists..."
+                        searchEntityType === "musicTrack" ? t('tracks.searchTracks') :
+                        searchEntityType === "album" ? t('tracks.searchAlbums') :
+                        t('tracks.searchArtists')
                       }
                       className="w-full bg-app-card border border-app-card-border shadow-app-card rounded-2xl py-5 pl-12 pr-12 text-lg font-medium outline-none transition-all focus:border-app-accent/50"
                     />
@@ -2719,7 +2719,7 @@ export default function App() {
                             <Search size={16} className="text-app-fg opacity-40 shrink-0 mr-1.5 sm:mr-2.5" />
                             <input
                               type="text"
-                              placeholder="Search lyrics..."
+                              placeholder={t('lyrics.searchPlaceholder')}
                               value={trackSearchQuery}
                               onChange={(e) => setTrackSearchQuery(e.target.value)}
                               className="flex-1 min-w-0 bg-transparent text-sm font-semibold text-app-fg placeholder-app-fg/30 focus:outline-none font-sans"
@@ -3266,7 +3266,7 @@ export default function App() {
                             </div>
                             <div className="space-y-2">
                               <h3 className="text-xl font-bold text-app-fg">
-                                Lyrics not found
+                                {t('lyrics.lyricsNotFound')}
                               </h3>
                               <p className="text-sm text-app-fg opacity-40">
                                 {lyricsFetchError}
@@ -3276,14 +3276,14 @@ export default function App() {
                             <div className="space-y-4">
                               <div className="text-left space-y-2">
                                 <label className="text-[10px] font-black uppercase tracking-[0.2em] text-app-fg opacity-30 ml-2">
-                                  Manual Entry
+                                  {t('lyrics.manualEntry')}
                                 </label>
                                 <textarea
                                   value={manualLyrics}
                                   onChange={(e) =>
                                     setManualLyrics(e.target.value)
                                   }
-                                  placeholder="Paste lyrics here..."
+                                  placeholder={t('tracks.pasteLyricsPlaceholder')}
                                   className="w-full min-h-[150px] bg-app-bg border border-app-card-border rounded-2xl p-4 text-sm font-serif outline-none focus:border-app-accent/50 transition-all placeholder:opacity-20"
                                 />
                               </div>
@@ -3295,7 +3295,7 @@ export default function App() {
                                   }
                                   className="flex-1 py-4 rounded-2xl bg-app-fg/5 hover:bg-app-fg/10 text-app-fg font-bold text-[10px] uppercase tracking-widest transition-all"
                                 >
-                                  Retry AI search
+                                  {t('lyrics.retryAiSearch')}
                                 </button>
                                 <button
                                   onClick={handleManualLyricsSubmit}
@@ -3305,8 +3305,8 @@ export default function App() {
                                   className="flex-[2] py-4 rounded-2xl bg-app-fg text-app-bg font-bold text-[10px] uppercase tracking-widest transition-all disabled:opacity-20"
                                 >
                                   {isLoadingLyrics
-                                    ? "Processing..."
-                                    : "Save & Analyze"}
+                                    ? t('nextStep.processing')
+                                    : t('lyrics.saveAndAnalyze')}
                                 </button>
                               </div>
                             </div>
@@ -3317,9 +3317,9 @@ export default function App() {
                                <Music2 size={32} />
                             </div>
                             <div className="space-y-2 text-center">
-                               <h3 className="text-xl font-black text-app-fg">Lyrics are missing</h3>
+                               <h3 className="text-xl font-black text-app-fg">{t('lyrics.lyricsAreMissing')}</h3>
                                <p className="text-sm text-app-muted max-w-xs mx-auto italic font-serif">
-                                 We haven't fetched the original text for this song yet.
+                                 {t('lyrics.missingLyricsDesc')}
                                </p>
                             </div>
                             <div className="flex flex-col gap-3 w-full max-w-xs">
@@ -3327,13 +3327,13 @@ export default function App() {
                                 onClick={handleAnalyzeSong}
                                 className="w-full py-4 rounded-2xl bg-app-accent text-white font-black uppercase tracking-widest text-[10px] shadow-xl transition-all hover:scale-105 active:scale-95"
                               >
-                                Find Lyrics & Phrases
+                                {t('lyrics.findLyricsPhrases')}
                               </button>
                               <button
                                 onClick={() => setLyricsFetchError("manual")}
                                 className="w-full py-4 rounded-2xl bg-app-fg/5 hover:bg-app-fg/10 text-app-fg font-black uppercase tracking-widest text-[10px] transition-all"
                               >
-                                Enter Manually
+                                {t('lyrics.enterManually')}
                               </button>
                             </div>
                           </div>
@@ -3344,7 +3344,7 @@ export default function App() {
                     {currentTrack.authors && (
                       <div className="space-y-1">
                         <p className="text-[10px] font-black uppercase tracking-[0.2em]">
-                          Lyric Authors
+                          {t('lyrics.lyricAuthors')}
                         </p>
                         <p className="text-sm font-serif italic text-app-fg">
                           {currentTrack.authors}
@@ -3354,7 +3354,7 @@ export default function App() {
                     {currentTrack.lyricSource && (
                       <div className="space-y-1">
                         <p className="text-[10px] font-black uppercase tracking-[0.2em]">
-                          Source
+                          {t('resources.lyricsSource')}
                         </p>
                         <p className="text-sm font-bold text-app-fg">
                           {currentTrack.lyricSource}
@@ -4128,7 +4128,7 @@ export default function App() {
                               type="text"
                               value={lyricsSearchTitle}
                               onChange={(e) => setLyricsSearchTitle(e.target.value)}
-                              placeholder="Title"
+                              placeholder={t('resources.trackTitle')}
                               className="w-full text-xs font-semibold rounded-xl bg-app-bg border border-app-card-border px-2.5 py-1.5 text-app-fg focus:border-accent/40 outline-none transition-all placeholder:opacity-30"
                             />
                           </div>
@@ -4141,7 +4141,7 @@ export default function App() {
                               type="text"
                               value={lyricsSearchArtist}
                               onChange={(e) => setLyricsSearchArtist(e.target.value)}
-                              placeholder="Artist"
+                              placeholder={t('resources.artistName')}
                               className="w-full text-xs font-semibold rounded-xl bg-app-bg border border-app-card-border px-2.5 py-1.5 text-app-fg focus:border-accent/40 outline-none transition-all placeholder:opacity-30"
                             />
                           </div>
@@ -4273,7 +4273,7 @@ export default function App() {
                     className="text-[10px] font-black uppercase tracking-[0.4em]"
                     style={{ color: "var(--accent)" }}
                   >
-                    Lyrics Settings
+                    {t('lyricsSettings.title')}
                   </span>
                   <button
                     onClick={() => setIsLyricsSettingsOpen(false)}
@@ -4287,10 +4287,10 @@ export default function App() {
                   <div className="flex items-center justify-between p-4 rounded-2xl bg-app-card border border-app-card-border">
                     <div className="space-y-1">
                       <p className="text-[10px] font-black uppercase tracking-widest text-app-fg opacity-40">
-                        Source Language
+                        {t('lyricsSettings.sourceLanguage')}
                       </p>
                       <p className="text-xs font-medium text-app-fg">
-                        Used for pronunciation and search
+                        {t('lyricsSettings.sourceLanguageDesc')}
                       </p>
                     </div>
                     <LanguageSelector
@@ -4313,10 +4313,10 @@ export default function App() {
                   <div className="flex items-center justify-between p-5 rounded-3xl bg-app-card border border-app-card-border">
                     <div className="space-y-1">
                       <p className="font-bold text-app-fg">
-                        Skip Known Phrases
+                        {t('lyricsSettings.skipKnown')}
                       </p>
                       <p className="text-xs text-app-fg opacity-40">
-                        Don't read lines you already know
+                        {t('lyricsSettings.skipKnownDesc')}
                       </p>
                     </div>
                     <button
@@ -4338,10 +4338,10 @@ export default function App() {
                   <div className="flex items-center justify-between p-5 rounded-3xl bg-app-card border border-app-card-border">
                     <div className="space-y-1">
                       <p className="font-bold text-app-fg">
-                        Translation
+                        {t('lyricsSettings.translation')}
                       </p>
                       <p className="text-xs text-app-fg opacity-40">
-                        Regenerate lyrics translation
+                        {t('lyricsSettings.translationDesc')}
                       </p>
                     </div>
                     <button
@@ -4357,7 +4357,7 @@ export default function App() {
                       )}
                     >
                       <RefreshCw size={12} className={cn(isTranslating ? "animate-spin" : "")} />
-                      <span>{isTranslating ? "Translating..." : "Regenerate"}</span>
+                      <span>{isTranslating ? t('lyricsSettings.translatingStatus') : t('lyricsSettings.regenerateBtn')}</span>
                     </button>
                   </div>
                 </div>
@@ -4371,7 +4371,7 @@ export default function App() {
                       "0 10px 20px -5px color-mix(in srgb, var(--accent) 40%, transparent)",
                   }}
                 >
-                  Done
+                  {t('common.done')}
                 </button>
               </div>
             </motion.div>
@@ -4402,7 +4402,7 @@ export default function App() {
                     className="text-[10px] font-black uppercase tracking-[0.4em]"
                     style={{ color: "var(--accent)" }}
                   >
-                    Phrase Action
+                    {t('phraseAction.title')}
                   </span>
                   <button
                     onClick={() => setIsEditModalOpen(false)}
@@ -4468,7 +4468,7 @@ export default function App() {
                         className="text-[10px] font-black uppercase tracking-widest mb-3 opacity-40"
                         style={{ color: "var(--accent)" }}
                       >
-                        Explanation
+                        {t('phraseAction.explanation')}
                       </p>
                       <div className="text-xl leading-relaxed text-app-fg opacity-80 prose prose-invert prose-lg">
                         <ReactMarkdown>{editingLine.explanation}</ReactMarkdown>
@@ -4491,7 +4491,7 @@ export default function App() {
                       disabled={isSaving}
                       className="py-4 rounded-2xl font-bold uppercase text-[10px] tracking-widest transition-all bg-app-card border border-app-card-border text-app-fg hover:bg-opacity-80"
                     >
-                      I know it
+                      {t('phraseAction.knowIt')}
                     </button>
                     <button
                       onClick={() => {
@@ -4509,7 +4509,7 @@ export default function App() {
                         boxShadow: "0 10px 20px -5px rgba(249, 115, 22, 0.4)",
                       }}
                     >
-                      {isSaving ? "Saving..." : "Learn"}
+                      {isSaving ? t('phraseAction.saving') : t('phraseAction.learn')}
                     </button>
                   </div>
 
@@ -4522,7 +4522,7 @@ export default function App() {
                     disabled={isExplaining || isSaving}
                     className="w-full py-4 rounded-2xl font-bold uppercase text-[10px] tracking-widest transition-all border border-[var(--accent)] text-[var(--accent)] hover:bg-[var(--accent)] hover:text-white"
                   >
-                    {isExplaining ? "Thinking..." : "Explain"}
+                    {isExplaining ? t('phraseAction.thinking') : t('phraseAction.explain')}
                   </button>
                 </div>
               </div>
