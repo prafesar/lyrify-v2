@@ -12,6 +12,7 @@ import { getLocaleByName } from '../lib/languages';
 import { useTranslation } from '../lib/i18n';
 import { getCachedTrackData } from '../services/musicService';
 import { resolvePhraseContext } from '../services/lyricsAnalysisService';
+import { PhraseCard, LyricsLineContext, PhraseCardStatus } from './PhraseCard';
 
 interface StudyViewProps {
   onBack: () => void;
@@ -41,6 +42,18 @@ export default function StudyView({ onBack, initialTrackId, onReviewCompleted, o
   const [selectedType, setSelectedType] = useState<string>('all');
   const [expandedParents, setExpandedParents] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState("");
+
+  // Column cards expanded toggles
+  const [expandedCardIds, setExpandedCardIds] = useState<Set<string>>(new Set());
+
+  const toggleCardExpanded = (cardId: string) => {
+    setExpandedCardIds(prev => {
+      const next = new Set(prev);
+      if (next.has(cardId)) next.delete(cardId);
+      else next.add(cardId);
+      return next;
+    });
+  };
 
   // Editing state for cards
   const [editingCardId, setEditingCardId] = useState<string | null>(null);
@@ -303,12 +316,23 @@ export default function StudyView({ onBack, initialTrackId, onReviewCompleted, o
     }
   }, [currentIndex, viewMode]);
 
-  const speak = (text: string) => {
+  const [currentlySpeakingCardId, setCurrentlySpeakingCardId] = useState<string | null>(null);
+
+  const speak = (text: string, cardId?: string) => {
     window.speechSynthesis.cancel();
+    if (cardId) {
+      setCurrentlySpeakingCardId(cardId);
+    }
     setTimeout(() => {
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.lang = getLocaleByName(currentCard?.sourceLanguage || 'English');
       utterance.rate = 0.9;
+      utterance.onend = () => {
+        setCurrentlySpeakingCardId(null);
+      };
+      utterance.onerror = () => {
+        setCurrentlySpeakingCardId(null);
+      };
       window.speechSynthesis.speak(utterance);
     }, 50);
   };
@@ -590,204 +614,174 @@ export default function StudyView({ onBack, initialTrackId, onReviewCompleted, o
                                 ? resolvePhraseContext(track.lines, child.lineId ? [child.lineId] : [], child.text)
                                 : [];
 
-                              let bgClasses = "bg-app-card/75 border-app-card-border hover:border-app-card-border/90";
-                              if (child.status === "learning") {
-                                bgClasses = "bg-orange-500/[0.04] border-orange-500/20 hover:border-orange-500/35";
-                              } else if (child.status === "new") {
-                                bgClasses = "bg-sky-500/[0.04] border-sky-500/20 hover:border-sky-500/35";
-                              } else if (child.status === "known") {
-                                bgClasses = "bg-emerald-500/[0.02] border-emerald-500/20 hover:border-emerald-500/35";
-                              }
+                              const isExpanded = expandedCardIds.has(child.id);
+
+                              const editFormContent = (
+                                <div className="space-y-3 w-full font-sans text-xs text-left">
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    <div className="flex flex-col gap-1">
+                                      <label className="text-[10px] font-black uppercase tracking-widest opacity-40">
+                                        {uiLanguage === 'ru' ? 'Оригинальный текст' : 'Original Text'}
+                                      </label>
+                                      <input
+                                        type="text"
+                                        value={editFields.text}
+                                        onChange={(e) => setEditFields({ ...editFields, text: e.target.value })}
+                                        className="w-full px-3 py-2 text-sm rounded-xl bg-app-bg border border-app-card-border focus:border-orange-500 focus:outline-none bg-app-card text-app-fg"
+                                      />
+                                    </div>
+                                    <div className="flex flex-col gap-1">
+                                      <label className="text-[10px] font-black uppercase tracking-widest opacity-40">
+                                        {uiLanguage === 'ru' ? 'Перевод' : 'Translation'}
+                                      </label>
+                                      <input
+                                        type="text"
+                                        value={editFields.translation}
+                                        onChange={(e) => setEditFields({ ...editFields, translation: e.target.value })}
+                                        className="w-full px-3 py-2 text-sm rounded-xl bg-app-bg border border-app-card-border focus:border-orange-500 focus:outline-none bg-app-card text-app-fg"
+                                      />
+                                    </div>
+                                  </div>
+
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    <div className="flex flex-col gap-1">
+                                      <label className="text-[10px] font-black uppercase tracking-widest opacity-40">
+                                        {uiLanguage === 'ru' ? 'Тип' : 'Type'}
+                                      </label>
+                                      <select
+                                        value={editFields.type}
+                                        onChange={(e) => setEditFields({ ...editFields, type: e.target.value })}
+                                        className="w-full px-3 py-2 text-sm rounded-xl bg-app-bg border border-app-card-border focus:border-orange-500 focus:outline-none bg-app-card text-app-fg font-sans text-sm"
+                                      >
+                                        {Object.entries(typeLabels).map(([val, label]) => (
+                                          <option key={val} value={val}>{label}</option>
+                                        ))}
+                                      </select>
+                                    </div>
+                                    <div className="flex flex-col gap-1">
+                                      <label className="text-[10px] font-black uppercase tracking-widest opacity-40">
+                                        {uiLanguage === 'ru' ? 'Примечания' : 'User Note'}
+                                      </label>
+                                      <input
+                                        type="text"
+                                        value={editFields.userNote}
+                                        onChange={(e) => setEditFields({ ...editFields, userNote: e.target.value })}
+                                        placeholder={uiLanguage === 'ru' ? "Ассоциации для запоминания..." : "Add private mnemonics helper..."}
+                                        className="w-full px-3 py-2 text-sm rounded-xl bg-app-bg border border-app-card-border focus:border-orange-500 focus:outline-none font-sans bg-app-card text-app-fg"
+                                      />
+                                    </div>
+                                  </div>
+
+                                  <div className="flex flex-col gap-1">
+                                    <label className="text-[10px] font-black uppercase tracking-widest opacity-40">
+                                      {uiLanguage === 'ru' ? 'Объяснение контекста' : 'Explanation'}
+                                    </label>
+                                    <textarea
+                                      value={editFields.explanation}
+                                      rows={2}
+                                      onChange={(e) => setEditFields({ ...editFields, explanation: e.target.value })}
+                                      className="w-full px-3 py-2 text-sm rounded-xl bg-app-bg border border-app-card-border focus:border-orange-500 focus:outline-none resize-none bg-app-card text-app-fg"
+                                    />
+                                  </div>
+
+                                  <div className="flex items-center justify-end gap-2.5 pt-1.5 border-t border-app-card-border/30 font-sans">
+                                    <button
+                                      type="button"
+                                      onClick={() => setEditingCardId(null)}
+                                      className="px-3.5 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-xl border border-app-card-border hover:bg-app-fg/5 transition-all cursor-pointer text-app-fg bg-transparent"
+                                    >
+                                      {t('common.cancel')}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={async () => {
+                                        await studyCardsRepository.updateCardFields(child.id, {
+                                          text: editFields.text,
+                                          translation: editFields.translation,
+                                          explanation: editFields.explanation,
+                                          type: editFields.type,
+                                          entryType: editFields.type,
+                                          userNote: editFields.userNote,
+                                        });
+                                        setEditingCardId(null);
+                                        loadCards();
+                                        onCardUpdated?.(child.id);
+                                      }}
+                                      className="px-3.5 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-xl bg-orange-500 hover:bg-orange-600 text-white hover:scale-105 active:scale-95 transition-all cursor-pointer border border-transparent"
+                                    >
+                                      {t('common.save')}
+                                    </button>
+                                  </div>
+                                </div>
+                              );
+
+                              const studyActionButton = (
+                                <button 
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    startSession([child]);
+                                  }}
+                                  className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-orange-500 text-white hover:bg-orange-600 font-sans text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer select-none"
+                                >
+                                  <PlayCircle size={14} />
+                                  <span>{uiLanguage === 'ru' ? 'Учить' : 'Study'}</span>
+                                </button>
+                              );
+
+                              const typeLabel = typeLabels[child.type || 'phrase'] || child.type;
 
                               return (
-                                <div key={child.id} className={`p-6 rounded-[2rem] border flex flex-col transition-all duration-300 font-sans ${bgClasses}`}>
-                                  {isEditing ? (
-                                    <div className="space-y-3 w-full font-sans">
-                                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                        <div className="flex flex-col gap-1">
-                                          <label className="text-[10px] font-black uppercase tracking-widest opacity-40">
-                                            {uiLanguage === 'ru' ? 'Оригинальный текст' : 'Original Text'}
-                                          </label>
-                                          <input
-                                            type="text"
-                                            value={editFields.text}
-                                            onChange={(e) => setEditFields({ ...editFields, text: e.target.value })}
-                                            className="w-full px-3 py-2 text-sm rounded-xl bg-app-bg border border-app-card-border focus:border-indigo-500 focus:outline-none"
-                                          />
-                                        </div>
-                                        <div className="flex flex-col gap-1">
-                                          <label className="text-[10px] font-black uppercase tracking-widest opacity-40">
-                                            {uiLanguage === 'ru' ? 'Перевод' : 'Translation'}
-                                          </label>
-                                          <input
-                                            type="text"
-                                            value={editFields.translation}
-                                            onChange={(e) => setEditFields({ ...editFields, translation: e.target.value })}
-                                            className="w-full px-3 py-2 text-sm rounded-xl bg-app-bg border border-app-card-border focus:border-indigo-500 focus:outline-none"
-                                          />
-                                        </div>
-                                      </div>
-
-                                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                        <div className="flex flex-col gap-1">
-                                          <label className="text-[10px] font-black uppercase tracking-widest opacity-40">
-                                            {uiLanguage === 'ru' ? 'Тип' : 'Type'}
-                                          </label>
-                                          <select
-                                            value={editFields.type}
-                                            onChange={(e) => setEditFields({ ...editFields, type: e.target.value })}
-                                            className="w-full px-3 py-2 text-sm rounded-xl bg-app-bg border border-app-card-border focus:border-indigo-500 focus:outline-none"
-                                          >
-                                            {Object.entries(typeLabels).map(([val, label]) => (
-                                              <option key={val} value={val}>{label}</option>
-                                            ))}
-                                          </select>
-                                        </div>
-                                        <div className="flex flex-col gap-1">
-                                          <label className="text-[10px] font-black uppercase tracking-widest opacity-40">
-                                            {uiLanguage === 'ru' ? 'Приметки (опционально)' : 'User Note (Optional)'}
-                                          </label>
-                                          <input
-                                            type="text"
-                                            value={editFields.userNote}
-                                            onChange={(e) => setEditFields({ ...editFields, userNote: e.target.value })}
-                                            placeholder={uiLanguage === 'ru' ? "Ассоциации для запоминания..." : "Add private mnemonics helper..."}
-                                            className="w-full px-3 py-2 text-sm rounded-xl bg-app-bg border border-app-card-border focus:border-indigo-500 focus:outline-none font-sans"
-                                          />
-                                        </div>
-                                      </div>
-
-                                      <div className="flex flex-col gap-1">
-                                        <label className="text-[10px] font-black uppercase tracking-widest opacity-40">
-                                          {uiLanguage === 'ru' ? 'Объяснение контекста' : 'Explanation'}
-                                        </label>
-                                        <textarea
-                                          value={editFields.explanation}
-                                          rows={3}
-                                          onChange={(e) => setEditFields({ ...editFields, explanation: e.target.value })}
-                                          className="w-full px-3 py-2 text-sm rounded-xl bg-app-bg border border-app-card-border focus:border-indigo-500 focus:outline-none resize-none"
-                                        />
-                                      </div>
-
-                                      <div className="flex items-center justify-end gap-2.5 pt-1.5 border-t border-app-card-border/30 font-sans">
-                                        <button
-                                          onClick={() => setEditingCardId(null)}
-                                          className="px-3.5 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-xl border border-app-card-border hover:bg-app-fg/5 transition-all cursor-pointer"
-                                        >
-                                          {t('common.cancel')}
-                                        </button>
-                                        <button
-                                          onClick={async () => {
-                                            await studyCardsRepository.updateCardFields(child.id, {
-                                              text: editFields.text,
-                                              translation: editFields.translation,
-                                              explanation: editFields.explanation,
-                                              type: editFields.type,
-                                              entryType: editFields.type,
-                                              userNote: editFields.userNote,
-                                            });
-                                            setEditingCardId(null);
-                                            loadCards();
-                                            onCardUpdated?.(child.id);
-                                          }}
-                                          className="px-3.5 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-xl bg-[var(--accent)] text-white hover:scale-105 active:scale-95 transition-all cursor-pointer"
-                                        >
-                                          {t('common.save')}
-                                        </button>
-                                      </div>
-                                    </div>
-                                  ) : (
-                                    <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 w-full font-sans">
-                                      <div className="space-y-2 flex-1 min-w-0">
-                                        {/* Phrase and Type Tag */}
-                                        <div className="flex flex-wrap items-center gap-2">
-                                          <span className="text-lg font-sans font-semibold text-app-fg leading-snug">{child.text}</span>
-                                          {child.type && child.type !== 'phrase' && (
-                                            <span className="text-[9px] font-black uppercase tracking-widest text-[var(--accent)] bg-[var(--accent)]/10 px-2 py-0.5 rounded-md shrink-0">
-                                              {typeLabels[child.type] || child.type}
-                                            </span>
-                                          )}
-                                          {child.userNote && (
-                                            <span className="text-[9px] font-bold text-teal-600 dark:text-teal-400 bg-teal-500/10 px-2 py-0.5 rounded-md shrink-0">
-                                              {uiLanguage === 'ru' ? 'Заметка' : 'Note'}: {child.userNote}
-                                            </span>
-                                          )}
-                                        </div>
-                                        
-                                        {/* Translation */}
-                                        <p className="text-sm font-sans font-medium text-app-fg/80 leading-snug">{child.translation}</p>
-
-                                        {/* Explanation */}
-                                        {child.explanation && (
-                                          <div className="text-xs text-app-fg/70 font-sans mt-2 leading-relaxed max-w-xl">
-                                            <ReactMarkdown>{child.explanation}</ReactMarkdown>
-                                          </div>
-                                        )}
-                                        
-                                        {/* Lyrics Context (dynamic and robust mapping) */}
-                                        {contextLines.length > 0 ? (
-                                          <div className="pt-3 border-t border-app-card-border/30 space-y-2 font-sans mt-3">
-                                            <span className="text-[9px] font-black uppercase tracking-wider text-app-fg opacity-40 block">
-                                              {uiLanguage === 'ru' ? 'Контекст из песни' : 'Lyrics Context'}
-                                            </span>
-                                            <div className="p-4 rounded-2xl bg-app-bg border border-app-card-border divide-y divide-app-card-border/40 space-y-3">
-                                              {contextLines.map((line, lIdx) => (
-                                                <div key={line.lineId || lIdx} className={lIdx > 0 ? "pt-3" : ""}>
-                                                  <p className="font-serif font-semibold text-app-fg leading-snug">
-                                                    {line.original}
-                                                  </p>
-                                                  {line.translation && (
-                                                    <p className="font-sans text-xs text-app-fg opacity-50 italic mt-1 leading-snug">
-                                                      {line.translation}
-                                                    </p>
-                                                  )}
-                                                </div>
-                                              ))}
-                                            </div>
-                                          </div>
-                                        ) : child.lineId && child.lineId.trim() !== "" && !child.lineId.startsWith("line_") ? (
-                                          <div className="pt-3 border-t border-app-card-border/30 space-y-2 font-sans mt-3">
-                                            <span className="text-[9px] font-black uppercase tracking-wider text-app-fg opacity-40 block">
-                                              {uiLanguage === 'ru' ? 'Контекст из песни' : 'Lyrics Context'}
-                                            </span>
-                                            <div className="p-4 rounded-2xl bg-app-bg border border-app-card-border text-sm font-sans">
-                                              <p className="font-serif font-semibold text-app-fg leading-snug">
-                                                {child.lineId}
-                                              </p>
-                                            </div>
-                                          </div>
-                                        ) : null}
-                                      </div>
-                                      
-                                      <div className="flex items-center gap-2 self-end md:self-start shrink-0 font-sans md:pt-0.5">
-                                        <button
-                                          onClick={() => {
-                                            setEditingCardId(child.id);
-                                            setEditFields({
-                                              text: child.text || '',
-                                              translation: child.translation || '',
-                                              explanation: child.explanation || '',
-                                              type: child.type || 'phrase',
-                                              userNote: child.userNote || '',
-                                            });
-                                          }}
-                                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-app-fg/5 text-app-fg text-[10px] font-black uppercase tracking-widest hover:bg-app-fg/10 transition-all border border-transparent font-sans cursor-pointer"
-                                          title="Edit card"
-                                        >
-                                          <Edit3 size={11} />
-                                          <span>{uiLanguage === 'ru' ? 'Редактировать' : 'Edit'}</span>
-                                        </button>
-                                        <button 
-                                          onClick={() => startSession([child])}
-                                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-app-fg/5 text-app-fg text-[10px] font-black uppercase tracking-widest hover:bg-[var(--accent)] hover:text-white hover:opacity-100 transition-all font-sans cursor-pointer"
-                                        >
-                                          <PlayCircle size={14} />
-                                          {uiLanguage === 'ru' ? 'Учить' : 'Study'}
-                                        </button>
-                                      </div>
-                                    </div>
-                                  )}
-                                </div>
+                                <PhraseCard
+                                  key={child.id}
+                                  itemId={child.id}
+                                  phraseText={child.text}
+                                  translation={child.translation}
+                                  explanation={child.explanation}
+                                  userNote={child.userNote}
+                                  type={child.type}
+                                  typeLabel={typeLabel}
+                                  source={child.entryType === "user" || (child as any).source === "user" ? "user" : "ai"}
+                                  status={child.status as PhraseCardStatus}
+                                  onStatusChange={async (nextStatus) => {
+                                    await studyCardsRepository.updateCardFields(child.id, {
+                                      status: nextStatus as any
+                                    });
+                                    loadCards();
+                                    onCardUpdated?.(child.id);
+                                  }}
+                                  contextLines={contextLines.length > 0 ? contextLines : undefined}
+                                  isSpeaking={currentlySpeakingCardId === child.id}
+                                  onSpeak={() => speak(child.text, child.id)}
+                                  isExpanded={isExpanded}
+                                  onToggleExpand={() => toggleCardExpanded(child.id)}
+                                  isEditing={isEditing}
+                                  editFormContent={editFormContent}
+                                  onEdit={() => {
+                                    setEditingCardId(child.id);
+                                    setEditFields({
+                                      text: child.text || '',
+                                      translation: child.translation || '',
+                                      explanation: child.explanation || '',
+                                      type: child.type || 'phrase',
+                                      userNote: child.userNote || '',
+                                    });
+                                    if (!isExpanded) {
+                                      toggleCardExpanded(child.id);
+                                    }
+                                  }}
+                                  onDelete={async () => {
+                                    const confirmMsg = uiLanguage === 'ru' 
+                                      ? 'Удалить эту карточку?' 
+                                      : 'Delete this card?';
+                                    if (confirm(confirmMsg)) {
+                                      await deleteFlashcard(child.id);
+                                      loadCards();
+                                      onCardUpdated?.(child.id);
+                                    }
+                                  }}
+                                  actionButtons={studyActionButton}
+                                  uiLanguage={uiLanguage}
+                                />
                               );
                             })}
                           </div>
