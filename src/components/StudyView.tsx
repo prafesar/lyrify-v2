@@ -578,23 +578,23 @@ export default function StudyView({ onBack, initialTrackId, onReviewCompleted, o
                 const isExpanded = expandedParents.has(group.id);
                 
                 return (
-                  <div key={group.id} className="group overflow-hidden rounded-[2rem] bg-app-card border border-app-card-border hover:border-app-fg/10 transition-all font-sans">
+                  <div key={group.id} className="space-y-3 font-sans">
                     <div 
-                      className="flex items-center justify-between p-6 cursor-pointer"
+                      className="flex items-center justify-between p-4 cursor-pointer hover:opacity-85 transition-all font-sans"
                       onClick={() => toggleParent(group.id)}
                     >
                       <div className="flex items-center gap-4 min-w-0">
-                        <div className="w-10 h-10 rounded-2xl bg-app-fg/5 flex items-center justify-center text-app-accent shrink-0">
-                           <Library size={20} />
+                        <div className="w-10 h-10 rounded-2xl bg-app-card border border-app-card-border flex items-center justify-center text-app-accent shrink-0 select-none shadow-xs">
+                           <Library size={18} />
                         </div>
                         <div className="min-w-0">
-                          <h3 className="font-serif text-lg leading-tight truncate">{group.trackTitle}</h3>
+                          <h3 className="font-serif text-lg font-bold text-app-fg leading-tight truncate">{group.trackTitle}</h3>
                           <p className="text-[10px] font-black uppercase tracking-widest opacity-40 truncate mt-1">{group.artist}</p>
                         </div>
                       </div>
                       
                       <div className="flex items-center gap-4 shrink-0 font-sans">
-                        <span className="text-[10px] font-black bg-app-fg/5 px-2 py-1 rounded-lg opacity-40 font-mono">
+                        <span className="text-[10px] font-black bg-app-card border border-app-card-border px-2.5 py-1 rounded-lg opacity-60 font-mono text-app-fg">
                           {knownCount}/{totalCount}
                         </span>
                         <button 
@@ -602,13 +602,13 @@ export default function StudyView({ onBack, initialTrackId, onReviewCompleted, o
                             e.stopPropagation();
                             startSession(group.phrases);
                           }}
-                          className="p-2 rounded-xl bg-app-fg text-app-bg hover:scale-110 active:scale-95 transition-all cursor-pointer"
+                          className="w-8 h-8 rounded-xl bg-app-fg text-app-bg hover:scale-110 active:scale-95 transition-all flex items-center justify-center cursor-pointer"
                           title="Study group"
                         >
-                          <PlayCircle size={18} />
+                          <PlayCircle size={16} />
                         </button>
-                        <div className={cn("transition-transform duration-300", isExpanded ? "rotate-180" : "")}>
-                           <ChevronDown size={20} className="opacity-20" />
+                        <div className={cn("transition-transform duration-300 text-app-fg opacity-40", isExpanded ? "rotate-180" : "")}>
+                           <ChevronDown size={18} />
                         </div>
                       </div>
                     </div>
@@ -616,12 +616,12 @@ export default function StudyView({ onBack, initialTrackId, onReviewCompleted, o
                     <AnimatePresence>
                       {isExpanded && (
                         <motion.div
-                          initial={{ height: 0 }}
-                          animate={{ height: 'auto' }}
-                          exit={{ height: 0 }}
-                          className="overflow-hidden border-t border-app-card-border bg-app-fg/[0.01] font-sans"
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: 'auto' }}
+                          exit={{ opacity: 0, height: 0 }}
+                          className="overflow-hidden font-sans"
                         >
-                          <div className="p-6 space-y-4">
+                          <div className="py-2.5 px-0.5 space-y-4">
                             {group.phrases.map((child, childIdx) => {
                               const isEditing = editingCardId === child.id;
                               const track = child.trackId ? getCachedTrackData(child.trackId) : null;
@@ -926,113 +926,84 @@ export default function StudyView({ onBack, initialTrackId, onReviewCompleted, o
         </header>
 
         <main className="flex-1 flex flex-col font-sans">
-          <AnimatePresence mode="wait">
-            <motion.div 
-              key={currentCard.id + (isFlipped ? '-back' : '-front')}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              className="relative font-sans"
-            >
-              <div className="w-full bg-app-card border border-app-card-border shadow-app-card rounded-[2.5rem] p-8 sm:p-12 flex flex-col items-center justify-start text-center gap-10 transition-all mb-8">
-                <div className="absolute top-8 left-1/2 -translate-x-1/2 text-[10px] font-black text-app-fg opacity-10 uppercase tracking-[0.5em] truncate max-w-[80%]">
-                  {currentCard.trackId}
-                </div>
+          {(() => {
+            const sessionTrack = currentCard.trackId ? getCachedTrackData(currentCard.trackId) : null;
+            const sessionContextLines = sessionTrack && sessionTrack.lines
+              ? resolvePhraseContext(sessionTrack.lines, currentCard.lineId ? [currentCard.lineId] : [], currentCard.text)
+              : [];
+            const sessionTrackTitle = currentCard.trackTitle || (sessionTrack ? sessionTrack.title : '');
+            const sessionArtistName = currentCard.artist || (sessionTrack ? sessionTrack.artist : '');
+            const sessionTypeLabel = typeLabels[currentCard.type || 'phrase'] || currentCard.type;
 
-                <div className="absolute top-8 right-8">
-                  <button 
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      speak(currentCard.text);
-                    }}
-                    className="w-10 h-10 rounded-full flex items-center justify-center bg-app-bg border border-app-card-border text-app-fg opacity-40 hover:opacity-100 transition-all hover:bg-app-fg/5"
-                  >
-                    <Volume2 size={18} />
-                  </button>
-                </div>
-                
-                <div className="space-y-10 w-full pt-10 font-sans">
-                  <p className="text-3xl lg:text-4xl font-serif leading-[1.3] text-app-fg">
-                    {isFlipped ? currentCard.translation : currentCard.text}
-                  </p>
-                  
-                  {isFlipped && (
-                    <div className="space-y-8 w-full animate-in fade-in slide-in-from-bottom-4 duration-500 font-sans">
-                      <div className="h-px w-12 bg-app-fg opacity-5 mx-auto" />
-                      
-                      <p className="text-2xl italic font-medium opacity-50 font-serif" style={{ color: 'var(--accent)' }}>
-                        {currentCard.text}
-                      </p>
-                      
-                      {currentCard.explanation && (
-                        <div className="w-full font-sans">
-                          <button 
-                            onClick={() => setIsExplanationExpanded(!isExplanationExpanded)}
-                            className="w-full flex items-center justify-between p-6 rounded-[2rem] bg-app-bg border border-app-card-border hover:border-app-accent/30 transition-all text-left font-sans"
-                          >
-                            <span className="text-[10px] font-black uppercase tracking-widest opacity-40">
-                              {uiLanguage === 'ru' ? 'Объяснение' : 'Explanation'}
-                            </span>
-                            <div className="w-6 h-6 rounded-lg bg-app-fg/5 flex items-center justify-center">
-                              {isExplanationExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                            </div>
-                          </button>
-                          
-                          <AnimatePresence>
-                            {isExplanationExpanded && (
-                              <motion.div 
-                                initial={{ height: 0, opacity: 0 }}
-                                animate={{ height: 'auto', opacity: 1 }}
-                                exit={{ height: 0, opacity: 0 }}
-                                className="overflow-hidden"
-                              >
-                                <div className="pt-8 px-2 text-left font-sans">
-                                  <div className="text-base leading-relaxed text-app-fg opacity-80 prose prose-invert max-w-none prose-p:mb-6">
-                                    <ReactMarkdown>{currentCard.explanation}</ReactMarkdown>
-                                  </div>
-                                </div>
-                              </motion.div>
-                            )}
-                          </AnimatePresence>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-
-                <div className="w-full mt-auto pt-6 font-sans">
-                  {!isFlipped ? (
-                    <button 
-                      onClick={() => setIsFlipped(true)}
-                      className="w-full py-5 text-white rounded-full font-bold uppercase tracking-[0.2em] text-xs transition-all flex items-center justify-center gap-3 shadow-xl active:scale-95 font-sans"
-                      style={{ 
-                        backgroundColor: 'var(--accent)', 
-                        boxShadow: '0 15px 25px -5px color-mix(in srgb, var(--accent) 40%, transparent)' 
-                      }}
-                    >
-                      {uiLanguage === 'ru' ? 'Показать перевод' : 'Show Translation'}
-                      <ArrowRight size={14} />
-                    </button>
-                  ) : (
-                    <div className="grid grid-cols-2 gap-4 w-full font-sans font-black uppercase tracking-[0.15em] text-xs">
-                      <button
-                        onClick={() => handleRating(Rating.Again)}
-                        className="py-5 rounded-[2rem] border border-red-500/20 text-red-500 font-bold uppercase tracking-[0.2em] text-xs hover:bg-red-500 hover:text-white transition-all shadow-lg active:scale-95"
-                      >
-                        {uiLanguage === 'ru' ? 'Заново' : 'Again'}
-                      </button>
-                      <button
-                        onClick={() => handleRating(Rating.Good)}
-                        className="py-5 rounded-[2rem] border border-emerald-500/20 text-emerald-500 font-bold uppercase tracking-[0.2em] text-xs hover:bg-emerald-500 hover:text-white transition-all shadow-lg active:scale-95"
-                      >
-                        {uiLanguage === 'ru' ? 'Помню' : 'Got it'}
-                      </button>
-                    </div>
-                  )}
-                </div>
+            const sessionActionArea = !isFlipped ? (
+              <button 
+                onClick={() => setIsFlipped(true)}
+                className="w-full py-5 text-white rounded-[2rem] font-bold uppercase tracking-[0.2em] text-[10px] sm:text-xs transition-all flex items-center justify-center gap-3 shadow-xl active:scale-95 cursor-pointer font-sans"
+                style={{ 
+                  backgroundColor: 'var(--accent)', 
+                  boxShadow: '0 15px 25px -5px color-mix(in srgb, var(--accent) 40%, transparent)' 
+                }}
+              >
+                {uiLanguage === 'ru' ? 'Показать перевод' : 'Show Translation'}
+                <ArrowRight size={14} />
+              </button>
+            ) : (
+              <div className="grid grid-cols-2 gap-4 w-full font-sans font-black uppercase tracking-[0.15em] text-[10px] sm:text-xs">
+                <button
+                  onClick={() => handleRating(Rating.Again)}
+                  className="py-4 rounded-[2rem] border border-red-500/25 text-red-500 font-bold uppercase tracking-[0.2em] hover:bg-red-505 hover:bg-red-500 hover:text-white transition-all shadow-lg active:scale-95 cursor-pointer text-center"
+                >
+                  {uiLanguage === 'ru' ? 'Заново' : 'Again'}
+                </button>
+                <button
+                  onClick={() => handleRating(Rating.Good)}
+                  className="py-4 rounded-[2rem] border border-emerald-500/25 text-emerald-500 font-bold uppercase tracking-[0.2em] hover:bg-emerald-500 hover:text-white transition-all shadow-lg active:scale-95 cursor-pointer text-center"
+                >
+                  {uiLanguage === 'ru' ? 'Помню' : 'Got it'}
+                </button>
               </div>
-            </motion.div>
-          </AnimatePresence>
+            );
+
+            return (
+              <AnimatePresence mode="wait">
+                <motion.div 
+                  key={currentCard.id + (isFlipped ? '-back' : '-front')}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  className="relative font-sans"
+                >
+                  {sessionTrackTitle && (
+                    <div className="text-center text-[10px] font-black text-app-fg opacity-35 uppercase tracking-[0.25em] mb-4 truncate max-w-[90%] mx-auto block">
+                      {sessionTrackTitle} {sessionArtistName ? `— ${sessionArtistName}` : ''}
+                    </div>
+                  )}
+
+                  <PhraseCard
+                    itemId={currentCard.id}
+                    phraseText={currentCard.text}
+                    translation={currentCard.translation}
+                    explanation={currentCard.explanation}
+                    userNote={currentCard.userNote}
+                    type={currentCard.type}
+                    typeLabel={sessionTypeLabel}
+                    source={currentCard.entryType === "user" || (currentCard as any).source === "user" ? "user" : "ai"}
+                    status={currentCard.status as any}
+                    contextLines={sessionContextLines.length > 0 ? sessionContextLines : undefined}
+                    isSpeaking={currentlySpeakingCardId === currentCard.id}
+                    onSpeak={() => speak(currentCard.text, currentCard.id)}
+                    isExpanded={isFlipped}
+                    onToggleExpand={() => setIsFlipped(!isFlipped)}
+                    onEdit={undefined}
+                    onDelete={undefined}
+                    actionButtons={sessionActionArea}
+                    uiLanguage={uiLanguage}
+                    hideTranslation={!isFlipped}
+                  />
+                </motion.div>
+              </AnimatePresence>
+            );
+          })()}
 
           <footer className="mt-auto py-12 flex justify-center shrink-0 font-sans">
             <button 

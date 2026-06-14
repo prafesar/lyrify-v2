@@ -269,6 +269,12 @@ export const StructuredAnalysisLecture: React.FC<StructuredAnalysisLectureProps>
     return card && (card.status === 'learning' || card.status === 'known');
   };
 
+  const getPhraseStatus = (phraseText: string) => {
+    const key = normalizePhraseKey(phraseText);
+    const card = phraseMetadata?.get(key);
+    return (card?.status as 'new' | 'learning' | 'known') || 'new';
+  };
+
   const handleTogglePhraseSaved = (phrase: StructuredSectionPhrase) => {
     const saved = isPhraseSaved(phrase.text);
     if (saved) {
@@ -441,9 +447,19 @@ export const StructuredAnalysisLecture: React.FC<StructuredAnalysisLectureProps>
               <div className="pt-2">
                 <div className="space-y-3">
                   {(block.phrases || []).map((phrase) => {
-                    const isSaveActive = isPhraseSaved(phrase.text);
+                    const status = getPhraseStatus(phrase.text);
+                    const isSaveActive = status === 'learning' || status === 'known';
                     const isPhraseEditing = editingPhraseId === phrase.id;
                     const isExpanded = expandedPhraseId === phrase.id;
+
+                    let bgStyleClasses = "bg-app-card border-app-card-border hover:border-app-accent/30";
+                    if (status === "new") {
+                      bgStyleClasses = "bg-sky-500/[0.04] border-sky-500/20 hover:border-sky-500/35";
+                    } else if (status === "learning") {
+                      bgStyleClasses = "bg-orange-500/[0.04] border-orange-500/20 hover:border-orange-500/35";
+                    } else if (status === "known") {
+                      bgStyleClasses = "bg-emerald-500/[0.02] border-emerald-500/20 hover:border-emerald-500/35";
+                    }
 
                     if (isPhraseEditing) {
                       return (
@@ -516,7 +532,7 @@ export const StructuredAnalysisLecture: React.FC<StructuredAnalysisLectureProps>
                     return (
                       <div 
                         key={phrase.id} 
-                        className="group/phrase flex flex-col p-4 bg-app-card border border-app-card-border hover:border-app-accent/30 rounded-2xl transition-all duration-200 shadow-sm hover:shadow-md cursor-pointer relative"
+                        className={`group/phrase flex flex-col p-4 rounded-2xl transition-all duration-200 shadow-sm hover:shadow-md cursor-pointer relative border ${bgStyleClasses}`}
                         onClick={() => setExpandedPhraseId(expandedPhraseId === phrase.id ? null : phrase.id)}
                       >
                         {/* Visible Row (Always visible) */}

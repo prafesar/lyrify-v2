@@ -72,6 +72,9 @@ export interface PhraseCardProps {
   
   // Metadata / UI language translations
   uiLanguage?: 'ru' | 'en';
+  
+  // Dynamic display options
+  hideTranslation?: boolean;
 }
 
 export const PhraseCard: React.FC<PhraseCardProps> = ({
@@ -102,6 +105,7 @@ export const PhraseCard: React.FC<PhraseCardProps> = ({
   actionButtons,
   headerRightActions,
   uiLanguage = 'en',
+  hideTranslation = false,
 }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
@@ -139,48 +143,50 @@ export const PhraseCard: React.FC<PhraseCardProps> = ({
   return (
     <div 
       onClick={onToggleExpand}
-      className={`cursor-pointer rounded-[2rem] border transition-all duration-300 overflow-hidden relative group font-sans ${bgClasses}`}
+      className={`cursor-pointer rounded-2xl border transition-all duration-300 overflow-hidden relative group font-sans ${bgClasses}`}
     >
       {/* ALWAYS VISIBLE HEADER SEGMENT */}
-      <div className="p-6">
+      <div className="p-4">
         <div className="flex items-center justify-between gap-4 w-full">
-          {/* Left Block: Number + Phrase text + voice trigger */}
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2 flex-wrap">
+          {/* Left Segment: Index, Voice Trigger, & Text Block */}
+          <div className="flex items-center gap-3 flex-1 min-w-0">
+            {/* Index and Voice Trigger */}
+            <div className="flex items-center gap-2 shrink-0">
               {index !== undefined && (
                 <span className="text-base font-sans font-semibold text-app-fg/40 select-none shrink-0">
                   {index + 1}.
                 </span>
               )}
-
-              <h3 className="text-lg font-sans font-semibold text-app-fg leading-snug">
-                {highlightedPhraseText || phraseText}
-              </h3>
-
               {onSpeak && (
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
                     onSpeak();
                   }}
-                  className={`p-1.5 rounded-lg border border-app-card-border/80 transition-all flex items-center justify-center hover:bg-app-accent hover:text-white shrink-0 cursor-pointer ${
+                  className={`p-2 rounded-xl border transition-all flex items-center justify-center shrink-0 cursor-pointer ${
                     isSpeaking 
                       ? "bg-orange-500 text-white border-orange-500 animate-pulse scale-105" 
-                      : "bg-transparent text-app-fg opacity-65 hover:opacity-100 hover:scale-105"
+                      : "bg-app-bg text-app-muted hover:text-app-fg border-app-card-border/40 hover:border-app-card-border"
                   }`}
                   title={uiLanguage === 'ru' ? "Прослушать произношение" : "Pronounce phrase"}
                 >
-                  <Volume2 size={13} />
+                  <Volume2 size={15} />
                 </button>
               )}
             </div>
 
-            {/* Translation description */}
-            {translation && (
-              <p className="text-sm font-sans text-app-fg/60 leading-snug pl-6 mt-1 transition-all">
-                {highlightedTranslation || translation}
-              </p>
-            )}
+            {/* Phrase Text & Translation */}
+            <div className="flex-1 min-w-0 pr-1">
+              <h3 className="font-serif text-[17px] md:text-[19px] text-app-accent leading-snug">
+                {highlightedPhraseText || phraseText}
+              </h3>
+
+              {translation && !hideTranslation && (
+                <p className="font-serif text-[17px] md:text-[19px] text-app-muted mt-0.5 leading-snug transition-all font-medium">
+                  {highlightedTranslation || translation}
+                </p>
+              )}
+            </div>
           </div>
 
           {/* Right Block: Status Button + Dropdown Actions or Custom Actions */}
@@ -264,7 +270,7 @@ export const PhraseCard: React.FC<PhraseCardProps> = ({
         </div>
 
         {/* EXTENDED CONTENT PANEL */}
-        {isExpanded && (
+        {isExpanded && !hideTranslation && (
           <div 
             onClick={(e) => {
               e.stopPropagation();
