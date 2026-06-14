@@ -591,7 +591,7 @@ export const AnalysisPhraseWorkspace: React.FC<AnalysisPhraseWorkspaceProps> = (
                   highlightedUserNote={item.note ? highlightMatch(item.note, trackSearchQuery) : undefined}
                   type={item.type}
                   typeLabel={typeLabels[item.type || "phrase"]}
-                  source={item.source}
+                  source={item.source === "llm" ? "ai" : item.source}
                   status={currentStatus as PhraseCardStatus}
                   onStatusChange={(nextStatus) => {
                     handleSetAnalysisPhraseStatus(item.text, item.translation || "", item.explanation || "", nextStatus as any);

@@ -6,7 +6,7 @@ import { studyCardsRepository, userPreferencesRepository, Flashcard, PhraseStatu
 const getCards = () => studyCardsRepository.getCards();
 const reviewCard = (cardId: string, rating: Rating) => studyCardsRepository.reviewCard(cardId, rating);
 const deleteFlashcard = (cardId: string) => studyCardsRepository.deleteFlashcard(cardId);
-import { Check, X, ArrowRight, Brain, Trash2, ChevronLeft, Clock, Music, User, LayoutGrid, PlayCircle, Library, Globe, ChevronDown, ChevronUp, Volume2, Edit3, Save, Search } from 'lucide-react';
+import { Check, X, ArrowRight, Brain, Trash2, ChevronLeft, Clock, Music, User, LayoutGrid, PlayCircle, Library, Globe, ChevronDown, ChevronUp, Volume2, Edit3, Save, Search, CheckCircle2 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { getLocaleByName } from '../lib/languages';
 import { useTranslation } from '../lib/i18n';
@@ -189,6 +189,21 @@ export default function StudyView({ onBack, initialTrackId, onReviewCompleted, o
     list = list.filter(card => card.status === 'learning');
     return list;
   }, [allCards, selectedLanguage, selectedTrack, selectedType, searchQuery]);
+
+  // Helper to highlight matched query in textual content
+  const highlightMatch = (text: string, query: string) => {
+    if (!query.trim() || !text) return <>{text}</>;
+    const index = text.toLowerCase().indexOf(query.toLowerCase());
+    if (index === -1) return <>{text}</>;
+    const length = query.length;
+    return (
+      <>
+        {text.substring(0, index)}
+        <mark className="bg-orange-500/20 text-orange-600 rounded-xs px-0.5">{text.substring(index, index + length)}</mark>
+        {text.substring(index + length)}
+      </>
+    );
+  };
 
   const groupedCards = useMemo(() => {
     // Group phrases by track for display
@@ -607,7 +622,7 @@ export default function StudyView({ onBack, initialTrackId, onReviewCompleted, o
                           className="overflow-hidden border-t border-app-card-border bg-app-fg/[0.01] font-sans"
                         >
                           <div className="p-6 space-y-4">
-                            {group.phrases.map(child => {
+                            {group.phrases.map((child, childIdx) => {
                               const isEditing = editingCardId === child.id;
                               const track = child.trackId ? getCachedTrackData(child.trackId) : null;
                               const contextLines = track && track.lines 
@@ -716,16 +731,41 @@ export default function StudyView({ onBack, initialTrackId, onReviewCompleted, o
                               );
 
                               const studyActionButton = (
-                                <button 
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    startSession([child]);
-                                  }}
-                                  className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-orange-500 text-white hover:bg-orange-600 font-sans text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer select-none"
-                                >
-                                  <PlayCircle size={14} />
-                                  <span>{uiLanguage === 'ru' ? 'Учить' : 'Study'}</span>
-                                </button>
+                                <>
+                                  <button 
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      startSession([child]);
+                                    }}
+                                    className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-5 py-2.5 rounded-2xl bg-orange-500 text-white hover:bg-orange-600 font-sans text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer select-none"
+                                  >
+                                    <PlayCircle size={14} />
+                                    <span>{uiLanguage === 'ru' ? 'Учить' : 'Study'}</span>
+                                  </button>
+
+                                  <button
+                                    onClick={async (e) => {
+                                      e.stopPropagation();
+                                      const nextStatus = child.status === "known" ? "learning" : "known";
+                                      await studyCardsRepository.updatePhraseStatus(child.id, nextStatus);
+                                      loadCards();
+                                      onCardUpdated?.(child.id);
+                                    }}
+                                    className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-5 py-2.5 rounded-2xl text-[10px] font-sans font-black uppercase tracking-widest transition-all cursor-pointer ${
+                                      child.status === "known"
+                                        ? "bg-emerald-500/15 border border-emerald-500/30 text-emerald-500 cursor-default"
+                                        : "bg-app-bg border border-app-card-border hover:border-app-fg/20 active:scale-95 text-app-fg hover:bg-app-card shadow-xs"
+                                    }`}
+                                  >
+                                    <CheckCircle2 size={13} className={child.status === 'known' ? "text-emerald-500 shrink-0 select-none" : "text-app-fg opacity-40 shrink-0 select-none animate-none"} />
+                                    <span className="font-sans">
+                                      {child.status === "known" 
+                                        ? (uiLanguage === 'ru' ? 'Изучено' : 'Known') 
+                                        : (uiLanguage === 'ru' ? 'Знаю' : 'Mark Known')
+                                      }
+                                    </span>
+                                  </button>
+                                </>
                               );
 
                               const typeLabel = typeLabels[child.type || 'phrase'] || child.type;
@@ -734,18 +774,21 @@ export default function StudyView({ onBack, initialTrackId, onReviewCompleted, o
                                 <PhraseCard
                                   key={child.id}
                                   itemId={child.id}
+                                  index={childIdx}
                                   phraseText={child.text}
+                                  highlightedPhraseText={highlightMatch(child.text, searchQuery)}
                                   translation={child.translation}
+                                  highlightedTranslation={child.translation ? highlightMatch(child.translation, searchQuery) : undefined}
                                   explanation={child.explanation}
+                                  highlightedExplanation={child.explanation ? highlightMatch(child.explanation, searchQuery) : undefined}
                                   userNote={child.userNote}
+                                  highlightedUserNote={child.userNote ? highlightMatch(child.userNote, searchQuery) : undefined}
                                   type={child.type}
                                   typeLabel={typeLabel}
                                   source={child.entryType === "user" || (child as any).source === "user" ? "user" : "ai"}
                                   status={child.status as PhraseCardStatus}
                                   onStatusChange={async (nextStatus) => {
-                                    await studyCardsRepository.updateCardFields(child.id, {
-                                      status: nextStatus as any
-                                    });
+                                    await studyCardsRepository.updatePhraseStatus(child.id, nextStatus as any);
                                     loadCards();
                                     onCardUpdated?.(child.id);
                                   }}
