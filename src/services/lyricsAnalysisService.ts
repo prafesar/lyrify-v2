@@ -648,7 +648,10 @@ export function resolvePhraseContext(
   // 1. Try resolving using lineIds first
   if (lineIds && lineIds.length > 0) {
     for (const line of lines) {
-      if (lineIds.includes(line.lineId || '')) {
+      if (
+        lineIds.includes(line.lineId || '') || 
+        lineIds.includes(line.original || '')
+      ) {
         matchedLines.push(line);
       }
     }

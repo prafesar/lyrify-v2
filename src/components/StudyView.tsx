@@ -6,10 +6,12 @@ import { studyCardsRepository, userPreferencesRepository, Flashcard, PhraseStatu
 const getCards = () => studyCardsRepository.getCards();
 const reviewCard = (cardId: string, rating: Rating) => studyCardsRepository.reviewCard(cardId, rating);
 const deleteFlashcard = (cardId: string) => studyCardsRepository.deleteFlashcard(cardId);
-import { Check, X, ArrowRight, Brain, Trash2, ChevronLeft, Clock, Music, User, LayoutGrid, PlayCircle, Library, Globe, ChevronDown, ChevronUp, Volume2, Edit3, Save } from 'lucide-react';
+import { Check, X, ArrowRight, Brain, Trash2, ChevronLeft, Clock, Music, User, LayoutGrid, PlayCircle, Library, Globe, ChevronDown, ChevronUp, Volume2, Edit3, Save, Search } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { getLocaleByName } from '../lib/languages';
 import { useTranslation } from '../lib/i18n';
+import { getCachedTrackData } from '../services/musicService';
+import { resolvePhraseContext } from '../services/lyricsAnalysisService';
 
 interface StudyViewProps {
   onBack: () => void;
@@ -38,6 +40,7 @@ export default function StudyView({ onBack, initialTrackId, onReviewCompleted, o
   const [selectedTrack, setSelectedTrack] = useState<string>(initialTrackId || 'all');
   const [selectedType, setSelectedType] = useState<string>('all');
   const [expandedParents, setExpandedParents] = useState<Set<string>>(new Set());
+  const [searchQuery, setSearchQuery] = useState("");
 
   // Editing state for cards
   const [editingCardId, setEditingCardId] = useState<string | null>(null);
@@ -102,6 +105,18 @@ export default function StudyView({ onBack, initialTrackId, onReviewCompleted, o
       if (available.length > 0) return available[0];
       return 'en';
     });
+
+    if (initialTrackId) {
+      const trackCards = cards.filter(card => card.trackId === initialTrackId && card.status === 'learning');
+      if (trackCards.length > 0) {
+        const trackDueCards = trackCards.filter(card => card.due <= new Date());
+        const cardsToStudy = trackDueCards.length > 0 ? trackDueCards : trackCards;
+        setSessionCards(cardsToStudy);
+        setCurrentIndex(0);
+        setIsFlipped(false);
+        setViewMode('session');
+      }
+    }
     
     setIsLoading(false);
   }
@@ -148,9 +163,19 @@ export default function StudyView({ onBack, initialTrackId, onReviewCompleted, o
     if (selectedType !== 'all') {
       list = list.filter(card => (card.type || 'phrase') === selectedType);
     }
+    if (searchQuery.trim() !== '') {
+      const q = searchQuery.toLowerCase().trim();
+      list = list.filter(card => 
+        card.text.toLowerCase().includes(q) ||
+        (card.translation && card.translation.toLowerCase().includes(q)) ||
+        (card.explanation && card.explanation.toLowerCase().includes(q)) ||
+        (card.userNote && card.userNote.toLowerCase().includes(q)) ||
+        (card.trackTitle && card.trackTitle.toLowerCase().includes(q))
+      );
+    }
     list = list.filter(card => card.status === 'learning');
     return list;
-  }, [allCards, selectedLanguage, selectedTrack, selectedType]);
+  }, [allCards, selectedLanguage, selectedTrack, selectedType, searchQuery]);
 
   const groupedCards = useMemo(() => {
     // Group phrases by track for display
@@ -338,22 +363,41 @@ export default function StudyView({ onBack, initialTrackId, onReviewCompleted, o
         <p className="text-[#94a3b8] mb-12 max-w-sm text-sm">
           {uiLanguage === 'ru' 
             ? `Отлично! Вы повторили ${sessionCards.length} выражений. Продолжайте в том же духе, чтобы закрепить изученное!`
-            : `Great job! You've reviewed ${sessionCards.length} phrases. Keep up the momentum to master ${selectedLanguage.toUpperCase()}!`}
+            : `Great job! You've reviewed ${sessionCards.length} phrases.`}
         </p>
 
         <div className="space-y-4 w-full">
-          <button 
-            onClick={() => setViewMode('hub')}
-            className="w-full py-4 rounded-3xl bg-app-fg text-app-bg font-bold tracking-widest uppercase text-xs active:scale-95 transition-all shadow-xl"
-          >
-            {uiLanguage === 'ru' ? 'Назад в Центр Обучения' : 'Back to Study Hub'}
-          </button>
-          <button 
-            onClick={onBack}
-            className="w-full py-4 rounded-3xl bg-app-card border border-app-card-border text-app-fg opacity-60 font-bold tracking-widest uppercase text-xs hover:opacity-100 transition-all"
-          >
-            {uiLanguage === 'ru' ? 'Назад к песням' : 'Go Back to Music'}
-          </button>
+          {initialTrackId ? (
+            <>
+              <button 
+                onClick={onBack}
+                className="w-full py-4 rounded-[2rem] bg-indigo-500 hover:bg-indigo-600 font-bold tracking-widest uppercase text-xs active:scale-95 transition-all shadow-xl text-white cursor-pointer"
+              >
+                {uiLanguage === 'ru' ? 'Вернуться к песне' : 'Return to Song'}
+              </button>
+              <button 
+                onClick={() => setViewMode('hub')}
+                className="w-full py-4 rounded-[2rem] bg-app-card border border-app-card-border text-app-fg opacity-60 font-bold tracking-widest uppercase text-xs hover:opacity-100 transition-all cursor-pointer"
+              >
+                {uiLanguage === 'ru' ? 'Перейти в Центр Обучения' : 'Go to Study Hub'}
+              </button>
+            </>
+          ) : (
+            <>
+              <button 
+                onClick={() => setViewMode('hub')}
+                className="w-full py-4 rounded-[2rem] bg-app-fg text-app-bg font-bold tracking-widest uppercase text-xs active:scale-95 transition-all shadow-xl cursor-pointer"
+              >
+                {uiLanguage === 'ru' ? 'Назад в Центр Обучения' : 'Back to Study Hub'}
+              </button>
+              <button 
+                onClick={onBack}
+                className="w-full py-4 rounded-[2rem] bg-app-card border border-app-card-border text-app-fg opacity-60 font-bold tracking-widest uppercase text-xs hover:opacity-100 transition-all cursor-pointer"
+              >
+                {uiLanguage === 'ru' ? 'Назад к песням' : 'Go Back to Music'}
+              </button>
+            </>
+          )}
         </div>
       </div>
     );
@@ -386,6 +430,26 @@ export default function StudyView({ onBack, initialTrackId, onReviewCompleted, o
           </div>
 
           <div className="flex flex-col gap-4">
+            {/* Search Input */}
+            <div className="relative w-full">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 opacity-30 text-app-fg" size={16} />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder={uiLanguage === 'ru' ? 'Поиск фразы, перевода, контекста или песни...' : 'Search phrase, translation, note or song...'}
+                className="w-full pl-11 pr-10 py-3 rounded-2xl bg-app-card border border-app-card-border focus:border-app-accent/40 focus:outline-none text-xs font-sans placeholder-app-fg/30 transition-all text-app-fg"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 opacity-40 hover:opacity-100 text-app-fg cursor-pointer"
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+
             <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide">
               <select 
                 value={selectedLanguage}
@@ -491,7 +555,7 @@ export default function StudyView({ onBack, initialTrackId, onReviewCompleted, o
                       </div>
                       
                       <div className="flex items-center gap-4 shrink-0 font-sans">
-                        <span className="text-[10px] font-black bg-app-fg/5 px-2 py-1 rounded-lg opacity-40">
+                        <span className="text-[10px] font-black bg-app-fg/5 px-2 py-1 rounded-lg opacity-40 font-mono">
                           {knownCount}/{totalCount}
                         </span>
                         <button 
@@ -499,7 +563,7 @@ export default function StudyView({ onBack, initialTrackId, onReviewCompleted, o
                             e.stopPropagation();
                             startSession(group.phrases);
                           }}
-                          className="p-2 rounded-xl bg-app-fg text-app-bg hover:scale-110 active:scale-95 transition-all"
+                          className="p-2 rounded-xl bg-app-fg text-app-bg hover:scale-110 active:scale-95 transition-all cursor-pointer"
                           title="Study group"
                         >
                           <PlayCircle size={18} />
@@ -518,11 +582,25 @@ export default function StudyView({ onBack, initialTrackId, onReviewCompleted, o
                           exit={{ height: 0 }}
                           className="overflow-hidden border-t border-app-card-border bg-app-fg/[0.01] font-sans"
                         >
-                          <div className="p-4 space-y-3">
+                          <div className="p-6 space-y-4">
                             {group.phrases.map(child => {
                               const isEditing = editingCardId === child.id;
+                              const track = child.trackId ? getCachedTrackData(child.trackId) : null;
+                              const contextLines = track && track.lines 
+                                ? resolvePhraseContext(track.lines, child.lineId ? [child.lineId] : [], child.text)
+                                : [];
+
+                              let bgClasses = "bg-app-card/75 border-app-card-border hover:border-app-card-border/90";
+                              if (child.status === "learning") {
+                                bgClasses = "bg-orange-500/[0.04] border-orange-500/20 hover:border-orange-500/35";
+                              } else if (child.status === "new") {
+                                bgClasses = "bg-sky-500/[0.04] border-sky-500/20 hover:border-sky-500/35";
+                              } else if (child.status === "known") {
+                                bgClasses = "bg-emerald-500/[0.02] border-emerald-500/20 hover:border-emerald-500/35";
+                              }
+
                               return (
-                                <div key={child.id} className="p-4 rounded-2xl border border-app-card-border/40 bg-app-card/30 flex flex-col hover:bg-app-fg/[0.02] transition-all font-sans">
+                                <div key={child.id} className={`p-6 rounded-[2rem] border flex flex-col transition-all duration-300 font-sans ${bgClasses}`}>
                                   {isEditing ? (
                                     <div className="space-y-3 w-full font-sans">
                                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -591,10 +669,10 @@ export default function StudyView({ onBack, initialTrackId, onReviewCompleted, o
                                         />
                                       </div>
 
-                                      <div className="flex items-center justify-end gap-2.5 pt-1.5 border-t border-app-card-border/30">
+                                      <div className="flex items-center justify-end gap-2.5 pt-1.5 border-t border-app-card-border/30 font-sans">
                                         <button
                                           onClick={() => setEditingCardId(null)}
-                                          className="px-3.5 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-xl border border-app-card-border hover:bg-app-fg/5 transition-all"
+                                          className="px-3.5 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-xl border border-app-card-border hover:bg-app-fg/5 transition-all cursor-pointer"
                                         >
                                           {t('common.cancel')}
                                         </button>
@@ -612,50 +690,76 @@ export default function StudyView({ onBack, initialTrackId, onReviewCompleted, o
                                             loadCards();
                                             onCardUpdated?.(child.id);
                                           }}
-                                          className="px-3.5 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-xl bg-[var(--accent)] text-white hover:scale-105 active:scale-95 transition-all"
+                                          className="px-3.5 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-xl bg-[var(--accent)] text-white hover:scale-105 active:scale-95 transition-all cursor-pointer"
                                         >
                                           {t('common.save')}
                                         </button>
                                       </div>
                                     </div>
                                   ) : (
-                                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 w-full font-sans">
-                                      <div className="space-y-1.5 flex-1 min-w-0">
+                                    <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 w-full font-sans">
+                                      <div className="space-y-2 flex-1 min-w-0">
                                         {/* Phrase and Type Tag */}
                                         <div className="flex flex-wrap items-center gap-2">
-                                          <span className="text-base font-serif font-medium text-app-fg">{child.text}</span>
+                                          <span className="text-lg font-sans font-semibold text-app-fg leading-snug">{child.text}</span>
                                           {child.type && child.type !== 'phrase' && (
-                                            <span className="text-[9px] font-black uppercase tracking-widest text-[var(--accent)] bg-[var(--accent)]/10 px-2 py-0.5 rounded-md">
+                                            <span className="text-[9px] font-black uppercase tracking-widest text-[var(--accent)] bg-[var(--accent)]/10 px-2 py-0.5 rounded-md shrink-0">
                                               {typeLabels[child.type] || child.type}
                                             </span>
                                           )}
                                           {child.userNote && (
-                                            <span className="text-[9px] font-bold text-teal-600 dark:text-teal-400 bg-teal-500/10 px-2 py-0.5 rounded-md">
+                                            <span className="text-[9px] font-bold text-teal-600 dark:text-teal-400 bg-teal-500/10 px-2 py-0.5 rounded-md shrink-0">
                                               {uiLanguage === 'ru' ? 'Заметка' : 'Note'}: {child.userNote}
                                             </span>
                                           )}
                                         </div>
                                         
                                         {/* Translation */}
-                                        <p className="text-sm text-app-fg opacity-60 font-sans">{child.translation}</p>
+                                        <p className="text-sm font-sans font-medium text-app-fg/80 leading-snug">{child.translation}</p>
 
                                         {/* Explanation */}
                                         {child.explanation && (
-                                          <div className="text-xs text-app-fg/75 font-sans mt-1 max-w-xl">
+                                          <div className="text-xs text-app-fg/70 font-sans mt-2 leading-relaxed max-w-xl">
                                             <ReactMarkdown>{child.explanation}</ReactMarkdown>
                                           </div>
                                         )}
                                         
-                                        {/* Original Lyric Line if available */}
-                                        {child.lineId && (
-                                          <div className="text-xs text-app-fg/40 italic flex items-center gap-1.5 mt-1 font-sans">
-                                            <span className="inline-block w-1.5 h-1.5 rounded-full bg-app-card-border" />
-                                            {uiLanguage === 'ru' ? 'Контекст' : 'Context'}: «{child.lineId}»
+                                        {/* Lyrics Context (dynamic and robust mapping) */}
+                                        {contextLines.length > 0 ? (
+                                          <div className="pt-3 border-t border-app-card-border/30 space-y-2 font-sans mt-3">
+                                            <span className="text-[9px] font-black uppercase tracking-wider text-app-fg opacity-40 block">
+                                              {uiLanguage === 'ru' ? 'Контекст из песни' : 'Lyrics Context'}
+                                            </span>
+                                            <div className="p-4 rounded-2xl bg-app-bg border border-app-card-border divide-y divide-app-card-border/40 space-y-3">
+                                              {contextLines.map((line, lIdx) => (
+                                                <div key={line.lineId || lIdx} className={lIdx > 0 ? "pt-3" : ""}>
+                                                  <p className="font-serif font-semibold text-app-fg leading-snug">
+                                                    {line.original}
+                                                  </p>
+                                                  {line.translation && (
+                                                    <p className="font-sans text-xs text-app-fg opacity-50 italic mt-1 leading-snug">
+                                                      {line.translation}
+                                                    </p>
+                                                  )}
+                                                </div>
+                                              ))}
+                                            </div>
                                           </div>
-                                        )}
+                                        ) : child.lineId && child.lineId.trim() !== "" && !child.lineId.startsWith("line_") ? (
+                                          <div className="pt-3 border-t border-app-card-border/30 space-y-2 font-sans mt-3">
+                                            <span className="text-[9px] font-black uppercase tracking-wider text-app-fg opacity-40 block">
+                                              {uiLanguage === 'ru' ? 'Контекст из песни' : 'Lyrics Context'}
+                                            </span>
+                                            <div className="p-4 rounded-2xl bg-app-bg border border-app-card-border text-sm font-sans">
+                                              <p className="font-serif font-semibold text-app-fg leading-snug">
+                                                {child.lineId}
+                                              </p>
+                                            </div>
+                                          </div>
+                                        ) : null}
                                       </div>
                                       
-                                      <div className="flex items-center gap-2 self-end md:self-center shrink-0 font-sans">
+                                      <div className="flex items-center gap-2 self-end md:self-start shrink-0 font-sans md:pt-0.5">
                                         <button
                                           onClick={() => {
                                             setEditingCardId(child.id);
@@ -667,7 +771,7 @@ export default function StudyView({ onBack, initialTrackId, onReviewCompleted, o
                                               userNote: child.userNote || '',
                                             });
                                           }}
-                                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-app-fg/5 text-app-fg text-[10px] font-black uppercase tracking-widest hover:bg-app-fg/10 transition-all border border-transparent font-sans"
+                                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-app-fg/5 text-app-fg text-[10px] font-black uppercase tracking-widest hover:bg-app-fg/10 transition-all border border-transparent font-sans cursor-pointer"
                                           title="Edit card"
                                         >
                                           <Edit3 size={11} />
@@ -675,7 +779,7 @@ export default function StudyView({ onBack, initialTrackId, onReviewCompleted, o
                                         </button>
                                         <button 
                                           onClick={() => startSession([child])}
-                                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-app-fg/5 text-app-fg text-[10px] font-black uppercase tracking-widest hover:bg-[var(--accent)] hover:text-white hover:opacity-100 transition-all font-sans"
+                                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-app-fg/5 text-app-fg text-[10px] font-black uppercase tracking-widest hover:bg-[var(--accent)] hover:text-white hover:opacity-100 transition-all font-sans cursor-pointer"
                                         >
                                           <PlayCircle size={14} />
                                           {uiLanguage === 'ru' ? 'Учить' : 'Study'}
