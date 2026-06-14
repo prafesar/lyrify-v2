@@ -1985,12 +1985,12 @@ export default function App() {
                         borderTopColor: "transparent",
                       }}
                     />
-                    <p className="text-xs font-black uppercase tracking-widest opacity-40 mb-6">Fetching details...</p>
+                    <p className="text-xs font-black uppercase tracking-widest opacity-40 mb-6">{t('lyrics.fetchingDetails')}</p>
                     <button
                       onClick={cancelSearchDetails}
                       className="px-6 py-2 rounded-xl bg-app-card border border-app-card-border text-[10px] font-black uppercase tracking-widest hover:bg-app-card/80 transition-colors"
                     >
-                      Cancel
+                      {t('common.cancel')}
                     </button>
                   </motion.div>
                 ) : albumDetails ? (
@@ -2420,8 +2420,8 @@ export default function App() {
                           )}
                         />
                         <span>
-                          {loadingStep === "searching" ? "Searching Lyrics" : 
-                           loadingStep === "meaning" ? "Generating Preview" : "Analyzing Track"}
+                          {loadingStep === "searching" ? t('lyrics.searchingLyrics') : 
+                           loadingStep === "meaning" ? t('lyrics.generatingPreview') : t('lyrics.analyzingTrack')}
                         </span>
                       </div>
                     </div>
@@ -2437,7 +2437,7 @@ export default function App() {
                             type="button"
                             onClick={() => goBack({ type: "explore" })}
                             className="absolute -top-2 -left-2 z-10 p-2 bg-app-card border border-app-card-border shadow-lg rounded-xl hover:scale-110 active:scale-95 transition-transform cursor-pointer"
-                            title="Back"
+                            title={t('common.back')}
                           >
                             <ChevronLeft className="w-4 h-4 sm:w-5 sm:h-5 text-app-fg" />
                           </button>
@@ -2606,7 +2606,7 @@ export default function App() {
                               type="button"
                               onClick={() => setIsResourcesExpanded(true)}
                               className="w-8 h-8 rounded-xl border border-app-card-border bg-app-card/30 flex items-center justify-center text-app-fg opacity-65 hover:opacity-100 hover:bg-app-fg/5 transition-all active:scale-95 cursor-pointer shrink-0"
-                              title="Expand resources"
+                              title={t('lyrics.expandResourcesTooltip')}
                             >
                               <ChevronRight size={14} />
                             </button>
@@ -2638,7 +2638,7 @@ export default function App() {
                                 type="button"
                                 onClick={() => setIsResourcesExpanded(false)}
                                 className="w-8 h-8 rounded-xl border border-app-card-border bg-app-card/30 flex items-center justify-center text-app-fg opacity-65 hover:opacity-100 hover:bg-app-fg/5 transition-all active:scale-95 cursor-pointer shrink-0"
-                                title="Collapse resources"
+                                title={t('lyrics.collapseResourcesTooltip')}
                               >
                                 <ChevronLeft size={14} />
                               </button>
@@ -2769,7 +2769,7 @@ export default function App() {
                                         handleSetLyricsDisplayMode("both");
                                       }
                                     }}
-                                    title={`Toggle ${currentTrack?.sourceLanguage || "Original"} Lyrics`}
+                                    title={t('lyrics.toggleSourceLyrics', { lang: currentTrack?.sourceLanguage || "Original" })}
                                     className={cn(btnBase, isSrcActive ? activeClass : inactiveClass)}
                                   >
                                     <span>{srcLangCode}</span>
@@ -2786,7 +2786,7 @@ export default function App() {
                                         handleSetLyricsDisplayMode("both");
                                       }
                                     }}
-                                    title={`Toggle ${targetLanguage || "Target"} Translation`}
+                                    title={t('lyrics.toggleTargetTranslation', { lang: targetLanguage || "Target" })}
                                     className={cn(btnBase, isTargetActive ? activeClass : inactiveClass)}
                                   >
                                     <span>{targetLangCode}</span>
@@ -2799,7 +2799,7 @@ export default function App() {
                                   <button
                                     type="button"
                                     onClick={handleToggleStarFilter}
-                                    title="Show Starred Lines Only"
+                                    title={t('lyrics.showStarredOnly')}
                                     className="w-8 h-8 rounded-lg flex items-center justify-center transition-all hover:scale-110 active:scale-90"
                                   >
                                     {isStarFilterActive ? (
@@ -2845,10 +2845,10 @@ export default function App() {
                          </div>
                          <div className="space-y-1">
                            <h3 className="text-lg font-black text-app-fg uppercase tracking-widest leading-none font-sans">
-                             {loadingStep === "searching" ? "Finding Lyrics" : "Analyzing Track"}
+                             {loadingStep === "searching" ? t('lyrics.findingLyrics') : t('lyrics.analyzingTrack')}
                            </h3>
                            <p className="text-[10px] text-app-muted uppercase tracking-[0.2em] font-sans font-bold">
-                             {loadingStep === "searching" ? "Scanning Databases" : "Consulting Gemini AI"}
+                             {loadingStep === "searching" ? t('lyrics.scanningDatabases') : t('lyrics.consultingGemini')}
                            </p>
                          </div>
                       </div>
@@ -3173,7 +3173,7 @@ export default function App() {
                         return (
                           <div className="py-24 text-center space-y-4">
                             <Star size={40} className="mx-auto text-amber-500/40" />
-                            <p className="text-sm font-bold text-app-fg opacity-45">No starred lines.</p>
+                            <p className="text-sm font-bold text-app-fg opacity-45">{t('lyrics.noStarredLines')}</p>
                           </div>
                         );
                       }
@@ -3191,12 +3191,12 @@ export default function App() {
                         return (
                           <div className="py-24 text-center space-y-4">
                             <Search size={40} className="mx-auto text-app-fg opacity-15" />
-                            <p className="text-sm font-bold text-app-fg opacity-45">No matching lyric lines.</p>
+                            <p className="text-sm font-bold text-app-fg opacity-45">{t('lyrics.noMatchingLyricLines')}</p>
                             <button
                               onClick={() => setTrackSearchQuery("")}
                               className="px-4 py-2 border border-app-card-border hover:border-app-fg/25 rounded-xl text-xs font-bold text-app-fg"
                             >
-                              Clear Search
+                              {t('lyrics.clearSearch')}
                             </button>
                           </div>
                         );
@@ -3245,13 +3245,13 @@ export default function App() {
                             <div className="space-y-2">
                               <h3 className="text-xl font-bold text-app-fg">
                                 {loadingStep === "searching"
-                                  ? "Checking lyrics databases..."
-                                  : "Analyzing with AI..."}
+                                  ? t('lyrics.checkingLyricsDatabases')
+                                  : t('lyrics.analyzingWithAI')}
                               </h3>
                               <p className="text-app-fg opacity-40 max-w-xs mx-auto text-sm">
                                 {loadingStep === "searching"
-                                  ? "Polling official sources for high-accuracy lyrics text."
-                                  : "Detecting language, extracting authors, and translating for you."}
+                                  ? t('lyrics.pollingOfficialSources')
+                                  : t('lyrics.detectingLanguageExtracting')}
                               </p>
                             </div>
                           </div>
@@ -3389,14 +3389,14 @@ export default function App() {
                         </div>
                         <div className="space-y-2">
                           <h3 className="text-lg font-black text-app-fg uppercase tracking-widest text-center">
-                            {loadingStep === "searching" ? "Finding Lyrics" : loadingStep === "lecture" ? "Generating Lecture" : "Deep Breakdown"}
+                            {loadingStep === "searching" ? t('lyrics.findingLyrics') : loadingStep === "lecture" ? t('lyrics.generatingLecture') : t('lyrics.deepBreakdown')}
                           </h3>
                           <div className="flex items-center justify-center gap-3">
                              <div className="flex gap-1">
                                 <div className={cn("w-1 h-1 rounded-full", loadingStep === "searching" ? "bg-amber-500 animate-pulse" : "bg-emerald-500")} />
                                 <div className={cn("w-1 h-1 rounded-full", loadingStep === "lecture" ? "bg-purple-500 animate-pulse" : loadingStep === "analyzing" ? "bg-app-accent animate-pulse" : "bg-app-fg/10")} />
                              </div>
-                             <span className="text-[10px] font-black uppercase tracking-[0.2em] opacity-40">Consulting Gemini</span>
+                             <span className="text-[10px] font-black uppercase tracking-[0.2em] opacity-40">{t('lyrics.consultingGeminiShort')}</span>
                           </div>
                         </div>
                       </div>
@@ -3479,14 +3479,14 @@ export default function App() {
                         </div>
                         <div className="space-y-2">
                           <h3 className="text-lg font-black text-app-fg uppercase tracking-widest text-center">
-                            {loadingStep === "searching" ? "Finding Lyrics" : loadingStep === "lecture" ? "Generating Lecture" : "Deep Breakdown"}
+                            {loadingStep === "searching" ? t('lyrics.findingLyrics') : loadingStep === "lecture" ? t('lyrics.generatingLecture') : t('lyrics.deepBreakdown')}
                           </h3>
                           <div className="flex items-center justify-center gap-3">
                              <div className="flex gap-1">
                                 <div className={cn("w-1 h-1 rounded-full", loadingStep === "searching" ? "bg-amber-500 animate-pulse" : "bg-emerald-500")} />
                                 <div className={cn("w-1 h-1 rounded-full", loadingStep === "lecture" ? "bg-purple-500 animate-pulse" : loadingStep === "analyzing" ? "bg-app-accent animate-pulse" : "bg-app-fg/10")} />
                              </div>
-                             <span className="text-[10px] font-black uppercase tracking-[0.2em] opacity-40">Consulting Gemini</span>
+                             <span className="text-[10px] font-black uppercase tracking-[0.2em] opacity-40">{t('lyrics.consultingGeminiShort')}</span>
                           </div>
                         </div>
                       </div>
@@ -3868,8 +3868,8 @@ export default function App() {
                         />
                         <span className="font-medium text-app-fg">
                           {isTrackFavoriteInApp(activeMenuTrack.id)
-                            ? "Remove from favorites"
-                            : "Add to favorites"}
+                            ? t('library.removeFromFavorites')
+                            : t('library.addToFavorites')}
                         </span>
                       </div>
                       {isTrackFavoriteInApp(activeMenuTrack.id) && (
@@ -3884,7 +3884,7 @@ export default function App() {
                       className="w-full flex items-center gap-4 p-4 rounded-2xl hover:bg-app-fg/5 active:scale-[0.99] transition-all text-left"
                     >
                       <ListMusic size={20} className="text-app-muted" />
-                      <span className="font-medium text-app-fg">Add to playlist</span>
+                      <span className="font-medium text-app-fg">{t('library.addToPlaylist').replace('...', '')}</span>
                     </button>
                   </div>
 
@@ -3894,7 +3894,7 @@ export default function App() {
                     onClick={() => setActiveMenuTrack(null)}
                     className="w-full py-4 bg-app-fg/5 hover:bg-app-fg/10 active:scale-[0.99] rounded-2xl text-center font-semibold text-app-fg transition-all"
                   >
-                    Close
+                    {t('common.close')}
                   </button>
                 </>
               ) : (
@@ -3907,7 +3907,7 @@ export default function App() {
                     >
                       <ChevronLeft size={20} />
                     </button>
-                    <h3 className="font-bold text-lg text-app-fg">Add to playlist</h3>
+                    <h3 className="font-bold text-lg text-app-fg">{t('library.addToPlaylist').replace('...', '')}</h3>
                   </div>
 
                   {playlistsInApp.length > 0 ? (
@@ -3925,7 +3925,7 @@ export default function App() {
                             {hasTrack ? (
                               <Check size={18} className="text-green-500" />
                             ) : (
-                              <span className="text-xs text-app-muted">Add</span>
+                              <span className="text-xs text-app-muted">{t('common.add')}</span>
                             )}
                           </button>
                         );
@@ -3933,7 +3933,7 @@ export default function App() {
                     </div>
                   ) : (
                     <div className="text-center py-8 text-app-muted italic">
-                      You don't have any playlists yet. Create them in the Library tab!
+                      {t('library.noPlaylistsAvailable')}
                     </div>
                   )}
 
@@ -3942,7 +3942,7 @@ export default function App() {
                     onClick={() => setIsAddToPlaylistOpenInApp(false)}
                     className="w-full py-4 bg-app-fg/5 hover:bg-app-fg/10 active:scale-[0.99] rounded-2xl text-center font-semibold text-app-fg transition-all"
                   >
-                    Back
+                    {t('common.back')}
                   </button>
                 </>
               )}
@@ -3989,7 +3989,7 @@ export default function App() {
                         className="text-[9px] font-black uppercase tracking-[0.3em]"
                         style={{ color: "var(--accent)" }}
                       >
-                        Resources & Source
+                        {t('resources.title')}
                       </span>
                       <h3 className="text-md sm:text-lg font-bold text-app-fg leading-tight line-clamp-1">
                         {currentTrack.title}
@@ -4018,7 +4018,7 @@ export default function App() {
                         : "border-transparent text-app-fg opacity-40 hover:opacity-100",
                     )}
                   >
-                    External Links
+                    {t('resources.externalLinks')}
                   </button>
                   <button
                     disabled={isLoadingLyrics}
@@ -4032,7 +4032,7 @@ export default function App() {
                         : "border-transparent text-app-fg opacity-40 hover:opacity-100",
                     )}
                   >
-                    Lyrics Source
+                    {t('resources.lyricsSource')}
                   </button>
                 </div>
 
@@ -4053,22 +4053,22 @@ export default function App() {
                       </div>
                       <div className="space-y-1.5 px-4">
                         <p className="text-[10px] font-black uppercase tracking-[0.2em]" style={{ color: "var(--accent)" }}>
-                          {loadingStep === "searching" ? "FETCHING LYRICS" : "ANALYZING LYRICS"}
+                          {loadingStep === "searching" ? t('resources.fetchingLyrics') : t('resources.analyzingLyrics')}
                         </p>
                         <h4 className="text-sm font-extrabold text-app-fg">
-                          {loadingStep === "searching" ? "Connecting to source..." : "AI Breakdown in progress..."}
+                          {loadingStep === "searching" ? t('resources.connectingToSource') : t('resources.aiBreakdownInProgress')}
                         </h4>
                         <p className="text-xs text-app-muted max-w-[280px] leading-relaxed select-none">
                           {loadingStep === "searching"
-                            ? "Retrieving target song texts from alternative lyric databases."
-                            : "Detecting original song language, building translation maps and line alignments."}
+                            ? t('resources.fetchingLyricsDesc')
+                            : t('resources.analyzingLyricsDesc')}
                         </p>
                       </div>
                     </div>
                   ) : resourceTab === "links" ? (
                     <div className="space-y-4">
                       <p className="text-xs text-app-fg opacity-60 leading-normal">
-                        External links and materials for this track.
+                        {t('resources.externalLinksDesc')}
                       </p>
 
                       <div className="grid gap-3 py-1">
@@ -4122,7 +4122,7 @@ export default function App() {
                         <div className="grid grid-cols-2 gap-2.5">
                           <div className="space-y-1">
                             <label className="text-[9px] font-black uppercase tracking-[0.15em] text-app-fg opacity-40 select-none">
-                              Track Title
+                              {t('resources.trackTitle')}
                             </label>
                             <input
                               type="text"
@@ -4135,7 +4135,7 @@ export default function App() {
 
                           <div className="space-y-1">
                             <label className="text-[9px] font-black uppercase tracking-[0.15em] text-app-fg opacity-40 select-none">
-                              Artist Name
+                              {t('resources.artistName')}
                             </label>
                             <input
                               type="text"
@@ -4155,12 +4155,12 @@ export default function App() {
                           {isSearchingOptions ? (
                             <>
                               <Loader2 size={12} className="animate-spin" />
-                              Searching...
+                              {t('resources.searching')}
                             </>
                           ) : (
                             <>
                               <Search size={12} />
-                              Search Alternative Lyrics
+                              {t('resources.searchBtn')}
                             </>
                           )}
                         </button>
@@ -4180,13 +4180,13 @@ export default function App() {
                           <div className="flex flex-col items-center justify-center py-10 space-y-3 opacity-40">
                             <Loader2 size={24} className="animate-spin text-accent" />
                             <p className="text-[10px] font-black uppercase tracking-widest text-center">
-                              Searching alternative sources...
+                              {t('resources.searchingAlternative')}
                             </p>
                           </div>
                         ) : lyricOptions.length > 0 ? (
                           <div className="space-y-2">
                             <p className="text-[10px] font-black uppercase tracking-wider text-app-fg opacity-30 select-none px-1">
-                              Available Results ({lyricOptions.length})
+                              {t('resources.availableResults', { count: lyricOptions.length })}
                             </p>
                             <div className="grid gap-2">
                               {lyricOptions.map((option) => (
@@ -4227,7 +4227,7 @@ export default function App() {
                           <div className="flex flex-col items-center justify-center py-12 space-y-3 opacity-30 border border-dashed border-app-card-border/60 rounded-2xl bg-app-card/10">
                             <FileText size={28} className="text-app-fg/80" />
                             <p className="text-[10px] font-bold uppercase tracking-widest text-center px-4 leading-normal">
-                              No lyrics searched yet or no results found above
+                              {t('resources.noLyricsFound')}
                             </p>
                           </div>
                         )}
@@ -4241,7 +4241,7 @@ export default function App() {
                     onClick={() => setIsResourcesOpen(false)}
                     className="w-full py-3.5 rounded-2xl bg-app-fg text-app-bg font-bold text-xs uppercase tracking-wider active:scale-95 transition-all cursor-pointer"
                   >
-                    Done
+                    {t('common.done')}
                   </button>
                 </div>
               </div>
