@@ -7,7 +7,8 @@ import {
   editPhrase, 
   deletePhrase,
   buildStarredLinesAnalysisInput,
-  mergeGeneratedPhrasesForLines
+  mergeGeneratedPhrasesForLines,
+  resolvePhraseContext
 } from "../services/lyricsAnalysisService";
 
 /**
@@ -278,6 +279,51 @@ describe("lyricsAnalysisService and Line linking tests", () => {
       // Verify that the duplicate is ignored and the new phrase is added
       expect(merged2.phrases?.length).toBe(3); // "Je t'aime", "grand amour", "moi non plus"
       expect(merged2.lines[0].phrases?.length).toBe(2); // "Je t'aime", "moi non plus"
+    });
+  });
+
+  describe("resolvePhraseContext tests", () => {
+    const mockLines = [
+      { id: "1", lineId: "lid-1", index: 0, original: "Quand elle me prend", translation: "When she takes me", phrases: [] },
+      { id: "2", lineId: "lid-2", index: 1, original: "dans ses bras", translation: "in her arms", phrases: [] },
+      { id: "3", lineId: "lid-3", index: 2, original: "Elle me parle tout bas", translation: "She speaks softly", phrases: [] },
+    ];
+
+    it("resolves context line by lineIds", () => {
+      const resolved = resolvePhraseContext(mockLines, ["lid-2"]);
+      expect(resolved.length).toBe(1);
+      expect(resolved[0].original).toBe("dans ses bras");
+      expect(resolved[0].translation).toBe("in her arms");
+    });
+
+    it("resolves multiple lines for multi-line context", () => {
+      const resolved = resolvePhraseContext(mockLines, ["lid-1", "lid-3"]);
+      expect(resolved.length).toBe(2);
+      expect(resolved[0].original).toBe("Quand elle me prend");
+      expect(resolved[1].original).toBe("Elle me parle tout bas");
+    });
+
+    it("falls back to text search when lineIds are empty", () => {
+      const resolved = resolvePhraseContext(mockLines, [], "me parle");
+      expect(resolved.length).toBe(1);
+      expect(resolved[0].original).toBe("Elle me parle tout bas");
+    });
+
+    it("falls back to text matching when lineIds are undefined", () => {
+      const resolved = resolvePhraseContext(mockLines, undefined, "dans ses");
+      expect(resolved.length).toBe(1);
+      expect(resolved[0].original).toBe("dans ses bras");
+    });
+
+    it("deduplicates context lines with overlapping identifiers", () => {
+      const resolved = resolvePhraseContext(mockLines, ["lid-2", "lid-2"]);
+      expect(resolved.length).toBe(1);
+      expect(resolved[0].original).toBe("dans ses bras");
+    });
+
+    it("returns empty array if no matches found", () => {
+      const resolved = resolvePhraseContext(mockLines, ["lid-unknown"], "something completely different");
+      expect(resolved.length).toBe(0);
     });
   });
 });

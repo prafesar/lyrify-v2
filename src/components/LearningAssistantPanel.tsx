@@ -5,6 +5,7 @@ import {
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { TrackLyricsData, Phrase } from "../services/musicService";
+import { resolvePhraseContext } from "../services/lyricsAnalysisService";
 import { aiClient } from "../application";
 import { useTranslation } from "../lib/i18n";
 
@@ -44,6 +45,11 @@ export const LearningAssistantPanel: React.FC<LearningAssistantPanelProps> = ({
   speak
 }) => {
   const { t } = useTranslation();
+  const contextLines = React.useMemo(() => {
+    if (!phraseContext || !track.lines) return [];
+    return resolvePhraseContext(track.lines, phraseContext.lineIds, phraseContext.text);
+  }, [track.lines, phraseContext]);
+
   const [userQuestion, setUserQuestion] = useState("");
   const [activePreset, setActivePreset] = useState<string | null>(null);
   
@@ -266,11 +272,26 @@ export const LearningAssistantPanel: React.FC<LearningAssistantPanelProps> = ({
                     <span className="text-[8px] uppercase tracking-wider text-app-fg opacity-35 block mb-1 font-sans">
                       {t('assistant.lyricsContext')}
                     </span>
-                    <p className="text-xs font-sans text-app-fg opacity-45 leading-relaxed">
-                      "{track.lines.find(l => phraseContext.lineIds?.includes(l.lineId || ""))?.original || 
-                        track.lines.find(l => l.original.toLowerCase().includes(phraseContext.text.toLowerCase()))?.original || 
-                        t('assistant.linkingMetadata')}"
-                    </p>
+                    {contextLines.length > 0 ? (
+                      <div className="space-y-2 mt-1">
+                        {contextLines.map((line, lIdx) => (
+                          <div key={line.lineId || lIdx} className={lIdx > 0 ? "pt-2 border-t border-app-card-border/30" : ""}>
+                            <p className="text-xs font-sans text-app-fg font-semibold leading-relaxed">
+                              {line.original}
+                            </p>
+                            {line.translation && (
+                              <p className="text-[11px] font-sans text-app-fg opacity-55 italic mt-0.5 leading-snug">
+                                {line.translation}
+                              </p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-xs font-sans text-app-fg opacity-35 italic leading-relaxed">
+                        {t('assistant.linkingMetadata')}
+                      </p>
+                    )}
                   </div>
                 )}
               </div>

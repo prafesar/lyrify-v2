@@ -19,7 +19,7 @@ import {
 import { motion, AnimatePresence } from "motion/react";
 import { Phrase, LyricsLine, TrackLyricsData } from "../services/musicService";
 import { PhraseStatus, normalizePhraseKey } from "../services/cardService";
-import { addUserPhrase, editPhrase, deletePhrase } from "../services/lyricsAnalysisService";
+import { addUserPhrase, editPhrase, deletePhrase, resolvePhraseContext } from "../services/lyricsAnalysisService";
 import { useTranslation } from "../lib/i18n";
 
 interface AnalysisPhraseWorkspaceProps {
@@ -433,22 +433,7 @@ export const AnalysisPhraseWorkspace: React.FC<AnalysisPhraseWorkspaceProps> = (
               const itemKey = item.id || item.text;
               const isExpanded = expandedPhraseKeys.has(itemKey);
 
-              // Find containing / linked lyric lines and pick the first non-empty distinct one
-              const nonUniqueLinked = currentTrack.lines.filter(l => 
-                (item.lineIds && item.lineIds.includes(l.lineId || "")) ||
-                l.phrases?.some((p: any) => p.text === item.text)
-              );
-              const validLines = nonUniqueLinked.filter(l => l.original && l.original.trim() !== "");
-              const uniqueLinkedLines: LyricsLine[] = [];
-              const seenTexts = new Set<string>();
-              for (const line of validLines) {
-                const norm = line.original.trim().toLowerCase();
-                if (!seenTexts.has(norm)) {
-                  seenTexts.add(norm);
-                  uniqueLinkedLines.push(line);
-                }
-              }
-              const firstContextLine = uniqueLinkedLines.length > 0 ? uniqueLinkedLines[0] : null;
+              const contextLines = resolvePhraseContext(currentTrack.lines, item.lineIds, item.text);
 
               let bgClasses = "bg-app-card/70 border-app-card-border hover:border-app-card-border/85";
               if (currentStatus === "new") {
@@ -723,20 +708,24 @@ export const AnalysisPhraseWorkspace: React.FC<AnalysisPhraseWorkspaceProps> = (
                             )}
 
                             {/* Lyrics Context */}
-                            {firstContextLine ? (
+                            {contextLines.length > 0 ? (
                               <div className="pt-3 border-t border-app-card-border/45 space-y-2 font-sans">
                                 <span className="text-[9px] font-black uppercase tracking-wider text-app-fg opacity-40 block">
                                   {uiLanguage === 'ru' ? 'Контекст из песни' : 'Lyrics Context'}
                                 </span>
-                                <div className="p-4 rounded-2xl bg-app-bg border border-app-card-border text-sm font-sans">
-                                  <p className="font-serif font-semibold text-app-fg leading-snug">
-                                    {firstContextLine.original}
-                                  </p>
-                                  {firstContextLine.translation && (
-                                    <p className="font-sans text-xs text-app-fg opacity-50 italic mt-1 leading-snug">
-                                      {firstContextLine.translation}
-                                    </p>
-                                  )}
+                                <div className="p-4 rounded-2xl bg-app-bg border border-app-card-border divide-y divide-app-card-border/40 space-y-3">
+                                  {contextLines.map((line, lIdx) => (
+                                    <div key={line.lineId || lIdx} className={lIdx > 0 ? "pt-3" : ""}>
+                                      <p className="font-serif font-semibold text-app-fg leading-snug">
+                                        {line.original}
+                                      </p>
+                                      {line.translation && (
+                                        <p className="font-sans text-xs text-app-fg opacity-50 italic mt-1 leading-snug">
+                                          {line.translation}
+                                        </p>
+                                      )}
+                                    </div>
+                                  ))}
                                 </div>
                               </div>
                             ) : (
