@@ -17,6 +17,7 @@ import {
 import { TrackLyricsData, StructuredLectureBlock, StructuredSectionPhrase } from '../services/musicService';
 import { PhraseStatus, normalizePhraseKey } from '../services/cardService';
 import ReactMarkdown from 'react-markdown';
+import { PhraseCard, PhraseCardStatus } from './PhraseCard';
 
 interface StructuredAnalysisLectureProps {
   currentTrack: TrackLyricsData;
@@ -76,6 +77,9 @@ export const StructuredAnalysisLecture: React.FC<StructuredAnalysisLectureProps>
 
   // Active expanded phrase card state
   const [expandedPhraseId, setExpandedPhraseId] = useState<string | null>(null);
+
+  // Speaking state for phrase playback
+  const [speakingText, setSpeakingText] = useState<string | null>(null);
 
   // Temporary edit value buffer
   const [tempEditValue, setTempEditValue] = useState('');
@@ -269,6 +273,34 @@ export const StructuredAnalysisLecture: React.FC<StructuredAnalysisLectureProps>
     return card && (card.status === 'learning' || card.status === 'known');
   };
 
+  const getPhraseContextLines = (phrase: StructuredSectionPhrase) => {
+    if (phrase.lineIds && phrase.lineIds.length > 0) {
+      return (currentTrack.lines || [])
+        .filter(l => phrase.lineIds?.includes(l.id))
+        .map(l => ({
+          lineId: l.id,
+          original: l.original,
+          translation: l.translation
+        }));
+    }
+    const lowerPhrase = phrase.text.toLowerCase();
+    const matched = (currentTrack.lines || []).filter(l => l.original.toLowerCase().includes(lowerPhrase));
+    if (matched.length > 0) {
+      return matched.slice(0, 2).map(l => ({
+        lineId: l.id,
+        original: l.original,
+        translation: l.translation
+      }));
+    }
+    return [];
+  };
+
+  const getPhraseStatus = (phraseText: string) => {
+    const key = normalizePhraseKey(phraseText);
+    const card = phraseMetadata?.get(key);
+    return (card?.status as 'new' | 'learning' | 'known') || 'new';
+  };
+
   const handleTogglePhraseSaved = (phrase: StructuredSectionPhrase) => {
     const saved = isPhraseSaved(phrase.text);
     if (saved) {
@@ -282,7 +314,10 @@ export const StructuredAnalysisLecture: React.FC<StructuredAnalysisLectureProps>
 
   // Safe voicing wrapper
   const handleVoicing = (phraseText: string) => {
-    speak(phraseText);
+    setSpeakingText(phraseText);
+    speak(phraseText, () => {
+      setSpeakingText(null);
+    });
   };
 
   const isFallbackError = useMemo(() => {
@@ -441,7 +476,6 @@ export const StructuredAnalysisLecture: React.FC<StructuredAnalysisLectureProps>
               <div className="pt-2">
                 <div className="space-y-3">
                   {(block.phrases || []).map((phrase) => {
-                    const isSaveActive = isPhraseSaved(phrase.text);
                     const isPhraseEditing = editingPhraseId === phrase.id;
                     const isExpanded = expandedPhraseId === phrase.id;
 
@@ -512,6 +546,8 @@ export const StructuredAnalysisLecture: React.FC<StructuredAnalysisLectureProps>
                         </div>
                       );
                     }
+
+                    const isSaveActive = isPhraseSaved(phrase.text);
 
                     return (
                       <div 

@@ -2,25 +2,21 @@ import React, { useState, useMemo } from "react";
 import { 
   Search, 
   Plus, 
-  Edit2, 
   Trash2, 
   Volume2, 
   CheckCircle2, 
-  Tag, 
   HelpCircle, 
-  Sparkles, 
-  User, 
   X, 
-  MessageSquare,
-  RefreshCw,
-  MoreVertical,
+  RefreshCw, 
   Bookmark
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { Phrase, LyricsLine, TrackLyricsData } from "../services/musicService";
 import { PhraseStatus, normalizePhraseKey } from "../services/cardService";
-import { addUserPhrase, editPhrase, deletePhrase } from "../services/lyricsAnalysisService";
+import { addUserPhrase, editPhrase, deletePhrase, resolvePhraseContext } from "../services/lyricsAnalysisService";
 import { useTranslation } from "../lib/i18n";
+import { PhraseCard, PhraseCardStatus } from "./PhraseCard";
+import { cn } from "../lib/utils";
 
 interface AnalysisPhraseWorkspaceProps {
   currentTrack: TrackLyricsData;
@@ -37,7 +33,6 @@ interface AnalysisPhraseWorkspaceProps {
   onUpdateTrack: (updatedTrack: TrackLyricsData) => Promise<void>;
   isGeneratingAnalysis?: boolean;
   handleRegenerateAnalysis?: () => void;
-  onOpenAssistantForPhrase?: (phrase: Phrase) => void;
   onNavigateToTab?: (tab: "preview" | "lyrics" | "analysis" | "cards") => void;
   onStartStudy?: () => void;
 }
@@ -52,11 +47,26 @@ export const AnalysisPhraseWorkspace: React.FC<AnalysisPhraseWorkspaceProps> = (
   onUpdateTrack,
   isGeneratingAnalysis = false,
   handleRegenerateAnalysis,
-  onOpenAssistantForPhrase,
   onNavigateToTab,
   onStartStudy
 }) => {
   const { uiLanguage } = useTranslation();
+
+  const typeLabels = useMemo<Record<string, string>>(() => ({
+    idiom: uiLanguage === 'ru' ? 'Идиома' : 'Idiom',
+    collocation: uiLanguage === 'ru' ? 'Коллокация' : 'Collocation',
+    phrasal_verb: uiLanguage === 'ru' ? 'Фразовый глагол' : 'Phrasal Verb',
+    cultural_ref: uiLanguage === 'ru' ? 'Культурная отсылка' : 'Cultural Reference',
+    vocabulary: uiLanguage === 'ru' ? 'Лексика' : 'Vocabulary',
+    phrase: uiLanguage === 'ru' ? 'Фраза' : 'Phrase',
+    slang: uiLanguage === 'ru' ? 'Сленг' : 'Slang',
+    verb: uiLanguage === 'ru' ? 'Глагол' : 'Verb',
+    grammar: uiLanguage === 'ru' ? 'Грамматика' : 'Grammar',
+    cultural: uiLanguage === 'ru' ? 'Культурное' : 'Cultural',
+    core: uiLanguage === 'ru' ? 'Базовая лексика' : 'Core Vocabulary',
+    colloquial: uiLanguage === 'ru' ? 'Разговорное' : 'Colloquial',
+    advanced: uiLanguage === 'ru' ? 'Продвинутый' : 'Advanced'
+  }), [uiLanguage]);
 
   // Local state for Modals
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -81,57 +91,7 @@ export const AnalysisPhraseWorkspace: React.FC<AnalysisPhraseWorkspaceProps> = (
   const [currentlySpeakingId, setCurrentlySpeakingId] = useState<string | null>(null);
 
   // Filter state
-  const [activeFilter, setActiveFilter] = useState<"all" | "new" | "learning" | "known" | "user" | "ai" | "has_note">("all");
-
-  const filtersList = useMemo(() => [
-    { id: "all" },
-    { id: "new" },
-    { id: "learning" },
-    { id: "known" },
-    { id: "user" },
-    { id: "ai" },
-    { id: "has_note" }
-  ] as const, []);
-
-  const getLocalizedFilterLabel = (id: string) => {
-    if (uiLanguage === 'ru') {
-      switch (id) {
-        case "all": return "Все";
-        case "new": return "Новые";
-        case "learning": return "Изучаю";
-        case "known": return "Освоенные";
-        case "user": return "Свои";
-        case "ai": return "Созданные AI";
-        case "has_note": return "С заметкой";
-        default: return id;
-      }
-    }
-    switch (id) {
-      case "all": return "All";
-      case "new": return "New";
-      case "learning": return "Learning";
-      case "known": return "Known";
-      case "user": return "User-added";
-      case "ai": return "AI-generated";
-      case "has_note": return "Has note";
-      default: return id;
-    }
-  };
-
-  // Helper to highlight matched query in textual content
-  const highlightMatch = (text: string, query: string) => {
-    if (!query.trim() || !text) return <>{text}</>;
-    const index = text.toLowerCase().indexOf(query.toLowerCase());
-    if (index === -1) return <>{text}</>;
-    const length = query.length;
-    return (
-      <>
-        {text.substring(0, index)}
-        <mark className="bg-orange-500/20 text-orange-600 rounded-xs px-0.5">{text.substring(index, index + length)}</mark>
-        {text.substring(index + length)}
-      </>
-    );
-  };
+  const [selectedType, setSelectedType] = useState<string>("all");
 
   // Extract only the explicitly study-saved unique phrases for this track from phraseMetadata
   const uniquePhrases = useMemo(() => {
@@ -164,33 +124,39 @@ export const AnalysisPhraseWorkspace: React.FC<AnalysisPhraseWorkspaceProps> = (
     return list;
   }, [currentTrack, phraseMetadata]);
 
-  // Filter phrases based on searched query & filter states
+  const availableTypes = useMemo(() => {
+    const types = new Set<string>();
+    uniquePhrases.forEach(phrase => {
+      const type = phrase.type || '';
+      if (type && !['new', 'learning', 'known', 'user', 'ai', 'has_note', 'none', 'all'].includes(type.toLowerCase()) && typeLabels[type]) {
+        types.add(type);
+      }
+    });
+    return Array.from(types).sort();
+  }, [uniquePhrases, typeLabels]);
+
+  // Helper to highlight matched query in textual content
+  const highlightMatch = (text: string, query: string) => {
+    if (!query.trim() || !text) return <>{text}</>;
+    const index = text.toLowerCase().indexOf(query.toLowerCase());
+    if (index === -1) return <>{text}</>;
+    const length = query.length;
+    return (
+      <>
+        {text.substring(0, index)}
+        <mark className="bg-orange-500/15 text-orange-600 dark:text-orange-400 font-semibold px-0.5 rounded-sm select-text">{text.substring(index, index + length)}</mark>
+        {text.substring(index + length)}
+      </>
+    );
+  };
+
+  // Filter phrases based on searched query & selected type
   const filteredPhrases = useMemo(() => {
     let result = uniquePhrases;
 
-    // Apply categorical filters
-    if (activeFilter !== "all") {
-      result = result.filter(phrase => {
-        const card = phraseMetadata.get(normalizePhraseKey(phrase.text));
-        const currentStatus = card ? card.status : "new";
-        
-        switch (activeFilter) {
-          case "new":
-            return currentStatus === "new";
-          case "learning":
-            return currentStatus === "learning";
-          case "known":
-            return currentStatus === "known";
-          case "user":
-            return phrase.source === "user";
-          case "ai":
-            return phrase.source !== "user";
-          case "has_note":
-            return !!phrase.note && phrase.note.trim() !== "";
-          default:
-            return true;
-        }
-      });
+    // Apply type filter
+    if (selectedType !== "all") {
+      result = result.filter(phrase => phrase.type === selectedType);
     }
 
     // Apply search query
@@ -216,8 +182,15 @@ export const AnalysisPhraseWorkspace: React.FC<AnalysisPhraseWorkspaceProps> = (
       });
     }
 
-    return result;
-  }, [uniquePhrases, trackSearchQuery, activeFilter, phraseMetadata, currentTrack.lines]);
+    // Sort newest first by main card's createdAt
+    return [...result].sort((a, b) => {
+      const cardA = phraseMetadata.get(normalizePhraseKey(a.text));
+      const cardB = phraseMetadata.get(normalizePhraseKey(b.text));
+      const dateA = cardA ? (cardA.createdAt instanceof Date ? cardA.createdAt : new Date(cardA.createdAt || 0)) : new Date(0);
+      const dateB = cardB ? (cardB.createdAt instanceof Date ? cardB.createdAt : new Date(cardB.createdAt || 0)) : new Date(0);
+      return dateB.getTime() - dateA.getTime();
+    });
+  }, [uniquePhrases, trackSearchQuery, selectedType, phraseMetadata, currentTrack.lines]);
 
   // Handle Speech trigger
   const handleVoicing = (phrase: Phrase) => {
@@ -321,20 +294,18 @@ export const AnalysisPhraseWorkspace: React.FC<AnalysisPhraseWorkspaceProps> = (
         <div className="flex gap-4 items-stretch md:items-center justify-between">
           {/* Search input field */}
           <div className="relative flex-1">
-            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-app-fg opacity-40">
-              <Search size={18} />
-            </div>
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 opacity-30 text-app-fg" size={16} />
             <input
               type="text"
-              placeholder={uiLanguage === 'ru' ? "Поиск фраз, переводов, заметок или контекста..." : "Search phrases, translations, notes, or lyric context..."}
+              placeholder={uiLanguage === 'ru' ? 'Поиск фраз, переводов, личного или песенного контекста...' : 'Search phrases, translations, notes, or lyric context...'}
               value={trackSearchQuery}
               onChange={(e) => setTrackSearchQuery(e.target.value)}
-              className="w-full pl-12 pr-10 py-3.5 bg-app-card border border-app-card-border rounded-2xl text-lg font-medium text-app-fg placeholder-app-fg/30 focus:outline-none focus:border-app-accent/50 transition-all font-sans"
+              className="w-full pl-11 pr-10 py-3 rounded-2xl bg-app-card border border-app-card-border focus:border-orange-500 focus:outline-none text-xs font-sans placeholder-app-fg/30 transition-all text-app-fg"
             />
             {trackSearchQuery && (
               <button
                 onClick={() => setTrackSearchQuery("")}
-                className="absolute inset-y-0 right-0 pr-4 flex items-center text-app-fg opacity-45 hover:opacity-100 transition-opacity"
+                className="absolute right-4 top-1/2 -translate-y-1/2 opacity-40 hover:opacity-100 text-app-fg cursor-pointer"
               >
                 <X size={14} />
               </button>
@@ -358,29 +329,40 @@ export const AnalysisPhraseWorkspace: React.FC<AnalysisPhraseWorkspaceProps> = (
 
         {/* Filter Chips Toolbar */}
         <div className="flex flex-wrap gap-2 items-center">
-          {filtersList.map((filter) => {
-            const isActive = activeFilter === filter.id;
-            return (
-              <button
-                key={filter.id}
-                onClick={() => setActiveFilter(filter.id)}
-                className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold font-sans tracking-tight transition-all active:scale-95 border ${
-                  isActive
-                    ? "bg-orange-500 border-orange-500 text-white shadow-md shadow-orange-500/10"
-                    : "bg-app-card border-app-card-border/60 text-app-fg opacity-70 hover:opacity-100 hover:border-app-card-border hover:bg-app-card"
-                }`}
-              >
-                {getLocalizedFilterLabel(filter.id)}
-              </button>
-            );
-          })}
-          {(activeFilter !== "all" || trackSearchQuery.trim() !== "") && (
+          <button
+            type="button"
+            onClick={() => setSelectedType('all')}
+            className={cn(
+              "px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all border whitespace-nowrap cursor-pointer active:scale-95",
+              selectedType === 'all'
+                ? "bg-app-fg text-app-bg border-app-fg shadow-lg"
+                : "bg-app-card text-app-fg/60 border-app-card-border hover:border-[var(--accent)]/35 hover:text-app-fg"
+            )}
+          >
+            {uiLanguage === 'ru' ? 'Все теги' : 'All tags'}
+          </button>
+          {availableTypes.map(t => (
+            <button
+              key={`type-chip-${t}`}
+              type="button"
+              onClick={() => setSelectedType(t)}
+              className={cn(
+                "px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all border whitespace-nowrap cursor-pointer active:scale-95",
+                selectedType === t
+                  ? "bg-[var(--accent)] text-white border-[var(--accent)] shadow-md shadow-[var(--accent)]/15"
+                  : "bg-app-card text-app-fg/60 border-app-card-border hover:border-[var(--accent)]/35 hover:text-app-fg"
+              )}
+            >
+              {typeLabels[t] || t}
+            </button>
+          ))}
+          {(selectedType !== "all" || trackSearchQuery.trim() !== "") && (
             <button
               onClick={() => {
-                setActiveFilter("all");
+                setSelectedType("all");
                 setTrackSearchQuery("");
               }}
-              className="text-[10px] font-black uppercase tracking-widest text-orange-500 hover:text-orange-600 px-2 py-1 flex items-center gap-1 transition-colors"
+              className="text-[10px] font-black uppercase tracking-widest text-orange-500 hover:text-orange-600 px-2 py-1 flex items-center gap-1 transition-colors cursor-pointer"
             >
               <X size={10} strokeWidth={3} />
               <span>{uiLanguage === 'ru' ? 'Сбросить фильтры' : 'Clear filters'}</span>
@@ -433,372 +415,182 @@ export const AnalysisPhraseWorkspace: React.FC<AnalysisPhraseWorkspaceProps> = (
               const itemKey = item.id || item.text;
               const isExpanded = expandedPhraseKeys.has(itemKey);
 
-              // Find containing / linked lyric lines and pick the first non-empty distinct one
-              const nonUniqueLinked = currentTrack.lines.filter(l => 
-                (item.lineIds && item.lineIds.includes(l.lineId || "")) ||
-                l.phrases?.some((p: any) => p.text === item.text)
-              );
-              const validLines = nonUniqueLinked.filter(l => l.original && l.original.trim() !== "");
-              const uniqueLinkedLines: LyricsLine[] = [];
-              const seenTexts = new Set<string>();
-              for (const line of validLines) {
-                const norm = line.original.trim().toLowerCase();
-                if (!seenTexts.has(norm)) {
-                  seenTexts.add(norm);
-                  uniqueLinkedLines.push(line);
-                }
-              }
-              const firstContextLine = uniqueLinkedLines.length > 0 ? uniqueLinkedLines[0] : null;
+              const contextLines = resolvePhraseContext(currentTrack.lines, item.lineIds, item.text);
 
-              let bgClasses = "bg-app-card/70 border-app-card-border hover:border-app-card-border/85";
-              if (currentStatus === "new") {
-                bgClasses = "bg-sky-500/[0.05] border-sky-500/20 hover:border-sky-500/35";
-              } else if (currentStatus === "learning") {
-                bgClasses = "bg-orange-500/[0.05] border-orange-500/20 hover:border-orange-500/35";
-              }
+              const typeLabels: Record<string, string> = {
+                idiom: uiLanguage === 'ru' ? 'Идиома' : 'Idiom',
+                collocation: uiLanguage === 'ru' ? 'Коллокация' : 'Collocation',
+                phrasal_verb: uiLanguage === 'ru' ? 'Фразовый глагол' : 'Phrasal Verb',
+                cultural_ref: uiLanguage === 'ru' ? 'Культурная отсылка' : 'Cultural Reference',
+                vocabulary: uiLanguage === 'ru' ? 'Лексика' : 'Vocabulary',
+                phrase: uiLanguage === 'ru' ? 'Фраза' : 'Phrase',
+                slang: uiLanguage === 'ru' ? 'Сленг' : 'Slang',
+                verb: uiLanguage === 'ru' ? 'Глагол' : 'Verb',
+                grammar: uiLanguage === 'ru' ? 'Грамматика' : 'Grammar',
+                cultural: uiLanguage === 'ru' ? 'Культурное' : 'Cultural',
+                core: uiLanguage === 'ru' ? 'Базовая лексика' : 'Core Vocabulary',
+                colloquial: uiLanguage === 'ru' ? 'Разговорное' : 'Colloquial',
+                advanced: uiLanguage === 'ru' ? 'Продвинутый' : 'Advanced'
+              };
 
-              return (
-                <div 
-                  key={item.id || idx}
-                  onClick={() => toggleExpand(itemKey)}
-                  className={`cursor-pointer rounded-[2rem] border transition-all overflow-hidden relative group font-sans ${bgClasses}`}
-                >
-                  {/* Top segment / Header - Always visible */}
-                  <div className="p-6">
-                    {/* One-line Header/Body Layout */}
-                    <div className="flex items-center justify-between gap-4 w-full">
-                      {/* Left Block: Number + Phrase text + play button */}
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-base font-sans font-semibold text-app-fg/40 select-none shrink-0">
-                            {idx + 1}.
-                          </span>
+              const isEditing = inlineEditId === item.id;
+              const editFormContent = (
+                <div className="space-y-4 font-sans text-xs">
+                  <span className="text-[10px] font-black uppercase text-orange-500 tracking-wider block font-sans">
+                    {uiLanguage === 'ru' ? 'Редактирование фразы' : 'Edit Phrase Inline'}
+                  </span>
 
-                          <h3 className="text-lg font-sans font-semibold text-app-fg leading-snug">
-                            {highlightMatch(item.text, trackSearchQuery)}
-                          </h3>
-
-                          {/* Speech play button right next to phrase */}
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleVoicing(item);
-                            }}
-                            className={`p-1.5 rounded-lg border border-app-card-border/80 transition-all flex items-center justify-center hover:bg-app-accent hover:text-white shrink-0 ${
-                              currentlySpeakingId === item.id 
-                                ? "bg-orange-500 text-white border-orange-500 animate-pulse scale-105" 
-                                : "bg-transparent text-app-fg opacity-65 hover:opacity-100 hover:scale-105"
-                            }`}
-                            title={uiLanguage === 'ru' ? "Прослушать произношение" : "Pronounce phrase"}
-                          >
-                            <Volume2 size={13} />
-                          </button>
-                        </div>
-
-                        {/* Second line: Translation */}
-                        {item.translation && (
-                          <p className="text-sm font-sans text-app-fg/60 leading-snug pl-6 mt-1 transition-all">
-                            {highlightMatch(item.translation, trackSearchQuery)}
-                          </p>
-                        )}
-                      </div>
-
-                      {/* Right Block: Status Indicator + Vertical Dots Menu */}
-                      <div className="flex items-center gap-2 shrink-0">
-                        {/* Status indicator button */}
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            const nextStatus: PhraseStatus = 
-                              currentStatus === "new" ? "learning" :
-                              currentStatus === "learning" ? "known" : "new";
-                            handleSetAnalysisPhraseStatus(item.text, item.translation || "", item.explanation || "", nextStatus);
-                          }}
-                          className="shrink-0 flex items-center justify-center p-2 rounded-xl border border-app-card-border/60 bg-transparent hover:bg-app-card hover:scale-105 active:scale-95 transition-all cursor-pointer"
-                          title={uiLanguage === 'ru' 
-                            ? `Статус: ${currentStatus === 'known' ? 'Изучено' : currentStatus === 'learning' ? 'Учу' : 'Новое'}`
-                            : `Status: ${currentStatus}`
-                          }
-                        >
-                          {currentStatus === "known" ? (
-                            <CheckCircle2 size={16} className="text-app-fg opacity-35" />
-                          ) : currentStatus === "learning" ? (
-                            <RefreshCw size={15} className="text-orange-500" />
-                          ) : (
-                            <HelpCircle size={16} className="text-sky-500" />
-                          )}
-                        </button>
-
-                        {/* Action Dropdown Menu Trigger */}
-                        <div className="relative">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setActiveMenuPhraseKey(activeMenuPhraseKey === itemKey ? null : itemKey);
-                            }}
-                            className="p-2 rounded-xl border border-app-card-border bg-app-bg text-app-fg opacity-75 hover:opacity-100 hover:bg-app-card transition-all flex items-center justify-center"
-                            title={uiLanguage === 'ru' ? "Опции" : "More options"}
-                          >
-                            <MoreVertical size={12} />
-                          </button>
-                          
-                          {activeMenuPhraseKey === itemKey && (
-                            <>
-                              <div 
-                                className="fixed inset-0 z-40" 
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setActiveMenuPhraseKey(null);
-                                }}
-                              />
-                              <div 
-                                className="absolute right-0 mt-1.5 w-36 bg-app-bg border border-app-card-border rounded-xl shadow-xl py-1 z-50 animate-fadeIn animate-duration-150"
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                <button
-                                  onClick={() => {
-                                    handleOpenEdit(item);
-                                    setActiveMenuPhraseKey(null);
-                                  }}
-                                  className="w-full px-3 py-2 text-left hover:bg-app-card transition-colors flex items-center gap-2 text-xs text-app-fg font-sans font-medium"
-                                >
-                                  <Edit2 size={11} className="opacity-60" />
-                                  <span>{uiLanguage === 'ru' ? 'Редактировать' : 'Edit Phrase'}</span>
-                                </button>
-                                <button
-                                  onClick={() => {
-                                    handleDelete(item.id);
-                                    setActiveMenuPhraseKey(null);
-                                  }}
-                                  className="w-full px-3 py-2 text-left hover:bg-rose-500/10 hover:text-rose-500 transition-colors flex items-center gap-2 text-xs text-rose-500 font-sans font-semibold"
-                                >
-                                  <Trash2 size={11} />
-                                  <span>{uiLanguage === 'ru' ? 'Удалить' : 'Delete'}</span>
-                                </button>
-                              </div>
-                            </>
-                          )}
-                        </div>
-                      </div>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-black uppercase text-app-fg opacity-40 tracking-wider block">
+                        {uiLanguage === 'ru' ? 'Фраза / Слово' : 'Phrase / Word'}
+                      </label>
+                      <input
+                        type="text"
+                        value={formText}
+                        onChange={(e) => setFormText(e.target.value)}
+                        className="w-full px-3 py-2 bg-app-card border border-app-card-border rounded-xl text-xs text-app-fg focus:outline-none focus:border-orange-500/50 font-sans"
+                      />
                     </div>
 
-                    {/* Extended Content (Collapsible segment) */}
-                    {isExpanded && (
-                      <div 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                        }} 
-                        className="space-y-4 pt-4 mt-4 border-t border-app-card-border/40 animate-fadeIn cursor-default"
-                      >
-                        {inlineEditId === item.id ? (
-                          /* Inline Edit Form */
-                          <div className="space-y-4 font-sans text-xs">
-                            <span className="text-[10px] font-black uppercase text-orange-500 tracking-wider block">
-                              {uiLanguage === 'ru' ? 'Редактирование фразы' : 'Edit Phrase Inline'}
-                            </span>
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-black uppercase text-app-fg opacity-40 tracking-wider block">
+                        {uiLanguage === 'ru' ? 'Перевод' : 'Translation'}
+                      </label>
+                      <input
+                        type="text"
+                        value={formTranslation}
+                        onChange={(e) => setFormTranslation(e.target.value)}
+                        className="w-full px-3 py-2 bg-app-card border border-app-card-border rounded-xl text-xs text-app-fg focus:outline-none focus:border-orange-500/50 font-sans"
+                      />
+                    </div>
+                  </div>
 
-                             <div className="grid gap-3 sm:grid-cols-2">
-                              <div className="space-y-1">
-                                <label className="text-[9px] font-black uppercase text-app-fg opacity-40 tracking-wider block">
-                                  {uiLanguage === 'ru' ? 'Фраза / Слово' : 'Phrase / Word'}
-                                </label>
-                                <input
-                                  type="text"
-                                  value={formText}
-                                  onChange={(e) => setFormText(e.target.value)}
-                                  className="w-full px-3 py-2 bg-app-card border border-app-card-border rounded-xl text-xs text-app-fg focus:outline-none focus:border-orange-500/50 font-sans"
-                                />
-                              </div>
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-black uppercase text-app-fg opacity-40 tracking-wider block">
+                      {uiLanguage === 'ru' ? 'Объяснение / Контекст' : 'Clarification / Explanation'}
+                    </label>
+                    <textarea
+                      rows={2}
+                      value={formExplanation}
+                      onChange={(e) => setFormExplanation(e.target.value)}
+                      className="w-full px-3 py-2 bg-app-card border border-app-card-border rounded-xl text-xs text-app-fg focus:outline-none focus:border-orange-500/50 resize-none font-sans"
+                    />
+                  </div>
 
-                              <div className="space-y-1">
-                                <label className="text-[9px] font-black uppercase text-app-fg opacity-40 tracking-wider block">
-                                  {uiLanguage === 'ru' ? 'Перевод' : 'Translation'}
-                                </label>
-                                <input
-                                  type="text"
-                                  value={formTranslation}
-                                  onChange={(e) => setFormTranslation(e.target.value)}
-                                  className="w-full px-3 py-2 bg-app-card border border-app-card-border rounded-xl text-xs text-app-fg focus:outline-none focus:border-orange-500/50 font-sans"
-                                />
-                              </div>
-                            </div>
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-black uppercase text-app-fg opacity-40 tracking-wider block">
+                      {uiLanguage === 'ru' ? 'Личные заметки' : 'Personal Note'}
+                    </label>
+                    <textarea
+                      rows={2}
+                      value={formNote}
+                      onChange={(e) => setFormNote(e.target.value)}
+                      className="w-full px-3 py-2 bg-app-card border border-app-card-border rounded-xl text-xs text-app-fg focus:outline-none focus:border-orange-500/50 resize-none font-sans"
+                    />
+                  </div>
 
-                            <div className="space-y-1">
-                              <label className="text-[9px] font-black uppercase text-app-fg opacity-40 tracking-wider block">
-                                {uiLanguage === 'ru' ? 'Объяснение / Контекст' : 'Clarification / Explanation'}
-                              </label>
-                              <textarea
-                                rows={2}
-                                value={formExplanation}
-                                onChange={(e) => setFormExplanation(e.target.value)}
-                                className="w-full px-3 py-2 bg-app-card border border-app-card-border rounded-xl text-xs text-app-fg focus:outline-none focus:border-orange-500/50 resize-none font-sans"
-                              />
-                            </div>
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-black uppercase text-app-fg opacity-40 tracking-wider block">
+                      {uiLanguage === 'ru' ? 'Тип' : 'Type'}
+                    </label>
+                    <select
+                      value={formType}
+                      onChange={(e) => setFormType(e.target.value)}
+                      className="w-full px-3 py-2 bg-app-card border border-app-card-border rounded-xl text-xs text-app-fg focus:outline-none focus:border-orange-500/50 font-sans bg-app-bg text-app-fg"
+                    >
+                      {Object.entries(typeLabels).map(([val, label]) => (
+                        <option key={val} value={val}>{label}</option>
+                      ))}
+                    </select>
+                  </div>
 
-                            <div className="space-y-1">
-                              <label className="text-[9px] font-black uppercase text-app-fg opacity-40 tracking-wider block">
-                                {uiLanguage === 'ru' ? 'Личные заметки' : 'Personal Note'}
-                              </label>
-                              <textarea
-                                rows={2}
-                                value={formNote}
-                                onChange={(e) => setFormNote(e.target.value)}
-                                className="w-full px-3 py-2 bg-app-card border border-app-card-border rounded-xl text-xs text-app-fg focus:outline-none focus:border-orange-500/50 resize-none font-sans"
-                              />
-                            </div>
-
-                            <div className="flex gap-2.5 pt-1.5 justify-end">
-                              <button
-                                onClick={handleSaveEdit}
-                                className="px-4 py-2 bg-orange-500 hover:bg-orange-600 rounded-xl text-xxs font-black uppercase text-white tracking-wider transition-colors active:scale-95 duration-150"
-                              >
-                                {uiLanguage === 'ru' ? 'Сохранить изменения' : 'Save Changes'}
-                              </button>
-                              <button
-                                onClick={() => {
-                                  setInlineEditId(null);
-                                  clearForm();
-                                }}
-                                className="px-4 py-2 bg-app-card border border-app-card-border hover:bg-app-bg text-app-fg opacity-75 hover:opacity-100 rounded-xl text-xxs font-black uppercase tracking-wider transition-all"
-                              >
-                                {uiLanguage === 'ru' ? 'Отмена' : 'Cancel'}
-                              </button>
-                            </div>
-                          </div>
-                        ) : (
-                          /* Standard Display Mode */
-                          <>
-                            {/* Explanation description */}
-                            {item.explanation && (
-                              <div className="pl-4 border-l-2 border-app-card-border">
-                                <p className="text-base text-app-fg opacity-75 leading-relaxed font-sans font-medium">
-                                  {highlightMatch(item.explanation, trackSearchQuery)}
-                                </p>
-                              </div>
-                            )}
-
-                            {/* Study action controls for 'Знаю' (known) and 'Учить' (learning) states */}
-                            <div className="flex items-center gap-3 pt-1 font-sans">
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleSetAnalysisPhraseStatus(item.text, item.translation || "", item.explanation || "", "known");
-                                }}
-                                className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-5 py-2.5 rounded-2xl text-[10px] font-sans font-black uppercase tracking-widest transition-all ${
-                                  currentStatus === "known"
-                                    ? "bg-app-card border border-app-card-border/60 text-app-fg opacity-30 cursor-default"
-                                    : "bg-app-bg border border-app-card-border hover:border-app-fg/20 active:scale-95 text-app-fg hover:bg-app-card shadow-xs"
-                                }`}
-                              >
-                                <CheckCircle2 size={13} className="text-app-fg opacity-40 shrink-0 select-none animate-none" />
-                                <span className="font-sans">{uiLanguage === 'ru' ? 'Знаю' : 'Known'}</span>
-                              </button>
-
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleSetAnalysisPhraseStatus(item.text, item.translation || "", item.explanation || "", "learning");
-                                }}
-                                className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-5 py-2.5 rounded-2xl text-[10px] font-sans font-black uppercase tracking-widest transition-all ${
-                                  currentStatus === "learning"
-                                    ? "bg-orange-500/15 border border-orange-500/30 text-orange-500 cursor-default"
-                                    : "bg-app-bg border border-app-card-border hover:border-orange-500/30 active:scale-95 text-orange-500 hover:bg-orange-500/[0.02] shadow-xs"
-                                }`}
-                              >
-                                <RefreshCw size={12} className="text-orange-500 shrink-0 select-none animate-none" />
-                                <span className="font-sans">{uiLanguage === 'ru' ? 'Учить' : 'Study'}</span>
-                              </button>
-                            </div>
-
-                            {/* User note */}
-                            {item.note && (
-                              <div className="p-4 rounded-xl bg-orange-500/[0.03] border border-orange-500/10 text-xs space-y-1 font-sans">
-                                <span className="text-[9px] font-black uppercase tracking-wider text-orange-500 opacity-80 block">
-                                  {uiLanguage === 'ru' ? 'Личные заметки' : 'Personal Note'}
-                                </span>
-                                <p className="text-app-fg opacity-75 leading-relaxed font-sans font-medium select-text">
-                                  {highlightMatch(item.note, trackSearchQuery)}
-                                </p>
-                              </div>
-                            )}
-
-                            {/* Lyrics Context */}
-                            {firstContextLine ? (
-                              <div className="pt-3 border-t border-app-card-border/45 space-y-2 font-sans">
-                                <span className="text-[9px] font-black uppercase tracking-wider text-app-fg opacity-40 block">
-                                  {uiLanguage === 'ru' ? 'Контекст из песни' : 'Lyrics Context'}
-                                </span>
-                                <div className="p-4 rounded-2xl bg-app-bg border border-app-card-border text-sm font-sans">
-                                  <p className="font-serif font-semibold text-app-fg leading-snug">
-                                    {firstContextLine.original}
-                                  </p>
-                                  {firstContextLine.translation && (
-                                    <p className="font-sans text-xs text-app-fg opacity-50 italic mt-1 leading-snug">
-                                      {firstContextLine.translation}
-                                    </p>
-                                  )}
-                                </div>
-                              </div>
-                            ) : (
-                              <div className="pt-3 border-t border-app-card-border/45 space-y-1 font-sans">
-                                <span className="text-[9px] font-black uppercase tracking-wider text-app-fg opacity-40 block">
-                                  {uiLanguage === 'ru' ? 'Контекст из песни' : 'Lyrics Context'}
-                                </span>
-                                <div className="p-3.5 rounded-2xl bg-app-bg border border-app-card-border/40 text-xs font-sans">
-                                  <p className="font-sans text-app-fg opacity-35 italic">
-                                    {uiLanguage === 'ru' ? 'Контекст отсутствует' : 'No lyric context linked'}
-                                  </p>
-                                </div>
-                              </div>
-                            )}
-
-                            {/* Metadata Tag and Source Block */}
-                            <div className="pt-3 border-t border-app-card-border/40 flex flex-wrap items-center gap-2.5 font-sans">
-                              <span className="text-[9px] font-black uppercase tracking-wider text-app-fg opacity-35 block mr-1.5">
-                                {uiLanguage === 'ru' ? 'Метаданные:' : 'Metadata:'}
-                              </span>
-                              
-                              {/* Type badge */}
-                              <span className="px-2.5 py-1 rounded-lg bg-app-bg text-[9px] font-black uppercase tracking-widest text-app-fg opacity-55 border border-app-card-border flex items-center gap-1.5 shadow-xs">
-                                <Tag size={10} className="text-orange-500 select-none animate-none" />
-                                {item.type || "phrase"}
-                              </span>
-
-                              {/* Source badge */}
-                              {item.source === "user" ? (
-                                <span className="px-2 py-0.5 rounded-lg bg-orange-500/10 text-orange-500 text-[8px] font-black uppercase tracking-widest flex items-center gap-1">
-                                  <User size={8} />
-                                  {uiLanguage === 'ru' ? 'Пользователь' : 'User'}
-                                </span>
-                              ) : (
-                                <span className="px-2 py-0.5 rounded-lg bg-indigo-500/10 text-indigo-500 text-[8px] font-black uppercase tracking-widest flex items-center gap-1">
-                                  <Sparkles size={8} />
-                                  AI
-                                </span>
-                              )}
-                            </div>
-
-                            {/* Action drawers: Ask AI */}
-                            {onOpenAssistantForPhrase && (
-                              <div className="pt-3 border-t border-app-card-border/40 flex items-center justify-end text-xs gap-3">
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    onOpenAssistantForPhrase(item);
-                                  }}
-                                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-orange-500 hover:bg-orange-600 hover:scale-[1.02] text-white active:scale-[0.98] transition-all text-[9.5px] font-black uppercase tracking-widest shadow-sm shadow-orange-500/10 cursor-pointer"
-                                >
-                                  <MessageSquare size={11} className="animated-none select-none" />
-                                  <span>{uiLanguage === 'ru' ? 'Спросить ассистента' : 'Ask Assistant'}</span>
-                                </button>
-                              </div>
-                            )}
-                          </>
-                        )}
-                      </div>
-                    )}
+                  <div className="flex gap-2.5 pt-1.5 justify-end">
+                    <button
+                      onClick={handleSaveEdit}
+                      className="px-4 py-2 bg-orange-500 hover:bg-orange-600 rounded-xl text-xxs font-black uppercase text-white tracking-wider transition-colors active:scale-95 duration-150 cursor-pointer"
+                    >
+                      {uiLanguage === 'ru' ? 'Сохранить изменения' : 'Save Changes'}
+                    </button>
+                    <button
+                      onClick={() => {
+                        setInlineEditId(null);
+                        clearForm();
+                      }}
+                      className="px-4 py-2 bg-app-card border border-app-card-border hover:bg-app-bg text-app-fg opacity-75 hover:opacity-100 rounded-xl text-xxs font-black uppercase tracking-wider transition-all cursor-pointer"
+                    >
+                      {uiLanguage === 'ru' ? 'Отмена' : 'Cancel'}
+                    </button>
                   </div>
                 </div>
+              );
+
+              const bottomActionButtons = (
+                <>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleSetAnalysisPhraseStatus(item.text, item.translation || "", item.explanation || "", "known");
+                    }}
+                    className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-5 py-2.5 rounded-2xl text-[10px] font-sans font-black uppercase tracking-widest transition-all cursor-pointer ${
+                      currentStatus === "known"
+                        ? "bg-app-card border border-app-card-border/60 text-app-fg opacity-30 cursor-default"
+                        : "bg-app-bg border border-app-card-border hover:border-app-fg/20 active:scale-95 text-app-fg hover:bg-app-card shadow-xs"
+                    }`}
+                  >
+                    <CheckCircle2 size={13} className="text-app-fg opacity-40 shrink-0 select-none animate-none" />
+                    <span className="font-sans">{uiLanguage === 'ru' ? 'Знаю' : 'Known'}</span>
+                  </button>
+
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleSetAnalysisPhraseStatus(item.text, item.translation || "", item.explanation || "", "learning");
+                    }}
+                    className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-5 py-2.5 rounded-2xl text-[10px] font-sans font-black uppercase tracking-widest transition-all cursor-pointer ${
+                      currentStatus === "learning"
+                        ? "bg-orange-500/15 border border-orange-500/30 text-orange-500 cursor-default"
+                        : "bg-app-bg border border-app-card-border hover:border-orange-500/30 active:scale-95 text-orange-500 hover:bg-orange-500/[0.02] shadow-xs"
+                    }`}
+                  >
+                    <RefreshCw size={12} className="text-orange-500 shrink-0 select-none animate-none" />
+                    <span className="font-sans">{uiLanguage === 'ru' ? 'Учить' : 'Study'}</span>
+                  </button>
+                </>
+              );
+
+              return (
+                <PhraseCard
+                  key={item.id || idx}
+                  itemId={item.id}
+                  index={idx}
+                  phraseText={item.text}
+                  highlightedPhraseText={highlightMatch(item.text, trackSearchQuery)}
+                  translation={item.translation}
+                  highlightedTranslation={item.translation ? highlightMatch(item.translation, trackSearchQuery) : undefined}
+                  explanation={item.explanation}
+                  highlightedExplanation={item.explanation ? highlightMatch(item.explanation, trackSearchQuery) : undefined}
+                  userNote={item.note}
+                  highlightedUserNote={item.note ? highlightMatch(item.note, trackSearchQuery) : undefined}
+                  type={item.type}
+                  typeLabel={typeLabels[item.type || "phrase"]}
+                  source={item.source === "llm" ? "ai" : item.source}
+                  status={currentStatus as PhraseCardStatus}
+                  onStatusChange={(nextStatus) => {
+                    handleSetAnalysisPhraseStatus(item.text, item.translation || "", item.explanation || "", nextStatus as any);
+                  }}
+                  contextLines={contextLines}
+                  isSpeaking={currentlySpeakingId === item.id}
+                  onSpeak={() => handleVoicing(item)}
+                  isExpanded={isExpanded}
+                  onToggleExpand={() => toggleExpand(itemKey)}
+                  isEditing={isEditing}
+                  editFormContent={editFormContent}
+                  onEdit={() => handleOpenEdit(item)}
+                  onDelete={() => handleDelete(item.id)}
+                  actionButtons={bottomActionButtons}
+                  uiLanguage={uiLanguage}
+                />
               );
             })}
           </div>
@@ -817,7 +609,7 @@ export const AnalysisPhraseWorkspace: React.FC<AnalysisPhraseWorkspaceProps> = (
             <div className="pt-2">
               <button
                 onClick={() => {
-                  setActiveFilter("all");
+                  setSelectedType("all");
                   setTrackSearchQuery("");
                 }}
                 className="px-5 py-2.5 bg-orange-500 hover:bg-orange-600 text-white rounded-2xl text-xs font-bold transition-all shadow-md active:scale-95 duration-150"

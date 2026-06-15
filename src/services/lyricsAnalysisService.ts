@@ -631,3 +631,60 @@ export function acceptSuggestedPhrase(
   return syncTrackPhrasesFromLines(updatedTrack);
 }
 
+/**
+ * Resolves context lines for a given phrase.
+ * First uses phrase's lineIds. If lineIds are empty, falls back to text-based matching as a safe fallback.
+ * Prevents duplicates by comparing normalized original text.
+ */
+export function resolvePhraseContext(
+  lines: LyricsLine[],
+  lineIds?: string[],
+  phraseText?: string
+): LyricsLine[] {
+  if (!lines || lines.length === 0) return [];
+
+  const matchedLines: LyricsLine[] = [];
+
+  // 1. Try resolving using lineIds first
+  if (lineIds && lineIds.length > 0) {
+    for (const line of lines) {
+      if (
+        lineIds.includes(line.lineId || '') || 
+        lineIds.includes(line.original || '')
+      ) {
+        matchedLines.push(line);
+      }
+    }
+  }
+
+  // 2. If no lines matched via lineIds, fallback to safe substring matching
+  if (matchedLines.length === 0 && phraseText) {
+    const normalizedPhrase = normalizePhraseText(phraseText);
+    if (normalizedPhrase) {
+      for (const line of lines) {
+        const normalizedLine = normalizeLineText(line.original);
+        if (normalizedLine.includes(normalizedPhrase)) {
+          matchedLines.push(line);
+        }
+      }
+    }
+  }
+
+  // Deduplicate matched lines by lineId or normalized original text
+  const deduplicated: LyricsLine[] = [];
+  const seenTexts = new Set<string>();
+  const seenIds = new Set<string>();
+
+  for (const line of matchedLines) {
+    const norm = (line.original || '').trim().toLowerCase();
+    const id = line.lineId || generateLineId(line.original);
+    if (!seenTexts.has(norm) && !seenIds.has(id)) {
+      seenTexts.add(norm);
+      seenIds.add(id);
+      deduplicated.push(line);
+    }
+  }
+
+  return deduplicated;
+}
+

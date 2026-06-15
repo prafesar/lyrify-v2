@@ -97,10 +97,47 @@ export interface TranslationDictionary {
     viewInDictionary: string;
     practiceTracker: string;
     noLyrics: string;
+    sourcesTooltip: string;
+    settingsTooltip: string;
+    expandResourcesTooltip: string;
+    collapseResourcesTooltip: string;
+    toggleSourceLyrics: string;
+    toggleTargetTranslation: string;
+    showStarredOnly: string;
+    showTrackerTooltip: string;
+    searchingLyrics: string;
+    generatingPreview: string;
+    analyzingTrack: string;
+    findingLyrics: string;
+    scanningDatabases: string;
+    consultingGemini: string;
+    checkingLyricsDatabases: string;
+    analyzingWithAI: string;
+    pollingOfficialSources: string;
+    detectingLanguageExtracting: string;
+    generatingLecture: string;
+    deepBreakdown: string;
+    consultingGeminiShort: string;
+    noMatchingLyricLines: string;
+    clearSearch: string;
+    fetchingDetails: string;
+    searchPlaceholder: string;
+    lyricsNotFound: string;
+    manualEntry: string;
+    retryAiSearch: string;
+    saveAndAnalyze: string;
+    lyricsAreMissing: string;
+    missingLyricsDesc: string;
+    findLyricsPhrases: string;
+    enterManually: string;
+    lyricAuthors: string;
   };
   tracks: {
     title: string;
     searchPlaceholder: string;
+    searchTracks: string;
+    searchAlbums: string;
+    searchArtists: string;
     customLyrics: string;
     searchNoResults: string;
     weeklyChallenge: string;
@@ -134,6 +171,7 @@ export interface TranslationDictionary {
     recent: string;
     noSongsInCommunity: string;
     noRecentTracks: string;
+    noRecentTracksShort: string;
   };
   analysis: {
     title: string;
@@ -213,46 +251,6 @@ export interface TranslationDictionary {
     options: string;
     aiRecommendation: string;
     manualPhrase: string;
-  };
-  assistant: {
-    title: string;
-    subtitle: string;
-    linguisticAnchor: string;
-    lyricsContext: string;
-    linkingMetadata: string;
-    interactivePrompts: string;
-    presetVocabulary: string;
-    presetVocabularyDesc: string;
-    presetGrammar: string;
-    presetGrammarDesc: string;
-    presetPhrases: string;
-    presetPhrasesDesc: string;
-    presetB2: string;
-    presetB2Desc: string;
-    presetCultural: string;
-    presetCulturalDesc: string;
-    textareaPlaceholder: string;
-    askTooltip: string;
-    loadingTitle: string;
-    loadingDesc: string;
-    errorTitle: string;
-    retryButton: string;
-    aiFeedback: string;
-    speaking: string;
-    speakText: string;
-    readExplanationTooltip: string;
-    suggestedVocabulary: string;
-    suggestedVocabularyDesc: string;
-    editTitle: string;
-    vocabChunkLabel: string;
-    targetTranslationLabel: string;
-    clarificationLabel: string;
-    editTooltip: string;
-    accept: string;
-    acceptTooltip: string;
-    dismissTooltip: string;
-    savedToStudyList: string;
-    added: string;
   };
   dailyProgress: {
     nextGoal: string;
@@ -407,6 +405,47 @@ export interface TranslationDictionary {
     savedTitle: string;
     addedBadge: string;
   };
+  resources: {
+    title: string;
+    externalLinks: string;
+    lyricsSource: string;
+    fetchingLyrics: string;
+    analyzingLyrics: string;
+    connectingToSource: string;
+    aiBreakdownInProgress: string;
+    fetchingLyricsDesc: string;
+    analyzingLyricsDesc: string;
+    externalLinksDesc: string;
+    trackTitle: string;
+    artistName: string;
+    searching: string;
+    searchBtn: string;
+    searchingAlternative: string;
+    availableResults: string;
+    noLyricsFound: string;
+  };
+  lyricsSettings: {
+    title: string;
+    sourceLanguage: string;
+    sourceLanguageDesc: string;
+    skipKnown: string;
+    skipKnownDesc: string;
+    translation: string;
+    translationDesc: string;
+    translatingStatus: string;
+    regenerateBtn: string;
+  };
+  phraseAction: {
+    title: string;
+    explanation: string;
+    knowIt: string;
+    learn: string;
+    saving: string;
+    thinking: string;
+    explain: string;
+    learning: string;
+    known: string;
+  };
 }
 
 const en: TranslationDictionary = {
@@ -503,10 +542,47 @@ const en: TranslationDictionary = {
     viewInDictionary: 'View in Dictionary',
     practiceTracker: 'Practice Tracker',
     noLyrics: 'No lyrics available for this track',
+    sourcesTooltip: 'Sources & Resources',
+    settingsTooltip: 'Lyrics Settings',
+    expandResourcesTooltip: 'Expand resources',
+    collapseResourcesTooltip: 'Collapse resources',
+    toggleSourceLyrics: 'Toggle {lang} Lyrics',
+    toggleTargetTranslation: 'Toggle {lang} Translation',
+    showStarredOnly: 'Show Starred Lines Only',
+    showTrackerTooltip: 'Show Practice Tracker & Search',
+    searchingLyrics: 'Searching Lyrics',
+    generatingPreview: 'Generating Preview',
+    analyzingTrack: 'Analyzing Track',
+    findingLyrics: 'Finding Lyrics',
+    scanningDatabases: 'Scanning Databases',
+    consultingGemini: 'Consulting Gemini AI',
+    checkingLyricsDatabases: 'Checking lyrics databases...',
+    analyzingWithAI: 'Analyzing with AI...',
+    pollingOfficialSources: 'Polling official sources for high-accuracy lyrics text.',
+    detectingLanguageExtracting: 'Detecting language, extracting authors, and translating for you.',
+    generatingLecture: 'Generating Lecture',
+    deepBreakdown: 'Deep Breakdown',
+    consultingGeminiShort: 'Consulting Gemini',
+    noMatchingLyricLines: 'No matching lyric lines.',
+    clearSearch: 'Clear Search',
+    fetchingDetails: 'Fetching details...',
+    searchPlaceholder: 'Search lyrics...',
+    lyricsNotFound: 'Lyrics not found',
+    manualEntry: 'Manual Entry',
+    retryAiSearch: 'Retry AI search',
+    saveAndAnalyze: 'Save & Analyze',
+    lyricsAreMissing: 'Lyrics are missing',
+    missingLyricsDesc: "We haven't fetched the original text for this song yet.",
+    findLyricsPhrases: 'Find Lyrics & Phrases',
+    enterManually: 'Enter Manually',
+    lyricAuthors: 'Lyric Authors',
   },
   tracks: {
     title: 'Explore Tracks',
     searchPlaceholder: 'Search songs, artists, or paste iTunes/Apple Music link...',
+    searchTracks: 'Search tracks...',
+    searchAlbums: 'Search albums...',
+    searchArtists: 'Search artists...',
     customLyrics: 'Or analyze your own lyrics...',
     searchNoResults: 'No tracks found. Try searching for something else or paste a direct iTunes track link!',
     weeklyChallenge: 'Weekly Language Challenge',
@@ -540,6 +616,7 @@ const en: TranslationDictionary = {
     recent: 'Recent',
     noSongsInCommunity: 'No songs in community yet.',
     noRecentTracks: 'No recent tracks yet. Search above to begin study!',
+    noRecentTracksShort: 'No recent tracks yet.',
   },
   analysis: {
     title: 'AI Insights & Explanations',
@@ -619,46 +696,6 @@ const en: TranslationDictionary = {
     options: 'Options',
     aiRecommendation: 'ai recommendation',
     manualPhrase: 'manual phrase',
-  },
-  assistant: {
-    title: 'CantoLex Assistant',
-    subtitle: 'Study Phrase / Follow-up',
-    linguisticAnchor: 'Linguistic Anchor',
-    lyricsContext: 'Lyrics Context',
-    linkingMetadata: 'Linking metadata contextual lines...',
-    interactivePrompts: 'Interactive Prompts',
-    presetVocabulary: 'Explain vocabulary',
-    presetVocabularyDesc: 'Key collocations & words',
-    presetGrammar: 'Explain grammar',
-    presetGrammarDesc: 'Sentence structure & conjugations',
-    presetPhrases: 'Find useful phrases',
-    presetPhrasesDesc: 'Convert lyrics into speech blocks',
-    presetB2: 'Explain at B2',
-    presetB2Desc: 'Mid-level vocabulary explanations',
-    presetCultural: 'Cultural context',
-    presetCulturalDesc: 'Metaphors & country context',
-    textareaPlaceholder: 'Ask about nuances, grammar, synonyms, register, or usage of this phrase...',
-    askTooltip: 'Ask assistant',
-    loadingTitle: 'Analyzing Lyrics',
-    loadingDesc: 'Consulting Gemini to break down grammar structures and suggest collocations...',
-    errorTitle: 'Linguistic Analysis Suspended',
-    retryButton: 'Retry analysis',
-    aiFeedback: 'AI tutor feedback',
-    speaking: 'Speaking',
-    speakText: 'Speak text',
-    readExplanationTooltip: 'Read explanation text',
-    suggestedVocabulary: 'Suggested Vocabulary Chunks ({count})',
-    suggestedVocabularyDesc: 'Click Accept to add to your study list',
-    editTitle: 'Edit block detail',
-    vocabChunkLabel: 'Vocabulary chunk',
-    targetTranslationLabel: 'Target language translation',
-    clarificationLabel: 'Clarification / Notes',
-    editTooltip: 'Inline edit before accept',
-    accept: 'Accept',
-    acceptTooltip: 'Accept suggested phrase',
-    dismissTooltip: 'Dismiss suggestion',
-    savedToStudyList: 'Saved to Study List ({count})',
-    added: 'Added',
   },
   dailyProgress: {
     nextGoal: 'Next Goal',
@@ -813,6 +850,47 @@ const en: TranslationDictionary = {
     savedTitle: 'Saved to Study List ({count})',
     addedBadge: 'Added',
   },
+  resources: {
+    title: 'Resources & Source',
+    externalLinks: 'External Links',
+    lyricsSource: 'Lyrics Source',
+    fetchingLyrics: 'FETCHING LYRICS',
+    analyzingLyrics: 'ANALYZING LYRICS',
+    connectingToSource: 'Connecting to source...',
+    aiBreakdownInProgress: 'AI Breakdown in progress...',
+    fetchingLyricsDesc: 'Retrieving target song texts from alternative lyric databases.',
+    analyzingLyricsDesc: 'Detecting original song language, building translation maps and line alignments.',
+    externalLinksDesc: 'External links and materials for this track.',
+    trackTitle: 'Track Title',
+    artistName: 'Artist Name',
+    searching: 'Searching...',
+    searchBtn: 'Search Alternative Lyrics',
+    searchingAlternative: 'Searching alternative sources...',
+    availableResults: 'Available Results ({count})',
+    noLyricsFound: 'No lyrics searched yet or no results found above',
+  },
+  lyricsSettings: {
+    title: 'Lyrics Settings',
+    sourceLanguage: 'Source Language',
+    sourceLanguageDesc: 'Used for pronunciation and search',
+    skipKnown: 'Skip Known Phrases',
+    skipKnownDesc: "Don't read lines you already know",
+    translation: 'Translation',
+    translationDesc: 'Regenerate lyrics translation',
+    translatingStatus: 'Translating...',
+    regenerateBtn: 'Regenerate',
+  },
+  phraseAction: {
+    title: 'Phrase Action',
+    explanation: 'Explanation',
+    knowIt: 'I know it',
+    learn: 'Learn',
+    saving: 'Saving...',
+    thinking: 'Thinking...',
+    explain: 'Explain',
+    learning: 'Learning',
+    known: 'Known',
+  },
 };
 
 const ru: TranslationDictionary = {
@@ -909,10 +987,47 @@ const ru: TranslationDictionary = {
     viewInDictionary: 'Посмотреть в словаре',
     practiceTracker: 'Трекер практики',
     noLyrics: 'Для этой песни нет текста',
+    sourcesTooltip: 'Источники и ресурсы',
+    settingsTooltip: 'Настройки текста',
+    expandResourcesTooltip: 'Показать дополнительные ресурсы',
+    collapseResourcesTooltip: 'Скрыть дополнительные ресурсы',
+    toggleSourceLyrics: 'Переключить текст на {lang}',
+    toggleTargetTranslation: 'Переключить перевод на {lang}',
+    showStarredOnly: 'Показывать только отмеченные строки',
+    showTrackerTooltip: 'Показать трекер практики и поиск',
+    searchingLyrics: 'Поиск текста песни',
+    generatingPreview: 'Создание превью',
+    analyzingTrack: 'Анализ песни',
+    findingLyrics: 'Поиск текста',
+    scanningDatabases: 'Сканирование баз данных',
+    consultingGemini: 'Запрос к Gemini AI',
+    checkingLyricsDatabases: 'Проверка баз данных текстинга...',
+    analyzingWithAI: 'Анализируем с помощью AI...',
+    pollingOfficialSources: 'Делаем запросы к официальным источникам для точного текста песни.',
+    detectingLanguageExtracting: 'Определяем язык, авторов и переводим песню.',
+    generatingLecture: 'Создание урока',
+    deepBreakdown: 'Подробный разбор',
+    consultingGeminiShort: 'Опрашиваем Gemini',
+    noMatchingLyricLines: 'Нет подходящих строк текста.',
+    clearSearch: 'Сбросить поиск',
+    fetchingDetails: 'Получение сведений...',
+    searchPlaceholder: 'Поиск по тексту...',
+    lyricsNotFound: 'Текст не найден',
+    manualEntry: 'Ручной ввод',
+    retryAiSearch: 'Повторить AI-поиск',
+    saveAndAnalyze: 'Сохранить и анализировать',
+    lyricsAreMissing: 'Текст отсутствует',
+    missingLyricsDesc: 'Оригинальный текст для этой песни еще не был загружен.',
+    findLyricsPhrases: 'Найти текст и фразы',
+    enterManually: 'Ввести вручную',
+    lyricAuthors: 'Авторы текста',
   },
   tracks: {
     title: 'Поиск песен',
     searchPlaceholder: 'Ищите песни, артистов или вставьте ссылку iTunes/Apple Music...',
+    searchTracks: 'Поиск треков...',
+    searchAlbums: 'Поиск альбомов...',
+    searchArtists: 'Поиск исполнителей...',
     customLyrics: 'Или проанализируйте свой собственный текст...',
     searchNoResults: 'Песен не найдено. Попробуйте поискать что-то другое или вставьте прямую ссылку iTunes!',
     weeklyChallenge: 'Еженедельный языковой вызов',
@@ -946,6 +1061,7 @@ const ru: TranslationDictionary = {
     recent: 'История',
     noSongsInCommunity: 'В сообществе пока нет песен.',
     noRecentTracks: 'История изучения пуста. Воспользуйтесь поиском выше!',
+    noRecentTracksShort: 'Нет недавних треков.',
   },
   analysis: {
     title: 'AI Анализ и Пояснения',
@@ -1025,46 +1141,6 @@ const ru: TranslationDictionary = {
     options: 'Опции',
     aiRecommendation: 'рекомендация AI',
     manualPhrase: 'ручная фраза',
-  },
-  assistant: {
-    title: 'Ассистент CantoLex',
-    subtitle: 'Изучение фразы / Вопросы',
-    linguisticAnchor: 'Языковой якорь',
-    lyricsContext: 'Контекст песни',
-    linkingMetadata: 'Связывание контекстных строк песни...',
-    interactivePrompts: 'Быстрые вопросы',
-    presetVocabulary: 'Объяснить лексику',
-    presetVocabularyDesc: 'Ключевые слова и сочетания',
-    presetGrammar: 'Объяснить грамматику',
-    presetGrammarDesc: 'Структура предложений и формы слов',
-    presetPhrases: 'Найти полезные фразы',
-    presetPhrasesDesc: 'Разбить текст на речевые клише',
-    presetB2: 'Объяснить на уровне B2',
-    presetB2Desc: 'Умеренно сложные выражения и грамматика',
-    presetCultural: 'Культурный контекст',
-    presetCulturalDesc: 'Идиомы, метафоры и реалии страны',
-    textareaPlaceholder: 'Спросите о синонимах, регистре речи, грамматических особенностях или употреблении фразы...',
-    askTooltip: 'Отправить вопрос',
-    loadingTitle: 'Анализ текста',
-    loadingDesc: 'Опрашиваем Gemini, чтобы разобрать грамматику и найти словосочетания...',
-    errorTitle: 'Анализ временно приостановлен',
-    retryButton: 'Повторить попытку',
-    aiFeedback: 'Обратная связь от AI',
-    speaking: 'Озвучивание',
-    speakText: 'Озвучить текст',
-    readExplanationTooltip: 'Прослушать пояснение',
-    suggestedVocabulary: 'Рекомендованные слова и фразы ({count})',
-    suggestedVocabularyDesc: 'Нажмите «Принять», чтобы добавить их в свой список изучения',
-    editTitle: 'Редактировать карточку',
-    vocabChunkLabel: 'Фраза',
-    targetTranslationLabel: 'Перевод изучаемой фразы',
-    clarificationLabel: 'Пояснение / Особенности',
-    editTooltip: 'Редактировать перед сохранением',
-    accept: 'Принять',
-    acceptTooltip: 'Добавить рекомендованную фразу',
-    dismissTooltip: 'Отклонить рекомендацию',
-    savedToStudyList: 'Добавлено в список изучения ({count})',
-    added: 'Добавлено',
   },
   dailyProgress: {
     nextGoal: 'Следующая цель',
@@ -1218,6 +1294,47 @@ const ru: TranslationDictionary = {
     acceptBtn: 'Добавить',
     savedTitle: 'Сохранено в список для изучения ({count})',
     addedBadge: 'Добавлено',
+  },
+  resources: {
+    title: 'Ресурсы и ссылки',
+    externalLinks: 'Внешние ссылки',
+    lyricsSource: 'Источник текста',
+    fetchingLyrics: 'ПОЛУЧЕНИЕ ТЕКСТА',
+    analyzingLyrics: 'АНАЛИЗ ТЕКСТА',
+    connectingToSource: 'Подключение к источнику...',
+    aiBreakdownInProgress: 'AI разбор в процессе...',
+    fetchingLyricsDesc: 'Получение текста песни из альтернативных баз данных.',
+    analyzingLyricsDesc: 'Определение языка оригинала, построение карт переводов и выравнивание строк.',
+    externalLinksDesc: 'Внешние ссылки и материалы для этой песни.',
+    trackTitle: 'Название трека',
+    artistName: 'Имя исполнителя',
+    searching: 'Поиск...',
+    searchBtn: 'Найти альтернативный текст',
+    searchingAlternative: 'Поиск в альтернативных источниках...',
+    availableResults: 'Доступные результаты ({count})',
+    noLyricsFound: 'Текст еще не искался или результаты в этот раз отсутствуют',
+  },
+  lyricsSettings: {
+    title: 'Настройки текста',
+    sourceLanguage: 'Язык оригинала',
+    sourceLanguageDesc: 'Используется для произношения и поиска',
+    skipKnown: 'Пропускать знакомые фразы',
+    skipKnownDesc: 'Не читать строки, которые вы уже знаете',
+    translation: 'Перевод',
+    translationDesc: 'Перегенерировать перевод песни',
+    translatingStatus: 'Переводим...',
+    regenerateBtn: 'Перевести заново',
+  },
+  phraseAction: {
+    title: 'Действие с фразой',
+    explanation: 'Пояснение',
+    knowIt: 'Я знаю это',
+    learn: 'Учить',
+    saving: 'Сохранение...',
+    thinking: 'Думает...',
+    explain: 'Объяснить',
+    learning: 'Изучаю',
+    known: 'Знаю',
   },
 };
 

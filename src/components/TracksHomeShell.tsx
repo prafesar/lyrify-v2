@@ -125,17 +125,17 @@ export const TracksHomeShell: React.FC<TracksHomeShellProps> = ({
                 className="flex items-center gap-1.5 text-xs font-black uppercase tracking-widest text-app-muted hover:text-app-fg transition-colors cursor-pointer"
               >
                 <X size={15} />
-                <span>{uiLanguage === 'ru' ? 'Назад' : 'Back to Home'}</span>
+                <span>{t('tracks.backToHome')}</span>
               </button>
             </div>
 
             <div className="flex items-center justify-between px-1">
               <div>
                 <h1 className="text-xl font-black text-app-fg tracking-tight">
-                  {uiLanguage === 'ru' ? 'Недавние треки' : 'Recent Tracks'}
+                  {t('tracks.recentTracks')}
                 </h1>
                 <p className="text-xs text-app-muted">
-                  {uiLanguage === 'ru' ? 'История практики и недавно прослушанные песни' : 'Your practice history and most recently studied songs'}
+                  {t('tracks.recentTracksDesc')}
                 </p>
               </div>
               <span className="text-[10px] font-black text-app-muted uppercase bg-app-fg/5 px-2.5 py-1 rounded-lg">
@@ -193,7 +193,7 @@ export const TracksHomeShell: React.FC<TracksHomeShellProps> = ({
               ) : (
                 <div className="text-center py-16 px-6 rounded-3xl border border-dashed border-app-card-border opacity-40 italic bg-app-card/30">
                   <Search size={40} className="mx-auto mb-4 opacity-20" />
-                  {uiLanguage === 'ru' ? 'Нет недавних треков.' : 'No recent tracks yet.'}
+                  {t('tracks.noRecentTracksShort')}
                 </div>
               )}
             </div>
@@ -203,8 +203,8 @@ export const TracksHomeShell: React.FC<TracksHomeShellProps> = ({
           <motion.div
             key="expanded-community"
             initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
             className="space-y-6"
           >
             <div className="flex items-center gap-3">
@@ -213,17 +213,17 @@ export const TracksHomeShell: React.FC<TracksHomeShellProps> = ({
                 className="flex items-center gap-1.5 text-xs font-black uppercase tracking-widest text-app-muted hover:text-app-fg transition-colors cursor-pointer"
               >
                 <X size={15} />
-                <span>{uiLanguage === 'ru' ? 'Назад' : 'Back to Home'}</span>
+                <span>{t('tracks.backToHome')}</span>
               </button>
             </div>
 
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
                 <h1 className="text-xl font-black text-app-fg tracking-tight">
-                  {uiLanguage === 'ru' ? 'Все песни' : 'Community Tracks'}
+                  {t('tracks.communityTracks')}
                 </h1>
                 <p className="text-xs text-app-muted">
-                  {uiLanguage === 'ru' ? 'Популярные песни для изучения языков, добавленные сообществом' : 'Trending songs in target languages shared by members'}
+                  {t('tracks.communityTracksDesc')}
                 </p>
               </div>
 
@@ -231,7 +231,7 @@ export const TracksHomeShell: React.FC<TracksHomeShellProps> = ({
               <div className="flex flex-wrap items-center gap-3 animate-in fade-in duration-200">
                 <div className="flex items-center gap-2">
                   <span className="text-[9px] font-black text-app-muted uppercase tracking-widest leading-none">
-                    {uiLanguage === 'ru' ? 'ЯЗЫК:' : 'LANGUAGE:'}
+                    {t('tracks.languageLabel')}
                   </span>
                   <button
                     type="button"
@@ -244,10 +244,10 @@ export const TracksHomeShell: React.FC<TracksHomeShellProps> = ({
                   >
                     <span>
                       {selectedLanguages.length === 0 
-                        ? (uiLanguage === 'ru' ? 'Все' : 'All') 
+                        ? t('common.all') 
                         : selectedLanguages.length === 1 
                         ? selectedLanguages[0] 
-                        : `${selectedLanguages.length} ${uiLanguage === 'ru' ? 'выбрано' : 'Selected'}`}
+                        : t('tracks.countSelected', { count: selectedLanguages.length })}
                     </span>
                     <ChevronDown 
                       size={12} 
@@ -257,17 +257,17 @@ export const TracksHomeShell: React.FC<TracksHomeShellProps> = ({
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="text-[9px] font-black text-app-muted uppercase tracking-widest leading-none">
-                    {uiLanguage === 'ru' ? 'СЛОЖНОСТЬ:' : 'DIFFICULTY:'}
+                    {t('tracks.difficultyLabel')}
                   </span>
                   <select 
                     value={communityDifficultyFilter}
                     onChange={(e) => setCommunityDifficultyFilter(e.target.value)}
                     className="bg-app-card border border-app-card-border rounded-xl px-2.5 py-1.5 text-[10px] font-bold text-app-fg outline-none focus:ring-1 focus:ring-accent transition-all appearance-none cursor-pointer text-center"
                   >
-                    <option value="All">{uiLanguage === 'ru' ? 'Все' : 'All'}</option>
-                    <option value="beginner">{uiLanguage === 'ru' ? 'Новичок' : 'Beginner'}</option>
-                    <option value="intermediate">{uiLanguage === 'ru' ? 'Средний' : 'Intermediate'}</option>
-                    <option value="advanced">{uiLanguage === 'ru' ? 'Продвинутый' : 'Advanced'}</option>
+                    <option value="All">{t('common.all')}</option>
+                    <option value="beginner">{t('tracks.difficultyBeginner')}</option>
+                    <option value="intermediate">{t('tracks.difficultyIntermediate')}</option>
+                    <option value="advanced">{t('tracks.difficultyAdvanced')}</option>
                   </select>
                 </div>
               </div>
@@ -278,7 +278,7 @@ export const TracksHomeShell: React.FC<TracksHomeShellProps> = ({
               <div className="w-full bg-app-card border border-app-card-border rounded-3xl p-4 md:p-5 flex flex-col gap-3 select-none">
                 <div className="flex items-center justify-between">
                   <span className="text-[9px] font-black text-app-muted uppercase tracking-widest leading-none">
-                    {uiLanguage === 'ru' ? 'Фильтр по языкам:' : 'Filter by Languages:'}
+                    {t('tracks.filterByLanguages')}
                   </span>
                   {selectedLanguages.length > 0 && (
                     <button
@@ -287,7 +287,7 @@ export const TracksHomeShell: React.FC<TracksHomeShellProps> = ({
                       className="text-[9.5px] font-black text-red-500 uppercase tracking-widest hover:text-red-600 transition-colors flex items-center gap-1 cursor-pointer"
                     >
                       <X size={11} strokeWidth={2.5} />
-                      {uiLanguage === 'ru' ? `Очистить фильтр (${selectedLanguages.length})` : `Clear Selection (${selectedLanguages.length})`}
+                      {t('tracks.clearSelection', { count: selectedLanguages.length })}
                     </button>
                   )}
                 </div>
@@ -381,7 +381,7 @@ export const TracksHomeShell: React.FC<TracksHomeShellProps> = ({
               ) : (
                 <div className="text-center py-12 px-6 rounded-3xl border border-dashed border-app-card-border opacity-40 italic bg-app-card/30">
                   <Music size={40} className="mx-auto mb-4 opacity-20" />
-                  {uiLanguage === 'ru' ? 'Песен по вашим фильтрам не найдено.' : 'No tracks found matching your filters.'}
+                  {t('tracks.noTracksFoundMatching')}
                 </div>
               )}
             </div>
@@ -405,7 +405,7 @@ export const TracksHomeShell: React.FC<TracksHomeShellProps> = ({
                 <div className="flex items-center gap-2">
                   <Globe size={16} className="text-app-accent" />
                   <h2 className="text-sm font-black uppercase tracking-[0.13em] leading-none">
-                    {uiLanguage === 'ru' ? 'Все песни' : 'Community'}
+                    {t('tracks.community')}
                   </h2>
                 </div>
                 <ChevronRight 
@@ -475,7 +475,7 @@ export const TracksHomeShell: React.FC<TracksHomeShellProps> = ({
               ) : (
                 <div className="text-center py-10 px-6 rounded-3xl border border-dashed border-app-card-border opacity-40 italic bg-app-card/30">
                   <Music size={30} className="mx-auto mb-2 opacity-20" />
-                  {uiLanguage === 'ru' ? 'В сообществе пока нет песен.' : 'No songs in community yet.'}
+                  {t('tracks.noSongsInCommunity')}
                 </div>
               )}
             </div>
@@ -490,7 +490,7 @@ export const TracksHomeShell: React.FC<TracksHomeShellProps> = ({
                 <div className="flex items-center gap-2">
                   <History size={16} className="text-app-accent" fill="none" />
                   <h2 className="text-sm font-black uppercase tracking-[0.13em] leading-none">
-                    {uiLanguage === 'ru' ? 'Недавние' : 'Recent'}
+                    {t('tracks.recent')}
                   </h2>
                 </div>
                 <ChevronRight 
@@ -543,7 +543,7 @@ export const TracksHomeShell: React.FC<TracksHomeShellProps> = ({
               ) : (
                 <div className="text-center py-10 px-6 rounded-3xl border border-dashed border-app-card-border opacity-40 italic bg-app-card/30">
                   <Search size={30} className="mx-auto mb-2 opacity-20" />
-                  {uiLanguage === 'ru' ? 'Нет недавних треков. Воспользуйтесь поиском выше!' : 'No recent tracks yet. Search above to begin study!'}
+                  {t('tracks.noRecentTracks')}
                 </div>
               )}
             </div>

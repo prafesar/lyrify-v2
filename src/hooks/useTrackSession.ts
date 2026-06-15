@@ -224,7 +224,7 @@ export function useTrackSession(): UseTrackSessionResult {
       
       // Load from local SQLite cache to pick up raw lyrics if they were successfully fetched/saved
       try {
-        const cached = trackSessionFacade.trackCacheRepository.getCachedTrackData(currentTrack.trackId);
+        const cached = trackSessionFacade.trackCacheRepository.getCachedTrack(currentTrack.trackId);
         if (cached) {
           console.log("Restoring track data with fetched raw lyrics from local cache:", cached);
           setCurrentTrack(cached);

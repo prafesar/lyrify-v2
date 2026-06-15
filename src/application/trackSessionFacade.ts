@@ -10,7 +10,7 @@ import { getCachedStructuredLecture } from "../services/geminiService";
 export class TrackSessionFacade {
   constructor(
     private aiClient: AiPort,
-    private trackCacheRepository: TrackCacheRepositoryPort,
+    public trackCacheRepository: TrackCacheRepositoryPort,
     private recentHistoryRepository: RecentHistoryRepositoryPort,
     private dailyTrackerRepository: DailyTrackerRepositoryPort,
     private lyricsProvider: LyricsProviderPort,
