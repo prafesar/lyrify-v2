@@ -21,7 +21,7 @@ interface StudyViewProps {
   onCardUpdated?: (cardId?: string) => void;
 }
 
-type GroupMode = 'recent' | 'track' | 'artist';
+type GroupMode = 'cards' | 'tracks';
 
 export default function StudyView({ onBack, initialTrackId, onReviewCompleted, onCardUpdated }: StudyViewProps) {
   const { t, uiLanguage } = useTranslation();
@@ -32,15 +32,11 @@ export default function StudyView({ onBack, initialTrackId, onReviewCompleted, o
   const [isFlipped, setIsFlipped] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'hub' | 'session' | 'complete'>('hub');
-  const [groupMode, setGroupMode] = useState<GroupMode>(initialTrackId ? 'track' : 'recent');
+  const [groupMode, setGroupMode] = useState<GroupMode>('cards');
   const [isExplanationExpanded, setIsExplanationExpanded] = useState(false);
-  const [selectedLanguage, setSelectedLanguage] = useState<string>(() => {
-    if (initialTrackId) return 'all';
-    return userPreferencesRepository.getPreference('study_selected_language', 'all');
-  });
+  const [selectedLanguage, setSelectedLanguage] = useState<string>('all');
   const [selectedTrack, setSelectedTrack] = useState<string>(initialTrackId || 'all');
   const [selectedType, setSelectedType] = useState<string>('all');
-  const [expandedParents, setExpandedParents] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState("");
 
   // Column cards expanded toggles
@@ -81,15 +77,6 @@ export default function StudyView({ onBack, initialTrackId, onReviewCompleted, o
     advanced: uiLanguage === 'ru' ? 'Продвинутый' : 'Advanced'
   };
 
-  const toggleParent = (phrase: string) => {
-    setExpandedParents(prev => {
-      const next = new Set(prev);
-      if (next.has(phrase)) next.delete(phrase);
-      else next.add(phrase);
-      return next;
-    });
-  };
-
   useEffect(() => {
     userPreferencesRepository.setPreference('study_selected_language', selectedLanguage);
   }, [selectedLanguage]);
@@ -98,13 +85,13 @@ export default function StudyView({ onBack, initialTrackId, onReviewCompleted, o
     loadCards();
   }, []);
 
+  const now = useMemo(() => new Date(), [viewMode]);
+
   async function loadCards() {
     setIsLoading(true);
     const cards = await getCards();
     setAllCards(cards);
     
-    // If current selected language is 'all' or not in available languages, 
-    // pick the first one from the new cards if available
     const langs = new Set<string>();
     cards.forEach(card => {
       langs.add(card.sourceLanguage || 'en');
@@ -112,22 +99,23 @@ export default function StudyView({ onBack, initialTrackId, onReviewCompleted, o
     const available = Array.from(langs).sort();
     
     setSelectedLanguage(prev => {
-      if (initialTrackId) return 'all';
-      const persisted = userPreferencesRepository.getPreference('study_selected_language', '');
-      if (persisted && available.includes(persisted)) return persisted;
-      if (available.length > 0) return available[0];
-      return 'en';
+      const persisted = userPreferencesRepository.getPreference('study_selected_language', 'all');
+      if (persisted === 'all') return 'all';
+      if (persisted && available.map(l => l.toLowerCase()).includes(persisted.toLowerCase())) return persisted;
+      return 'all';
     });
 
     if (initialTrackId) {
       const trackCards = cards.filter(card => card.trackId === initialTrackId && card.status === 'learning');
-      if (trackCards.length > 0) {
-        const trackDueCards = trackCards.filter(card => card.due <= new Date());
-        const cardsToStudy = trackDueCards.length > 0 ? trackDueCards : trackCards;
-        setSessionCards(cardsToStudy);
+      const trackDueCards = trackCards.filter(card => card.due <= new Date());
+      if (trackDueCards.length > 0) {
+        setSessionCards(trackDueCards);
         setCurrentIndex(0);
         setIsFlipped(false);
         setViewMode('session');
+      } else {
+        setSelectedTrack(initialTrackId);
+        setViewMode('hub');
       }
     }
     
@@ -138,7 +126,7 @@ export default function StudyView({ onBack, initialTrackId, onReviewCompleted, o
     const langs = new Set<string>();
     allCards.forEach(card => {
       const lang = card.sourceLanguage || 'en';
-      langs.add(lang);
+      langs.add(lang.toLowerCase());
     });
     return Array.from(langs).filter(Boolean).sort();
   }, [allCards]);
@@ -156,26 +144,33 @@ export default function StudyView({ onBack, initialTrackId, onReviewCompleted, o
   const availableTypes = useMemo(() => {
     const types = new Set<string>();
     allCards.forEach(card => {
-      if (card.status === 'learning') {
-        types.add(card.type || 'phrase');
+      if (card.type) {
+        types.add(card.type);
       }
     });
     return Array.from(types).sort();
   }, [allCards]);
 
-  const now = useMemo(() => new Date(), [viewMode]);
-
-  const filteredCards = useMemo(() => {
+  // Clean, separated selectors as requested
+  const allMatchingCards = useMemo(() => {
     let list = allCards;
+    
+    // 1. Language filter
     if (selectedLanguage !== 'all') {
-      list = list.filter(card => (card.sourceLanguage || 'en') === selectedLanguage);
+      list = list.filter(card => (card.sourceLanguage || 'en').toLowerCase() === selectedLanguage.toLowerCase());
     }
+    
+    // 2. Track filter
     if (selectedTrack !== 'all') {
       list = list.filter(card => card.trackId === selectedTrack);
     }
+    
+    // 3. Tag / Type filter
     if (selectedType !== 'all') {
       list = list.filter(card => (card.type || 'phrase') === selectedType);
     }
+    
+    // 4. Search Query filter (matches original text, translation, explanation, userNote, track title)
     if (searchQuery.trim() !== '') {
       const q = searchQuery.toLowerCase().trim();
       list = list.filter(card => 
@@ -186,117 +181,87 @@ export default function StudyView({ onBack, initialTrackId, onReviewCompleted, o
         (card.trackTitle && card.trackTitle.toLowerCase().includes(q))
       );
     }
-    list = list.filter(card => card.status === 'learning');
+
     return list;
   }, [allCards, selectedLanguage, selectedTrack, selectedType, searchQuery]);
 
-  // Helper to highlight matched query in textual content
-  const highlightMatch = (text: string, query: string) => {
-    if (!query.trim() || !text) return <>{text}</>;
-    const index = text.toLowerCase().indexOf(query.toLowerCase());
-    if (index === -1) return <>{text}</>;
-    const length = query.length;
-    return (
-      <>
-        {text.substring(0, index)}
-        <mark className="bg-orange-500/20 text-orange-600 rounded-xs px-0.5">{text.substring(index, index + length)}</mark>
-        {text.substring(index + length)}
-      </>
-    );
-  };
-
-  const groupedCards = useMemo(() => {
-    // Group phrases by track for display
-    const groups = new Map<string, Flashcard[]>();
-    
-    filteredCards.forEach(card => {
-      const key = card.trackId || 'unknown-track';
-      const list = groups.get(key) || [];
-      list.push(card);
-      groups.set(key, list);
-    });
-
-    return Array.from(groups.entries()).map(([key, phrases]) => {
-      const sample = phrases[0];
-      return {
-        id: key,
-        trackTitle: sample.trackTitle || sample.trackId || 'Unknown Track',
-        artist: sample.artist || 'Unknown Artist',
-        phrases: phrases,
-        createdAt: sample.createdAt
-      };
-    }).sort((a, b) => {
-      const dateA = a.createdAt instanceof Date ? a.createdAt : new Date(a.createdAt || 0);
-      const dateB = b.createdAt instanceof Date ? b.createdAt : new Date(b.createdAt || 0);
-      return dateB.getTime() - dateA.getTime();
-    });
-  }, [filteredCards]);
+  const learningCards = useMemo(() => {
+    return allMatchingCards.filter(card => card.status === 'learning');
+  }, [allMatchingCards]);
 
   const dueCards = useMemo(() => {
-    return filteredCards.filter(card => card.due <= now);
-  }, [filteredCards, now]);
+    return allMatchingCards.filter(card => card.status === 'learning' && card.due <= now);
+  }, [allMatchingCards, now]);
 
-  // Decks computation
-  const decks = useMemo(() => {
-    const getDueCount = (cards: Flashcard[]) => cards.filter(c => c.due <= now).length;
-    if (groupMode === 'recent') {
-      const sorted = [...filteredCards].sort((a, b) => {
-        const dateA = a.createdAt instanceof Date ? a.createdAt : new Date(a.createdAt || 0);
-        const dateB = b.createdAt instanceof Date ? b.createdAt : new Date(b.createdAt || 0);
-        return dateB.getTime() - dateA.getTime();
-      });
-      
-      return [{
-        id: 'recent-all',
-        title: uiLanguage === 'ru' ? 'Недавние выражения' : 'Recent Phrases',
-        subtitle: uiLanguage === 'ru' ? 'Последние добавления' : 'Latest additions',
-        count: filteredCards.length,
-        dueCount: getDueCount(filteredCards),
-        cards: sorted,
-        icon: <Clock size={20} />
-      }];
-    }
+  const knownCards = useMemo(() => {
+    return allMatchingCards.filter(card => card.status === 'known');
+  }, [allMatchingCards]);
 
-    if (groupMode === 'track') {
-      const groups = filteredCards.reduce((acc, card) => {
-        const key = card.trackTitle;
-        if (!acc[key]) acc[key] = [];
-        acc[key].push(card);
-        return acc;
-      }, {} as Record<string, Flashcard[]>);
+  // Derived language due counts computed from allCards for precise badge numbers
+  const languageDueCounts = useMemo(() => {
+    const counts: Record<string, number> = { all: 0 };
+    allCards.forEach(card => {
+      if (card.status === 'learning' && card.due <= now) {
+        counts.all = (counts.all || 0) + 1;
+        const lang = (card.sourceLanguage || 'en').toLowerCase();
+        counts[lang] = (counts[lang] || 0) + 1;
+      }
+    });
+    return counts;
+  }, [allCards, now]);
 
-      return Object.entries(groups).map(([title, cards]) => ({
-        id: `track-${title}`,
-        title,
-        subtitle: cards[0].artist,
-        count: cards.length,
-        dueCount: getDueCount(cards),
-        cards,
-        icon: <Music size={20} />
-      })).sort((a, b) => b.count - a.count);
-    }
+  // Derived tracks list showing track details sorted newest-first
+  const tracksListStats = useMemo(() => {
+    const trackMap = new Map<string, {
+      id: string;
+      title: string;
+      artist: string;
+      total: number;
+      due: number;
+      learning: number;
+      known: number;
+      createdAt: Date;
+    }>();
 
-    if (groupMode === 'artist') {
-      const groups = filteredCards.reduce((acc, card) => {
-        const key = card.artist;
-        if (!acc[key]) acc[key] = [];
-        acc[key].push(card);
-        return acc;
-      }, {} as Record<string, Flashcard[]>);
+    allCards.forEach(card => {
+      if (selectedLanguage !== 'all' && (card.sourceLanguage || 'en').toLowerCase() !== selectedLanguage.toLowerCase()) {
+        return;
+      }
 
-      return Object.entries(groups).map(([artist, cards]) => ({
-        id: `artist-${artist}`,
-        title: artist,
-        subtitle: uiLanguage === 'ru' ? `${cards.length} выражений` : `${cards.length} phrases`,
-        count: cards.length,
-        dueCount: getDueCount(cards),
-        cards,
-        icon: <User size={20} />
-      })).sort((a, b) => b.count - a.count);
-    }
+      if (card.trackId) {
+        const key = card.trackId;
+        const existing = trackMap.get(key) || {
+          id: card.trackId,
+          title: card.trackTitle || card.trackId,
+          artist: card.artist || '',
+          total: 0,
+          due: 0,
+          learning: 0,
+          known: 0,
+          createdAt: card.createdAt instanceof Date ? card.createdAt : new Date(card.createdAt || 0)
+        };
 
-    return [];
-  }, [filteredCards, groupMode, now, uiLanguage]);
+        existing.total += 1;
+        if (card.status === 'learning') {
+          existing.learning += 1;
+          if (card.due <= now) {
+            existing.due += 1;
+          }
+        } else if (card.status === 'known') {
+          existing.known += 1;
+        }
+
+        const cardDate = card.createdAt instanceof Date ? card.createdAt : new Date(card.createdAt || 0);
+        if (cardDate > existing.createdAt) {
+          existing.createdAt = cardDate;
+        }
+
+        trackMap.set(key, existing);
+      }
+    });
+
+    return Array.from(trackMap.values()).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  }, [allCards, selectedLanguage, now]);
 
   const startSession = (cards: Flashcard[]) => {
     if (cards.length === 0) return;
@@ -317,7 +282,6 @@ export default function StudyView({ onBack, initialTrackId, onReviewCompleted, o
     if (currentIndex < sessionCards.length - 1) {
       setCurrentIndex(currentIndex + 1);
     } else {
-      // Session finished
       loadCards();
       setViewMode('complete');
     }
@@ -351,6 +315,23 @@ export default function StudyView({ onBack, initialTrackId, onReviewCompleted, o
       window.speechSynthesis.speak(utterance);
     }, 50);
   };
+
+  // Helper to highlight matched query in textual content
+  const highlightMatch = (text: string, query: string) => {
+    if (!query.trim() || !text) return <>{text}</>;
+    const index = text.toLowerCase().indexOf(query.toLowerCase());
+    if (index === -1) return <>{text}</>;
+    const length = query.length;
+    return (
+      <>
+        {text.substring(0, index)}
+        <mark className="bg-amber-100 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200 px-0.5 rounded-sm font-semibold select-text">{text.substring(index, index + length)}</mark>
+        {text.substring(index + length)}
+      </>
+    );
+  };
+
+
 
   if (isLoading) {
     return (
@@ -443,6 +424,12 @@ export default function StudyView({ onBack, initialTrackId, onReviewCompleted, o
   }
 
   if (viewMode === 'hub') {
+    const sortedMatchingCards = [...allMatchingCards].sort((a, b) => {
+      const dateA = a.createdAt instanceof Date ? a.createdAt : new Date(a.createdAt || 0);
+      const dateB = b.createdAt instanceof Date ? b.createdAt : new Date(b.createdAt || 0);
+      return dateB.getTime() - dateA.getTime();
+    });
+
     return (
       <div className="flex-1 flex flex-col h-full min-h-0 p-3 sm:p-6 max-w-5xl mx-auto w-full overflow-y-auto scrollbar-hide font-sans">
         <header className="mb-6 space-y-4 shrink-0">
@@ -453,13 +440,13 @@ export default function StudyView({ onBack, initialTrackId, onReviewCompleted, o
             {dueCards.length > 0 ? (
               <button 
                 onClick={() => startSession(dueCards)}
-                className="flex items-center justify-center gap-2 px-6 py-2.5 rounded-full bg-app-fg text-app-bg font-bold text-xs uppercase tracking-widest active:scale-95 transition-all shadow-xl"
+                className="flex items-center justify-center gap-2 px-6 py-2.5 rounded-full bg-app-fg text-app-bg hover:scale-105 active:scale-95 transition-all shadow-xl text-xs font-bold uppercase tracking-widest cursor-pointer select-none"
               >
                 <PlayCircle size={18} />
                 {uiLanguage === 'ru' ? `Повторить (${dueCards.length})` : `Review Due (${dueCards.length})`}
               </button>
             ) : (
-              <div className="flex items-center justify-center gap-3 px-4 py-2 rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/10 w-fit">
+              <div className="flex items-center justify-center gap-2 px-4 py-2 rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/10 w-fit select-none">
                 <Check size={14} />
                 <span className="text-[10px] font-black uppercase tracking-widest">
                   {uiLanguage === 'ru' ? 'Всё разобрано!' : 'All caught up!'}
@@ -477,7 +464,7 @@ export default function StudyView({ onBack, initialTrackId, onReviewCompleted, o
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder={uiLanguage === 'ru' ? 'Поиск фразы, перевода, контекста или песни...' : 'Search phrase, translation, note or song...'}
-                className="w-full pl-11 pr-10 py-3 rounded-2xl bg-app-card border border-app-card-border focus:border-app-accent/40 focus:outline-none text-xs font-sans placeholder-app-fg/30 transition-all text-app-fg"
+                className="w-full pl-11 pr-10 py-3 rounded-2xl bg-app-card border border-app-card-border focus:border-orange-500 focus:outline-none text-xs font-sans placeholder-app-fg/30 transition-all text-app-fg"
               />
               {searchQuery && (
                 <button
@@ -489,24 +476,87 @@ export default function StudyView({ onBack, initialTrackId, onReviewCompleted, o
               )}
             </div>
 
-            <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide">
-              <select 
-                value={selectedLanguage}
-                onChange={(e) => setSelectedLanguage(e.target.value)}
-                className="px-3 sm:px-4 py-2 rounded-xl bg-app-card border border-app-card-border text-[10px] sm:text-xs font-black uppercase tracking-widest outline-none cursor-pointer"
-              >
-                <option key="lang-opt-all" value="all">{uiLanguage === 'ru' ? 'Все языки' : 'All Languages'}</option>
-                {availableLanguages.map(l => <option key={`lang-opt-${l}`} value={l}>{l.toUpperCase()}</option>)}
-              </select>
+            {/* Active Track Selection Indicator and Reset */}
+            {selectedTrack !== 'all' && (
+              <div className="flex items-center justify-between px-4 py-2.5 rounded-xl bg-orange-500/5 border border-orange-500/10 text-xs text-app-fg select-none">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="shrink-0 text-[10px] font-black bg-orange-500/10 text-orange-500 px-1.5 py-0.5 rounded-md uppercase tracking-wider font-sans">
+                    {uiLanguage === 'ru' ? 'Фильтр по песне' : 'Track Filter'}
+                  </span>
+                  <span className="font-bold truncate opacity-80">
+                    {allCards.find(c => c.trackId === selectedTrack)?.trackTitle || selectedTrack}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSelectedTrack('all')}
+                  className="text-orange-500 hover:text-orange-600 font-bold uppercase tracking-widest text-[10px] shrink-0 ml-3 flex items-center gap-1 hover:scale-105 active:scale-95 transition-all"
+                >
+                  <X size={12} />
+                  {uiLanguage === 'ru' ? 'Сбросить' : 'Clear'}
+                </button>
+              </div>
+            )}
 
-              <select 
-                value={selectedTrack}
-                onChange={(e) => setSelectedTrack(e.target.value)}
-                className="px-3 sm:px-4 py-2 rounded-xl bg-app-card border border-app-card-border text-[10px] sm:text-xs font-black uppercase tracking-widest outline-none max-w-[140px] sm:max-w-[240px] truncate cursor-pointer"
-              >
-                <option key="track-opt-all" value="all">{uiLanguage === 'ru' ? 'Все песни' : 'All Tracks'}</option>
-                {tracksList.map(t => <option key={`track-opt-${t.id}`} value={t.id}>{t.title}</option>)}
-              </select>
+            {/* Language Selection Chips with Due Counts */}
+            <div className="flex flex-col gap-1.5">
+              <span className="text-[10px] font-black uppercase tracking-[0.15em] text-app-muted pl-0.5 select-none font-sans">
+                {uiLanguage === 'ru' ? 'Язык обучения' : 'Language'}
+              </span>
+              <div className="flex items-center gap-2 overflow-x-auto pb-1.5 scrollbar-hide w-full">
+                <button
+                  type="button"
+                  onClick={() => setSelectedLanguage('all')}
+                  className={cn(
+                    "px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all border whitespace-nowrap cursor-pointer active:scale-95 flex items-center gap-2",
+                    selectedLanguage === 'all'
+                      ? "bg-app-fg text-app-bg border-app-fg shadow-lg"
+                      : "bg-app-card text-app-fg/60 border-app-card-border hover:border-orange-500/40 hover:text-app-fg"
+                  )}
+                >
+                  <span>{uiLanguage === 'ru' ? 'Все' : 'All'}</span>
+                  {languageDueCounts.all > 0 && (
+                    <span className={cn(
+                      "px-1.5 py-0.5 rounded-md text-[8px] font-bold font-mono",
+                      selectedLanguage === 'all'
+                        ? "bg-app-bg text-app-fg"
+                        : "bg-orange-500 text-white"
+                    )}>
+                      {languageDueCounts.all}
+                    </span>
+                  )}
+                </button>
+
+                {availableLanguages.map(l => {
+                  const isActive = selectedLanguage.toLowerCase() === l.toLowerCase();
+                  const count = languageDueCounts[l.toLowerCase()] || 0;
+                  return (
+                    <button
+                      key={`lang-chip-${l}`}
+                      type="button"
+                      onClick={() => setSelectedLanguage(l)}
+                      className={cn(
+                        "px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all border whitespace-nowrap cursor-pointer active:scale-95 flex items-center gap-2",
+                        isActive
+                          ? "bg-[var(--accent)] text-white border-[var(--accent)] shadow-md shadow-[var(--accent)]/15"
+                          : "bg-app-card text-app-fg/60 border-app-card-border hover:border-orange-500/40 hover:text-app-fg"
+                      )}
+                    >
+                      <span>{l.toUpperCase()}</span>
+                      {count > 0 && (
+                        <span className={cn(
+                          "px-1.5 py-0.5 rounded-md text-[8px] font-bold font-mono",
+                          isActive
+                            ? "bg-white text-orange-600"
+                            : "bg-orange-500 text-white"
+                        )}>
+                          {count}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
             {/* Tags scrolling carousel selector */}
@@ -522,7 +572,7 @@ export default function StudyView({ onBack, initialTrackId, onReviewCompleted, o
                     "px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all border whitespace-nowrap cursor-pointer active:scale-95",
                     selectedType === 'all'
                       ? "bg-app-fg text-app-bg border-app-fg shadow-lg"
-                      : "bg-app-card text-app-fg/60 border-app-card-border hover:border-app-accent/35 hover:text-app-fg"
+                      : "bg-app-card text-app-fg/60 border-app-card-border hover:border-orange-500/40 hover:text-app-fg"
                   )}
                 >
                   {uiLanguage === 'ru' ? 'Все теги' : 'All tags'}
@@ -536,7 +586,7 @@ export default function StudyView({ onBack, initialTrackId, onReviewCompleted, o
                       "px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all border whitespace-nowrap cursor-pointer active:scale-95",
                       selectedType === t
                         ? "bg-[var(--accent)] text-white border-[var(--accent)] shadow-md shadow-[var(--accent)]/15"
-                        : "bg-app-card text-app-fg/60 border-app-card-border hover:border-app-accent/35 hover:text-app-fg"
+                        : "bg-app-card text-app-fg/60 border-orange-500/40 text-app-fg"
                     )}
                   >
                     {typeLabels[t] || t}
@@ -545,19 +595,19 @@ export default function StudyView({ onBack, initialTrackId, onReviewCompleted, o
               </div>
             </div>
             
+            {/* Tab Switcher */}
             <div className="flex p-1 bg-app-card border border-app-card-border rounded-2xl w-full sm:w-fit overflow-x-auto scrollbar-hide font-sans">
               {[
-                { id: 'recent', label: uiLanguage === 'ru' ? 'Выражения' : 'Phrases', icon: <Clock size={15} /> },
-                { id: 'track', label: uiLanguage === 'ru' ? 'Колоды' : 'Decks', icon: <Music size={15} /> },
-                { id: 'artist', label: uiLanguage === 'ru' ? 'Авторы' : 'Artists', icon: <User size={15} /> },
+                { id: 'cards', label: uiLanguage === 'ru' ? 'Карточки' : 'Cards', icon: <Clock size={15} /> },
+                { id: 'tracks', label: uiLanguage === 'ru' ? 'Плейлисты' : 'Tracks', icon: <Music size={15} /> },
               ].map((tab) => (
                 <button
                   key={tab.id}
                   onClick={() => setGroupMode(tab.id as GroupMode)}
                   className={cn(
-                    "flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-2.5 sm:px-6 py-2 rounded-xl text-[10px] sm:text-xs font-bold uppercase tracking-wider transition-all whitespace-nowrap",
+                    "flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-6 py-2.5 rounded-xl text-[10px] sm:text-xs font-bold uppercase tracking-wider transition-all whitespace-nowrap cursor-pointer",
                     groupMode === tab.id 
-                      ? "bg-app-bg text-app-fg shadow-lg" 
+                      ? "bg-app-bg text-app-fg shadow-lg font-black" 
                       : "text-app-fg opacity-40 hover:opacity-100"
                   )}
                 >
@@ -569,344 +619,292 @@ export default function StudyView({ onBack, initialTrackId, onReviewCompleted, o
           </div>
         </header>
 
-        <div className="space-y-4 pb-32 font-sans">
-          {groupMode === 'recent' ? (
-            <div className="grid gap-3">
-              {groupedCards.map((group) => {
-                const knownCount = group.phrases.filter(c => c.status === 'known').length;
-                const totalCount = group.phrases.length;
-                const isExpanded = expandedParents.has(group.id);
-                
-                return (
-                  <div key={group.id} className="space-y-3 font-sans">
-                    <div 
-                      className="flex items-center justify-between p-2.5 sm:p-4 cursor-pointer hover:opacity-85 transition-all font-sans gap-2"
-                      onClick={() => toggleParent(group.id)}
-                    >
-                      <div className="flex items-center gap-2 sm:gap-4 min-w-0">
-                        <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-2xl bg-app-card border border-app-card-border flex items-center justify-center text-app-accent shrink-0 select-none shadow-xs">
-                           <Library size={15} />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <h3 className="font-serif text-sm sm:text-lg font-bold text-app-fg leading-tight truncate">{group.trackTitle}</h3>
-                          <p className="text-[8px] sm:text-[10px] font-black uppercase tracking-widest opacity-40 truncate mt-0.5 sm:mt-1">{group.artist}</p>
-                        </div>
+        {/* Dynamic content rendering */}
+        {groupMode === 'cards' ? (
+          <div className="space-y-4 pb-20 font-sans">
+            {sortedMatchingCards.length > 0 ? (
+              sortedMatchingCards.map((child, childIdx) => {
+                const isEditing = editingCardId === child.id;
+                const track = child.trackId ? getCachedTrackData(child.trackId) : null;
+                const contextLines = track && track.lines 
+                  ? resolvePhraseContext(track.lines, child.lineId ? [child.lineId] : [], child.text)
+                  : [];
+
+                const isExpanded = expandedCardIds.has(child.id);
+
+                const editFormContent = (
+                  <div className="space-y-3 w-full font-sans text-xs text-left">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="flex flex-col gap-1">
+                        <label className="text-[10px] font-black uppercase tracking-widest opacity-40">
+                          {uiLanguage === 'ru' ? 'Оригинальный текст' : 'Original Text'}
+                        </label>
+                        <input
+                          type="text"
+                          value={editFields.text}
+                          onChange={(e) => setEditFields({ ...editFields, text: e.target.value })}
+                          className="w-full px-3 py-2 text-sm rounded-xl bg-app-bg border border-app-card-border focus:border-orange-500 focus:outline-none bg-app-card text-app-fg"
+                        />
                       </div>
-                      
-                      <div className="flex items-center gap-1.5 sm:gap-4 shrink-0 font-sans">
-                        <span className="text-[9px] sm:text-[10px] font-black bg-app-card border border-app-card-border px-1.5 py-0.5 sm:px-2.5 sm:py-1 rounded-lg opacity-60 font-mono text-app-fg">
-                          {knownCount}/{totalCount}
-                        </span>
-                        <button 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            startSession(group.phrases);
-                          }}
-                          className="w-7 h-7 rounded-xl bg-app-fg text-app-bg hover:scale-110 active:scale-95 transition-all flex items-center justify-center cursor-pointer"
-                          title="Study group"
-                        >
-                          <PlayCircle size={15} />
-                        </button>
-                        <div className={cn("transition-transform duration-300 text-app-fg opacity-40", isExpanded ? "rotate-180" : "")}>
-                           <ChevronDown size={16} />
-                        </div>
+                      <div className="flex flex-col gap-1">
+                        <label className="text-[10px] font-black uppercase tracking-widest opacity-40">
+                          {uiLanguage === 'ru' ? 'Перевод' : 'Translation'}
+                        </label>
+                        <input
+                          type="text"
+                          value={editFields.translation}
+                          onChange={(e) => setEditFields({ ...editFields, translation: e.target.value })}
+                          className="w-full px-3 py-2 text-sm rounded-xl bg-app-bg border border-app-card-border focus:border-orange-500 focus:outline-none bg-app-card text-app-fg"
+                        />
                       </div>
                     </div>
-                    
-                    <AnimatePresence>
-                      {isExpanded && (
-                        <motion.div
-                          initial={{ opacity: 0, height: 0 }}
-                          animate={{ opacity: 1, height: 'auto' }}
-                          exit={{ opacity: 0, height: 0 }}
-                          className="overflow-hidden font-sans"
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="flex flex-col gap-1">
+                        <label className="text-[10px] font-black uppercase tracking-widest opacity-40">
+                          {uiLanguage === 'ru' ? 'Тип' : 'Type'}
+                        </label>
+                        <select
+                          value={editFields.type}
+                          onChange={(e) => setEditFields({ ...editFields, type: e.target.value })}
+                          className="w-full px-3 py-2 text-sm rounded-xl bg-app-bg border border-app-card-border focus:border-orange-500 focus:outline-none bg-app-card text-app-fg font-sans text-sm"
                         >
-                          <div className="py-2.5 px-0.5 space-y-4">
-                            {group.phrases.map((child, childIdx) => {
-                              const isEditing = editingCardId === child.id;
-                              const track = child.trackId ? getCachedTrackData(child.trackId) : null;
-                              const contextLines = track && track.lines 
-                                ? resolvePhraseContext(track.lines, child.lineId ? [child.lineId] : [], child.text)
-                                : [];
+                          {Object.entries(typeLabels).map(([val, label]) => (
+                            <option key={val} value={val}>{label}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="flex flex-col gap-1">
+                        <label className="text-[10px] font-black uppercase tracking-widest opacity-40">
+                          {uiLanguage === 'ru' ? 'Примечания' : 'User Note'}
+                        </label>
+                        <input
+                          type="text"
+                          value={editFields.userNote}
+                          onChange={(e) => setEditFields({ ...editFields, userNote: e.target.value })}
+                          placeholder={uiLanguage === 'ru' ? "Ассоциации для запоминания..." : "Add private mnemonics helper..."}
+                          className="w-full px-3 py-2 text-sm rounded-xl bg-app-bg border border-app-card-border focus:border-orange-500 focus:outline-none font-sans bg-app-card text-app-fg"
+                        />
+                      </div>
+                    </div>
 
-                              const isExpanded = expandedCardIds.has(child.id);
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[10px] font-black uppercase tracking-widest opacity-40">
+                        {uiLanguage === 'ru' ? 'Объяснение контекста' : 'Explanation'}
+                      </label>
+                      <textarea
+                        value={editFields.explanation}
+                        rows={2}
+                        onChange={(e) => setEditFields({ ...editFields, explanation: e.target.value })}
+                        className="w-full px-3 py-2 text-sm rounded-xl bg-app-bg border border-app-card-border focus:border-orange-500 focus:outline-none resize-none bg-app-card text-app-fg"
+                      />
+                    </div>
 
-                              const editFormContent = (
-                                <div className="space-y-3 w-full font-sans text-xs text-left">
-                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                    <div className="flex flex-col gap-1">
-                                      <label className="text-[10px] font-black uppercase tracking-widest opacity-40">
-                                        {uiLanguage === 'ru' ? 'Оригинальный текст' : 'Original Text'}
-                                      </label>
-                                      <input
-                                        type="text"
-                                        value={editFields.text}
-                                        onChange={(e) => setEditFields({ ...editFields, text: e.target.value })}
-                                        className="w-full px-3 py-2 text-sm rounded-xl bg-app-bg border border-app-card-border focus:border-orange-500 focus:outline-none bg-app-card text-app-fg"
-                                      />
-                                    </div>
-                                    <div className="flex flex-col gap-1">
-                                      <label className="text-[10px] font-black uppercase tracking-widest opacity-40">
-                                        {uiLanguage === 'ru' ? 'Перевод' : 'Translation'}
-                                      </label>
-                                      <input
-                                        type="text"
-                                        value={editFields.translation}
-                                        onChange={(e) => setEditFields({ ...editFields, translation: e.target.value })}
-                                        className="w-full px-3 py-2 text-sm rounded-xl bg-app-bg border border-app-card-border focus:border-orange-500 focus:outline-none bg-app-card text-app-fg"
-                                      />
-                                    </div>
-                                  </div>
-
-                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                    <div className="flex flex-col gap-1">
-                                      <label className="text-[10px] font-black uppercase tracking-widest opacity-40">
-                                        {uiLanguage === 'ru' ? 'Тип' : 'Type'}
-                                      </label>
-                                      <select
-                                        value={editFields.type}
-                                        onChange={(e) => setEditFields({ ...editFields, type: e.target.value })}
-                                        className="w-full px-3 py-2 text-sm rounded-xl bg-app-bg border border-app-card-border focus:border-orange-500 focus:outline-none bg-app-card text-app-fg font-sans text-sm"
-                                      >
-                                        {Object.entries(typeLabels).map(([val, label]) => (
-                                          <option key={val} value={val}>{label}</option>
-                                        ))}
-                                      </select>
-                                    </div>
-                                    <div className="flex flex-col gap-1">
-                                      <label className="text-[10px] font-black uppercase tracking-widest opacity-40">
-                                        {uiLanguage === 'ru' ? 'Примечания' : 'User Note'}
-                                      </label>
-                                      <input
-                                        type="text"
-                                        value={editFields.userNote}
-                                        onChange={(e) => setEditFields({ ...editFields, userNote: e.target.value })}
-                                        placeholder={uiLanguage === 'ru' ? "Ассоциации для запоминания..." : "Add private mnemonics helper..."}
-                                        className="w-full px-3 py-2 text-sm rounded-xl bg-app-bg border border-app-card-border focus:border-orange-500 focus:outline-none font-sans bg-app-card text-app-fg"
-                                      />
-                                    </div>
-                                  </div>
-
-                                  <div className="flex flex-col gap-1">
-                                    <label className="text-[10px] font-black uppercase tracking-widest opacity-40">
-                                      {uiLanguage === 'ru' ? 'Объяснение контекста' : 'Explanation'}
-                                    </label>
-                                    <textarea
-                                      value={editFields.explanation}
-                                      rows={2}
-                                      onChange={(e) => setEditFields({ ...editFields, explanation: e.target.value })}
-                                      className="w-full px-3 py-2 text-sm rounded-xl bg-app-bg border border-app-card-border focus:border-orange-500 focus:outline-none resize-none bg-app-card text-app-fg"
-                                    />
-                                  </div>
-
-                                  <div className="flex items-center justify-end gap-2.5 pt-1.5 border-t border-app-card-border/30 font-sans">
-                                    <button
-                                      type="button"
-                                      onClick={() => setEditingCardId(null)}
-                                      className="px-3.5 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-xl border border-app-card-border hover:bg-app-fg/5 transition-all cursor-pointer text-app-fg bg-transparent"
-                                    >
-                                      {t('common.cancel')}
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={async () => {
-                                        await studyCardsRepository.updateCardFields(child.id, {
-                                          text: editFields.text,
-                                          translation: editFields.translation,
-                                          explanation: editFields.explanation,
-                                          type: editFields.type,
-                                          entryType: editFields.type,
-                                          userNote: editFields.userNote,
-                                        });
-                                        setEditingCardId(null);
-                                        loadCards();
-                                        onCardUpdated?.(child.id);
-                                      }}
-                                      className="px-3.5 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-xl bg-orange-500 hover:bg-orange-600 text-white hover:scale-105 active:scale-95 transition-all cursor-pointer border border-transparent"
-                                    >
-                                      {t('common.save')}
-                                    </button>
-                                  </div>
-                                </div>
-                              );
-
-                              const studyActionButton = (
-                                <>
-                                  <button 
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      startSession([child]);
-                                    }}
-                                    className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3 sm:px-5 py-2 sm:py-2.5 rounded-xl sm:rounded-2xl bg-orange-500 text-white hover:bg-orange-600 font-sans text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer select-none"
-                                  >
-                                    <PlayCircle size={13} />
-                                    <span>{uiLanguage === 'ru' ? 'Учить' : 'Study'}</span>
-                                  </button>
-
-                                  <button
-                                    onClick={async (e) => {
-                                      e.stopPropagation();
-                                      const nextStatus = child.status === "known" ? "learning" : "known";
-                                      await studyCardsRepository.updatePhraseStatus(child.id, nextStatus);
-                                      loadCards();
-                                      onCardUpdated?.(child.id);
-                                    }}
-                                    className={`flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3 sm:px-5 py-2 sm:py-2.5 rounded-xl sm:rounded-2xl text-[9px] sm:text-[10px] font-sans font-black uppercase tracking-widest transition-all cursor-pointer ${
-                                      child.status === "known"
-                                        ? "bg-emerald-500/15 border border-emerald-500/30 text-emerald-500 cursor-default"
-                                        : "bg-app-bg border border-app-card-border hover:border-app-fg/20 active:scale-95 text-app-fg hover:bg-app-card shadow-xs"
-                                    }`}
-                                  >
-                                    <CheckCircle2 size={12} className={child.status === 'known' ? "text-emerald-500 shrink-0 select-none" : "text-app-fg opacity-40 shrink-0 select-none animate-none"} />
-                                    <span className="font-sans">
-                                      {child.status === "known" 
-                                        ? (uiLanguage === 'ru' ? 'Изучено' : 'Known') 
-                                        : (uiLanguage === 'ru' ? 'Знаю' : 'Mark Known')}
-                                    </span>
-                                  </button>
-                                </>
-                              );
-
-                              const typeLabel = typeLabels[child.type || 'phrase'] || child.type;
-
-                              return (
-                                <PhraseCard
-                                  key={child.id}
-                                  itemId={child.id}
-                                  index={childIdx}
-                                  phraseText={child.text}
-                                  highlightedPhraseText={highlightMatch(child.text, searchQuery)}
-                                  translation={child.translation}
-                                  highlightedTranslation={child.translation ? highlightMatch(child.translation, searchQuery) : undefined}
-                                  explanation={child.explanation}
-                                  highlightedExplanation={child.explanation ? highlightMatch(child.explanation, searchQuery) : undefined}
-                                  userNote={child.userNote}
-                                  highlightedUserNote={child.userNote ? highlightMatch(child.userNote, searchQuery) : undefined}
-                                  type={child.type}
-                                  typeLabel={typeLabel}
-                                  source={child.entryType === "user" || (child as any).source === "user" ? "user" : "ai"}
-                                  status={child.status as PhraseCardStatus}
-                                  onStatusChange={async (nextStatus) => {
-                                    await studyCardsRepository.updatePhraseStatus(child.id, nextStatus as any);
-                                    loadCards();
-                                    onCardUpdated?.(child.id);
-                                  }}
-                                  contextLines={contextLines.length > 0 ? contextLines : undefined}
-                                  isSpeaking={currentlySpeakingCardId === child.id}
-                                  onSpeak={() => speak(child.text, child.id)}
-                                  isExpanded={isExpanded}
-                                  onToggleExpand={() => toggleCardExpanded(child.id)}
-                                  isEditing={isEditing}
-                                  editFormContent={editFormContent}
-                                  onEdit={() => {
-                                    setEditingCardId(child.id);
-                                    setEditFields({
-                                      text: child.text || '',
-                                      translation: child.translation || '',
-                                      explanation: child.explanation || '',
-                                      type: child.type || 'phrase',
-                                      userNote: child.userNote || '',
-                                    });
-                                    if (!isExpanded) {
-                                      toggleCardExpanded(child.id);
-                                    }
-                                  }}
-                                  onDelete={async () => {
-                                    const confirmMsg = uiLanguage === 'ru' 
-                                      ? 'Удалить эту карточку?' 
-                                      : 'Delete this card?';
-                                    if (confirm(confirmMsg)) {
-                                      await deleteFlashcard(child.id);
-                                      loadCards();
-                                      onCardUpdated?.(child.id);
-                                    }
-                                  }}
-                                  actionButtons={studyActionButton}
-                                  uiLanguage={uiLanguage}
-                                />
-                              );
-                            })}
-                          </div>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
+                    <div className="flex items-center justify-end gap-2.5 pt-1.5 border-t border-app-card-border/30 font-sans">
+                      <button
+                        type="button"
+                        onClick={() => setEditingCardId(null)}
+                        className="px-3.5 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-xl border border-app-card-border hover:bg-app-fg/5 transition-all cursor-pointer text-app-fg bg-transparent"
+                      >
+                        {t('common.cancel')}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          await studyCardsRepository.updateCardFields(child.id, {
+                            text: editFields.text,
+                            translation: editFields.translation,
+                            explanation: editFields.explanation,
+                            type: editFields.type,
+                            entryType: editFields.type,
+                            userNote: editFields.userNote,
+                          });
+                          setEditingCardId(null);
+                          loadCards();
+                          onCardUpdated?.(child.id);
+                        }}
+                        className="px-3.5 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-xl bg-orange-500 hover:bg-orange-600 text-white hover:scale-105 active:scale-95 transition-all cursor-pointer border border-transparent"
+                      >
+                        {t('common.save')}
+                      </button>
+                    </div>
                   </div>
                 );
-              })}
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 pb-20 font-sans">
-              <AnimatePresence mode="popLayout">
-                {decks.length > 0 ? decks.map((deck) => (
-                  <motion.button
-                    key={deck.id}
-                    layout
-                    initial={{ opacity: 0, scale: 0.9 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.9 }}
-                    onClick={() => {
-                      const dueOnly = deck.cards.filter(c => c.due <= now);
-                      if (dueOnly.length > 0) {
-                        startSession(dueOnly);
-                      } else {
-                        const confirmMsg = uiLanguage === 'ru' 
-                          ? 'У вас нет карточек к повторению в этой колоде. Повторить все заново?'
-                          : 'No cards are currently due in this deck. Review all anyway?';
-                        if (confirm(confirmMsg)) {
-                          startSession(deck.cards);
-                        }
+
+                const studyActionButton = (
+                  <>
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        startSession([child]);
+                      }}
+                      className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3 sm:px-5 py-2 sm:py-2.5 rounded-xl sm:rounded-2xl bg-orange-500 text-white hover:bg-orange-600 font-sans text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer select-none"
+                    >
+                      <PlayCircle size={13} />
+                      <span>{uiLanguage === 'ru' ? 'Учить' : 'Study'}</span>
+                    </button>
+
+                    <button
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        const nextStatus = child.status === "known" ? "learning" : "known";
+                        await studyCardsRepository.updatePhraseStatus(child.id, nextStatus);
+                        loadCards();
+                        onCardUpdated?.(child.id);
+                      }}
+                      className={`flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3 sm:px-5 py-2 sm:py-2.5 rounded-xl sm:rounded-2xl text-[9px] sm:text-[10px] font-sans font-black uppercase tracking-widest transition-all cursor-pointer ${
+                        child.status === "known"
+                          ? "bg-emerald-500/15 border border-emerald-500/30 text-emerald-500 cursor-default"
+                          : "bg-app-bg border border-app-card-border hover:border-app-fg/20 active:scale-95 text-app-fg hover:bg-app-card shadow-xs"
+                      }`}
+                    >
+                      <CheckCircle2 size={12} className={child.status === 'known' ? "text-emerald-500 shrink-0 select-none" : "text-app-fg opacity-40 shrink-0 select-none animate-none"} />
+                      <span className="font-sans">
+                        {child.status === "known" 
+                          ? (uiLanguage === 'ru' ? 'Изучено' : 'Known') 
+                          : (uiLanguage === 'ru' ? 'Знаю' : 'Mark Known')}
+                      </span>
+                    </button>
+                  </>
+                );
+
+                const typeLabel = typeLabels[child.type || 'phrase'] || child.type;
+
+                return (
+                  <PhraseCard
+                    key={child.id}
+                    itemId={child.id}
+                    index={childIdx}
+                    phraseText={child.text}
+                    highlightedPhraseText={highlightMatch(child.text, searchQuery)}
+                    translation={child.translation}
+                    highlightedTranslation={child.translation ? highlightMatch(child.translation, searchQuery) : undefined}
+                    explanation={child.explanation}
+                    highlightedExplanation={child.explanation ? highlightMatch(child.explanation, searchQuery) : undefined}
+                    userNote={child.userNote}
+                    highlightedUserNote={child.userNote ? highlightMatch(child.userNote, searchQuery) : undefined}
+                    type={child.type}
+                    typeLabel={typeLabel}
+                    source={child.entryType === "user" || (child as any).source === "user" ? "user" : "ai"}
+                    status={child.status as PhraseCardStatus}
+                    onStatusChange={async (nextStatus) => {
+                      await studyCardsRepository.updatePhraseStatus(child.id, nextStatus as any);
+                      loadCards();
+                      onCardUpdated?.(child.id);
+                    }}
+                    contextLines={contextLines.length > 0 ? contextLines : undefined}
+                    isSpeaking={currentlySpeakingCardId === child.id}
+                    onSpeak={() => speak(child.text, child.id)}
+                    isExpanded={isExpanded}
+                    onToggleExpand={() => toggleCardExpanded(child.id)}
+                    isEditing={isEditing}
+                    editFormContent={editFormContent}
+                    onEdit={() => {
+                      setEditingCardId(child.id);
+                      setEditFields({
+                        text: child.text || '',
+                        translation: child.translation || '',
+                        explanation: child.explanation || '',
+                        type: child.type || 'phrase',
+                        userNote: child.userNote || '',
+                      });
+                      if (!isExpanded) {
+                        toggleCardExpanded(child.id);
                       }
                     }}
-                    className="group relative flex flex-col p-6 sm:p-8 rounded-[1.75rem] sm:rounded-[2.5rem] bg-app-card border border-app-card-border shadow-app-card hover:border-app-accent/30 transition-all text-left overflow-hidden active:scale-95 font-sans"
-                  >
-                    <div 
-                      className="absolute top-0 right-0 p-6 sm:p-10 opacity-[0.03] group-hover:opacity-[0.08] transition-opacity font-sans"
-                      style={{ color: 'var(--accent)' }}
-                    >
-                      {deck.icon}
-                    </div>
-                    
-                    <div className="flex-1 space-y-1 mb-6 sm:mb-10 font-sans">
-                      <h3 className="text-xl font-bold leading-tight group-hover:text-[var(--accent)] transition-colors line-clamp-2">
-                        {deck.title}
-                      </h3>
-                      <p className="text-sm opacity-40 truncate">{deck.subtitle}</p>
-                    </div>
-
-                    <div className="flex items-center justify-between font-sans">
-                      <div className="flex gap-4">
-                        <div className="space-y-0.5">
-                          <span className="text-[10px] font-black uppercase tracking-widest opacity-20 block">{uiLanguage === 'ru' ? 'Всего' : 'All'}</span>
-                          <span className="text-lg font-bold">{deck.count}</span>
-                        </div>
-                        {deck.dueCount > 0 && (
-                          <div className="space-y-0.5">
-                            <span className="text-[10px] font-black uppercase tracking-widest text-emerald-500 block">{uiLanguage === 'ru' ? 'Новые' : 'Due'}</span>
-                            <span className="text-lg font-bold text-emerald-500">{deck.dueCount}</span>
-                          </div>
-                        )}
-                      </div>
-                      <div 
-                        className="w-10 h-10 rounded-2xl flex items-center justify-center bg-app-bg border border-app-card-border group-hover:bg-[var(--accent)] group-hover:text-white transition-all shadow-inner"
-                      >
-                        <ArrowRight size={18} />
-                      </div>
-                    </div>
-                  </motion.button>
-                  )) : (
-                    <div className="col-span-full py-20 flex flex-col items-center justify-center text-center opacity-40 font-sans">
-                      <Music size={48} className="mb-4" />
-                      <p className="font-bold">{uiLanguage === 'ru' ? 'Материалы отсутствуют' : 'No cards found for this selection'}</p>
-                      <p className="text-sm">{uiLanguage === 'ru' ? 'Попробуйте изменить тип фильтра или группировку' : 'Try changing the filter or group mode'}</p>
-                    </div>
-                  )}
-                </AnimatePresence>
+                    onDelete={async () => {
+                      const confirmMsg = uiLanguage === 'ru' 
+                        ? 'Удалить эту карточку?' 
+                        : 'Delete this card?';
+                      if (confirm(confirmMsg)) {
+                        await deleteFlashcard(child.id);
+                        loadCards();
+                        onCardUpdated?.(child.id);
+                      }
+                    }}
+                    actionButtons={studyActionButton}
+                    uiLanguage={uiLanguage}
+                  />
+                );
+              })
+            ) : (
+              <div className="py-20 text-center text-app-fg opacity-40 font-sans">
+                 <Clock size={40} className="mx-auto mb-4 text-orange-500 opacity-50 font-sans" />
+                 <p className="font-bold">{uiLanguage === 'ru' ? 'Карточки не найдены' : 'No cards found'}</p>
+                 <p className="text-sm font-sans">{uiLanguage === 'ru' ? 'Выберите другие фильтры или измените поисковый запрос.' : 'Try selecting different filter tags or adjust your search.'}</p>
               </div>
             )}
           </div>
-        </div>
-      );
-    }
+        ) : (
+          <div className="space-y-4 pb-20 font-sans">
+            {tracksListStats.length > 0 ? (
+              tracksListStats.map((track) => {
+                const hasDue = track.due > 0;
+                return (
+                  <div 
+                    key={track.id}
+                    onClick={() => {
+                      setSelectedTrack(track.id);
+                      setGroupMode('cards');
+                    }}
+                    className="flex flex-col sm:flex-row sm:items-center justify-between p-4 sm:p-5 rounded-[1.5rem] bg-app-card border border-app-card-border hover:border-orange-500/30 hover:bg-app-card/65 transition-all cursor-pointer font-sans gap-4"
+                  >
+                    <div className="flex items-center gap-3.5 min-w-0">
+                      <div className="w-10 h-10 rounded-xl bg-app-bg border border-app-card-border flex items-center justify-center text-orange-500 shrink-0 select-none shadow-sm">
+                        <Music size={18} />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <h3 className="text-base font-bold text-app-fg leading-tight truncate">{track.title}</h3>
+                        {track.artist && (
+                          <p className="text-[10px] font-black uppercase tracking-widest opacity-40 truncate mt-0.5">{track.artist}</p>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2 sm:gap-4 shrink-0 font-sans self-end sm:self-auto">
+                      <div className="flex items-center gap-2 text-xs font-mono bg-app-bg border border-app-card-border/60 px-3 py-1.5 rounded-xl text-app-fg select-none">
+                        <span className="opacity-40">{uiLanguage === 'ru' ? 'Всего:' : 'Total:'} {track.total}</span>
+                        <span className="opacity-20">|</span>
+                        <span className="text-orange-400 font-bold">{uiLanguage === 'ru' ? 'Изучаю:' : 'Learning:'} {track.learning}</span>
+                        <span className="opacity-20">|</span>
+                        <span className="text-emerald-500 font-bold">{uiLanguage === 'ru' ? 'Знаю:' : 'Known:'} {track.known}</span>
+                      </div>
+
+                      {hasDue ? (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const dueTrackCards = allCards.filter(c => c.trackId === track.id && c.status === 'learning' && c.due <= now);
+                            startSession(dueTrackCards);
+                          }}
+                          className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-orange-500 text-white hover:bg-orange-600 hover:scale-105 active:scale-95 transition-all text-[10px] font-black uppercase tracking-widest cursor-pointer select-none"
+                        >
+                          <PlayCircle size={14} />
+                          <span>{uiLanguage === 'ru' ? `Повторить (${track.due})` : `Review (${track.due})`}</span>
+                        </button>
+                      ) : (
+                        <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/10 text-emerald-500 border border-emerald-500/10 select-none text-[10px] font-black uppercase tracking-widest">
+                          <Check size={12} />
+                          <span>{uiLanguage === 'ru' ? 'Освоен' : 'Done'}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })
+            ) : (
+              <div className="col-span-full py-20 flex flex-col items-center justify-center text-center opacity-40 font-sans border border-dashed border-app-card-border/60 rounded-3xl">
+                <Music size={40} className="mb-4 text-orange-500" />
+                <p className="font-bold">{uiLanguage === 'ru' ? 'Песни не найдены' : 'No tracks found'}</p>
+                <p className="text-sm">{uiLanguage === 'ru' ? 'Попробуйте сменить языковой фильтр.' : 'Try changing your language selection.'}</p>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  }
 
     return (
     <div className="absolute inset-0 overflow-y-auto overflow-x-hidden bg-app-bg scrollbar-hide font-sans">

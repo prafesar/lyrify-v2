@@ -22,6 +22,7 @@ import { PhraseStatus, normalizePhraseKey } from "../services/cardService";
 import { addUserPhrase, editPhrase, deletePhrase, resolvePhraseContext } from "../services/lyricsAnalysisService";
 import { useTranslation } from "../lib/i18n";
 import { PhraseCard, LyricsLineContext, PhraseCardStatus } from "./PhraseCard";
+import { cn } from "../lib/utils";
 
 interface AnalysisPhraseWorkspaceProps {
   currentTrack: TrackLyricsData;
@@ -57,6 +58,22 @@ export const AnalysisPhraseWorkspace: React.FC<AnalysisPhraseWorkspaceProps> = (
 }) => {
   const { uiLanguage } = useTranslation();
 
+  const typeLabels = useMemo<Record<string, string>>(() => ({
+    idiom: uiLanguage === 'ru' ? 'Идиома' : 'Idiom',
+    collocation: uiLanguage === 'ru' ? 'Коллокация' : 'Collocation',
+    phrasal_verb: uiLanguage === 'ru' ? 'Фразовый глагол' : 'Phrasal Verb',
+    cultural_ref: uiLanguage === 'ru' ? 'Культурная отсылка' : 'Cultural Reference',
+    vocabulary: uiLanguage === 'ru' ? 'Лексика' : 'Vocabulary',
+    phrase: uiLanguage === 'ru' ? 'Фраза' : 'Phrase',
+    slang: uiLanguage === 'ru' ? 'Сленг' : 'Slang',
+    verb: uiLanguage === 'ru' ? 'Глагол' : 'Verb',
+    grammar: uiLanguage === 'ru' ? 'Грамматика' : 'Grammar',
+    cultural: uiLanguage === 'ru' ? 'Культурное' : 'Cultural',
+    core: uiLanguage === 'ru' ? 'Базовая лексика' : 'Core Vocabulary',
+    colloquial: uiLanguage === 'ru' ? 'Разговорное' : 'Colloquial',
+    advanced: uiLanguage === 'ru' ? 'Продвинутый' : 'Advanced'
+  }), [uiLanguage]);
+
   // Local state for Modals
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingPhrase, setEditingPhrase] = useState<Phrase | null>(null);
@@ -80,57 +97,7 @@ export const AnalysisPhraseWorkspace: React.FC<AnalysisPhraseWorkspaceProps> = (
   const [currentlySpeakingId, setCurrentlySpeakingId] = useState<string | null>(null);
 
   // Filter state
-  const [activeFilter, setActiveFilter] = useState<"all" | "new" | "learning" | "known" | "user" | "ai" | "has_note">("all");
-
-  const filtersList = useMemo(() => [
-    { id: "all" },
-    { id: "new" },
-    { id: "learning" },
-    { id: "known" },
-    { id: "user" },
-    { id: "ai" },
-    { id: "has_note" }
-  ] as const, []);
-
-  const getLocalizedFilterLabel = (id: string) => {
-    if (uiLanguage === 'ru') {
-      switch (id) {
-        case "all": return "Все";
-        case "new": return "Новые";
-        case "learning": return "Изучаю";
-        case "known": return "Освоенные";
-        case "user": return "Свои";
-        case "ai": return "Созданные AI";
-        case "has_note": return "С заметкой";
-        default: return id;
-      }
-    }
-    switch (id) {
-      case "all": return "All";
-      case "new": return "New";
-      case "learning": return "Learning";
-      case "known": return "Known";
-      case "user": return "User-added";
-      case "ai": return "AI-generated";
-      case "has_note": return "Has note";
-      default: return id;
-    }
-  };
-
-  // Helper to highlight matched query in textual content
-  const highlightMatch = (text: string, query: string) => {
-    if (!query.trim() || !text) return <>{text}</>;
-    const index = text.toLowerCase().indexOf(query.toLowerCase());
-    if (index === -1) return <>{text}</>;
-    const length = query.length;
-    return (
-      <>
-        {text.substring(0, index)}
-        <mark className="bg-orange-500/20 text-orange-600 rounded-xs px-0.5">{text.substring(index, index + length)}</mark>
-        {text.substring(index + length)}
-      </>
-    );
-  };
+  const [selectedType, setSelectedType] = useState<string>("all");
 
   // Extract only the explicitly study-saved unique phrases for this track from phraseMetadata
   const uniquePhrases = useMemo(() => {
@@ -163,33 +130,38 @@ export const AnalysisPhraseWorkspace: React.FC<AnalysisPhraseWorkspaceProps> = (
     return list;
   }, [currentTrack, phraseMetadata]);
 
-  // Filter phrases based on searched query & filter states
+  const availableTypes = useMemo(() => {
+    const types = new Set<string>();
+    uniquePhrases.forEach(phrase => {
+      if (phrase.type) {
+        types.add(phrase.type);
+      }
+    });
+    return Array.from(types).sort();
+  }, [uniquePhrases]);
+
+  // Helper to highlight matched query in textual content
+  const highlightMatch = (text: string, query: string) => {
+    if (!query.trim() || !text) return <>{text}</>;
+    const index = text.toLowerCase().indexOf(query.toLowerCase());
+    if (index === -1) return <>{text}</>;
+    const length = query.length;
+    return (
+      <>
+        {text.substring(0, index)}
+        <mark className="bg-orange-500/20 text-orange-600 rounded-xs px-0.5">{text.substring(index, index + length)}</mark>
+        {text.substring(index + length)}
+      </>
+    );
+  };
+
+  // Filter phrases based on searched query & selected type
   const filteredPhrases = useMemo(() => {
     let result = uniquePhrases;
 
-    // Apply categorical filters
-    if (activeFilter !== "all") {
-      result = result.filter(phrase => {
-        const card = phraseMetadata.get(normalizePhraseKey(phrase.text));
-        const currentStatus = card ? card.status : "new";
-        
-        switch (activeFilter) {
-          case "new":
-            return currentStatus === "new";
-          case "learning":
-            return currentStatus === "learning";
-          case "known":
-            return currentStatus === "known";
-          case "user":
-            return phrase.source === "user";
-          case "ai":
-            return phrase.source !== "user";
-          case "has_note":
-            return !!phrase.note && phrase.note.trim() !== "";
-          default:
-            return true;
-        }
-      });
+    // Apply type filter
+    if (selectedType !== "all") {
+      result = result.filter(phrase => phrase.type === selectedType);
     }
 
     // Apply search query
@@ -215,8 +187,15 @@ export const AnalysisPhraseWorkspace: React.FC<AnalysisPhraseWorkspaceProps> = (
       });
     }
 
-    return result;
-  }, [uniquePhrases, trackSearchQuery, activeFilter, phraseMetadata, currentTrack.lines]);
+    // Sort newest first by main card's createdAt
+    return [...result].sort((a, b) => {
+      const cardA = phraseMetadata.get(normalizePhraseKey(a.text));
+      const cardB = phraseMetadata.get(normalizePhraseKey(b.text));
+      const dateA = cardA ? (cardA.createdAt instanceof Date ? cardA.createdAt : new Date(cardA.createdAt || 0)) : new Date(0);
+      const dateB = cardB ? (cardB.createdAt instanceof Date ? cardB.createdAt : new Date(cardB.createdAt || 0)) : new Date(0);
+      return dateB.getTime() - dateA.getTime();
+    });
+  }, [uniquePhrases, trackSearchQuery, selectedType, phraseMetadata, currentTrack.lines]);
 
   // Handle Speech trigger
   const handleVoicing = (phrase: Phrase) => {
@@ -357,29 +336,40 @@ export const AnalysisPhraseWorkspace: React.FC<AnalysisPhraseWorkspaceProps> = (
 
         {/* Filter Chips Toolbar */}
         <div className="flex flex-wrap gap-2 items-center">
-          {filtersList.map((filter) => {
-            const isActive = activeFilter === filter.id;
-            return (
-              <button
-                key={filter.id}
-                onClick={() => setActiveFilter(filter.id)}
-                className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold font-sans tracking-tight transition-all active:scale-95 border ${
-                  isActive
-                    ? "bg-orange-500 border-orange-500 text-white shadow-md shadow-orange-500/10"
-                    : "bg-app-card border-app-card-border/60 text-app-fg opacity-70 hover:opacity-100 hover:border-app-card-border hover:bg-app-card"
-                }`}
-              >
-                {getLocalizedFilterLabel(filter.id)}
-              </button>
-            );
-          })}
-          {(activeFilter !== "all" || trackSearchQuery.trim() !== "") && (
+          <button
+            type="button"
+            onClick={() => setSelectedType('all')}
+            className={cn(
+              "px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all border whitespace-nowrap cursor-pointer active:scale-95",
+              selectedType === 'all'
+                ? "bg-app-fg text-app-bg border-app-fg shadow-lg"
+                : "bg-app-card text-app-fg/60 border-app-card-border hover:border-[var(--accent)]/35 hover:text-app-fg"
+            )}
+          >
+            {uiLanguage === 'ru' ? 'Все теги' : 'All tags'}
+          </button>
+          {availableTypes.map(t => (
+            <button
+              key={`type-chip-${t}`}
+              type="button"
+              onClick={() => setSelectedType(t)}
+              className={cn(
+                "px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all border whitespace-nowrap cursor-pointer active:scale-95",
+                selectedType === t
+                  ? "bg-[var(--accent)] text-white border-[var(--accent)] shadow-md shadow-[var(--accent)]/15"
+                  : "bg-app-card text-app-fg/60 border-app-card-border hover:border-[var(--accent)]/35 hover:text-app-fg"
+              )}
+            >
+              {typeLabels[t] || t}
+            </button>
+          ))}
+          {(selectedType !== "all" || trackSearchQuery.trim() !== "") && (
             <button
               onClick={() => {
-                setActiveFilter("all");
+                setSelectedType("all");
                 setTrackSearchQuery("");
               }}
-              className="text-[10px] font-black uppercase tracking-widest text-orange-500 hover:text-orange-600 px-2 py-1 flex items-center gap-1 transition-colors"
+              className="text-[10px] font-black uppercase tracking-widest text-orange-500 hover:text-orange-600 px-2 py-1 flex items-center gap-1 transition-colors cursor-pointer"
             >
               <X size={10} strokeWidth={3} />
               <span>{uiLanguage === 'ru' ? 'Сбросить фильтры' : 'Clear filters'}</span>
@@ -626,7 +616,7 @@ export const AnalysisPhraseWorkspace: React.FC<AnalysisPhraseWorkspaceProps> = (
             <div className="pt-2">
               <button
                 onClick={() => {
-                  setActiveFilter("all");
+                  setSelectedType("all");
                   setTrackSearchQuery("");
                 }}
                 className="px-5 py-2.5 bg-orange-500 hover:bg-orange-600 text-white rounded-2xl text-xs font-bold transition-all shadow-md active:scale-95 duration-150"
