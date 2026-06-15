@@ -2,18 +2,12 @@ import React, { useState, useMemo } from "react";
 import { 
   Search, 
   Plus, 
-  Edit2, 
   Trash2, 
   Volume2, 
   CheckCircle2, 
-  Tag, 
   HelpCircle, 
-  Sparkles, 
-  User, 
   X, 
-  MessageSquare,
-  RefreshCw,
-  MoreVertical,
+  RefreshCw, 
   Bookmark
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
@@ -21,7 +15,7 @@ import { Phrase, LyricsLine, TrackLyricsData } from "../services/musicService";
 import { PhraseStatus, normalizePhraseKey } from "../services/cardService";
 import { addUserPhrase, editPhrase, deletePhrase, resolvePhraseContext } from "../services/lyricsAnalysisService";
 import { useTranslation } from "../lib/i18n";
-import { PhraseCard, LyricsLineContext, PhraseCardStatus } from "./PhraseCard";
+import { PhraseCard, PhraseCardStatus } from "./PhraseCard";
 import { cn } from "../lib/utils";
 
 interface AnalysisPhraseWorkspaceProps {
@@ -133,12 +127,13 @@ export const AnalysisPhraseWorkspace: React.FC<AnalysisPhraseWorkspaceProps> = (
   const availableTypes = useMemo(() => {
     const types = new Set<string>();
     uniquePhrases.forEach(phrase => {
-      if (phrase.type) {
-        types.add(phrase.type);
+      const type = phrase.type || '';
+      if (type && !['new', 'learning', 'known', 'user', 'ai', 'has_note', 'none', 'all'].includes(type.toLowerCase()) && typeLabels[type]) {
+        types.add(type);
       }
     });
     return Array.from(types).sort();
-  }, [uniquePhrases]);
+  }, [uniquePhrases, typeLabels]);
 
   // Helper to highlight matched query in textual content
   const highlightMatch = (text: string, query: string) => {
@@ -149,7 +144,7 @@ export const AnalysisPhraseWorkspace: React.FC<AnalysisPhraseWorkspaceProps> = (
     return (
       <>
         {text.substring(0, index)}
-        <mark className="bg-orange-500/20 text-orange-600 rounded-xs px-0.5">{text.substring(index, index + length)}</mark>
+        <mark className="bg-orange-500/15 text-orange-600 dark:text-orange-400 font-semibold px-0.5 rounded-sm select-text">{text.substring(index, index + length)}</mark>
         {text.substring(index + length)}
       </>
     );
@@ -299,20 +294,18 @@ export const AnalysisPhraseWorkspace: React.FC<AnalysisPhraseWorkspaceProps> = (
         <div className="flex gap-4 items-stretch md:items-center justify-between">
           {/* Search input field */}
           <div className="relative flex-1">
-            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-app-fg opacity-40">
-              <Search size={18} />
-            </div>
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 opacity-30 text-app-fg" size={16} />
             <input
               type="text"
-              placeholder={uiLanguage === 'ru' ? "Поиск фраз, переводов, заметок или контекста..." : "Search phrases, translations, notes, or lyric context..."}
+              placeholder={uiLanguage === 'ru' ? 'Поиск фраз, переводов, личного или песенного контекста...' : 'Search phrases, translations, notes, or lyric context...'}
               value={trackSearchQuery}
               onChange={(e) => setTrackSearchQuery(e.target.value)}
-              className="w-full pl-12 pr-10 py-3.5 bg-app-card border border-app-card-border rounded-2xl text-lg font-medium text-app-fg placeholder-app-fg/30 focus:outline-none focus:border-app-accent/50 transition-all font-sans"
+              className="w-full pl-11 pr-10 py-3 rounded-2xl bg-app-card border border-app-card-border focus:border-orange-500 focus:outline-none text-xs font-sans placeholder-app-fg/30 transition-all text-app-fg"
             />
             {trackSearchQuery && (
               <button
                 onClick={() => setTrackSearchQuery("")}
-                className="absolute inset-y-0 right-0 pr-4 flex items-center text-app-fg opacity-45 hover:opacity-100 transition-opacity"
+                className="absolute right-4 top-1/2 -translate-y-1/2 opacity-40 hover:opacity-100 text-app-fg cursor-pointer"
               >
                 <X size={14} />
               </button>

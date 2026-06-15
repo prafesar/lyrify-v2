@@ -2,17 +2,17 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import ReactMarkdown from 'react-markdown';
 import { Rating } from 'ts-fsrs';
-import { studyCardsRepository, userPreferencesRepository, Flashcard, PhraseStatus } from '../application';
+import { studyCardsRepository, userPreferencesRepository, Flashcard } from '../application';
 const getCards = () => studyCardsRepository.getCards();
 const reviewCard = (cardId: string, rating: Rating) => studyCardsRepository.reviewCard(cardId, rating);
 const deleteFlashcard = (cardId: string) => studyCardsRepository.deleteFlashcard(cardId);
-import { Check, X, ArrowRight, Brain, Trash2, ChevronLeft, Clock, Music, User, LayoutGrid, PlayCircle, Library, Globe, ChevronDown, ChevronUp, Volume2, Edit3, Save, Search, CheckCircle2, Sparkles, Tag } from 'lucide-react';
+import { Check, X, ArrowRight, Brain, Trash2, ChevronLeft, Clock, Music, PlayCircle, Volume2, Search, CheckCircle2 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { getLocaleByName } from '../lib/languages';
 import { useTranslation } from '../lib/i18n';
 import { getCachedTrackData } from '../services/musicService';
 import { resolvePhraseContext } from '../services/lyricsAnalysisService';
-import { PhraseCard, LyricsLineContext, PhraseCardStatus } from './PhraseCard';
+import { PhraseCard, PhraseCardStatus } from './PhraseCard';
 
 interface StudyViewProps {
   onBack: () => void;
@@ -61,7 +61,7 @@ export default function StudyView({ onBack, initialTrackId, onReviewCompleted, o
     userNote: '',
   });
 
-  const typeLabels: Record<string, string> = {
+  const typeLabels = useMemo<Record<string, string>>(() => ({
     idiom: uiLanguage === 'ru' ? 'Идиомы' : 'Idioms',
     collocation: uiLanguage === 'ru' ? 'Коллокации' : 'Collocations',
     phrasal_verb: uiLanguage === 'ru' ? 'Фразовые глаголы' : 'Phrasal Verbs',
@@ -75,7 +75,7 @@ export default function StudyView({ onBack, initialTrackId, onReviewCompleted, o
     core: uiLanguage === 'ru' ? 'Базовая лексика' : 'Core Vocabulary',
     colloquial: uiLanguage === 'ru' ? 'Разговорное' : 'Colloquial',
     advanced: uiLanguage === 'ru' ? 'Продвинутый' : 'Advanced'
-  };
+  }), [uiLanguage]);
 
   useEffect(() => {
     userPreferencesRepository.setPreference('study_selected_language', selectedLanguage);
@@ -144,12 +144,13 @@ export default function StudyView({ onBack, initialTrackId, onReviewCompleted, o
   const availableTypes = useMemo(() => {
     const types = new Set<string>();
     allCards.forEach(card => {
-      if (card.type) {
-        types.add(card.type);
+      const type = card.type || '';
+      if (type && !['new', 'learning', 'known', 'user', 'ai', 'has_note', 'none', 'all'].includes(type.toLowerCase()) && typeLabels[type]) {
+        types.add(type);
       }
     });
     return Array.from(types).sort();
-  }, [allCards]);
+  }, [allCards, typeLabels]);
 
   // Clean, separated selectors as requested
   const allMatchingCards = useMemo(() => {
@@ -170,16 +171,29 @@ export default function StudyView({ onBack, initialTrackId, onReviewCompleted, o
       list = list.filter(card => (card.type || 'phrase') === selectedType);
     }
     
-    // 4. Search Query filter (matches original text, translation, explanation, userNote, track title)
+    // 4. Search Query filter (matches original text, translation, explanation, userNote, track title, and lyric context)
     if (searchQuery.trim() !== '') {
       const q = searchQuery.toLowerCase().trim();
-      list = list.filter(card => 
-        card.text.toLowerCase().includes(q) ||
-        (card.translation && card.translation.toLowerCase().includes(q)) ||
-        (card.explanation && card.explanation.toLowerCase().includes(q)) ||
-        (card.userNote && card.userNote.toLowerCase().includes(q)) ||
-        (card.trackTitle && card.trackTitle.toLowerCase().includes(q))
-      );
+      list = list.filter(card => {
+        const directMatch = card.text.toLowerCase().includes(q) ||
+          (card.translation && card.translation.toLowerCase().includes(q)) ||
+          (card.explanation && card.explanation.toLowerCase().includes(q)) ||
+          (card.userNote && card.userNote.toLowerCase().includes(q)) ||
+          (card.trackTitle && card.trackTitle.toLowerCase().includes(q));
+
+        if (directMatch) return true;
+
+        // Extract context lines and match query
+        const track = card.trackId ? getCachedTrackData(card.trackId) : null;
+        if (track && track.lines) {
+          const contextLines = resolvePhraseContext(track.lines, card.lineId ? [card.lineId] : [], card.text);
+          return contextLines.some(line => 
+            (line.original && line.original.toLowerCase().includes(q)) || 
+            (line.translation && line.translation.toLowerCase().includes(q))
+          );
+        }
+        return false;
+      });
     }
 
     return list;
@@ -325,7 +339,7 @@ export default function StudyView({ onBack, initialTrackId, onReviewCompleted, o
     return (
       <>
         {text.substring(0, index)}
-        <mark className="bg-amber-100 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200 px-0.5 rounded-sm font-semibold select-text">{text.substring(index, index + length)}</mark>
+        <mark className="bg-orange-500/15 text-orange-600 dark:text-orange-400 font-semibold px-0.5 rounded-sm select-text">{text.substring(index, index + length)}</mark>
         {text.substring(index + length)}
       </>
     );
@@ -463,7 +477,7 @@ export default function StudyView({ onBack, initialTrackId, onReviewCompleted, o
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder={uiLanguage === 'ru' ? 'Поиск фразы, перевода, контекста или песни...' : 'Search phrase, translation, note or song...'}
+                placeholder={uiLanguage === 'ru' ? 'Поиск фраз, переводов, личного или песенного контекста...' : 'Search phrases, translations, notes, or lyric context...'}
                 className="w-full pl-11 pr-10 py-3 rounded-2xl bg-app-card border border-app-card-border focus:border-orange-500 focus:outline-none text-xs font-sans placeholder-app-fg/30 transition-all text-app-fg"
               />
               {searchQuery && (
@@ -586,7 +600,7 @@ export default function StudyView({ onBack, initialTrackId, onReviewCompleted, o
                       "px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all border whitespace-nowrap cursor-pointer active:scale-95",
                       selectedType === t
                         ? "bg-[var(--accent)] text-white border-[var(--accent)] shadow-md shadow-[var(--accent)]/15"
-                        : "bg-app-card text-app-fg/60 border-orange-500/40 text-app-fg"
+                        : "bg-app-card text-app-fg/60 border-app-card-border hover:border-orange-500/40 hover:text-app-fg"
                     )}
                   >
                     {typeLabels[t] || t}
@@ -828,10 +842,30 @@ export default function StudyView({ onBack, initialTrackId, onReviewCompleted, o
                 );
               })
             ) : (
-              <div className="py-20 text-center text-app-fg opacity-40 font-sans">
-                 <Clock size={40} className="mx-auto mb-4 text-orange-500 opacity-50 font-sans" />
-                 <p className="font-bold">{uiLanguage === 'ru' ? 'Карточки не найдены' : 'No cards found'}</p>
-                 <p className="text-sm font-sans">{uiLanguage === 'ru' ? 'Выберите другие фильтры или измените поисковый запрос.' : 'Try selecting different filter tags or adjust your search.'}</p>
+              <div className="py-20 text-center space-y-4 rounded-[2rem] bg-app-card/25 border border-dashed border-app-card-border/60 font-sans p-8 sm:p-12">
+                <Clock size={40} className="mx-auto text-app-fg opacity-15" />
+                <p className="text-sm font-black text-app-fg opacity-40 uppercase tracking-widest">
+                  {uiLanguage === 'ru' ? 'Карточки не найдены' : 'No cards found'}
+                </p>
+                <p className="text-xs text-app-fg opacity-30 font-medium max-w-sm mx-auto">
+                  {uiLanguage === 'ru'
+                    ? 'Мы не смогли найти карточки, соответствующие вашим текущим фильтрам и поисковому запросу. Попробуйте сбросить их.'
+                    : "We couldn't find any cards matching your current filters and search query. Try clearing them to see all cards."
+                  }
+                </p>
+                <div className="pt-2">
+                  <button
+                    onClick={() => {
+                      setSelectedType("all");
+                      setSearchQuery("");
+                      setSelectedTrack("all");
+                      setSelectedLanguage("all");
+                    }}
+                    className="px-5 py-2.5 bg-orange-500 hover:bg-orange-600 text-white rounded-2xl text-xs font-bold transition-all shadow-md active:scale-95 duration-150 cursor-pointer"
+                  >
+                    {uiLanguage === 'ru' ? 'Сбросить фильтры и поиск' : 'Clear filters & search'}
+                  </button>
+                </div>
               </div>
             )}
           </div>
@@ -1114,7 +1148,7 @@ export default function StudyView({ onBack, initialTrackId, onReviewCompleted, o
               className="flex items-center gap-2 px-4 py-2 rounded-xl text-app-fg opacity-20 hover:opacity-100 transition-all font-bold uppercase tracking-widest text-[10px]"
             >
               <Trash2 size={16} />
-              {uiLanguage === 'ru' ? 'Улалить фразу' : 'Delete Phrase'}
+              {uiLanguage === 'ru' ? 'Удалить фразу' : 'Delete Phrase'}
             </button>
           </footer>
         </main>
