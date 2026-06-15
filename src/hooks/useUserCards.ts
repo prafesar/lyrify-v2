@@ -43,6 +43,7 @@ export function useUserCards(recentTracks: any[]): UseUserCardsResult {
     const cards = Array.from(phraseMetadata.values());
     const now = new Date();
     return cards.filter(card => {
+      if (card.status !== 'learning') return false;
       const dueTime = card.due instanceof Date ? card.due.getTime() : new Date(card.due || 0).getTime();
       return dueTime <= now.getTime();
     }).length;
