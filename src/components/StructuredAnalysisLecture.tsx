@@ -476,92 +476,190 @@ export const StructuredAnalysisLecture: React.FC<StructuredAnalysisLectureProps>
               <div className="pt-2">
                 <div className="space-y-3">
                   {(block.phrases || []).map((phrase) => {
-                    const status = getPhraseStatus(phrase.text);
                     const isPhraseEditing = editingPhraseId === phrase.id;
                     const isExpanded = expandedPhraseId === phrase.id;
 
-                    return (
-                      <PhraseCard
-                        key={phrase.id}
-                        itemId={phrase.id}
-                        phraseText={phrase.text}
-                        translation={phrase.translation}
-                        explanation={phrase.studyExample}
-                        type={phrase.type}
-                        typeLabel={[phrase.type !== 'phrase' && phrase.type, phrase.priority].filter(Boolean).join(' • ')}
-                        source={phrase.source === 'manual' ? 'user' : 'ai'}
-                        status={status}
-                        onStatusChange={(next) => handleSetAnalysisPhraseStatus(phrase.text, phrase.translation, phrase.studyExample || '', next, phrase.type || 'phrase')}
-                        contextLines={getPhraseContextLines(phrase)}
-                        isSpeaking={speakingText === phrase.text}
-                        onSpeak={() => handleVoicing(phrase.text)}
-                        isExpanded={isExpanded}
-                        onToggleExpand={() => setExpandedPhraseId(expandedPhraseId === phrase.id ? null : phrase.id)}
-                        isEditing={isPhraseEditing}
-                        onEdit={() => startPhraseEdit(phrase)}
-                        onDelete={() => deletePhraseItem(block.id, phrase.id)}
-                        editFormContent={
-                          isPhraseEditing ? (
-                            <div className="flex items-center gap-3 w-full" onClick={(e) => e.stopPropagation()}>
-                              {/* Active editor indicator */}
-                              <div className="p-2.5 bg-app-accent/10 border border-app-accent/20 text-app-accent rounded-xl inline-flex shrink-0 max-h-12 justify-center items-center align-middle">
-                                <Edit3 size={15} className="animate-pulse" />
-                              </div>
+                    if (isPhraseEditing) {
+                      return (
+                        <div 
+                          key={phrase.id} 
+                          className="flex flex-col p-4 bg-app-card border border-app-accent/30 rounded-2xl animate-in fade-in zoom-in-95 duration-200 shadow-sm relative"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <div className="flex items-center gap-3 w-full">
+                            {/* Active editor indicator */}
+                            <div className="p-2.5 bg-app-accent/10 border border-app-accent/20 text-app-accent rounded-xl inline-flex shrink-0 max-h-12 justify-center items-center align-middle">
+                              <Edit3 size={15} className="animate-pulse" />
+                            </div>
 
-                              {/* Inline editable inputs */}
-                              <div className="flex-1 min-w-0 pr-1 space-y-2">
-                                <div>
-                                  <input
-                                    type="text"
-                                    value={tempPhraseText}
-                                    onChange={(e) => setTempPhraseText(e.target.value)}
-                                    className="w-full bg-app-bg text-app-fg border border-app-card-border/80 focus:border-app-accent focus:ring-1 focus:ring-app-accent rounded-xl py-1.5 px-3 font-sans text-sm sm:text-base font-extrabold tracking-tight leading-none outline-none"
-                                    placeholder="Original Phrase • Оригинальная фраза"
-                                    autoFocus
-                                  />
-                                </div>
-                                <div>
-                                  <input
-                                    type="text"
-                                    value={tempPhraseTranslation}
-                                    onChange={(e) => setTempPhraseTranslation(e.target.value)}
-                                    className="w-full bg-app-bg text-app-fg border border-app-card-border/80 focus:border-app-accent focus:ring-1 focus:ring-app-accent rounded-xl py-1 px-3 font-sans text-xs sm:text-sm font-semibold tracking-tight leading-none outline-none"
-                                    placeholder="Translation • Перевод"
-                                  />
-                                </div>
+                            {/* Inline editable inputs */}
+                            <div className="flex-1 min-w-0 pr-1 space-y-2">
+                              <div>
+                                <input
+                                  type="text"
+                                  value={tempPhraseText}
+                                  onChange={(e) => setTempPhraseText(e.target.value)}
+                                  className="w-full bg-app-bg text-app-fg border border-app-card-border/80 focus:border-app-accent focus:ring-1 focus:ring-app-accent rounded-xl py-1.5 px-3 font-sans text-sm sm:text-base font-extrabold tracking-tight leading-none outline-none"
+                                  placeholder="Original Phrase • Оригинальная фраза"
+                                  autoFocus
+                                />
                               </div>
-
-                              {/* Controls actions row */}
-                              <div className="flex items-center gap-1.5 shrink-0 align-middle">
-                                <button
-                                  type="button"
-                                  onClick={() => savePhraseEdit(block.id, phrase.id)}
-                                  className="p-2.5 border border-emerald-500/20 bg-emerald-500/10 text-emerald-400 rounded-xl hover:bg-emerald-500/20 active:scale-95 transition-all cursor-pointer"
-                                  title="Save"
-                                >
-                                  <Check size={14} />
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => deletePhraseItem(block.id, phrase.id)}
-                                  className="p-2.5 border border-red-500/20 bg-red-500/10 text-red-200 rounded-xl hover:bg-red-500/20 active:scale-95 transition-all cursor-pointer"
-                                  title="Delete Phrase"
-                                >
-                                  <Trash2 size={14} />
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={cancelEdit}
-                                  className="p-2.5 border border-app-card-border bg-app-bg text-app-muted hover:text-app-fg rounded-xl hover:bg-app-card-border/20 active:scale-95 transition-all cursor-pointer"
-                                  title="Cancel"
-                                >
-                                  <X size={14} />
-                                </button>
+                              <div>
+                                <input
+                                  type="text"
+                                  value={tempPhraseTranslation}
+                                  onChange={(e) => setTempPhraseTranslation(e.target.value)}
+                                  className="w-full bg-app-bg text-app-fg border border-app-card-border/80 focus:border-app-accent focus:ring-1 focus:ring-app-accent rounded-xl py-1 px-3 font-sans text-xs sm:text-sm font-semibold tracking-tight leading-none outline-none"
+                                  placeholder="Translation • Перевод"
+                                />
                               </div>
                             </div>
-                          ) : null
-                        }
-                      />
+
+                            {/* Controls actions row */}
+                            <div className="flex items-center gap-1.5 shrink-0 align-middle">
+                              <button
+                                type="button"
+                                onClick={() => savePhraseEdit(block.id, phrase.id)}
+                                className="p-2.5 border border-emerald-500/20 bg-emerald-500/10 text-emerald-400 rounded-xl hover:bg-emerald-500/20 active:scale-95 transition-all cursor-pointer"
+                                title="Save"
+                              >
+                                <Check size={14} />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => deletePhraseItem(block.id, phrase.id)}
+                                className="p-2.5 border border-red-500/20 bg-red-500/10 text-red-200 rounded-xl hover:bg-red-500/20 active:scale-95 transition-all cursor-pointer"
+                                title="Delete Phrase"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={cancelEdit}
+                                className="p-2.5 border border-app-card-border bg-app-bg text-app-muted hover:text-app-fg rounded-xl hover:bg-app-card-border/20 active:scale-95 transition-all cursor-pointer"
+                                title="Cancel"
+                              >
+                                <X size={14} />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    const isSaveActive = isPhraseSaved(phrase.text);
+
+                    return (
+                      <div 
+                        key={phrase.id} 
+                        className="group/phrase flex flex-col p-4 bg-app-card border border-app-card-border hover:border-app-accent/30 rounded-2xl transition-all duration-200 shadow-sm hover:shadow-md cursor-pointer relative"
+                        onClick={() => setExpandedPhraseId(expandedPhraseId === phrase.id ? null : phrase.id)}
+                      >
+                        {/* Visible Row (Always visible) */}
+                        <div className="flex items-center gap-3 w-full">
+                          {/* Voice action */}
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleVoicing(phrase.text);
+                            }}
+                            className="p-2 bg-app-bg text-app-muted hover:text-app-fg rounded-xl transition-all active:scale-95 inline-flex shrink-0 border border-app-card-border/40 hover:border-app-card-border align-middle leading-none cursor-pointer"
+                            title="Pronounce"
+                          >
+                            <Volume2 size={15} />
+                          </button>
+
+                          {/* Phrase Text & Translation */}
+                          <div className="flex-1 min-w-0 pr-1">
+                            <div className="flex flex-wrap items-baseline gap-x-2">
+                              <span className="font-serif text-[17px] md:text-[19px] text-app-accent leading-snug">
+                                {phrase.text}
+                              </span>
+                            </div>
+                            <p className="font-serif text-[17px] md:text-[19px] text-app-muted mt-0.5 leading-snug">
+                              {phrase.translation}
+                            </p>
+                          </div>
+
+                          {/* FSRS Toggle trigger */}
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleTogglePhraseSaved(phrase);
+                            }}
+                            className={`p-2.5 rounded-xl transition-all duration-200 cursor-pointer shrink-0 border active:scale-95 ${
+                              isSaveActive 
+                                ? 'bg-emerald-500/10 text-emerald-400 font-bold border border-emerald-500/20' 
+                                : 'bg-app-bg text-app-muted hover:text-app-fg border border-app-card-border/30 hover:border-app-accent/30'
+                            }`}
+                            title={isSaveActive ? 'Saved in Study Cards' : 'Add phrase to Cards'}
+                          >
+                            {isSaveActive ? <Check size={14} /> : <Plus size={14} />}
+                          </button>
+                        </div>
+
+                        {/* Expandable info space */}
+                        <AnimatePresence initial={false}>
+                          {isExpanded && (
+                            <motion.div
+                              initial={{ height: 0, opacity: 0 }}
+                              animate={{ height: "auto", opacity: 1 }}
+                              exit={{ height: 0, opacity: 0 }}
+                              transition={{ duration: 0.15, ease: "easeInOut" }}
+                              className="overflow-hidden"
+                            >
+                              <div className="pt-3.5 mt-3 border-t border-app-card-border/40 space-y-3.5" onClick={(e) => e.stopPropagation()}>
+                                {/* Example usage */}
+                                {phrase.studyExample && (
+                                  <div className="pl-4 border-l-2 border-app-card-border/55 py-0.5">
+                                    <p className="font-serif text-[17px] md:text-[19px] text-app-muted/90 italic leading-relaxed">
+                                      "{phrase.studyExample}"
+                                    </p>
+                                  </div>
+                                )}
+
+                                {/* Tags layer (chips) */}
+                                <div className="flex flex-wrap gap-2 items-center">
+                                  {/* Type badge */}
+                                  {phrase.type && phrase.type !== 'phrase' && (
+                                    <span className="text-[9px] uppercase font-black tracking-widest text-[#6366f1] bg-[#6366f1]/10 border border-[#6366f1]/10 px-2 py-0.5 rounded-lg shrink-0 leading-none">
+                                      {phrase.type}
+                                    </span>
+                                  )}
+
+                                  {/* Priority/Level indicator badge */}
+                                  {phrase.priority && (
+                                    <span className={`text-[9.5px] uppercase font-black tracking-[0.08em] px-2 py-0.5 rounded-lg leading-none shrink-0 border ${
+                                      phrase.priority === 'core' ? 'bg-emerald-500/5 text-emerald-600 dark:text-emerald-400 border-emerald-500/10' :
+                                      phrase.priority === 'colloquial' ? 'bg-sky-500/5 text-sky-600 dark:text-sky-400 border-sky-500/10' :
+                                      phrase.priority === 'cultural' ? 'bg-amber-500/5 text-amber-600 dark:text-amber-500 border-amber-500/10' :
+                                      'bg-purple-500/5 text-purple-600 dark:text-purple-400 border-purple-500/10'
+                                    }`}>
+                                      {phrase.priority}
+                                    </span>
+                                  )}
+                                </div>
+
+                                {/* Editor Action row only */}
+                                <div className="flex items-center justify-between pt-2 border-t border-app-card-border/20">
+                                  <button
+                                    type="button"
+                                    onClick={() => startPhraseEdit(phrase)}
+                                    className="text-[10px] uppercase font-extrabold tracking-wider text-app-muted hover:text-app-fg flex items-center gap-1 cursor-pointer py-0.5"
+                                  >
+                                    <Edit3 size={11} /> Edit Phrase
+                                  </button>
+                                  <span className="text-[9px] font-mono opacity-25 select-none uppercase tracking-widest">
+                                    CantoLex Interactive Card
+                                  </span>
+                                </div>
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
                     );
                   })}
                 </div>

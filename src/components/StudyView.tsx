@@ -6,7 +6,7 @@ import { studyCardsRepository, userPreferencesRepository, Flashcard, PhraseStatu
 const getCards = () => studyCardsRepository.getCards();
 const reviewCard = (cardId: string, rating: Rating) => studyCardsRepository.reviewCard(cardId, rating);
 const deleteFlashcard = (cardId: string) => studyCardsRepository.deleteFlashcard(cardId);
-import { Check, X, ArrowRight, Brain, Trash2, ChevronLeft, Clock, Music, User, LayoutGrid, PlayCircle, Library, Globe, ChevronDown, ChevronUp, Volume2, Edit3, Save, Search, CheckCircle2 } from 'lucide-react';
+import { Check, X, ArrowRight, Brain, Trash2, ChevronLeft, Clock, Music, User, LayoutGrid, PlayCircle, Library, Globe, ChevronDown, ChevronUp, Volume2, Edit3, Save, Search, CheckCircle2, Sparkles, Tag } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { getLocaleByName } from '../lib/languages';
 import { useTranslation } from '../lib/i18n';
@@ -444,22 +444,22 @@ export default function StudyView({ onBack, initialTrackId, onReviewCompleted, o
 
   if (viewMode === 'hub') {
     return (
-      <div className="flex-1 flex flex-col h-full min-h-0 p-4 sm:p-6 max-w-5xl mx-auto w-full overflow-y-auto scrollbar-hide font-sans">
+      <div className="flex-1 flex flex-col h-full min-h-0 p-3 sm:p-6 max-w-5xl mx-auto w-full overflow-y-auto scrollbar-hide font-sans">
         <header className="mb-6 space-y-4 shrink-0">
-          <div className="flex items-center justify-between">
-            <h1 className="text-3xl font-bold">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
+            <h1 className="text-2xl sm:text-3xl font-bold">
               {uiLanguage === 'ru' ? 'Центр Обучения' : 'Study Hub'}
             </h1>
             {dueCards.length > 0 ? (
               <button 
                 onClick={() => startSession(dueCards)}
-                className="flex items-center gap-2 px-6 py-2.5 rounded-full bg-app-fg text-app-bg font-bold text-xs uppercase tracking-widest active:scale-95 transition-all shadow-xl"
+                className="flex items-center justify-center gap-2 px-6 py-2.5 rounded-full bg-app-fg text-app-bg font-bold text-xs uppercase tracking-widest active:scale-95 transition-all shadow-xl"
               >
                 <PlayCircle size={18} />
                 {uiLanguage === 'ru' ? `Повторить (${dueCards.length})` : `Review Due (${dueCards.length})`}
               </button>
             ) : (
-              <div className="flex items-center gap-3 px-4 py-2 rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/10">
+              <div className="flex items-center justify-center gap-3 px-4 py-2 rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/10 w-fit">
                 <Check size={14} />
                 <span className="text-[10px] font-black uppercase tracking-widest">
                   {uiLanguage === 'ru' ? 'Всё разобрано!' : 'All caught up!'}
@@ -468,7 +468,7 @@ export default function StudyView({ onBack, initialTrackId, onReviewCompleted, o
             )}
           </div>
 
-          <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-3 sm:gap-4">
             {/* Search Input */}
             <div className="relative w-full">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 opacity-30 text-app-fg" size={16} />
@@ -493,7 +493,7 @@ export default function StudyView({ onBack, initialTrackId, onReviewCompleted, o
               <select 
                 value={selectedLanguage}
                 onChange={(e) => setSelectedLanguage(e.target.value)}
-                className="px-4 py-2 rounded-xl bg-app-card border border-app-card-border text-xs font-black uppercase tracking-widest outline-none cursor-pointer"
+                className="px-3 sm:px-4 py-2 rounded-xl bg-app-card border border-app-card-border text-[10px] sm:text-xs font-black uppercase tracking-widest outline-none cursor-pointer"
               >
                 <option key="lang-opt-all" value="all">{uiLanguage === 'ru' ? 'Все языки' : 'All Languages'}</option>
                 {availableLanguages.map(l => <option key={`lang-opt-${l}`} value={l}>{l.toUpperCase()}</option>)}
@@ -502,7 +502,7 @@ export default function StudyView({ onBack, initialTrackId, onReviewCompleted, o
               <select 
                 value={selectedTrack}
                 onChange={(e) => setSelectedTrack(e.target.value)}
-                className="px-4 py-2 rounded-xl bg-app-card border border-app-card-border text-xs font-black uppercase tracking-widest outline-none max-w-[180px] sm:max-w-[240px] truncate cursor-pointer"
+                className="px-3 sm:px-4 py-2 rounded-xl bg-app-card border border-app-card-border text-[10px] sm:text-xs font-black uppercase tracking-widest outline-none max-w-[140px] sm:max-w-[240px] truncate cursor-pointer"
               >
                 <option key="track-opt-all" value="all">{uiLanguage === 'ru' ? 'Все песни' : 'All Tracks'}</option>
                 {tracksList.map(t => <option key={`track-opt-${t.id}`} value={t.id}>{t.title}</option>)}
@@ -510,11 +510,11 @@ export default function StudyView({ onBack, initialTrackId, onReviewCompleted, o
             </div>
 
             {/* Tags scrolling carousel selector */}
-            <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-1.5">
               <span className="text-[10px] font-black uppercase tracking-[0.15em] text-app-muted pl-0.5 select-none font-sans">
                 {uiLanguage === 'ru' ? 'Фильтр по типу и тегам' : 'Filter by Tag'}
               </span>
-              <div className="flex items-center gap-2 overflow-x-auto pb-1.5 scrollbar-hide -mx-4 px-4 sm:mx-0 sm:px-0">
+              <div className="flex items-center gap-2 overflow-x-auto pb-1.5 scrollbar-hide w-full">
                 <button
                   type="button"
                   onClick={() => setSelectedType('all')}
@@ -547,15 +547,15 @@ export default function StudyView({ onBack, initialTrackId, onReviewCompleted, o
             
             <div className="flex p-1 bg-app-card border border-app-card-border rounded-2xl w-full sm:w-fit overflow-x-auto scrollbar-hide font-sans">
               {[
-                { id: 'recent', label: uiLanguage === 'ru' ? 'Выражения' : 'Phrases', icon: <Clock size={16} /> },
-                { id: 'track', label: uiLanguage === 'ru' ? 'Колоды (Песни)' : 'Decks (Tracks)', icon: <Music size={16} /> },
-                { id: 'artist', label: uiLanguage === 'ru' ? 'Исполнители' : 'Artists', icon: <User size={16} /> },
+                { id: 'recent', label: uiLanguage === 'ru' ? 'Выражения' : 'Phrases', icon: <Clock size={15} /> },
+                { id: 'track', label: uiLanguage === 'ru' ? 'Колоды' : 'Decks', icon: <Music size={15} /> },
+                { id: 'artist', label: uiLanguage === 'ru' ? 'Авторы' : 'Artists', icon: <User size={15} /> },
               ].map((tab) => (
                 <button
                   key={tab.id}
                   onClick={() => setGroupMode(tab.id as GroupMode)}
                   className={cn(
-                    "flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all whitespace-nowrap",
+                    "flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-2.5 sm:px-6 py-2 rounded-xl text-[10px] sm:text-xs font-bold uppercase tracking-wider transition-all whitespace-nowrap",
                     groupMode === tab.id 
                       ? "bg-app-bg text-app-fg shadow-lg" 
                       : "text-app-fg opacity-40 hover:opacity-100"
@@ -580,21 +580,21 @@ export default function StudyView({ onBack, initialTrackId, onReviewCompleted, o
                 return (
                   <div key={group.id} className="space-y-3 font-sans">
                     <div 
-                      className="flex items-center justify-between p-4 cursor-pointer hover:opacity-85 transition-all font-sans"
+                      className="flex items-center justify-between p-2.5 sm:p-4 cursor-pointer hover:opacity-85 transition-all font-sans gap-2"
                       onClick={() => toggleParent(group.id)}
                     >
-                      <div className="flex items-center gap-4 min-w-0">
-                        <div className="w-10 h-10 rounded-2xl bg-app-card border border-app-card-border flex items-center justify-center text-app-accent shrink-0 select-none shadow-xs">
-                           <Library size={18} />
+                      <div className="flex items-center gap-2 sm:gap-4 min-w-0">
+                        <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-2xl bg-app-card border border-app-card-border flex items-center justify-center text-app-accent shrink-0 select-none shadow-xs">
+                           <Library size={15} />
                         </div>
-                        <div className="min-w-0">
-                          <h3 className="font-serif text-lg font-bold text-app-fg leading-tight truncate">{group.trackTitle}</h3>
-                          <p className="text-[10px] font-black uppercase tracking-widest opacity-40 truncate mt-1">{group.artist}</p>
+                        <div className="min-w-0 flex-1">
+                          <h3 className="font-serif text-sm sm:text-lg font-bold text-app-fg leading-tight truncate">{group.trackTitle}</h3>
+                          <p className="text-[8px] sm:text-[10px] font-black uppercase tracking-widest opacity-40 truncate mt-0.5 sm:mt-1">{group.artist}</p>
                         </div>
                       </div>
                       
-                      <div className="flex items-center gap-4 shrink-0 font-sans">
-                        <span className="text-[10px] font-black bg-app-card border border-app-card-border px-2.5 py-1 rounded-lg opacity-60 font-mono text-app-fg">
+                      <div className="flex items-center gap-1.5 sm:gap-4 shrink-0 font-sans">
+                        <span className="text-[9px] sm:text-[10px] font-black bg-app-card border border-app-card-border px-1.5 py-0.5 sm:px-2.5 sm:py-1 rounded-lg opacity-60 font-mono text-app-fg">
                           {knownCount}/{totalCount}
                         </span>
                         <button 
@@ -602,13 +602,13 @@ export default function StudyView({ onBack, initialTrackId, onReviewCompleted, o
                             e.stopPropagation();
                             startSession(group.phrases);
                           }}
-                          className="w-8 h-8 rounded-xl bg-app-fg text-app-bg hover:scale-110 active:scale-95 transition-all flex items-center justify-center cursor-pointer"
+                          className="w-7 h-7 rounded-xl bg-app-fg text-app-bg hover:scale-110 active:scale-95 transition-all flex items-center justify-center cursor-pointer"
                           title="Study group"
                         >
-                          <PlayCircle size={16} />
+                          <PlayCircle size={15} />
                         </button>
                         <div className={cn("transition-transform duration-300 text-app-fg opacity-40", isExpanded ? "rotate-180" : "")}>
-                           <ChevronDown size={18} />
+                           <ChevronDown size={16} />
                         </div>
                       </div>
                     </div>
@@ -737,9 +737,9 @@ export default function StudyView({ onBack, initialTrackId, onReviewCompleted, o
                                       e.stopPropagation();
                                       startSession([child]);
                                     }}
-                                    className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-5 py-2.5 rounded-2xl bg-orange-500 text-white hover:bg-orange-600 font-sans text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer select-none"
+                                    className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3 sm:px-5 py-2 sm:py-2.5 rounded-xl sm:rounded-2xl bg-orange-500 text-white hover:bg-orange-600 font-sans text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer select-none"
                                   >
-                                    <PlayCircle size={14} />
+                                    <PlayCircle size={13} />
                                     <span>{uiLanguage === 'ru' ? 'Учить' : 'Study'}</span>
                                   </button>
 
@@ -751,18 +751,17 @@ export default function StudyView({ onBack, initialTrackId, onReviewCompleted, o
                                       loadCards();
                                       onCardUpdated?.(child.id);
                                     }}
-                                    className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-5 py-2.5 rounded-2xl text-[10px] font-sans font-black uppercase tracking-widest transition-all cursor-pointer ${
+                                    className={`flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3 sm:px-5 py-2 sm:py-2.5 rounded-xl sm:rounded-2xl text-[9px] sm:text-[10px] font-sans font-black uppercase tracking-widest transition-all cursor-pointer ${
                                       child.status === "known"
                                         ? "bg-emerald-500/15 border border-emerald-500/30 text-emerald-500 cursor-default"
                                         : "bg-app-bg border border-app-card-border hover:border-app-fg/20 active:scale-95 text-app-fg hover:bg-app-card shadow-xs"
                                     }`}
                                   >
-                                    <CheckCircle2 size={13} className={child.status === 'known' ? "text-emerald-500 shrink-0 select-none" : "text-app-fg opacity-40 shrink-0 select-none animate-none"} />
+                                    <CheckCircle2 size={12} className={child.status === 'known' ? "text-emerald-500 shrink-0 select-none" : "text-app-fg opacity-40 shrink-0 select-none animate-none"} />
                                     <span className="font-sans">
                                       {child.status === "known" 
                                         ? (uiLanguage === 'ru' ? 'Изучено' : 'Known') 
-                                        : (uiLanguage === 'ru' ? 'Знаю' : 'Mark Known')
-                                      }
+                                        : (uiLanguage === 'ru' ? 'Знаю' : 'Mark Known')}
                                     </span>
                                   </button>
                                 </>
@@ -858,16 +857,16 @@ export default function StudyView({ onBack, initialTrackId, onReviewCompleted, o
                         }
                       }
                     }}
-                    className="group relative flex flex-col p-8 rounded-[2.5rem] bg-app-card border border-app-card-border shadow-app-card hover:border-app-accent/30 transition-all text-left overflow-hidden active:scale-95 font-sans"
+                    className="group relative flex flex-col p-6 sm:p-8 rounded-[1.75rem] sm:rounded-[2.5rem] bg-app-card border border-app-card-border shadow-app-card hover:border-app-accent/30 transition-all text-left overflow-hidden active:scale-95 font-sans"
                   >
                     <div 
-                      className="absolute top-0 right-0 p-10 opacity-[0.03] group-hover:opacity-[0.08] transition-opacity font-sans"
+                      className="absolute top-0 right-0 p-6 sm:p-10 opacity-[0.03] group-hover:opacity-[0.08] transition-opacity font-sans"
                       style={{ color: 'var(--accent)' }}
                     >
                       {deck.icon}
                     </div>
                     
-                    <div className="flex-1 space-y-1 mb-10 font-sans">
+                    <div className="flex-1 space-y-1 mb-6 sm:mb-10 font-sans">
                       <h3 className="text-xl font-bold leading-tight group-hover:text-[var(--accent)] transition-colors line-clamp-2">
                         {deck.title}
                       </h3>
@@ -894,25 +893,25 @@ export default function StudyView({ onBack, initialTrackId, onReviewCompleted, o
                       </div>
                     </div>
                   </motion.button>
-                )) : (
-                  <div className="col-span-full py-20 flex flex-col items-center justify-center text-center opacity-40 font-sans">
-                    <Music size={48} className="mb-4" />
-                    <p className="font-bold">{uiLanguage === 'ru' ? 'Материалы отсутствуют' : 'No cards found for this selection'}</p>
-                    <p className="text-sm">{uiLanguage === 'ru' ? 'Попробуйте изменить тип фильтра или группировку' : 'Try changing the filter or group mode'}</p>
-                  </div>
-                )}
-              </AnimatePresence>
-            </div>
-          )}
+                  )) : (
+                    <div className="col-span-full py-20 flex flex-col items-center justify-center text-center opacity-40 font-sans">
+                      <Music size={48} className="mb-4" />
+                      <p className="font-bold">{uiLanguage === 'ru' ? 'Материалы отсутствуют' : 'No cards found for this selection'}</p>
+                      <p className="text-sm">{uiLanguage === 'ru' ? 'Попробуйте изменить тип фильтра или группировку' : 'Try changing the filter or group mode'}</p>
+                    </div>
+                  )}
+                </AnimatePresence>
+              </div>
+            )}
+          </div>
         </div>
-      </div>
-    );
-  }
+      );
+    }
 
-  return (
+    return (
     <div className="absolute inset-0 overflow-y-auto overflow-x-hidden bg-app-bg scrollbar-hide font-sans">
-      <div className="max-w-2xl mx-auto w-full py-8 px-4 sm:px-6 flex flex-col min-h-full">
-        <header className="flex items-center justify-between mb-8 shrink-0 font-sans">
+      <div className="max-w-2xl mx-auto w-full py-4 sm:py-8 px-4 sm:px-6 flex flex-col min-h-full">
+        <header className="flex items-center justify-between mb-4 sm:mb-8 shrink-0 font-sans">
           <button 
             onClick={() => setViewMode('hub')} 
             className="flex items-center gap-2 text-app-fg opacity-40 hover:opacity-100 transition-all font-bold uppercase tracking-widest text-[10px]"
@@ -938,26 +937,26 @@ export default function StudyView({ onBack, initialTrackId, onReviewCompleted, o
             const sessionActionArea = !isFlipped ? (
               <button 
                 onClick={() => setIsFlipped(true)}
-                className="w-full py-5 text-white rounded-[2rem] font-bold uppercase tracking-[0.2em] text-[10px] sm:text-xs transition-all flex items-center justify-center gap-3 shadow-xl active:scale-95 cursor-pointer font-sans"
+                className="w-full py-3.5 sm:py-5 text-white rounded-2xl sm:rounded-[2rem] font-bold uppercase tracking-[0.2em] text-[10px] sm:text-xs transition-all flex items-center justify-center gap-3 shadow-xl active:scale-95 cursor-pointer font-sans"
                 style={{ 
                   backgroundColor: 'var(--accent)', 
-                  boxShadow: '0 15px 25px -5px color-mix(in srgb, var(--accent) 40%, transparent)' 
+                  boxShadow: '0 12px 20px -5px color-mix(in srgb, var(--accent) 40%, transparent)' 
                 }}
               >
                 {uiLanguage === 'ru' ? 'Показать перевод' : 'Show Translation'}
                 <ArrowRight size={14} />
               </button>
             ) : (
-              <div className="grid grid-cols-2 gap-4 w-full font-sans font-black uppercase tracking-[0.15em] text-[10px] sm:text-xs">
+              <div className="grid grid-cols-2 gap-3 sm:gap-4 w-full font-sans font-black uppercase tracking-[0.15em] text-[10px] sm:text-xs">
                 <button
                   onClick={() => handleRating(Rating.Again)}
-                  className="py-4 rounded-[2rem] border border-red-500/25 text-red-500 font-bold uppercase tracking-[0.2em] hover:bg-red-505 hover:bg-red-500 hover:text-white transition-all shadow-lg active:scale-95 cursor-pointer text-center"
+                  className="py-3 sm:py-4 rounded-2xl sm:rounded-[2rem] border border-red-500/25 text-red-500 font-bold uppercase tracking-[0.2em] hover:bg-red-500 hover:text-white transition-all shadow-lg active:scale-95 cursor-pointer text-center"
                 >
                   {uiLanguage === 'ru' ? 'Заново' : 'Again'}
                 </button>
                 <button
                   onClick={() => handleRating(Rating.Good)}
-                  className="py-4 rounded-[2rem] border border-emerald-500/25 text-emerald-500 font-bold uppercase tracking-[0.2em] hover:bg-emerald-500 hover:text-white transition-all shadow-lg active:scale-95 cursor-pointer text-center"
+                  className="py-3 sm:py-4 rounded-2xl sm:rounded-[2rem] border border-emerald-500/25 text-emerald-500 font-bold uppercase tracking-[0.2em] hover:bg-emerald-500 hover:text-white transition-all shadow-lg active:scale-95 cursor-pointer text-center"
                 >
                   {uiLanguage === 'ru' ? 'Помню' : 'Got it'}
                 </button>
@@ -967,45 +966,179 @@ export default function StudyView({ onBack, initialTrackId, onReviewCompleted, o
             return (
               <AnimatePresence mode="wait">
                 <motion.div 
-                  key={currentCard.id + (isFlipped ? '-back' : '-front')}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -10 }}
-                  className="relative font-sans"
+                   key={currentCard.id + (isFlipped ? '-back' : '-front')}
+                   initial={{ opacity: 0, y: 10 }}
+                   animate={{ opacity: 1, y: 0 }}
+                   exit={{ opacity: 0, y: -10 }}
+                   className="relative font-sans"
                 >
                   {sessionTrackTitle && (
-                    <div className="text-center text-[10px] font-black text-app-fg opacity-35 uppercase tracking-[0.25em] mb-4 truncate max-w-[90%] mx-auto block">
+                    <div className="text-center text-[9px] sm:text-[10px] font-black text-app-fg opacity-35 uppercase tracking-[0.25em] mb-2 sm:mb-4 truncate max-w-[90%] mx-auto block">
                       {sessionTrackTitle} {sessionArtistName ? `— ${sessionArtistName}` : ''}
                     </div>
                   )}
 
-                  <PhraseCard
-                    itemId={currentCard.id}
-                    phraseText={currentCard.text}
-                    translation={currentCard.translation}
-                    explanation={currentCard.explanation}
-                    userNote={currentCard.userNote}
-                    type={currentCard.type}
-                    typeLabel={sessionTypeLabel}
-                    source={currentCard.entryType === "user" || (currentCard as any).source === "user" ? "user" : "ai"}
-                    status={currentCard.status as any}
-                    contextLines={sessionContextLines.length > 0 ? sessionContextLines : undefined}
-                    isSpeaking={currentlySpeakingCardId === currentCard.id}
-                    onSpeak={() => speak(currentCard.text, currentCard.id)}
-                    isExpanded={isFlipped}
-                    onToggleExpand={() => setIsFlipped(!isFlipped)}
-                    onEdit={undefined}
-                    onDelete={undefined}
-                    actionButtons={sessionActionArea}
-                    uiLanguage={uiLanguage}
-                    hideTranslation={!isFlipped}
-                  />
+                  {/* LARGE REPETITION FLIP CARD */}
+                  <div 
+                    onClick={() => !isFlipped && setIsFlipped(true)}
+                    className={`rounded-[1.75rem] sm:rounded-[2.5rem] bg-app-card border border-app-card-border p-4 sm:p-8 md:p-10 shadow-app-card hover:border-app-card-border/80 transition-all duration-300 relative min-h-[220px] sm:min-h-[360px] flex flex-col justify-between ${!isFlipped ? 'cursor-pointer hover:scale-[1.01]' : 'cursor-default'}`}
+                  >
+                    {!isFlipped ? (
+                      /* FRONT SIDE */
+                      <div className="flex-1 flex flex-col justify-between">
+                        {/* Header metadata */}
+                        <div className="flex items-center justify-between">
+                          <span className="px-3 py-1 rounded-xl text-[9px] font-sans font-black bg-app-bg border border-app-card-border/60 uppercase tracking-widest text-[#6366f1] inline-block">
+                            {sessionTypeLabel}
+                          </span>
+                          <button 
+                            type="button"
+                            onClick={(e) => { 
+                              e.stopPropagation(); 
+                              speak(currentCard.text, currentCard.id); 
+                            }} 
+                            className={`p-2.5 sm:p-3 rounded-2xl border transition-all flex items-center justify-center cursor-pointer shrink-0 ${
+                              currentlySpeakingCardId === currentCard.id 
+                                ? 'bg-orange-500 border-orange-500 text-white animate-pulse' 
+                                : 'bg-app-bg text-app-muted hover:text-app-fg border-app-card-border hover:border-app-card-border/80'
+                            }`}
+                            title={uiLanguage === 'ru' ? "Прослушать" : "Pronounce"}
+                          >
+                            <Volume2 size={16} />
+                          </button>
+                        </div>
+
+                        {/* Centered big phrase text */}
+                        <div className="flex-1 flex items-center justify-center py-4 sm:py-8">
+                          <h2 className="text-xl sm:text-2xl md:text-3xl font-serif text-app-fg font-extrabold leading-snug tracking-tight text-center max-w-[90%] select-text">
+                            {currentCard.text}
+                          </h2>
+                        </div>
+
+                        {/* Prompt hint */}
+                        <div className="text-center text-[9px] sm:text-[10px] font-sans font-bold uppercase tracking-widest text-app-fg opacity-30 select-none">
+                          {uiLanguage === 'ru' ? 'Нажмите, чтобы открыть перевод' : 'Tap to reveal translation'}
+                        </div>
+                      </div>
+                    ) : (
+                      /* BACK SIDE */
+                      <div className="flex-1 flex flex-col justify-between space-y-4 sm:space-y-6">
+                        {/* Header block with badges and speak button */}
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="px-3 py-1 rounded-xl text-[9px] font-sans font-black bg-app-bg border border-app-card-border/60 uppercase tracking-widest text-[#6366f1]">
+                              {sessionTypeLabel}
+                            </span>
+                            {currentCard.entryType === "user" || (currentCard as any).source === "user" ? (
+                              <span className="px-2 py-0.5 rounded-lg bg-orange-500/10 text-orange-500 text-[8px] font-black uppercase tracking-widest flex items-center gap-1">
+                                <User size={8} />
+                                {uiLanguage === 'ru' ? 'Вы' : 'User'}
+                              </span>
+                            ) : (
+                              <span className="px-2 py-0.5 rounded-lg bg-indigo-500/10 text-indigo-500 text-[8px] font-black uppercase tracking-widest flex-inline items-center gap-1 inline-flex">
+                                <Sparkles size={8} />
+                                AI
+                              </span>
+                            )}
+                          </div>
+                          <button 
+                            type="button"
+                            onClick={(e) => { 
+                              e.stopPropagation(); 
+                              speak(currentCard.text, currentCard.id); 
+                            }} 
+                            className={`p-2.5 sm:p-3 rounded-2xl border transition-all flex items-center justify-center cursor-pointer shrink-0 ${
+                              currentlySpeakingCardId === currentCard.id 
+                                ? 'bg-orange-500 border-orange-500 text-white animate-pulse' 
+                                : 'bg-app-bg text-app-muted hover:text-app-fg border-app-card-border hover:border-app-card-border/80'
+                            }`}
+                            title={uiLanguage === 'ru' ? "Прослушать" : "Pronounce"}
+                          >
+                            <Volume2 size={16} />
+                          </button>
+                        </div>
+
+                        {/* Phrases area */}
+                        <div className="text-center space-y-2 sm:space-y-3">
+                          <h2 className="text-lg sm:text-2xl font-serif text-app-accent font-extrabold leading-snug tracking-tight">
+                            {currentCard.text}
+                          </h2>
+                          <p className="text-base sm:text-xl font-serif text-app-fg opacity-90 leading-relaxed font-semibold">
+                            {currentCard.translation}
+                          </p>
+                        </div>
+
+                        {/* Details contents (Explanation, Personal note, Context lines) */}
+                        <div className="space-y-3 sm:space-y-4 pt-3 sm:pt-4 border-t border-app-card-border/40 select-text text-left">
+                          {/* Explanation markdown */}
+                          {currentCard.explanation && (
+                            <div className="pl-3 sm:pl-4 border-l-2 border-app-card-border">
+                              <div className="markdown-body text-xs sm:text-base text-app-fg opacity-75 leading-relaxed font-sans font-medium">
+                                <ReactMarkdown>
+                                  {currentCard.explanation}
+                                </ReactMarkdown>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Personal notes */}
+                          {currentCard.userNote && currentCard.userNote.trim() !== "" && (
+                            <div className="p-3 sm:p-4 rounded-xl bg-orange-500/[0.03] border border-orange-500/10 text-[11px] sm:text-xs space-y-1">
+                              <span className="text-[8px] sm:text-[9px] font-black uppercase tracking-wider text-orange-500 opacity-80 block font-sans">
+                                {uiLanguage === 'ru' ? 'Личные заметки' : 'Personal Note'}
+                              </span>
+                              <p className="text-app-fg opacity-75 leading-relaxed font-sans font-medium">
+                                {currentCard.userNote}
+                              </p>
+                            </div>
+                          )}
+
+                          {/* Lyric Context lines */}
+                          {sessionContextLines && sessionContextLines.length > 0 ? (
+                            <div className="space-y-1.5 sm:space-y-2">
+                              <span className="text-[8px] sm:text-[9px] font-black uppercase tracking-wider text-app-fg opacity-40 block">
+                                {uiLanguage === 'ru' ? 'Контекст из песни' : 'Lyrics Context'}
+                              </span>
+                              <div className="p-3 sm:p-4 rounded-2xl bg-app-bg border border-app-card-border divide-y divide-app-card-border/40 space-y-2 sm:space-y-3">
+                                {sessionContextLines.map((line, lIdx) => (
+                                  <div key={line.lineId || lIdx} className={lIdx > 0 ? "pt-2 sm:pt-3" : ""}>
+                                    <p className="font-serif font-semibold text-app-fg text-xs sm:text-sm md:text-base leading-snug">
+                                      {line.original}
+                                    </p>
+                                    {line.translation && line.translation.trim() !== "" && (
+                                      <p className="font-sans text-[10px] sm:text-xs text-app-fg opacity-50 italic mt-0.5 sm:mt-1 leading-snug">
+                                        {line.translation}
+                                      </p>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="space-y-1">
+                              <span className="text-[8px] sm:text-[9px] font-black uppercase tracking-wider text-app-fg opacity-40 block">
+                                {uiLanguage === 'ru' ? 'Контекст из песни' : 'Lyrics Context'}
+                              </span>
+                              <div className="p-2.5 rounded-2xl bg-app-bg border border-app-card-border/40 text-[10px] sm:text-[11px] font-sans text-app-fg opacity-35 italic">
+                                {uiLanguage === 'ru' ? 'Контекст отсутствует' : 'No lyric context linked'}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Large Repetition Action buttons inside the card */}
+                        <div className="pt-3 sm:pt-4 border-t border-app-card-border/30">
+                          {sessionActionArea}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </motion.div>
               </AnimatePresence>
             );
           })()}
 
-          <footer className="mt-auto py-12 flex justify-center shrink-0 font-sans">
+          <footer className="mt-auto py-4 sm:py-12 flex justify-center shrink-0 font-sans">
             <button 
               onClick={async () => {
                 const confMsg = uiLanguage === 'ru' ? 'Удалить эту карточку?' : 'Delete this card?';
@@ -1022,7 +1155,7 @@ export default function StudyView({ onBack, initialTrackId, onReviewCompleted, o
               className="flex items-center gap-2 px-4 py-2 rounded-xl text-app-fg opacity-20 hover:opacity-100 transition-all font-bold uppercase tracking-widest text-[10px]"
             >
               <Trash2 size={16} />
-              {uiLanguage === 'ru' ? 'Удалить фразу' : 'Delete Phrase'}
+              {uiLanguage === 'ru' ? 'Улалить фразу' : 'Delete Phrase'}
             </button>
           </footer>
         </main>

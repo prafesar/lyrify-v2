@@ -130,14 +130,18 @@ export const PhraseCard: React.FC<PhraseCardProps> = ({
     return st === 'known' ? 'Known' : st === 'learning' ? 'Learning' : 'New';
   };
 
-  // State-based coloring (from StudyView but optimized for unified aesthetics)
-  let bgClasses = "bg-app-card/70 border-app-card-border hover:border-app-card-border/85";
+  // State-based border styling & transparent overlay over solid opaque background (prevents dirty background looks)
+  let bgClasses = "bg-app-card border-app-card-border hover:border-app-card-border/85 shadow-xs";
+  let overlayClasses = "";
   if (status === "new") {
-    bgClasses = "bg-sky-500/[0.04] border-sky-500/20 hover:border-sky-500/35";
+    bgClasses = "bg-app-card border-sky-500/30 hover:border-sky-500/55 shadow-xs";
+    overlayClasses = "bg-sky-500/[0.04] group-hover:bg-sky-500/[0.07]";
   } else if (status === "learning") {
-    bgClasses = "bg-orange-500/[0.04] border-orange-500/20 hover:border-orange-500/35";
+    bgClasses = "bg-app-card border-orange-500/35 hover:border-orange-500/55 shadow-xs";
+    overlayClasses = "bg-orange-500/[0.04] group-hover:bg-orange-500/[0.07]";
   } else if (status === "known") {
-    bgClasses = "bg-emerald-500/[0.02] border-emerald-500/20 hover:border-emerald-500/35";
+    bgClasses = "bg-app-card border-emerald-500/30 hover:border-emerald-500/55 shadow-xs";
+    overlayClasses = "bg-emerald-500/[0.03] group-hover:bg-emerald-500/[0.06]";
   }
 
   return (
@@ -145,15 +149,20 @@ export const PhraseCard: React.FC<PhraseCardProps> = ({
       onClick={onToggleExpand}
       className={`cursor-pointer rounded-2xl border transition-all duration-300 overflow-hidden relative group font-sans ${bgClasses}`}
     >
+      {/* Opaque card container backdrop (bg-app-card underlay is active), this layer applies pure translucent color tint */}
+      {overlayClasses && (
+        <div className={`absolute inset-0 pointer-events-none transition-colors duration-300 ${overlayClasses}`} />
+      )}
+
       {/* ALWAYS VISIBLE HEADER SEGMENT */}
-      <div className="p-4">
-        <div className="flex items-center justify-between gap-4 w-full">
+      <div className="p-3 sm:p-4">
+        <div className="flex items-center justify-between gap-2.5 sm:gap-4 w-full">
           {/* Left Segment: Index, Voice Trigger, & Text Block */}
-          <div className="flex items-center gap-3 flex-1 min-w-0">
+          <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
             {/* Index and Voice Trigger */}
-            <div className="flex items-center gap-2 shrink-0">
+            <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
               {index !== undefined && (
-                <span className="text-base font-sans font-semibold text-app-fg/40 select-none shrink-0">
+                <span className="text-sm sm:text-base font-sans font-semibold text-app-fg/40 select-none shrink-0">
                   {index + 1}.
                 </span>
               )}
@@ -170,19 +179,19 @@ export const PhraseCard: React.FC<PhraseCardProps> = ({
                   }`}
                   title={uiLanguage === 'ru' ? "Прослушать произношение" : "Pronounce phrase"}
                 >
-                  <Volume2 size={15} />
+                  <Volume2 size={13} />
                 </button>
               )}
             </div>
 
             {/* Phrase Text & Translation */}
             <div className="flex-1 min-w-0 pr-1">
-              <h3 className="font-serif text-[17px] md:text-[19px] text-app-accent leading-snug">
+              <h3 className="font-serif text-[15px] sm:text-[17px] md:text-[19px] text-app-accent leading-snug break-words">
                 {highlightedPhraseText || phraseText}
               </h3>
 
               {translation && !hideTranslation && (
-                <p className="font-serif text-[17px] md:text-[19px] text-app-muted mt-0.5 leading-snug transition-all font-medium">
+                <p className="font-serif text-[15px] sm:text-[17px] md:text-[19px] text-app-muted mt-0.5 leading-snug transition-all font-medium break-words">
                   {highlightedTranslation || translation}
                 </p>
               )}
@@ -298,7 +307,7 @@ export const PhraseCard: React.FC<PhraseCardProps> = ({
 
                 {/* Inline Action Buttons */}
                 {actionButtons && (
-                  <div className="flex items-center gap-3 pt-1 font-sans">
+                  <div className="flex flex-wrap items-center gap-2 sm:gap-3 pt-1 font-sans">
                     {actionButtons}
                   </div>
                 )}
