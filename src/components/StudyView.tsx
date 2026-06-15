@@ -986,11 +986,11 @@ export default function StudyView({ onBack, initialTrackId, onReviewCompleted, o
                     {!isFlipped ? (
                       /* FRONT SIDE */
                       <div className="flex-1 flex flex-col justify-between">
-                        {/* Header metadata */}
-                        <div className="flex items-center justify-between">
-                          <span className="px-3 py-1 rounded-xl text-[9px] font-sans font-black bg-app-bg border border-app-card-border/60 uppercase tracking-widest text-[#6366f1] inline-block">
-                            {sessionTypeLabel}
-                          </span>
+                        {/* Centered big phrase text with play button inline next to it */}
+                        <div className="flex-1 flex items-center justify-center gap-3 sm:gap-4 py-8 sm:py-12">
+                          <h2 className="text-xl sm:text-2xl md:text-3xl font-serif text-app-fg font-extrabold leading-snug tracking-tight text-center max-w-[85%] select-text">
+                            {currentCard.text}
+                          </h2>
                           <button 
                             type="button"
                             onClick={(e) => { 
@@ -1006,13 +1006,6 @@ export default function StudyView({ onBack, initialTrackId, onReviewCompleted, o
                           >
                             <Volume2 size={16} />
                           </button>
-                        </div>
-
-                        {/* Centered big phrase text */}
-                        <div className="flex-1 flex items-center justify-center py-4 sm:py-8">
-                          <h2 className="text-xl sm:text-2xl md:text-3xl font-serif text-app-fg font-extrabold leading-snug tracking-tight text-center max-w-[90%] select-text">
-                            {currentCard.text}
-                          </h2>
                         </div>
 
                         {/* Prompt hint */}
@@ -1023,46 +1016,28 @@ export default function StudyView({ onBack, initialTrackId, onReviewCompleted, o
                     ) : (
                       /* BACK SIDE */
                       <div className="flex-1 flex flex-col justify-between space-y-4 sm:space-y-6">
-                        {/* Header block with badges and speak button */}
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <span className="px-3 py-1 rounded-xl text-[9px] font-sans font-black bg-app-bg border border-app-card-border/60 uppercase tracking-widest text-[#6366f1]">
-                              {sessionTypeLabel}
-                            </span>
-                            {currentCard.entryType === "user" || (currentCard as any).source === "user" ? (
-                              <span className="px-2 py-0.5 rounded-lg bg-orange-500/10 text-orange-500 text-[8px] font-black uppercase tracking-widest flex items-center gap-1">
-                                <User size={8} />
-                                {uiLanguage === 'ru' ? 'Вы' : 'User'}
-                              </span>
-                            ) : (
-                              <span className="px-2 py-0.5 rounded-lg bg-indigo-500/10 text-indigo-500 text-[8px] font-black uppercase tracking-widest flex-inline items-center gap-1 inline-flex">
-                                <Sparkles size={8} />
-                                AI
-                              </span>
-                            )}
+                        {/* Phrases area with play button inline next to the text */}
+                        <div className="text-center flex flex-col items-center justify-center space-y-2 sm:space-y-3">
+                          <div className="flex items-center justify-center gap-2.5 sm:gap-3 flex-wrap">
+                            <h2 className="text-lg sm:text-2xl font-serif text-app-accent font-extrabold leading-snug tracking-tight">
+                              {currentCard.text}
+                            </h2>
+                            <button 
+                              type="button"
+                              onClick={(e) => { 
+                                e.stopPropagation(); 
+                                speak(currentCard.text, currentCard.id); 
+                              }} 
+                              className={`p-1.5 sm:p-2 rounded-xl border transition-all flex items-center justify-center cursor-pointer shrink-0 ${
+                                currentlySpeakingCardId === currentCard.id 
+                                  ? 'bg-orange-500 border-orange-500 text-white animate-pulse' 
+                                  : 'bg-app-bg text-app-muted hover:text-app-fg border-app-card-border hover:border-app-card-border/80'
+                              }`}
+                              title={uiLanguage === 'ru' ? "Прослушать" : "Pronounce"}
+                            >
+                              <Volume2 size={14} />
+                            </button>
                           </div>
-                          <button 
-                            type="button"
-                            onClick={(e) => { 
-                              e.stopPropagation(); 
-                              speak(currentCard.text, currentCard.id); 
-                            }} 
-                            className={`p-2.5 sm:p-3 rounded-2xl border transition-all flex items-center justify-center cursor-pointer shrink-0 ${
-                              currentlySpeakingCardId === currentCard.id 
-                                ? 'bg-orange-500 border-orange-500 text-white animate-pulse' 
-                                : 'bg-app-bg text-app-muted hover:text-app-fg border-app-card-border hover:border-app-card-border/80'
-                            }`}
-                            title={uiLanguage === 'ru' ? "Прослушать" : "Pronounce"}
-                          >
-                            <Volume2 size={16} />
-                          </button>
-                        </div>
-
-                        {/* Phrases area */}
-                        <div className="text-center space-y-2 sm:space-y-3">
-                          <h2 className="text-lg sm:text-2xl font-serif text-app-accent font-extrabold leading-snug tracking-tight">
-                            {currentCard.text}
-                          </h2>
                           <p className="text-base sm:text-xl font-serif text-app-fg opacity-90 leading-relaxed font-semibold">
                             {currentCard.translation}
                           </p>
@@ -1093,35 +1068,21 @@ export default function StudyView({ onBack, initialTrackId, onReviewCompleted, o
                             </div>
                           )}
 
-                          {/* Lyric Context lines */}
-                          {sessionContextLines && sessionContextLines.length > 0 ? (
-                            <div className="space-y-1.5 sm:space-y-2">
-                              <span className="text-[8px] sm:text-[9px] font-black uppercase tracking-wider text-app-fg opacity-40 block">
-                                {uiLanguage === 'ru' ? 'Контекст из песни' : 'Lyrics Context'}
-                              </span>
-                              <div className="p-3 sm:p-4 rounded-2xl bg-app-bg border border-app-card-border divide-y divide-app-card-border/40 space-y-2 sm:space-y-3">
-                                {sessionContextLines.map((line, lIdx) => (
-                                  <div key={line.lineId || lIdx} className={lIdx > 0 ? "pt-2 sm:pt-3" : ""}>
-                                    <p className="font-serif font-semibold text-app-fg text-xs sm:text-sm md:text-base leading-snug">
-                                      {line.original}
+                          {/* Lyric Context lines simplified to italics and gray accent */}
+                          {sessionContextLines && sessionContextLines.length > 0 && (
+                            <div className="pt-2 border-t border-app-card-border/20 space-y-2 text-left">
+                              {sessionContextLines.map((line, lIdx) => (
+                                <div key={line.lineId || lIdx} className="text-app-muted italic font-serif leading-relaxed text-xs sm:text-sm pl-1.5 border-l border-app-card-border/25">
+                                  <p className="font-serif italic text-app-muted select-text">
+                                    "{line.original}"
+                                  </p>
+                                  {line.translation && line.translation.trim() !== "" && (
+                                    <p className="font-sans text-[10px] sm:text-xs text-app-muted/75 pl-2 mt-0.5 sm:mt-1 not-italic select-text">
+                                      — {line.translation}
                                     </p>
-                                    {line.translation && line.translation.trim() !== "" && (
-                                      <p className="font-sans text-[10px] sm:text-xs text-app-fg opacity-50 italic mt-0.5 sm:mt-1 leading-snug">
-                                        {line.translation}
-                                      </p>
-                                    )}
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="space-y-1">
-                              <span className="text-[8px] sm:text-[9px] font-black uppercase tracking-wider text-app-fg opacity-40 block">
-                                {uiLanguage === 'ru' ? 'Контекст из песни' : 'Lyrics Context'}
-                              </span>
-                              <div className="p-2.5 rounded-2xl bg-app-bg border border-app-card-border/40 text-[10px] sm:text-[11px] font-sans text-app-fg opacity-35 italic">
-                                {uiLanguage === 'ru' ? 'Контекст отсутствует' : 'No lyric context linked'}
-                              </div>
+                                  )}
+                                </div>
+                              ))}
                             </div>
                           )}
                         </div>

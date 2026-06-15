@@ -324,67 +324,23 @@ export const PhraseCard: React.FC<PhraseCardProps> = ({
                   </div>
                 )}
 
-                {/* Lyrics Context (dynamic and robust mapping) */}
-                {contextLines && contextLines.length > 0 ? (
-                  <div className="pt-3 border-t border-app-card-border/45 space-y-2 font-sans">
-                    <span className="text-[9px] font-black uppercase tracking-wider text-app-fg opacity-40 block font-sans">
-                      {uiLanguage === 'ru' ? 'Контекст из песни' : 'Lyrics Context'}
-                    </span>
-                    <div className="p-4 rounded-2xl bg-app-bg border border-app-card-border divide-y divide-app-card-border/40 space-y-3 font-sans">
-                      {contextLines.map((line, lIdx) => (
-                        <div key={line.lineId || lIdx} className={lIdx > 0 ? "pt-3" : ""}>
-                          <p className="font-serif font-semibold text-app-fg leading-snug">
-                            {line.original}
+                {/* Lyric Context lines simplified to italics and gray accent */}
+                {contextLines && contextLines.length > 0 && (
+                  <div className="pt-3 border-t border-app-card-border/30 space-y-2 text-left">
+                    {contextLines.map((line, lIdx) => (
+                      <div key={line.lineId || lIdx} className="text-app-muted italic font-serif leading-relaxed text-xs sm:text-sm pl-1.5 border-l border-app-card-border/25">
+                        <p className="font-serif italic text-app-muted select-text">
+                          "{line.original}"
+                        </p>
+                        {line.translation && line.translation.trim() !== "" && (
+                          <p className="font-sans text-[10px] sm:text-xs text-app-muted/75 pl-2 mt-0.5 sm:mt-1 not-italic select-text">
+                            — {line.translation}
                           </p>
-                          {line.translation && line.translation.trim() !== "" && (
-                            <p className="font-sans text-xs text-app-fg opacity-50 italic mt-1 leading-snug">
-                              {line.translation}
-                            </p>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="pt-3 border-t border-app-card-border/45 space-y-1 font-sans">
-                    <span className="text-[9px] font-black uppercase tracking-wider text-app-fg opacity-40 block font-sans">
-                      {uiLanguage === 'ru' ? 'Контекст из песни' : 'Lyrics Context'}
-                    </span>
-                    <div className="p-3.5 rounded-2xl bg-app-bg border border-app-card-border/40 text-xs font-sans text-left">
-                      <p className="font-sans text-app-fg opacity-35 italic">
-                        {uiLanguage === 'ru' ? 'Контекст отсутствует' : 'No lyric context linked'}
-                      </p>
-                    </div>
+                        )}
+                      </div>
+                    ))}
                   </div>
                 )}
-
-                {/* Metadata Tags Source and Type Badges */}
-                <div className="pt-3 border-t border-app-card-border/40 flex flex-wrap items-center gap-2.5 font-sans">
-                  <span className="text-[9px] font-black uppercase tracking-wider text-app-fg opacity-35 block mr-1.5 font-sans">
-                    {uiLanguage === 'ru' ? 'Метаданные:' : 'Metadata:'}
-                  </span>
-                  
-                  {/* Type block badge */}
-                  <span className="px-2.5 py-1 rounded-lg bg-app-bg text-[9px] font-black uppercase tracking-widest text-app-fg opacity-55 border border-app-card-border flex items-center gap-1.5 shadow-xs font-sans">
-                    <Tag size={10} className="text-orange-500 select-none animate-none" />
-                    {typeLabel || type}
-                  </span>
-
-                  {/* Creator / Origin Tag details */}
-                  {source && (
-                    source === "user" ? (
-                      <span className="px-2 py-0.5 rounded-lg bg-orange-500/10 text-orange-500 text-[8px] font-black uppercase tracking-widest flex items-center gap-1 font-sans">
-                        <User size={8} />
-                        {uiLanguage === 'ru' ? 'Пользователь' : 'User'}
-                      </span>
-                    ) : (
-                      <span className="px-2 py-0.5 rounded-lg bg-indigo-500/10 text-indigo-500 text-[8px] font-black uppercase tracking-widest flex items-center gap-1 font-sans">
-                        <Sparkles size={8} />
-                        AI
-                      </span>
-                    )
-                  )}
-                </div>
               </>
             )}
           </div>
