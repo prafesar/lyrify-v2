@@ -17,6 +17,37 @@ To prevent leaky abstractions, **all client interactions with AI logic and serve
   Authorization: Bearer <JWT or ApiKey> (When authentication/authorization is active)
   ```
 
+## 🏛️ Shared Types & Data Rules
+
+To improve cache consistency and decouple the server-side AI orchestration from client-side lyrics retrieval mechanisms, we use the following structured models.
+
+```typescript
+export interface PreparedLyricsLine {
+  lineIndex: number; // Preserves order from source lyrics
+  lineKey: string;   // Main stable hash of the normalized line text
+  text: string;      // Standardized text after client cleanup
+  blockType?: "intro" | "verse" | "pre_chorus" | "chorus" | "bridge" | "outro" | "unknown";
+}
+
+export interface PreparedLyricsInput {
+  track: {
+    title: string;
+    artists: string[];
+  };
+  targetLanguage: string;
+  source: {
+    provider: string;
+    url?: string | null;
+    authors?: string[] | null;
+  } | null;
+  lines: PreparedLyricsLine[];
+}
+```
+
+- **`lineKey` (Canonical Key)**: The client and server match lines by `lineKey` (SHA/Murmur hash of normalized lowercase text), ensuring translations and breakdowns remain perfectly aligned even if line indexes shift slightly.
+- **`lineIndex`**: Serves purely to preserve original order.
+- **Track Normalization**: Track titles are stripped of bracketed additions (e.g., `(Live)` or `[Remastered]`) by the client during preparation to improve cache hit rates.
+
 ---
 
 ## 🏛️ Standard Envelopes
@@ -55,26 +86,28 @@ Common Error Codes:
 ## 📝 Endpoints Contract
 
 ### 1. Retrieve Cached Structured Lecture
-Checks if a structured learning guide/lecture exists in the worker's shared/distributed cache (e.g., Cloudflare KV/D1 or cache-proxy) for a specific track.
+Checks if a structured learning guide/lecture exists in the worker's shared/distributed cache for a specific track.
 
 - **Endpoint**: `/lecture/get-cached`
 - **Method**: `POST`
-- **Request Payload**:
-  ```typescript
-  interface GetCachedLectureRequest {
-    lyrics: string;
-    title: string;
-    artist: string;
-    targetLanguage: string;
-  }
-  ```
-  *Example*:
+- **Request Payload**: `PreparedLyricsInput` (canonical format, see Shared Types & Data Rules)
+  - *Legacy format (deprecated)*: `GetCachedLectureRequest { lyrics: string, title: string, artist: string, targetLanguage: string }`
+- **Example (Canonical Payload)**:
   ```json
   {
-    "lyrics": "Take me out tonight...",
-    "title": "There Is a Light That Never Goes Out",
-    "artist": "The Smiths",
-    "targetLanguage": "Russian"
+    "track": {
+      "title": "There Is a Light That Never Goes Out",
+      "artists": ["The Smiths"]
+    },
+    "targetLanguage": "Russian",
+    "source": {
+      "provider": "genius",
+      "url": "https://genius.com/The-smiths-there-is-a-light-that-never-goes-out-lyrics"
+    },
+    "lines": [
+      { "lineIndex": 0, "lineKey": "f68a2bc", "text": "Take me out tonight" },
+      { "lineIndex": 1, "lineKey": "01b239c", "text": "Where there's music and there's people" }
+    ]
   }
   ```
 - **Responses**:
@@ -113,14 +146,17 @@ Generates or retrieves a comprehensive, structured lecture/learning breakdown of
 
 - **Endpoint**: `/lecture/fetch`
 - **Method**: `POST`
-- **Request Payload**:
+- **Request Payload**: 
   ```typescript
   interface FetchLectureRequest {
-    lyrics: string;
-    title: string;
-    artist: string;
-    targetLanguage: string;
+    lyricsInput: PreparedLyricsInput; // Canonical structured input
     forceRegenerate?: boolean;
+    
+    // Legacy fields (deprecated):
+    lyrics?: string;
+    title?: string;
+    artist?: string;
+    targetLanguage?: string;
   }
   ```
 - **Responses**:
@@ -151,12 +187,12 @@ Generates or retrieves a comprehensive, structured lecture/learning breakdown of
 
 ---
 
-### 3. Fetch or Generate Track Meaning
-Retrieves the overarching analysis, translation, and metadata for a specific song track.
+### 3. Fetch or Generate Track Meaning (LEGACY / DEPRECATED)
+> ⚠️ **Status: LEGACY / DEPRECATED**. As per the migration strategy, the standalone track meaning capability will not be developed or maintained as a separate path. All high-level song meaning, cultural context, and overall analysis should live as a semantic block of kind `intro` inside the unified `/lecture/fetch` response. This prevents multiple fragmented LLM calls and consolidates track comprehension.
 
 - **Endpoint**: `/track-meaning/fetch`
 - **Method**: `POST`
-- **Request Payload**:
+- **Request Payload (Legacy)**:
   ```typescript
   interface FetchTrackMeaningRequest {
     lyrics: string;
@@ -168,17 +204,6 @@ Retrieves the overarching analysis, translation, and metadata for a specific son
     };
     promptVersion?: number;
     forceRegenerate?: boolean;
-  }
-  ```
-  *Example*:
-  ```json
-  {
-    "lyrics": "I was riding shotgun with my hair undone...",
-    "metadata": {
-      "title": "Our Song",
-      "artists": ["Taylor Swift"],
-      "targetLanguage": "Russian"
-    }
   }
   ```
 - **Responses**:
