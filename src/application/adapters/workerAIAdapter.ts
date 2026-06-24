@@ -12,7 +12,48 @@ import { TrackLyricsData, StructuredLectureBlock } from "../../services/musicSer
  * as the `aiClient` in `/src/application/index.ts`.
  */
 export class WorkerAIAdapter implements AiPort {
-  private workerBaseUrl = "/api/v2/worker"; // Placeholer Cloudflare Worker boundary
+  private workerBaseUrl = "/api/v2/worker"; // Placeholder Cloudflare Worker boundary
+
+  /**
+   * Universal HTTP POST helper to delegate AI capability calls to the Cloudflare Worker backend.
+   * Handles JSON request payload serialization, response envelope validation, and friendly error parsing.
+   */
+  private async postToWorker<T>(endpoint: string, body: any): Promise<T> {
+    const url = `${this.workerBaseUrl}${endpoint}`;
+    try {
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Accept": "application/json",
+        },
+        body: JSON.stringify(body),
+      });
+
+      if (!response.ok) {
+        let errorMsg = `Worker HTTP Error ${response.status}: ${response.statusText}`;
+        try {
+          const errData = await response.json();
+          if (errData?.status === "error" && errData?.error?.message) {
+            errorMsg = errData.error.message;
+          }
+        } catch {
+          // ignore parsing error, proceed to fallback error message
+        }
+        throw new Error(errorMsg);
+      }
+
+      const resJson = await response.json();
+      if (resJson?.status === "success") {
+        return resJson.data as T;
+      }
+      
+      throw new Error(resJson?.error?.message || "Invalid or empty response format from Worker API");
+    } catch (error: any) {
+      console.error(`[WorkerAIAdapter] API call to ${endpoint} failed:`, error);
+      throw error;
+    }
+  }
 
   async fetchStructuredLecture(
     lyrics: string,
@@ -21,7 +62,13 @@ export class WorkerAIAdapter implements AiPort {
     targetLanguage: string,
     forceRegenerate?: boolean
   ): Promise<StructuredLectureBlock[]> {
-    throw new Error("WorkerAIAdapter is currently in placeholder state. Please use GeminiAIAdapter.");
+    return this.postToWorker<StructuredLectureBlock[]>("/lecture/fetch", {
+      lyrics,
+      title,
+      artist,
+      targetLanguage,
+      forceRegenerate,
+    });
   }
 
   async getCachedStructuredLecture(
@@ -30,7 +77,12 @@ export class WorkerAIAdapter implements AiPort {
     artist: string,
     targetLanguage: string
   ): Promise<StructuredLectureBlock[] | null> {
-    throw new Error("WorkerAIAdapter is currently in placeholder state. Please use GeminiAIAdapter.");
+    return this.postToWorker<StructuredLectureBlock[] | null>("/lecture/get-cached", {
+      lyrics,
+      title,
+      artist,
+      targetLanguage,
+    });
   }
 
   async fetchTrackMeaning(
@@ -39,14 +91,12 @@ export class WorkerAIAdapter implements AiPort {
     promptVersion?: number,
     forceRegenerate?: boolean
   ): Promise<TrackMeaningResult> {
-    // Future Implementation:
-    // const response = await fetch(`${this.workerBaseUrl}/track-meaning`, {
-    //   method: "POST",
-    //   headers: { "Content-Type": "application/json" },
-    //   body: JSON.stringify({ lyrics, metadata, promptVersion, forceRegenerate })
-    // });
-    // return await response.json();
-    throw new Error("WorkerAIAdapter is currently in placeholder state. Please use GeminiAIAdapter.");
+    return this.postToWorker<TrackMeaningResult>("/track-meaning/fetch", {
+      lyrics,
+      metadata,
+      promptVersion,
+      forceRegenerate,
+    });
   }
 
   async getOriginalLanguage(trackKey: string): Promise<string | null> {
