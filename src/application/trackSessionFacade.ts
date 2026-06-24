@@ -5,6 +5,7 @@ import { DailyTrackerRepositoryPort } from "./ports/dailyTrackerRepositoryPort";
 import { LyricsProviderPort } from "./ports/lyricsProviderPort";
 import { MusicMetadataPort } from "./ports/musicMetadataPort";
 import { TrackLyricsData, Track } from "../services/musicService";
+import { prepareLyricsInput } from "../services/lyricsPreprocessor";
 
 export class TrackSessionFacade {
   constructor(
@@ -60,21 +61,23 @@ export class TrackSessionFacade {
         appleMusicUrl: cached.appleMusicUrl || appleMusicUrl,
       };
 
-      if ((!cached.coverUrl && coverUrl) || (!cached.title && trackTitle) || (!cached.audioUrl && audioUrl) || !cached.itunesTrackId) {
-        this.trackCacheRepository.saveTrackData(trackId, updatedCached);
+      let enrichedCached = this.enrichWithPreparedLyricsInput(updatedCached, targetLanguage);
+
+      if ((!cached.coverUrl && coverUrl) || (!cached.title && trackTitle) || (!cached.audioUrl && audioUrl) || !cached.itunesTrackId || enrichedCached.preparedLyricsInput !== cached.preparedLyricsInput) {
+        this.trackCacheRepository.saveTrackData(trackId, enrichedCached);
       }
 
       this.recentHistoryRepository.addRecentTrack({
         ...track,
-        difficulty: updatedCached.difficulty || track.difficulty
+        difficulty: enrichedCached.difficulty || track.difficulty
       });
 
       // Background check if no lecture blocks exist but lyrics do
-      if ((!updatedCached.lectureBlocks || updatedCached.lectureBlocks.length === 0) && updatedCached.rawLyrics) {
-        this.checkAndLoadCachedLecture(trackId, updatedCached.rawLyrics, updatedCached.title, updatedCached.artist, targetLanguage, callbacks.onCacheUpdate);
+      if ((!enrichedCached.lectureBlocks || enrichedCached.lectureBlocks.length === 0) && enrichedCached.rawLyrics) {
+        this.checkAndLoadCachedLecture(trackId, enrichedCached.rawLyrics, enrichedCached.title, enrichedCached.artist, targetLanguage, callbacks.onCacheUpdate);
       }
 
-      return updatedCached;
+      return enrichedCached;
     }
 
     // 3. Create initial empty lyric structure
@@ -154,7 +157,7 @@ export class TrackSessionFacade {
           const currentCached = this.trackCacheRepository.getCachedTrack(trackId) || initialTrack;
           const hasLyricsAndLinesCache = !!(cacheResult.rawLyrics && cacheResult.lines && cacheResult.lines.length > 0);
           
-          const updated = {
+          const updated = this.enrichWithPreparedLyricsInput({
             ...currentCached,
             rawLyrics: hasLyricsAndLinesCache ? cacheResult.rawLyrics : currentCached.rawLyrics,
             meaning,
@@ -169,7 +172,7 @@ export class TrackSessionFacade {
               stage2_completed: true,
               stage3_completed: hasLyricsAndLinesCache ? cacheResult.lines.some((l: any) => l.phrases && l.phrases.length > 0) : currentCached.processingStatus.stage3_completed
             }
-          };
+          }, targetLanguage);
 
           this.trackCacheRepository.saveTrackData(trackId, updated);
           if (callbacks.onCacheUpdate) {
@@ -293,6 +296,7 @@ export class TrackSessionFacade {
       };
     }
 
+    trackData = this.enrichWithPreparedLyricsInput(trackData, targetLanguage);
     this.trackCacheRepository.saveTrackData(trackData.trackId, trackData);
     await this.aiClient.saveTrackToSharedCache(trackData).catch(e => console.error("Firestore cache upload failed:", e));
 
@@ -349,11 +353,11 @@ export class TrackSessionFacade {
       };
     });
 
-    const updated = {
+    const updated = this.enrichWithPreparedLyricsInput({
       ...track,
       lines: updatedLines,
       processingStatus: { ...track.processingStatus, stage3_completed: true }
-    };
+    }, targetLanguage);
 
     this.trackCacheRepository.saveTrackData(track.trackId, updated);
     await this.aiClient.saveTrackToSharedCache(updated).catch(e => console.error("Firestore cache upload failed:", e));
@@ -378,7 +382,7 @@ export class TrackSessionFacade {
     );
 
     // Initial draft with lines split from manual text
-    const initialTrack: TrackLyricsData = {
+    const initialTrack = this.enrichWithPreparedLyricsInput({
       ...track,
       rawLyrics: manualLyrics,
       source: "Manual",
@@ -392,7 +396,7 @@ export class TrackSessionFacade {
         stage3_completed: false,
       },
       lastUpdated: Date.now(),
-    };
+    }, targetLanguage);
 
     this.trackCacheRepository.saveTrackData(track.trackId, initialTrack);
 
@@ -411,14 +415,14 @@ export class TrackSessionFacade {
         if (langKey === 'russian') meaning = result.meanings.ru;
         if (langKey === 'polish') meaning = result.meanings.pl;
 
-        const updated = {
+        const updated = this.enrichWithPreparedLyricsInput({
           ...cached,
           sourceLanguage: result.originalLanguage || cached.sourceLanguage,
           meaning,
           meanings: result.meanings,
           difficulty: result.difficulty,
           processingStatus: { ...cached.processingStatus, stage2_completed: true }
-        };
+        }, targetLanguage);
 
         this.trackCacheRepository.saveTrackData(track.trackId, updated);
         this.aiClient.saveTrackToSharedCache(updated).catch(e => console.error("Firestore cache upload failed:", e));
@@ -464,15 +468,36 @@ export class TrackSessionFacade {
       };
     });
 
-    const updatedTrack: TrackLyricsData = {
+    const updatedTrack = this.enrichWithPreparedLyricsInput({
       ...track,
       translationPromptVersion: TRANSLATION_PROMPT_VERSION,
       lines: updatedLines
-    };
+    }, targetLanguage);
 
     this.trackCacheRepository.saveTrackData(updatedTrack.trackId, updatedTrack);
     await this.aiClient.saveTrackToSharedCache(updatedTrack).catch(e => console.error("Firestore cache upload failed:", e));
     return updatedTrack;
+  }
+
+  private enrichWithPreparedLyricsInput(trackData: TrackLyricsData, targetLanguage: string): TrackLyricsData {
+    if (!trackData.rawLyrics) return trackData;
+    try {
+      const provider = typeof trackData.source === 'string' ? trackData.source : 'unknown';
+      const authors = trackData.authors ? trackData.authors.split(',').map((a: string) => a.trim()) : null;
+      return {
+        ...trackData,
+        preparedLyricsInput: prepareLyricsInput(
+          trackData.title,
+          [trackData.artist],
+          trackData.rawLyrics,
+          targetLanguage,
+          { provider, url: trackData.lyricSource || null, authors }
+        )
+      };
+    } catch (e) {
+      console.error("Failed to enrich track with prepared lyrics input:", e);
+      return trackData;
+    }
   }
 
   /**

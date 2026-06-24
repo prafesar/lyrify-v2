@@ -1,6 +1,7 @@
 
 import { type Track, Artist, Album } from '../constants';
 import { sqliteService } from './sqliteService';
+import { PreparedLyricsInput } from './lyricsPreprocessor';
 export type { Track };
 
 export interface LyricsData {
@@ -568,6 +569,7 @@ export interface TrackLyricsData {
   lines: LyricsLine[];
   phrases?: Phrase[];
   fullTranslation?: string;
+  preparedLyricsInput?: PreparedLyricsInput;
   promptVersion?: number;
   translationPromptVersion?: number;
   processingStatus: {

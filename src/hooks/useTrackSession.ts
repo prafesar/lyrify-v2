@@ -21,6 +21,7 @@ import {
   buildStarredLinesAnalysisInput, 
   mergeGeneratedPhrasesForLines
 } from "../services/lyricsAnalysisService";
+import { prepareLyricsInput } from "../services/lyricsPreprocessor";
 
 export interface UseTrackSessionResult {
   currentTrack: TrackLyricsData | null;
