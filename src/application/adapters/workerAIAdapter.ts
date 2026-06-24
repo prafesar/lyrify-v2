@@ -1,5 +1,5 @@
 import { AiPort, TrackMetadata, TrackMeaningResult, TrackMeaningEntry } from "../ports/aiPort";
-import { TrackLyricsData } from "../../services/musicService";
+import { TrackLyricsData, StructuredLectureBlock } from "../../services/musicService";
 
 /**
  * WorkerAIAdapter (Placeholder Migration Seam)
@@ -13,6 +13,25 @@ import { TrackLyricsData } from "../../services/musicService";
  */
 export class WorkerAIAdapter implements AiPort {
   private workerBaseUrl = "/api/v2/worker"; // Placeholer Cloudflare Worker boundary
+
+  async fetchStructuredLecture(
+    lyrics: string,
+    title: string,
+    artist: string,
+    targetLanguage: string,
+    forceRegenerate?: boolean
+  ): Promise<StructuredLectureBlock[]> {
+    throw new Error("WorkerAIAdapter is currently in placeholder state. Please use GeminiAIAdapter.");
+  }
+
+  async getCachedStructuredLecture(
+    lyrics: string,
+    title: string,
+    artist: string,
+    targetLanguage: string
+  ): Promise<StructuredLectureBlock[] | null> {
+    throw new Error("WorkerAIAdapter is currently in placeholder state. Please use GeminiAIAdapter.");
+  }
 
   async fetchTrackMeaning(
     lyrics: string,

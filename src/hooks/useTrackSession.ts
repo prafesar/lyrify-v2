@@ -21,7 +21,6 @@ import {
   buildStarredLinesAnalysisInput, 
   mergeGeneratedPhrasesForLines
 } from "../services/lyricsAnalysisService";
-import { fetchStructuredLecture } from "../services/geminiService";
 
 export interface UseTrackSessionResult {
   currentTrack: TrackLyricsData | null;
@@ -370,7 +369,7 @@ export function useTrackSession(): UseTrackSessionResult {
       if (force || !trackData.lectureBlocks || trackData.lectureBlocks.length === 0) {
         setLoadingStep("lecture");
         try {
-          const blocks = await fetchStructuredLecture(trackData.rawLyrics, trackData.title, trackData.artist, targetLanguage, force);
+          const blocks = await aiClient.fetchStructuredLecture(trackData.rawLyrics, trackData.title, trackData.artist, targetLanguage, force);
           trackData = {
             ...trackData,
             lectureBlocks: blocks

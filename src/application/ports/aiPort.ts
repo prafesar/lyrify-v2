@@ -1,4 +1,4 @@
-import { TrackLyricsData } from "../../services/musicService";
+import { TrackLyricsData, StructuredLectureBlock } from "../../services/musicService";
 
 export interface TrackMetadata {
   title: string;
@@ -48,6 +48,21 @@ export const ANALYSIS_PROMPT_VERSION = 3;
 export const TRANSLATION_PROMPT_VERSION = 4;
 
 export interface AiPort {
+  fetchStructuredLecture(
+    lyrics: string,
+    title: string,
+    artist: string,
+    targetLanguage: string,
+    forceRegenerate?: boolean
+  ): Promise<StructuredLectureBlock[]>;
+
+  getCachedStructuredLecture(
+    lyrics: string,
+    title: string,
+    artist: string,
+    targetLanguage: string
+  ): Promise<StructuredLectureBlock[] | null>;
+
   fetchTrackMeaning(
     lyrics: string,
     metadata: TrackMetadata,

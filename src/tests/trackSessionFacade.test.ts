@@ -21,6 +21,8 @@ vi.mock("../application/adapters/geminiAIAdapter", () => {
       saveTrackToSharedCache: vi.fn(),
       computeTrackKey: vi.fn(),
       computeLyricsHash: vi.fn(),
+      fetchStructuredLecture: vi.fn(),
+      getCachedStructuredLecture: vi.fn().mockResolvedValue(null),
     },
   };
 });

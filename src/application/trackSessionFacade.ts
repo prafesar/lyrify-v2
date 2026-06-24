@@ -5,7 +5,6 @@ import { DailyTrackerRepositoryPort } from "./ports/dailyTrackerRepositoryPort";
 import { LyricsProviderPort } from "./ports/lyricsProviderPort";
 import { MusicMetadataPort } from "./ports/musicMetadataPort";
 import { TrackLyricsData, Track } from "../services/musicService";
-import { getCachedStructuredLecture } from "../services/geminiService";
 
 export class TrackSessionFacade {
   constructor(
@@ -488,7 +487,7 @@ export class TrackSessionFacade {
     onUpdate?: (updated: TrackLyricsData) => void
   ) {
     if (!rawLyrics) return;
-    getCachedStructuredLecture(rawLyrics, title, artist, targetLanguage)
+    this.aiClient.getCachedStructuredLecture(rawLyrics, title, artist, targetLanguage)
       .then(blocks => {
         if (blocks && blocks.length > 0) {
           const currentCached = this.trackCacheRepository.getCachedTrack(trackId);

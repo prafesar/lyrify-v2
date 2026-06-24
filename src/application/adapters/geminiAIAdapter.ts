@@ -1,8 +1,27 @@
 import { AiPort, TrackMetadata, TrackMeaningResult, TrackMeaningEntry } from "../ports/aiPort";
-import { TrackLyricsData } from "../../services/musicService";
+import { TrackLyricsData, StructuredLectureBlock } from "../../services/musicService";
 import * as originalGeminiService from "../../services/geminiService";
 
 export class GeminiAIAdapter implements AiPort {
+  async fetchStructuredLecture(
+    lyrics: string,
+    title: string,
+    artist: string,
+    targetLanguage: string,
+    forceRegenerate?: boolean
+  ): Promise<StructuredLectureBlock[]> {
+    return originalGeminiService.fetchStructuredLecture(lyrics, title, artist, targetLanguage, forceRegenerate);
+  }
+
+  async getCachedStructuredLecture(
+    lyrics: string,
+    title: string,
+    artist: string,
+    targetLanguage: string
+  ): Promise<StructuredLectureBlock[] | null> {
+    return originalGeminiService.getCachedStructuredLecture(lyrics, title, artist, targetLanguage);
+  }
+
   async fetchTrackMeaning(
     lyrics: string,
     metadata: TrackMetadata,
