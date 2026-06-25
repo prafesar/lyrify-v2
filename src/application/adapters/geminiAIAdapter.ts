@@ -262,7 +262,7 @@ export class GeminiAIAdapter implements AiPort {
     let rawLyrics = "";
 
     if (isPreparedInput(lyrics)) {
-      rawLyrics = lyrics.track.rawLyrics || "";
+      rawLyrics = lyrics.lines.map(l => l.text).join("\n");
       if (!finalTrackKey) {
         finalTrackKey = await this.computeTrackKey(lyrics.track.title, lyrics.track.artists);
       }

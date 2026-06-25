@@ -159,7 +159,14 @@ describe("TrackSessionFacade Unit Tests", () => {
 
       const result = await trackSessionFacade.runDeepPhraseAnalysis(track, "Russian");
 
-      expect(aiClient.getPhraseAnalysis).toHaveBeenCalledWith("Hello from the other side", "track-adele-hello", "Russian");
+      expect(aiClient.getPhraseAnalysis).toHaveBeenCalledWith(
+        expect.objectContaining({
+          track: { title: "Hello", artists: ["adele"] },
+          targetLanguage: "Russian"
+        }),
+        "track-adele-hello",
+        "Russian"
+      );
       expect(result.processingStatus.stage3_completed).toBe(true);
       expect(result.lines[0].phrases).toHaveLength(1);
       expect(result.lines[0].phrases[0].text).toBe("the other side");

@@ -299,19 +299,20 @@ export class TrackSessionFacade {
       return track;
     }
 
-    const trackKey = await this.aiClient.computeTrackKey(track.title, [track.artist]);
+    const enrichedTrack = this.enrichWithPreparedLyricsInput(track, targetLanguage);
+    const trackKey = await this.aiClient.computeTrackKey(enrichedTrack.title, [enrichedTrack.artist]);
 
     const phraseAnalysisResult = await this.aiClient.getPhraseAnalysis(
-      track.rawLyrics,
+      enrichedTrack.preparedLyricsInput || enrichedTrack.rawLyrics,
       trackKey,
       targetLanguage
     );
 
-    const updatedLines = track.lines.map(line => {
+    const updatedLines = enrichedTrack.lines.map(line => {
       const linePhrases = phraseAnalysisResult
         .filter((p: any) => p.lineIndex === line.index)
         .map((p: any) => ({
-          id: `${track.trackId}:p:${p.text.replace(/\s+/g, '_')}`,
+          id: `${enrichedTrack.trackId}:p:${p.text.replace(/\s+/g, '_')}`,
           text: p.text,
           translation: p.translation,
           explanation: p.explanation,
@@ -327,12 +328,12 @@ export class TrackSessionFacade {
     });
 
     const updated = this.enrichWithPreparedLyricsInput({
-      ...track,
+      ...enrichedTrack,
       lines: updatedLines,
-      processingStatus: { ...track.processingStatus, stage3_completed: true }
+      processingStatus: { ...enrichedTrack.processingStatus, stage3_completed: true }
     }, targetLanguage);
 
-    this.trackCacheRepository.saveTrackData(track.trackId, updated);
+    this.trackCacheRepository.saveTrackData(enrichedTrack.trackId, updated);
     await this.aiClient.saveTrackToSharedCache(updated).catch(e => console.error("Firestore cache upload failed:", e));
     return updated;
   }

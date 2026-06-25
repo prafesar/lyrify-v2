@@ -24,7 +24,7 @@ To improve cache consistency and decouple the server-side AI orchestration from 
 ```typescript
 export interface PreparedLyricsLine {
   lineIndex: number; // Preserves order from source lyrics
-  lineKey: string;   // Main stable hash of the normalized line text
+  lineKey: string;   // Stable 8-character FNV-1a hex hash of the normalized line text
   text: string;      // Standardized text after client cleanup
   blockType?: "intro" | "verse" | "pre_chorus" | "chorus" | "bridge" | "outro" | "unknown";
 }
@@ -42,9 +42,26 @@ export interface PreparedLyricsInput {
   } | null;
   lines: PreparedLyricsLine[];
 }
+
+export interface LineTranslationResult {
+  lineKey: string;
+  lineIndex: number;
+  originalText: string;
+  translation: string;
+  language: string;
+}
+
+export interface PhraseAnalysisResult {
+  text: string;
+  language: string;
+  translation: string;
+  explanation: string;
+  lineIndex: number;
+  lineKey?: string;
+}
 ```
 
-- **`lineKey` (Canonical Key)**: The client and server match lines by `lineKey` (SHA/Murmur hash of normalized lowercase text), ensuring translations and breakdowns remain perfectly aligned even if line indexes shift slightly.
+- **`lineKey` (Canonical Key)**: The client and server match lines by `lineKey` (FNV-1a hash of normalized lowercase text), ensuring translations and breakdowns remain perfectly aligned even if line indexes shift slightly.
 - **`lineIndex`**: Serves purely to preserve original order.
 - **Track Normalization**: Track titles are stripped of bracketed additions (e.g., `(Live)` or `[Remastered]`) by the client during preparation to improve cache hit rates.
 
@@ -74,125 +91,83 @@ Any operational or execution error returns an appropriate HTTP status code (`400
 }
 ```
 
-Common Error Codes:
-- `BAD_REQUEST`: Invalid parameters or missing payload properties.
-- `UNAUTHORIZED`: Invalid or expired bearer token.
-- `AI_GENERATION_FAILED`: The LLM failed to produce structured or parsable results.
-- `CACHE_MISS`: No cached data was available (only returned when explicit cash checks are made).
-- `INTERNAL_SERVER_ERROR`: Unhandled worker exceptions.
-
 ---
 
 ## 📝 Endpoints Contract
 
-### 1. Retrieve Cached Structured Lecture
-Checks if a structured learning guide/lecture exists in the worker's shared/distributed cache for a specific track.
+### 1. Retrieve Line Translations (Canonical Integration)
+Generates or retrieves precise line-by-line translations for the track lines.
 
-- **Endpoint**: `/lecture/get-cached`
+- **Endpoint**: `/translations/fetch`
 - **Method**: `POST`
-- **Request Payload**: `PreparedLyricsInput` (canonical format, see Shared Types & Data Rules)
-  - *Legacy format (deprecated)*: `GetCachedLectureRequest { lyrics: string, title: string, artist: string, targetLanguage: string }`
-- **Example (Canonical Payload)**:
+- **Request Payload**: `PreparedLyricsInput` (canonical format)
+- **Response Payload**: `LineTranslationResult[]`
+- **Example Response (`data`)**:
   ```json
-  {
-    "track": {
-      "title": "There Is a Light That Never Goes Out",
-      "artists": ["The Smiths"]
-    },
-    "targetLanguage": "Russian",
-    "source": {
-      "provider": "genius",
-      "url": "https://genius.com/The-smiths-there-is-a-light-that-never-goes-out-lyrics"
-    },
-    "lines": [
-      { "lineIndex": 0, "lineKey": "f68a2bc", "text": "Take me out tonight" },
-      { "lineIndex": 1, "lineKey": "01b239c", "text": "Where there's music and there's people" }
-    ]
-  }
+  [
+    {
+      "lineKey": "982bcb7c",
+      "lineIndex": 0,
+      "originalText": "Hello from the other side",
+      "translation": "Привет с другой стороны",
+      "language": "es"
+    }
+  ]
   ```
-- **Responses**:
-  - **`200 OK` (Cache Hit)**:
-    ```json
-    {
-      "status": "success",
-      "data": [
-        {
-          "id": "intro_meaning",
-          "kind": "intro",
-          "text": "This Smiths classic uses a dark romantic humor...",
-          "source": "ai"
-        },
-        {
-          "id": "vocabulary_focus",
-          "kind": "lexical_groups",
-          "text": "- **Take me out**: пригласи меня на свидание/прогулку...",
-          "source": "ai"
-        }
-      ]
-    }
-    ```
-  - **`200 OK` (Cache Miss)**:
-    ```json
-    {
-      "status": "success",
-      "data": null
-    }
-    ```
 
 ---
 
-### 2. Generate or Fetch Structured Lecture
-Generates or retrieves a comprehensive, structured lecture/learning breakdown of a song. If not cached, triggers the LLM (Gemini) orchestration serverless pipeline.
+### 2. Retrieve Phrase / Study Analysis (Stage 3 Deep Analysis)
+Identifies high-value phrase segments (2-6 words each) for study, providing grammatical/cultural annotations.
+
+- **Endpoint**: `/phrases/fetch`
+- **Method**: `POST`
+- **Request Payload**: `PreparedLyricsInput` (canonical format)
+- **Response Payload**: `PhraseAnalysisResult[]`
+- **Example Response (`data`)**:
+  ```json
+  [
+    {
+      "text": "the other side",
+      "language": "en",
+      "translation": "другая сторона",
+      "explanation": "Разговорная идиома, означающая буквально другую сторону чего-либо, либо метафорически другой мир.",
+      "lineIndex": 0,
+      "lineKey": "982bcb7c"
+    }
+  ]
+  ```
+
+---
+
+### 3. Generate or Fetch Structured Lecture
+Generates or retrieves a comprehensive, structured lecture/learning breakdown of a song (cultural notes, active vocabulary themes).
 
 - **Endpoint**: `/lecture/fetch`
 - **Method**: `POST`
-- **Request Payload**: 
-  ```typescript
-  interface FetchLectureRequest {
-    lyricsInput: PreparedLyricsInput; // Canonical structured input
-    forceRegenerate?: boolean;
-    
-    // Legacy fields (deprecated):
-    lyrics?: string;
-    title?: string;
-    artist?: string;
-    targetLanguage?: string;
-  }
+- **Request Payload**: `PreparedLyricsInput` (canonical format)
+- **Response Payload**: `StructuredLectureBlock[]`
+- **Example Response (`data`)**:
+  ```json
+  [
+    {
+      "id": "block-1",
+      "kind": "intro",
+      "title": "Sociocultural Context & Message",
+      "text": "Intro text explaining the deeper background of this track...",
+      "source": "ai"
+    }
+  ]
   ```
-- **Responses**:
-  - **`200 OK` (Successful Generation / Retrieval)**:
-    ```json
-    {
-      "status": "success",
-      "data": [
-        {
-          "id": "block-1",
-          "kind": "intro",
-          "text": "Intro text explaining background...",
-          "source": "ai"
-        }
-      ]
-    }
-    ```
-  - **`502 Bad Gateway` / `500 Internal Server Error` (AI Failure)**:
-    ```json
-    {
-      "status": "error",
-      "error": {
-        "code": "AI_GENERATION_FAILED",
-        "message": "Underlying LLM response was unparsable or timeout occurred."
-      }
-    }
-    ```
 
 ---
 
-### 3. Fetch or Generate Track Meaning (LEGACY / DEPRECATED)
-> ⚠️ **Status: LEGACY / DEPRECATED**. As per the migration strategy, the standalone track meaning capability will not be developed or maintained as a separate path. All high-level song meaning, cultural context, and overall analysis should live as a semantic block of kind `intro` inside the unified `/lecture/fetch` response. This prevents multiple fragmented LLM calls and consolidates track comprehension.
+### 4. Fetch or Generate Track Meaning (LEGACY / DEPRECATED)
+> ⚠️ **Status: LEGACY / DEPRECATED**. This standalone endpoint exists for backward compatibility but is excluded from the primary target design flow. Meaning summaries are now embedded inside the unified `/lecture/fetch` response under blocks of kind `intro`.
 
 - **Endpoint**: `/track-meaning/fetch`
 - **Method**: `POST`
-- **Request Payload (Legacy)**:
+- **Request Payload**:
   ```typescript
   interface FetchTrackMeaningRequest {
     lyrics: string;
@@ -200,31 +175,14 @@ Generates or retrieves a comprehensive, structured lecture/learning breakdown of
       title: string;
       artists: string[];
       targetLanguage?: string;
-      originalLanguage?: string;
     };
-    promptVersion?: number;
-    forceRegenerate?: boolean;
   }
   ```
-- **Responses**:
-  - **`200 OK`**:
-    ```json
-    {
-      "status": "success",
-      "data": {
-        "songKey": "track_taylor_swift_our_song",
-        "meaning": "An acoustic country-pop track describing a young couple's shared moments...",
-        "originalLanguage": "English",
-        "lastUpdated": "2026-06-24T14:31:00Z",
-        "promptVersion": 3
-      }
-    }
-    ```
 
 ---
 
 ## ⚙️ Client Transition Roadmap (Recommended Next Steps)
 1. **Durable API Contract**: Maintain this specification document to keep client and server aligned.
-2. **Transport Layer implementation**: Implement the standard, safe HTTP `fetch` utility in `WorkerAIAdapter` (already initiated in code edits).
+2. **Transport Layer implementation**: Implement the standard, safe HTTP `fetch` utility in `WorkerAIAdapter`.
 3. **Local Testing Proxy**: Set up local Mock Worker routes inside the Express development server (or mock responses in Vitest).
 4. **Gradual Adapter Swap**: Wire specific domains incrementally by updating the composition root in `/src/application/index.ts`.
