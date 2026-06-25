@@ -20,13 +20,14 @@ const lyricsProvider = new BrowserLyricsProvider();
 const musicMetadataProvider = new BrowserMusicMetadata();
 
 // ============================================================================
-// AI TRANSPORT CUTOVER POINT (FUTURE EXTERNAL API / CLOUDFLARE WORKER SWITCH)
+// AI TRANSPORT CUTOVER POINT (PRODUCTION Rest API / CLOUDFLARE WORKER SWITCH)
 // ============================================================================
-// To switch the entire application's AI layer to the Cloudflare Worker API:
-// 1. Swap the active declaration below to use `new WorkerAIAdapter()` instead of `geminiAiClient`.
-// This single point controls all AI translation, lecture, and analysis transport.
-export const aiClient = geminiAiClient; // Current active Gemini transport
-// export const aiClient = new WorkerAIAdapter(); // Future Cloudflare Worker transport
+// Switch entire application to Worker-based Rest API transport.
+// Active production Rest API transport connecting to api.cantolex.com
+export const aiClient = new WorkerAIAdapter();
+
+// Legacy / fallback client preserved for backward compatibility and rollbacks
+export const legacyAiClient = geminiAiClient;
 // ============================================================================
 
 // Compose/Wire the TrackSessionFacade inside the composition root

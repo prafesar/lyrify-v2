@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { aiClient, userDataRepository } from '../application';
+import { legacyAiClient as aiClient, userDataRepository } from '../application';
 import * as originalGeminiService from '../services/geminiService';
 import * as originalCardService from '../services/localCardService';
 import * as originalDailyTrackerService from '../services/dailyTrackerService';

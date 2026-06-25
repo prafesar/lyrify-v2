@@ -148,7 +148,8 @@ export class TrackSessionFacade {
   }
 
   /**
-   * Fetches lyrics (if missing) and runs Stage 2 AI analysis (track meaning and line translations).
+   * Fetches lyrics (if missing) and runs Stage 2 AI analysis (line-by-line translations).
+   * Note: The primary overall track meaning is subsequently derived from structured lectures.
    */
   async analyzeSongMeaningAndTranslations(
     track: TrackLyricsData,

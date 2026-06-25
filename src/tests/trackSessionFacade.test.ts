@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { trackSessionFacade } from "../application";
-import { aiClient } from "../application/adapters/geminiAIAdapter";
 import { 
   trackCacheRepository, 
   recentHistoryRepository, 
@@ -8,10 +7,9 @@ import {
 } from "../application/adapters/browserUserDataRepository";
 import { TrackLyricsData } from "../services/musicService";
 
-// Mock the dependencies of the Facade
-vi.mock("../application/adapters/geminiAIAdapter", () => {
+const { mockAiClient } = vi.hoisted(() => {
   return {
-    aiClient: {
+    mockAiClient: {
       normalizeString: vi.fn(),
       getTrackMeaningFromCache: vi.fn(),
       fetchTrackMeaning: vi.fn(),
@@ -26,6 +24,34 @@ vi.mock("../application/adapters/geminiAIAdapter", () => {
     },
   };
 });
+
+// Mock the dependencies of the Facade
+vi.mock("../application/adapters/geminiAIAdapter", () => {
+  return {
+    aiClient: mockAiClient,
+  };
+});
+
+vi.mock("../application/adapters/workerAIAdapter", () => {
+  return {
+    WorkerAIAdapter: class {
+      normalizeString = mockAiClient.normalizeString;
+      getTrackMeaningFromCache = mockAiClient.getTrackMeaningFromCache;
+      fetchTrackMeaning = mockAiClient.fetchTrackMeaning;
+      getLineTranslations = mockAiClient.getLineTranslations;
+      getPhraseAnalysis = mockAiClient.getPhraseAnalysis;
+      extractLyricsMetadata = mockAiClient.extractLyricsMetadata;
+      saveTrackToSharedCache = mockAiClient.saveTrackToSharedCache;
+      computeTrackKey = mockAiClient.computeTrackKey;
+      computeLyricsHash = mockAiClient.computeLyricsHash;
+      fetchStructuredLecture = mockAiClient.fetchStructuredLecture;
+      getCachedStructuredLecture = mockAiClient.getCachedStructuredLecture;
+    },
+  };
+});
+
+const aiClient = mockAiClient;
+
 
 vi.mock("../application/adapters/browserUserDataRepository", () => {
   return {
