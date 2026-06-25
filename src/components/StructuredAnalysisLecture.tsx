@@ -685,21 +685,23 @@ export const StructuredAnalysisLecture: React.FC<StructuredAnalysisLectureProps>
       {/* Regeneration action panel at the deep bottom */}
       {handleRegenerateAnalysis && (
         <div className="border border-app-card-border/30 rounded-3xl p-6 flex flex-col md:flex-row items-center justify-between gap-6 mt-10" id="reset-lecture-block">
-          <div className="space-y-1 text-center md:text-left select-none">
-            <h5 className="text-[12px] font-black uppercase tracking-[0.18em] text-app-fg leading-none flex items-center justify-center md:justify-start gap-1">
-              <RefreshCw size={11} className="text-app-accent shrink-0" /> Rebuild Breakdown Lecture
-            </h5>
-            <p className="text-[11px] text-app-fg opacity-40 max-w-sm font-medium leading-normal">
-              Re-engage Gemini AI music specialists to reconstruct the structured language breakdown essay from the source lyrics block.
+          <div className="space-y-2 text-center md:text-left w-full">
+            <button
+              type="button"
+              disabled={isGeneratingAnalysis}
+              onClick={handleRegenerateAnalysis}
+              className="group text-[12px] font-black uppercase tracking-[0.18em] text-app-fg hover:text-app-accent leading-none flex items-center justify-center md:justify-start gap-2 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none"
+            >
+              <RefreshCw 
+                size={12} 
+                className={`text-app-accent shrink-0 transition-transform duration-500 ${isGeneratingAnalysis ? 'animate-spin' : 'group-hover:rotate-180'}`} 
+              />
+              <span>{isGeneratingAnalysis ? 'Rebuilding...' : 'Rebuild breakdown'}</span>
+            </button>
+            <p className="text-[11px] text-app-fg opacity-40 max-w-sm font-medium leading-normal select-none">
+              Re-engage serverless AI music specialists to reconstruct the structured language breakdown essay from the source lyrics block.
             </p>
           </div>
-          <button
-            type="button"
-            onClick={handleRegenerateAnalysis}
-            className="flex items-center gap-2 px-5 py-2.5 bg-app-fg hover:bg-app-fg-hover cursor-pointer text-app-bg rounded-xl text-[10px] font-black uppercase tracking-wider transition-all hover:scale-[1.03]"
-          >
-            Regenerate Breakdown
-          </button>
         </div>
       )}
 

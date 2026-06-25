@@ -601,6 +601,7 @@ export default function App() {
     setTargetLanguage,
     theme,
     setTheme,
+    lecturePromptVariant,
     lyricsDisplayMode,
     isStarFilterActive,
     previewLyricsMode,
@@ -624,6 +625,7 @@ export default function App() {
     
     handleSetLyricsDisplayMode,
     handleToggleStarFilter,
+    handleSetLecturePromptVariant,
     handleOnboardingDismiss,
     handleOnboardingSelect,
     handleNextStepClick,
@@ -3504,6 +3506,8 @@ export default function App() {
               setTargetLanguage={setTargetLanguage}
               theme={theme}
               setTheme={setTheme}
+              lecturePromptVariant={lecturePromptVariant}
+              setLecturePromptVariant={handleSetLecturePromptVariant}
               onResetData={resetUserData}
               onClose={() => goBack({ type: "explore" })}
             />

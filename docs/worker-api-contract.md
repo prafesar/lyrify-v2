@@ -18,6 +18,10 @@ To prevent leaky abstractions, **all client interactions with AI logic and serve
   Content-Type: application/json
   Accept: application/json
   ```
+- **Prompt Variants (AI Lecture Depth)**:
+  To customize the depth of the AI-generated lecture breakdown, the `/api/v1/lecture/fetch` flow supports a custom HTTP header:
+  - `x-lyrify-lecture-variant: compact` (Default): Generates a focused, concise linguistic analysis and core phrases for quicker loading.
+  - `x-lyrify-lecture-variant: rich`: Generates a deeply detailed linguistic commentary, cultural essay, and exhaustive idiomatic study material.
 
 ## 🏛️ Shared Types & Data Rules
 

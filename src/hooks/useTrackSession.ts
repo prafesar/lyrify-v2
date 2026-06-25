@@ -424,18 +424,6 @@ export function useTrackSession(): UseTrackSessionResult {
   ) => {
     if (!currentTrack || isGeneratingAnalysis) return;
 
-    const isFallbackError = currentTrack.lectureBlocks?.some(b => b.id === 'fallback-overview');
-    let confirmed = true;
-    if (!isFallbackError) {
-      try {
-        confirmed = window.confirm("Are you sure you want to reset and regenerate the analysis? This will clear current phrases and meaning.");
-      } catch (e) {
-        // Fallback to true if confirm is blocked by sandbox iframe
-        confirmed = true;
-      }
-    }
-    if (!confirmed) return;
-
     const resetTrack: TrackLyricsData = {
       ...currentTrack,
       meaning: undefined,

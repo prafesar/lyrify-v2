@@ -41,6 +41,12 @@ export interface TranslationDictionary {
     guest: string;
     signInPrompt: string;
     preferences: string;
+    lecturePromptVariant: string;
+    lecturePromptVariantCompact: string;
+    lecturePromptVariantRich: string;
+    lecturePromptVariantDesc: string;
+    lecturePromptVariantCompactDesc: string;
+    lecturePromptVariantRichDesc: string;
     uiLanguage: string;
     targetLanguage: string;
     appearance: string;
@@ -486,6 +492,12 @@ const en: TranslationDictionary = {
     guest: 'Guest User',
     signInPrompt: 'Sign in to sync your progress',
     preferences: 'Preferences',
+    lecturePromptVariant: 'AI Lecture Breakdown',
+    lecturePromptVariantCompact: 'Compact',
+    lecturePromptVariantRich: 'Rich',
+    lecturePromptVariantDesc: 'Choose depth of the generated breakdown essay',
+    lecturePromptVariantCompactDesc: 'Compact mode: Generates a focused, concise linguistic analysis and core phrases. Faster response.',
+    lecturePromptVariantRichDesc: 'Rich mode: Generates deeply detailed linguistic commentaries, cultural essays, and exhaustive idioms. Comprehensive response.',
     uiLanguage: 'App Language',
     targetLanguage: 'Target Language',
     appearance: 'Appearance',
@@ -931,6 +943,12 @@ const ru: TranslationDictionary = {
     guest: 'Гость',
     signInPrompt: 'Войдите, чтобы синхронизировать прогресс',
     preferences: 'Настройки',
+    lecturePromptVariant: 'AI-разбор песни',
+    lecturePromptVariantCompact: 'Компактный',
+    lecturePromptVariantRich: 'Полный',
+    lecturePromptVariantDesc: 'Выберите глубину генерируемого разбора песни',
+    lecturePromptVariantCompactDesc: 'Компактный режим: Генерирует лаконичный лингвистический анализ и ключевые фразы. Быстрый ответ.',
+    lecturePromptVariantRichDesc: 'Полный режим: Генерирует глубокий разбор контекста, подробные грамматические комментарии и идиомы. Всеобъемлющий ответ.',
     uiLanguage: 'Язык интерфейса',
     targetLanguage: 'Изучаемый язык',
     appearance: 'Оформление',

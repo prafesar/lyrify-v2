@@ -1,6 +1,7 @@
 import { AiPort, TrackMetadata, TrackMeaningResult, TrackMeaningEntry } from "../ports/aiPort";
 import { TrackLyricsData, StructuredLectureBlock, extractTrackMeaning } from "../../services/musicService";
 import { PreparedLyricsInput, prepareLyricsInput, normalizeTrackTitle, normalizeArtists, computeStableHash } from "../../services/lyricsPreprocessor";
+import { userPreferencesRepository } from "./browserUserDataRepository";
 
 function isPreparedInput(input: any): input is PreparedLyricsInput {
   return input && typeof input === 'object' && 'lines' in input && Array.isArray(input.lines);
@@ -19,7 +20,7 @@ export class WorkerAIAdapter implements AiPort {
    * Universal HTTP POST helper to delegate AI capability calls to the Cloudflare Worker backend.
    * Handles JSON request payload serialization, response envelope validation, and friendly error parsing.
    */
-  private async postToWorker<T>(endpoint: string, body: any): Promise<T> {
+  private async postToWorker<T>(endpoint: string, body: any, customHeaders?: Record<string, string>): Promise<T> {
     const url = `${this.workerBaseUrl}${endpoint}`;
     try {
       const response = await fetch(url, {
@@ -27,6 +28,7 @@ export class WorkerAIAdapter implements AiPort {
         headers: {
           "Content-Type": "application/json",
           "Accept": "application/json",
+          ...customHeaders
         },
         body: JSON.stringify(body),
       });
@@ -71,7 +73,10 @@ export class WorkerAIAdapter implements AiPort {
         "English"
       );
     }
-    return this.postToWorker<StructuredLectureBlock[]>("/api/v1/lecture/fetch", preparedInput);
+    const variant = userPreferencesRepository.getPreference("lyrify_lecture_variant", "compact");
+    return this.postToWorker<StructuredLectureBlock[]>("/api/v1/lecture/fetch", preparedInput, {
+      "x-lyrify-lecture-variant": variant
+    });
   }
 
   async getCachedStructuredLecture(
@@ -288,7 +293,10 @@ export class WorkerAIAdapter implements AiPort {
       );
     }
 
-    const blocks = await this.postToWorker<any[]>("/api/v1/lecture/fetch", preparedInput);
+    const variant = userPreferencesRepository.getPreference("lyrify_lecture_variant", "compact");
+    const blocks = await this.postToWorker<any[]>("/api/v1/lecture/fetch", preparedInput, {
+      "x-lyrify-lecture-variant": variant
+    });
     const results: any[] = [];
     
     const lineKeyToIndex = new Map<string, number>();
