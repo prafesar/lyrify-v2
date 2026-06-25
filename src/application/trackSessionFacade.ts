@@ -5,7 +5,7 @@ import { DailyTrackerRepositoryPort } from "./ports/dailyTrackerRepositoryPort";
 import { LyricsProviderPort } from "./ports/lyricsProviderPort";
 import { MusicMetadataPort } from "./ports/musicMetadataPort";
 import { TrackLyricsData, Track } from "../services/musicService";
-import { prepareLyricsInput } from "../services/lyricsPreprocessor";
+import { prepareLyricsInput, computeLineKey } from "../services/lyricsPreprocessor";
 
 export class TrackSessionFacade {
   constructor(
@@ -222,6 +222,9 @@ export class TrackSessionFacade {
       this.trackCacheRepository.saveTrackData(trackData.trackId, trackData);
     }
 
+    // Pre-enrich with PreparedLyricsInput for the translation flow
+    trackData = this.enrichWithPreparedLyricsInput(trackData, targetLanguage);
+
     if (onStepChange) onStepChange("meaning");
 
     const trackKey = await this.aiClient.computeTrackKey(trackData.title, [trackData.artist]);
@@ -243,7 +246,7 @@ export class TrackSessionFacade {
       try {
         const [result, translationsResult] = await Promise.all([
           this.aiClient.fetchTrackMeaning(lyrics || "", metadata),
-          this.aiClient.getLineTranslations(lyrics || "", trackKey, targetLanguage)
+          this.aiClient.getLineTranslations(trackData.preparedLyricsInput || lyrics || "", trackKey, targetLanguage)
         ]);
         
         const langKey = targetLanguage.toLowerCase().trim();
@@ -253,7 +256,14 @@ export class TrackSessionFacade {
         if (langKey === 'polish') meaning = result.meanings.pl;
 
         const updatedLines = trackData.lines.map((line, idx) => {
-          const matched = translationsResult[idx] || translationsResult.find((t: any) => t.originalText === line.original);
+          if (!line.original.trim()) {
+            return line;
+          }
+          const targetLineKey = computeLineKey(line.original);
+          const matched = translationsResult.find((t: any) => t.lineKey === targetLineKey)
+            || translationsResult.find((t: any) => (t.original || t.originalText) === line.original)
+            || translationsResult[idx];
+
           return {
             ...line,
             translation: matched ? matched.translation : (line.translation || ""),
@@ -280,9 +290,16 @@ export class TrackSessionFacade {
       }
     } else {
       // Meaning cached, but reload translations to confirm accuracy or ensure they're loaded
-      const translationsResult = await this.aiClient.getLineTranslations(lyrics || "", trackKey, targetLanguage);
+      const translationsResult = await this.aiClient.getLineTranslations(trackData.preparedLyricsInput || lyrics || "", trackKey, targetLanguage);
       const updatedLines = trackData.lines.map((line, idx) => {
-        const matched = translationsResult[idx] || translationsResult.find((t: any) => t.originalText === line.original);
+        if (!line.original.trim()) {
+          return line;
+        }
+        const targetLineKey = computeLineKey(line.original);
+        const matched = translationsResult.find((t: any) => t.lineKey === targetLineKey)
+          || translationsResult.find((t: any) => (t.original || t.originalText) === line.original)
+          || translationsResult[idx];
+
         return {
           ...line,
           translation: matched ? matched.translation : (line.translation || ""),
@@ -452,15 +469,23 @@ export class TrackSessionFacade {
     track: TrackLyricsData,
     targetLanguage: string
   ): Promise<TrackLyricsData> {
-    const trackKey = await this.aiClient.computeTrackKey(track.title, [track.artist]);
+    const updatedTrackPre = this.enrichWithPreparedLyricsInput(track, targetLanguage);
+    const trackKey = await this.aiClient.computeTrackKey(updatedTrackPre.title, [updatedTrackPre.artist]);
     const translationsResult = await this.aiClient.getLineTranslations(
-      track.rawLyrics,
+      updatedTrackPre.preparedLyricsInput || updatedTrackPre.rawLyrics,
       trackKey,
       targetLanguage
     );
 
-    const updatedLines = track.lines.map((line, idx) => {
-      const matched = translationsResult[idx] || translationsResult.find((t: any) => t.originalText === line.original);
+    const updatedLines = updatedTrackPre.lines.map((line, idx) => {
+      if (!line.original.trim()) {
+        return line;
+      }
+      const targetLineKey = computeLineKey(line.original);
+      const matched = translationsResult.find((t: any) => t.lineKey === targetLineKey)
+        || translationsResult.find((t: any) => (t.original || t.originalText) === line.original)
+        || translationsResult[idx];
+
       return {
         ...line,
         translation: matched ? matched.translation : (line.translation || ""),
@@ -469,7 +494,7 @@ export class TrackSessionFacade {
     });
 
     const updatedTrack = this.enrichWithPreparedLyricsInput({
-      ...track,
+      ...updatedTrackPre,
       translationPromptVersion: TRANSLATION_PROMPT_VERSION,
       lines: updatedLines
     }, targetLanguage);

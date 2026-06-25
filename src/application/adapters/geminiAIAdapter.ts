@@ -231,11 +231,11 @@ export class GeminiAIAdapter implements AiPort {
   }
 
   async getLineTranslations(
-    lyrics: string,
+    lyrics: string | PreparedLyricsInput,
     trackKey: string,
     targetLanguage: string
   ): Promise<any[]> {
-    const lyricsHash = await originalGeminiService.computeLyricsHash(lyrics);
+    const lyricsHash = await this.computeLyricsHash(lyrics);
     return originalGeminiService.getLineTranslations(lyrics, trackKey, lyricsHash, targetLanguage);
   }
 
@@ -256,7 +256,7 @@ export class GeminiAIAdapter implements AiPort {
     return originalGeminiService.computeTrackKey(title, artists);
   }
 
-  async computeLyricsHash(lyrics: string): Promise<string> {
+  async computeLyricsHash(lyrics: string | PreparedLyricsInput): Promise<string> {
     return originalGeminiService.computeLyricsHash(lyrics);
   }
 

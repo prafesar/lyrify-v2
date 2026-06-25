@@ -128,4 +128,55 @@ describe("Lyrics Preprocessor Helper", () => {
       expect(result.lines[0].text).toBe("Look at the stars");
     });
   });
+
+  describe("Structured Lyrics Translation Merge", () => {
+    it("should correctly merge translations back into track lines using lineKey", () => {
+      // Mock track lines with different positions/indices than the original translations array
+      const mockTrackLines = [
+        { original: "", translation: "", language: "" }, // empty line
+        { original: "Look at the stars", translation: "", language: "" },
+        { original: "They shine for you", translation: "", language: "" }
+      ];
+
+      const translationsResult = [
+        {
+          original: "Look at the stars",
+          translation: "Посмотри на звёзды",
+          language: "en",
+          type: "verse",
+          lineKey: computeLineKey("Look at the stars"),
+          lineIndex: 0
+        },
+        {
+          original: "They shine for you",
+          translation: "Они светят для тебя",
+          language: "en",
+          type: "verse",
+          lineKey: computeLineKey("They shine for you"),
+          lineIndex: 1
+        }
+      ];
+
+      // Perform matching logic
+      const updatedLines = mockTrackLines.map((line, idx) => {
+        if (!line.original.trim()) {
+          return line;
+        }
+        const targetLineKey = computeLineKey(line.original);
+        const matched = translationsResult.find((t: any) => t.lineKey === targetLineKey)
+          || translationsResult.find((t: any) => (t.original || t.originalText) === line.original)
+          || translationsResult[idx];
+
+        return {
+          ...line,
+          translation: matched ? matched.translation : "",
+          language: matched ? matched.language : "en"
+        };
+      });
+
+      expect(updatedLines[0].translation).toBe(""); // empty line untouched
+      expect(updatedLines[1].translation).toBe("Посмотри на звёзды");
+      expect(updatedLines[2].translation).toBe("Они светят для тебя");
+    });
+  });
 });

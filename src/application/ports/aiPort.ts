@@ -177,7 +177,7 @@ export interface AiPort {
   getLatestAnalyzedTracks(maxCount?: number): Promise<TrackMeaningEntry[]>;
 
   getLineTranslations(
-    lyrics: string,
+    lyrics: string | PreparedLyricsInput,
     trackKey: string,
     targetLanguage: string
   ): Promise<any[]>;
@@ -191,6 +191,6 @@ export interface AiPort {
   saveTrackToSharedCache(track: TrackLyricsData): Promise<void>;
 
   computeTrackKey(title: string, artists: string[]): Promise<string>;
-  computeLyricsHash(lyrics: string): Promise<string>;
+  computeLyricsHash(lyrics: string | PreparedLyricsInput): Promise<string>;
   normalizeString(str: string): string;
 }

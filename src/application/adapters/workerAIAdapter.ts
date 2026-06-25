@@ -257,7 +257,7 @@ export class WorkerAIAdapter implements AiPort {
   }
 
   async getLineTranslations(
-    lyrics: string,
+    lyrics: string | PreparedLyricsInput,
     trackKey: string,
     targetLanguage: string
   ): Promise<any[]> {
@@ -280,7 +280,7 @@ export class WorkerAIAdapter implements AiPort {
     throw new Error("WorkerAIAdapter is currently in placeholder state.");
   }
 
-  async computeLyricsHash(lyrics: string): Promise<string> {
+  async computeLyricsHash(lyrics: string | PreparedLyricsInput): Promise<string> {
     throw new Error("WorkerAIAdapter is currently in placeholder state.");
   }
 

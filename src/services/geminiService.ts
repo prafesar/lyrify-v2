@@ -1,6 +1,7 @@
 import { db } from '../lib/firebase';
 import { doc, getDoc, setDoc, serverTimestamp, collection, query, orderBy, limit, getDocs, where } from 'firebase/firestore';
 import { TrackLyricsData, StructuredLectureBlock } from "./musicService";
+import { PreparedLyricsInput } from "./lyricsPreprocessor";
 
 export enum Type {
   TYPE_UNSPECIFIED = "TYPE_UNSPECIFIED",
@@ -108,8 +109,11 @@ export async function computeTrackKey(title: string, artists: string[]): Promise
   return await computeSHA256(`${normTitle}|${normArtists}`);
 }
 
-export async function computeLyricsHash(lyrics: string): Promise<string> {
-  const normLyrics = (lyrics || '').trim().replace(/\r\n/g, '\n').replace(/\n+/g, '\n');
+export async function computeLyricsHash(lyrics: string | PreparedLyricsInput): Promise<string> {
+  const rawLyricsText = typeof lyrics === "string"
+    ? lyrics
+    : (lyrics?.lines || []).map(l => l.text).join("\n");
+  const normLyrics = (rawLyricsText || "").trim().replace(/\r\n/g, "\n").replace(/\n+/g, "\n");
   return await computeSHA256(normLyrics);
 }
 
@@ -1527,10 +1531,13 @@ export async function getLatestAnalyzedTracks(maxCount: number = 10): Promise<Tr
 // --- New Functions for Divided Translation & Phrase Analysis Cache ---
 
 export interface LineTranslationResult {
-  originalText: string;
+  original: string;
+  originalText?: string; // fallback
   translation: string;
   language: string;
   type: string;
+  lineKey?: string;
+  lineIndex?: number;
 }
 
 export interface PhraseAnalysisResult {
@@ -1548,8 +1555,12 @@ export function getTargetLangCode2Letter(lang: string): 'en' | 'es' | 'ru' {
   return 'en'; // default to english
 }
 
+function isPreparedInput(input: any): input is PreparedLyricsInput {
+  return input && typeof input === 'object' && 'lines' in input && Array.isArray(input.lines);
+}
+
 export async function getLineTranslations(
-  lyrics: string,
+  lyrics: string | PreparedLyricsInput,
   trackKey: string,
   lyricsHash: string,
   targetLang: string,
@@ -1557,7 +1568,9 @@ export async function getLineTranslations(
 ): Promise<LineTranslationResult[]> {
   const docId = `${trackKey}_${lyricsHash}_v${TRANSLATION_PROMPT_VERSION}`;
   const docRef = doc(db, 'line_translations_cache', docId);
-  const originalLines = lyrics.split('\n').map(l => l.trim());
+  const originalLines = isPreparedInput(lyrics)
+    ? lyrics.lines.map(l => l.text)
+    : lyrics.split('\n').map(l => l.trim());
 
   if (!forceRegenerate) {
     try {
@@ -1572,20 +1585,30 @@ export async function getLineTranslations(
         const targetLangCode = getTargetLangCode2Letter(targetLang);
 
         return originalLines.map((lineText: string, idx: number) => {
+          const lineObj = isPreparedInput(lyrics) ? lyrics.lines[idx] : null;
+          const lineKey = lineObj ? lineObj.lineKey : undefined;
+          const lineIndex = lineObj ? lineObj.lineIndex : idx;
+
           if (lineText.length === 0) {
             return {
+              original: "",
               originalText: "",
               translation: "",
               language: "en",
-              type: "verse"
+              type: "verse",
+              lineKey,
+              lineIndex
             };
           }
           const matched = transMap.get(idx);
           return {
+            original: lineText,
             originalText: lineText,
             translation: matched?.translations?.[targetLangCode] || matched?.translations?.['en'] || "",
             language: matched?.language || "en",
-            type: "verse"
+            type: "verse",
+            lineKey,
+            lineIndex
           };
         });
       }
@@ -1685,20 +1708,30 @@ Return JSON with this exact schema:
     }
 
     return originalLines.map((lineText: string, idx: number) => {
+      const lineObj = isPreparedInput(lyrics) ? lyrics.lines[idx] : null;
+      const lineKey = lineObj ? lineObj.lineKey : undefined;
+      const lineIndex = lineObj ? lineObj.lineIndex : idx;
+
       if (lineText.length === 0) {
         return {
+          original: "",
           originalText: "",
           translation: "",
           language: "en",
-          type: "verse"
+          type: "verse",
+          lineKey,
+          lineIndex
         };
       }
       const matched = transMap.get(idx);
       return {
+        original: lineText,
         originalText: lineText,
         translation: matched?.translations?.[targetLangCode] || matched?.translations?.['en'] || '',
         language: matched?.language || 'en',
-        type: 'verse'
+        type: 'verse',
+        lineKey,
+        lineIndex
       };
     });
   } catch (error: any) {
