@@ -7,14 +7,16 @@ To prevent leaky abstractions, **all client interactions with AI logic and serve
 ---
 
 ## 🌐 Base URL & Protocol
-- **Production Base URL**: `https://api.cantolex.com/api/v2/worker` (or similar routing)
-- **Preview / Dev Proxy**: `/api/v2/worker`
+- **Production Base URL**: `https://api.cantolex.com`
+- **Current Integration Endpoints**:
+  - `POST /api/v1/translation/fetch`: Used to translate lists of lines via `PreparedLyricsInput`
+  - `POST /api/v1/lecture/fetch`: Used to generate/retrieve structured lectures & study materials via `PreparedLyricsInput`
+- **Cached Lecture Support**: Currently, there is no separate endpoint for fetching cached lectures on the external API. Calling `getCachedStructuredLecture()` returns a safe `null` value in the client.
 - **Protocol**: HTTPS / JSON-over-HTTP
 - **Global Headers**:
   ```http
   Content-Type: application/json
   Accept: application/json
-  Authorization: Bearer <JWT or ApiKey> (When authentication/authorization is active)
   ```
 
 ## 🏛️ Shared Types & Data Rules
