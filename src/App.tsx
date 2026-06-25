@@ -1452,88 +1452,32 @@ export default function App() {
               // Fallback to external lookup if not in cache
               const trackData = await getTrackDetails(currentRoute.id);
               if (trackData && active) {
-                // Check shared/server cache
-                try {
-                  const sharedCacheResult = await aiClient.getTrackMeaningFromCache(
-                    trackData.title,
-                    [trackData.artist],
-                    targetLanguage
-                  );
-                  if (sharedCacheResult && (sharedCacheResult.meanings || sharedCacheResult.rawLyrics)) {
-                    const langKey = targetLanguage.toLowerCase().trim();
-                    let meaning = sharedCacheResult.meanings?.en || "";
-                    if (langKey === 'spanish') meaning = sharedCacheResult.meanings?.es || "";
-                    if (langKey === 'russian') meaning = sharedCacheResult.meanings?.ru || "";
-                    if (langKey === 'polish') meaning = sharedCacheResult.meanings?.pl || "";
+                const initialTrack: TrackLyricsData = {
+                  trackId: String(trackData.id),
+                  itunesTrackId: String(trackData.id),
+                  artist: trackData.artist,
+                  artistId: trackData.artistId,
+                  title: trackData.title,
+                  album: trackData.album,
+                  albumId: trackData.albumId,
+                  coverUrl: trackData.coverUrl,
+                  audioUrl: trackData.audioUrl,
+                  appleMusicUrl: trackData.appleMusicUrl,
+                  rawLyrics: "",
+                  source: null,
+                  sourceLanguage: "English",
+                  lines: [],
+                  processingStatus: {
+                    stage1_completed: false,
+                    stage2_completed: false,
+                    stage3_completed: false,
+                  },
+                  lastUpdated: Date.now(),
+                };
 
-                    const hasLyricsAndLinesCache = !!(sharedCacheResult.rawLyrics && sharedCacheResult.lines && sharedCacheResult.lines.length > 0);
-
-                    const fullTrack: TrackLyricsData = {
-                      trackId: String(trackData.id),
-                      itunesTrackId: String(trackData.id),
-                      title: trackData.title,
-                      artist: trackData.artist,
-                      artistId: trackData.artistId,
-                      album: trackData.album,
-                      albumId: trackData.albumId,
-                      coverUrl: trackData.coverUrl,
-                      audioUrl: trackData.audioUrl,
-                      appleMusicUrl: trackData.appleMusicUrl,
-                      rawLyrics: hasLyricsAndLinesCache ? sharedCacheResult.rawLyrics : "",
-                      source: hasLyricsAndLinesCache ? (sharedCacheResult.source as any || "LRCLib") : null,
-                      sourceLanguage: sharedCacheResult.originalLanguage || "English",
-                      meaning,
-                      meanings: sharedCacheResult.meanings,
-                      difficulty: sharedCacheResult.difficulty,
-                      promptVersion: sharedCacheResult.promptVersion,
-                      lines: hasLyricsAndLinesCache ? sharedCacheResult.lines : [],
-                      processingStatus: {
-                        stage1_completed: hasLyricsAndLinesCache,
-                        stage2_completed: true,
-                        stage3_completed: hasLyricsAndLinesCache ? sharedCacheResult.lines.some((l: any) => l.phrases && l.phrases.length > 0) : false
-                      },
-                      lastUpdated: Date.now()
-                    };
-
-                    if (active) {
-                      saveTrackData(fullTrack.trackId, fullTrack);
-                      await handleTrackSelect(fullTrack);
-                    }
-                  } else {
-                    // Shared cache not found: fallback to initialTrack creation
-                    const initialTrack: TrackLyricsData = {
-                      trackId: String(trackData.id),
-                      itunesTrackId: String(trackData.id),
-                      artist: trackData.artist,
-                      artistId: trackData.artistId,
-                      title: trackData.title,
-                      album: trackData.album,
-                      albumId: trackData.albumId,
-                      coverUrl: trackData.coverUrl,
-                      audioUrl: trackData.audioUrl,
-                      appleMusicUrl: trackData.appleMusicUrl,
-                      rawLyrics: "",
-                      source: null,
-                      sourceLanguage: "English",
-                      lines: [],
-                      processingStatus: {
-                        stage1_completed: false,
-                        stage2_completed: false,
-                        stage3_completed: false,
-                      },
-                      lastUpdated: Date.now(),
-                    };
-
-                    if (active) {
-                      await saveTrackData(initialTrack.trackId, initialTrack);
-                      await handleTrackSelect(initialTrack);
-                    }
-                  }
-                } catch (cacheErr) {
-                  console.error("[RouteLoaderSync] Shared cache read/setup fallback:", cacheErr);
-                  if (active) {
-                    await handleTrackSelect(trackData);
-                  }
+                if (active) {
+                  await saveTrackData(initialTrack.trackId, initialTrack);
+                  await handleTrackSelect(initialTrack);
                 }
               }
             }

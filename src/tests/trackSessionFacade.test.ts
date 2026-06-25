@@ -134,18 +134,16 @@ describe("TrackSessionFacade Unit Tests", () => {
       ];
 
       vi.mocked(aiClient.computeTrackKey).mockResolvedValue("track-coldplay-yellow");
-      vi.mocked(aiClient.fetchTrackMeaning).mockResolvedValue(mockMeaningResult);
       vi.mocked(aiClient.getLineTranslations).mockResolvedValue(mockTranslations);
       vi.mocked(aiClient.saveTrackToSharedCache).mockResolvedValue();
 
       const updated = await trackSessionFacade.analyzeSongMeaningAndTranslations(initialTrack, "Spanish");
 
       expect(fetchLyrics).toHaveBeenCalledWith("Coldplay", "Yellow");
-      expect(aiClient.fetchTrackMeaning).toHaveBeenCalled();
       expect(aiClient.getLineTranslations).toHaveBeenCalled();
       expect(trackCacheRepository.saveTrackData).toHaveBeenCalled();
       expect(updated.rawLyrics).toBe(mockLyricsData.lyrics);
-      expect(updated.meaning).toBe("Overview Spanish");
+      expect(updated.meaning).toBe("");
       expect(updated.lines[0].translation).toBe("Mira las estrellas");
     });
   });

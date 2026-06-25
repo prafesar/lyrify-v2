@@ -144,49 +144,6 @@ export class TrackSessionFacade {
          .catch(err => console.error("[trackSessionFacade] Metadata lookup failed:", err));
     }
 
-    // 5. Background Firestore Cache Check
-    this.aiClient.getTrackMeaningFromCache(trackTitle, [artist], targetLanguage)
-      .then(cacheResult => {
-        if (cacheResult) {
-          const langKey = targetLanguage.toLowerCase().trim();
-          let meaning = cacheResult.meanings.en;
-          if (langKey === 'spanish') meaning = cacheResult.meanings.es;
-          if (langKey === 'russian') meaning = cacheResult.meanings.ru;
-          if (langKey === 'polish') meaning = cacheResult.meanings.pl;
-
-          const currentCached = this.trackCacheRepository.getCachedTrack(trackId) || initialTrack;
-          const hasLyricsAndLinesCache = !!(cacheResult.rawLyrics && cacheResult.lines && cacheResult.lines.length > 0);
-          
-          const updated = this.enrichWithPreparedLyricsInput({
-            ...currentCached,
-            rawLyrics: hasLyricsAndLinesCache ? cacheResult.rawLyrics : currentCached.rawLyrics,
-            meaning,
-            meanings: cacheResult.meanings,
-            difficulty: cacheResult.difficulty,
-            promptVersion: cacheResult.promptVersion || currentCached.promptVersion,
-            sourceLanguage: cacheResult.originalLanguage || currentCached.sourceLanguage,
-            lines: hasLyricsAndLyricsLinesCheck(cacheResult.lines) ? cacheResult.lines : currentCached.lines,
-            processingStatus: {
-              ...currentCached.processingStatus,
-              stage1_completed: hasLyricsAndLinesCache ? true : currentCached.processingStatus.stage1_completed,
-              stage2_completed: true,
-              stage3_completed: hasLyricsAndLinesCache ? cacheResult.lines.some((l: any) => l.phrases && l.phrases.length > 0) : currentCached.processingStatus.stage3_completed
-            }
-          }, targetLanguage);
-
-          this.trackCacheRepository.saveTrackData(trackId, updated);
-          if (callbacks.onCacheUpdate) {
-            callbacks.onCacheUpdate(updated);
-          }
-
-          // Background check if no lecture blocks exist but lyrics do
-          if (updated.rawLyrics) {
-            this.checkAndLoadCachedLecture(trackId, updated.rawLyrics, updated.title, updated.artist, targetLanguage, callbacks.onCacheUpdate);
-          }
-        }
-      })
-      .catch(err => console.error("[trackSessionFacade] Firestore cache check failed:", err));
-
     return initialTrack;
   }
 
@@ -229,9 +186,9 @@ export class TrackSessionFacade {
 
     const trackKey = await this.aiClient.computeTrackKey(trackData.title, [trackData.artist]);
 
-    const isOutdated = !trackData.promptVersion || trackData.promptVersion < ANALYSIS_PROMPT_VERSION;
+    const isTranslationOutdated = !trackData.translationPromptVersion || trackData.translationPromptVersion < TRANSLATION_PROMPT_VERSION;
 
-    if (!trackData.meaning || !trackData.processingStatus.stage2_completed || isOutdated) {
+    if (!trackData.processingStatus.stage2_completed || isTranslationOutdated) {
       const metadata = {
         title: trackData.title,
         artists: [trackData.artist],
@@ -244,17 +201,8 @@ export class TrackSessionFacade {
       };
 
       try {
-        const [result, translationsResult] = await Promise.all([
-          this.aiClient.fetchTrackMeaning(lyrics || "", metadata),
-          this.aiClient.getLineTranslations(trackData.preparedLyricsInput || lyrics || "", trackKey, targetLanguage)
-        ]);
+        const translationsResult = await this.aiClient.getLineTranslations(trackData.preparedLyricsInput || lyrics || "", trackKey, targetLanguage);
         
-        const langKey = targetLanguage.toLowerCase().trim();
-        let meaning = result.meanings.en;
-        if (langKey === 'spanish') meaning = result.meanings.es;
-        if (langKey === 'russian') meaning = result.meanings.ru;
-        if (langKey === 'polish') meaning = result.meanings.pl;
-
         const updatedLines = trackData.lines.map((line, idx) => {
           if (!line.original.trim()) {
             return line;
@@ -271,14 +219,22 @@ export class TrackSessionFacade {
           };
         });
 
+        const overviewBlock = trackData.lectureBlocks?.find(b => b.kind === "overview");
+        const meaning = trackData.meaning || overviewBlock?.text || "";
+
         trackData = {
           ...trackData,
           meaning,
-          meanings: result.meanings,
-          difficulty: result.difficulty,
+          meanings: trackData.meanings || {
+            en: meaning,
+            es: meaning,
+            ru: meaning,
+            pl: meaning
+          },
+          difficulty: trackData.difficulty || "medium",
           promptVersion: ANALYSIS_PROMPT_VERSION,
           translationPromptVersion: TRANSLATION_PROMPT_VERSION,
-          sourceLanguage: result.originalLanguage || trackData.sourceLanguage,
+          sourceLanguage: trackData.sourceLanguage || "English",
           lines: updatedLines,
           processingStatus: { ...trackData.processingStatus, stage2_completed: true }
         };
@@ -403,13 +359,16 @@ export class TrackSessionFacade {
       ...track,
       rawLyrics: manualLyrics,
       source: "Manual",
-      sourceLanguage: track.sourceLanguage, // Background will fetch original
+      sourceLanguage: track.sourceLanguage || "English",
+      meaning: "",
+      meanings: { en: "", es: "", ru: "", pl: "" },
+      difficulty: "medium",
       authors: metadataResult?.authors,
       lyricSource: "Manual Entry",
       lines: this.lyricsProvider.splitLyricsIntoLines(track.trackId, manualLyrics),
       processingStatus: {
         stage1_completed: true,
-        stage2_completed: false, // Updated by background
+        stage2_completed: true,
         stage3_completed: false,
       },
       lastUpdated: Date.now(),
@@ -417,47 +376,24 @@ export class TrackSessionFacade {
 
     this.trackCacheRepository.saveTrackData(track.trackId, initialTrack);
 
-    // Background enrichment
-    this.aiClient.fetchTrackMeaning(manualLyrics, {
+    // Background upload / history update without separate meaning request
+    const updated = initialTrack;
+    this.aiClient.saveTrackToSharedCache(updated).catch(e => console.error("Firestore cache upload failed:", e));
+
+    this.recentHistoryRepository.addRecentTrack({
+      id: track.trackId,
       title: track.title,
-      artists: [track.artist],
-      albumName: track.album,
-      coverUrl: track.coverUrl
-    })
-      .then(result => {
-        const cached = this.trackCacheRepository.getCachedTrack(track.trackId) || initialTrack;
-        const langKey = targetLanguage.toLowerCase().trim();
-        let meaning = result.meanings.en;
-        if (langKey === 'spanish') meaning = result.meanings.es;
-        if (langKey === 'russian') meaning = result.meanings.ru;
-        if (langKey === 'polish') meaning = result.meanings.pl;
+      artist: track.artist,
+      coverUrl: track.coverUrl || "",
+      album: track.album || "",
+      difficulty: "medium"
+    } as Track);
 
-        const updated = this.enrichWithPreparedLyricsInput({
-          ...cached,
-          sourceLanguage: result.originalLanguage || cached.sourceLanguage,
-          meaning,
-          meanings: result.meanings,
-          difficulty: result.difficulty,
-          processingStatus: { ...cached.processingStatus, stage2_completed: true }
-        }, targetLanguage);
-
-        this.trackCacheRepository.saveTrackData(track.trackId, updated);
-        this.aiClient.saveTrackToSharedCache(updated).catch(e => console.error("Firestore cache upload failed:", e));
-
-        this.recentHistoryRepository.addRecentTrack({
-          id: track.trackId,
-          title: track.title,
-          artist: track.artist,
-          coverUrl: track.coverUrl || "",
-          album: track.album || "",
-          difficulty: result.difficulty
-        } as Track);
-
-        if (callbacks.onBackgroundComplete) {
-          callbacks.onBackgroundComplete(updated);
-        }
-      })
-      .catch(e => console.error("[trackSessionFacade] Manual submit background fetch failed:", e));
+    if (callbacks.onBackgroundComplete) {
+      setTimeout(() => {
+        callbacks.onBackgroundComplete!(updated);
+      }, 50);
+    }
 
     return initialTrack;
   }
@@ -544,8 +480,24 @@ export class TrackSessionFacade {
         if (blocks && blocks.length > 0) {
           const freshCached = this.trackCacheRepository.getCachedTrack(trackId);
           if (freshCached) {
+            const overviewBlock = blocks.find(b => b.kind === "overview");
+            let meaning = freshCached.meaning;
+            let meanings = freshCached.meanings;
+            if (overviewBlock?.text) {
+              meaning = overviewBlock.text;
+              const langKey = targetLanguage.toLowerCase().trim();
+              meanings = {
+                ...freshCached.meanings,
+                en: langKey === 'english' ? overviewBlock.text : (freshCached.meanings?.en || ""),
+                es: langKey === 'spanish' ? overviewBlock.text : (freshCached.meanings?.es || ""),
+                ru: langKey === 'russian' ? overviewBlock.text : (freshCached.meanings?.ru || ""),
+                pl: langKey === 'polish' ? overviewBlock.text : (freshCached.meanings?.pl || "")
+              };
+            }
             const updated = {
               ...freshCached,
+              meaning,
+              meanings,
               lectureBlocks: blocks
             };
             this.trackCacheRepository.saveTrackData(trackId, updated);
