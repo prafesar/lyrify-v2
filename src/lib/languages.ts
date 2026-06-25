@@ -40,3 +40,20 @@ export function getLanguageByName(name: string): Language | undefined {
 export function getLocaleByName(name: string): string {
   return getLanguageByName(name)?.locale || 'en-US';
 }
+
+export function getLanguageCode(lang: string): string {
+  if (!lang) return 'en';
+  const trimmed = lang.trim().toLowerCase();
+  if (trimmed === 'english' || trimmed === 'en') return 'en';
+  if (trimmed === 'spanish' || trimmed === 'es') return 'es';
+  if (trimmed === 'russian' || trimmed === 'ru') return 'ru';
+  if (trimmed === 'polish' || trimmed === 'pl') return 'pl';
+  
+  const found = SUPPORTED_LANGUAGES.find(
+    l => l.name.toLowerCase() === trimmed || l.code.toLowerCase() === trimmed
+  );
+  if (found) {
+    return found.code.toLowerCase();
+  }
+  return 'en';
+}

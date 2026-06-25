@@ -1,6 +1,7 @@
 
 import { type Track, Artist, Album } from '../constants';
 import { sqliteService } from './sqliteService';
+import { PreparedLyricsInput, computeLineKey } from './lyricsPreprocessor';
 export type { Track };
 
 export interface LyricsData {
@@ -501,6 +502,7 @@ export interface LyricsLine {
   id: string;
   lineId?: string;
   lineTextHash?: string;
+  lineKey?: string;
   index: number;
   original: string;
   translation?: string;
@@ -532,7 +534,7 @@ export interface StructuredSectionPhrase {
 
 export interface StructuredLectureBlock {
   id: string;
-  kind: 'overview' | 'emotions' | 'sections' | 'lexical_groups' | 'takeaways' | 'notes' | 'summary' | 'themes' | 'motifs' | 'context' | 'important_lines';
+  kind: 'intro' | 'overview' | 'emotions' | 'sections' | 'lexical_groups' | 'takeaways' | 'notes' | 'summary' | 'themes' | 'motifs' | 'context' | 'important_lines';
   title?: string;
   text: string;
   source: 'ai' | 'manual';
@@ -568,6 +570,7 @@ export interface TrackLyricsData {
   lines: LyricsLine[];
   phrases?: Phrase[];
   fullTranslation?: string;
+  preparedLyricsInput?: PreparedLyricsInput;
   promptVersion?: number;
   translationPromptVersion?: number;
   processingStatus: {
@@ -597,6 +600,15 @@ export function generateLineId(text: string): string {
   return `line_${(hash >>> 0).toString(16)}`;
 }
 
+export function extractTrackMeaning(blocks?: StructuredLectureBlock[]): string {
+  if (!blocks || blocks.length === 0) return "";
+  const meaningBlock = blocks.find(b => b.kind === "intro") || 
+                       blocks.find(b => b.kind === "overview") || 
+                       blocks.find(b => b.kind === "context") || 
+                       blocks[0];
+  return meaningBlock ? meaningBlock.text : "";
+}
+
 export function getCachedTrackData(trackId: string): TrackLyricsData | null {
   const track = sqliteService.getCachedTrack(trackId);
   if (!track) return null;
@@ -606,6 +618,9 @@ export function getCachedTrackData(trackId: string): TrackLyricsData | null {
         line.lineId = generateLineId(line.original);
       }
       line.lineTextHash = generateLineId(line.original);
+      if (!line.lineKey) {
+        line.lineKey = computeLineKey(line.original);
+      }
       return line;
     });
   }
@@ -622,6 +637,9 @@ export function saveTrackData(trackId: string, data: TrackLyricsDataPatch) {
         line.lineId = generateLineId(line.original);
       }
       line.lineTextHash = generateLineId(line.original);
+      if (!line.lineKey) {
+        line.lineKey = computeLineKey(line.original);
+      }
       return line;
     });
   }
@@ -638,6 +656,7 @@ export function splitLyricsIntoLines(trackId: string, lyrics: string): LyricsLin
         id: `${trackId}:line:${idx}`,
         lineId: textHash,
         lineTextHash: textHash,
+        lineKey: computeLineKey(trimmed),
         index: idx,
         original: trimmed,
         phrases: []

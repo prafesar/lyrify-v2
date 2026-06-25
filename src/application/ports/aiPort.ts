@@ -1,4 +1,5 @@
-import { TrackLyricsData } from "../../services/musicService";
+import { TrackLyricsData, StructuredLectureBlock } from "../../services/musicService";
+import { PreparedLyricsInput } from "../../services/lyricsPreprocessor";
 
 export interface TrackMetadata {
   title: string;
@@ -48,6 +49,15 @@ export const ANALYSIS_PROMPT_VERSION = 3;
 export const TRANSLATION_PROMPT_VERSION = 4;
 
 export interface AiPort {
+  fetchStructuredLecture(
+    lyrics: string | PreparedLyricsInput,
+    forceRegenerate?: boolean
+  ): Promise<StructuredLectureBlock[]>;
+
+  getCachedStructuredLecture(
+    lyrics: string | PreparedLyricsInput
+  ): Promise<StructuredLectureBlock[] | null>;
+
   fetchTrackMeaning(
     lyrics: string,
     metadata: TrackMetadata,
@@ -72,7 +82,7 @@ export interface AiPort {
     metadata?: Partial<TrackMetadata>
   ): Promise<string>;
 
-  translateLyrics(lyrics: string, targetLanguage: string): Promise<string>;
+  translateLyrics(lyrics: string | PreparedLyricsInput, targetLanguage?: string): Promise<string>;
 
   extractLyricsMetadata(
     lyrics: string,
@@ -161,20 +171,20 @@ export interface AiPort {
   getLatestAnalyzedTracks(maxCount?: number): Promise<TrackMeaningEntry[]>;
 
   getLineTranslations(
-    lyrics: string,
-    trackKey: string,
-    targetLanguage: string
+    lyrics: string | PreparedLyricsInput,
+    trackKey?: string,
+    targetLanguage?: string
   ): Promise<any[]>;
 
   getPhraseAnalysis(
-    lyrics: string,
-    trackKey: string,
-    targetLanguage: string
+    lyrics: string | PreparedLyricsInput,
+    trackKey?: string,
+    targetLanguage?: string
   ): Promise<any[]>;
 
   saveTrackToSharedCache(track: TrackLyricsData): Promise<void>;
 
   computeTrackKey(title: string, artists: string[]): Promise<string>;
-  computeLyricsHash(lyrics: string): Promise<string>;
+  computeLyricsHash(lyrics: string | PreparedLyricsInput): Promise<string>;
   normalizeString(str: string): string;
 }

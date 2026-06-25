@@ -13,6 +13,7 @@ import {
   getAlbumDetails 
 } from "../services/musicService";
 import { sqliteService } from "../services/sqliteService";
+import { getLanguageCode } from "../lib/languages";
 
 export interface UseLibrarySearchResult {
   searchQuery: string;
@@ -131,10 +132,10 @@ export function useLibrarySearch(targetLanguage: string): UseLibrarySearchResult
           difficulty: t.difficulty,
           promptVersion: t.promptVersion,
           meaning: (() => {
-            const langKey = targetLanguage.toLowerCase().trim();
-            if (langKey === "spanish") return t.meanings?.es || t.meanings?.en;
-            if (langKey === "russian") return t.meanings?.ru || t.meanings?.en;
-            if (langKey === "polish") return t.meanings?.pl || t.meanings?.en;
+            const langCode = getLanguageCode(targetLanguage);
+            if (langCode === "es") return t.meanings?.es || t.meanings?.en;
+            if (langCode === "ru") return t.meanings?.ru || t.meanings?.en;
+            if (langCode === "pl") return t.meanings?.pl || t.meanings?.en;
             return t.meanings?.en;
           })(),
           meanings: t.meanings,

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { aiClient, userDataRepository } from '../application';
+import { legacyAiClient as aiClient, userDataRepository } from '../application';
 import * as originalGeminiService from '../services/geminiService';
 import * as originalCardService from '../services/localCardService';
 import * as originalDailyTrackerService from '../services/dailyTrackerService';
@@ -12,6 +12,8 @@ vi.mock('../services/geminiService', async () => {
     ...actual,
     fetchTrackMeaning: vi.fn(),
     translateLyrics: vi.fn(),
+    fetchStructuredLecture: vi.fn(),
+    getCachedStructuredLecture: vi.fn(),
   };
 });
 
@@ -74,6 +76,20 @@ describe('CantoLex Ports and Adapters Layer', () => {
       const result = await aiClient.translateLyrics('Original Lyrics', 'Russian');
       expect(originalGeminiService.translateLyrics).toHaveBeenCalledWith('Original Lyrics', 'Russian');
       expect(result).toBe('Translated Lyrics');
+    });
+
+    it('should delegate fetchStructuredLecture calls to the underlying service', async () => {
+      vi.mocked(originalGeminiService.fetchStructuredLecture).mockResolvedValueOnce([]);
+      const result = await aiClient.fetchStructuredLecture('Lyrics', true);
+      expect(originalGeminiService.fetchStructuredLecture).toHaveBeenCalledWith('Lyrics', 'Unknown Title', 'Unknown Artist', 'English', true);
+      expect(result).toEqual([]);
+    });
+
+    it('should delegate getCachedStructuredLecture calls to the underlying service', async () => {
+      vi.mocked(originalGeminiService.getCachedStructuredLecture).mockResolvedValueOnce(null);
+      const result = await aiClient.getCachedStructuredLecture('Lyrics');
+      expect(originalGeminiService.getCachedStructuredLecture).toHaveBeenCalledWith('Lyrics', 'Unknown Title', 'Unknown Artist', 'English');
+      expect(result).toBeNull();
     });
   });
 

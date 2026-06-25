@@ -14,14 +14,16 @@ import {
   saveTrackData, 
   searchLyricsOptions, 
   fetchLyricsFromOption, 
-  clearCachedLyrics 
+  clearCachedLyrics,
+  extractTrackMeaning 
 } from "../services/musicService";
 import { 
   linkPhrasesToLines, 
   buildStarredLinesAnalysisInput, 
   mergeGeneratedPhrasesForLines
 } from "../services/lyricsAnalysisService";
-import { fetchStructuredLecture } from "../services/geminiService";
+import { prepareLyricsInput } from "../services/lyricsPreprocessor";
+import { getLanguageCode } from "../lib/languages";
 
 export interface UseTrackSessionResult {
   currentTrack: TrackLyricsData | null;
@@ -357,11 +359,11 @@ export function useTrackSession(): UseTrackSessionResult {
         };
       }
 
-      const isOutdated = !trackData.promptVersion || trackData.promptVersion < ANALYSIS_PROMPT_VERSION;
       const isTranslationOutdated = !trackData.translationPromptVersion || trackData.translationPromptVersion < TRANSLATION_PROMPT_VERSION;
+      const needsTranslation = force || !trackData.processingStatus.stage2_completed || isTranslationOutdated || !trackData.lines.some(l => l.translation);
 
-      if (force || !trackData.meaning || !trackData.processingStatus.stage2_completed || isOutdated || isTranslationOutdated) {
-        setLoadingStep("meaning");
+      if (needsTranslation) {
+        setLoadingStep("translating");
         trackData = await trackSessionFacade.analyzeSongMeaningAndTranslations(trackData, targetLanguage);
         setCurrentTrack(trackData);
         callbacks.loadCommunityTracks();
@@ -370,9 +372,30 @@ export function useTrackSession(): UseTrackSessionResult {
       if (force || !trackData.lectureBlocks || trackData.lectureBlocks.length === 0) {
         setLoadingStep("lecture");
         try {
-          const blocks = await fetchStructuredLecture(trackData.rawLyrics, trackData.title, trackData.artist, targetLanguage, force);
+          const blocks = await aiClient.fetchStructuredLecture(
+            trackData.preparedLyricsInput || trackData.rawLyrics,
+            force
+          );
+          
+          let meaning = trackData.meaning || "";
+          let meanings = trackData.meanings || { en: "", es: "", ru: "", pl: "" };
+          const extractedMeaning = extractTrackMeaning(blocks);
+          if (extractedMeaning) {
+            meaning = extractedMeaning;
+            const langCode = getLanguageCode(targetLanguage);
+            meanings = {
+              ...trackData.meanings,
+              en: langCode === 'en' ? extractedMeaning : (trackData.meanings?.en || ""),
+              es: langCode === 'es' ? extractedMeaning : (trackData.meanings?.es || ""),
+              ru: langCode === 'ru' ? extractedMeaning : (trackData.meanings?.ru || ""),
+              pl: langCode === 'pl' ? extractedMeaning : (trackData.meanings?.pl || "")
+            };
+          }
+
           trackData = {
             ...trackData,
+            meaning,
+            meanings,
             lectureBlocks: blocks
           };
           setCurrentTrack(trackData);
@@ -400,18 +423,6 @@ export function useTrackSession(): UseTrackSessionResult {
     }
   ) => {
     if (!currentTrack || isGeneratingAnalysis) return;
-
-    const isFallbackError = currentTrack.lectureBlocks?.some(b => b.id === 'fallback-overview');
-    let confirmed = true;
-    if (!isFallbackError) {
-      try {
-        confirmed = window.confirm("Are you sure you want to reset and regenerate the analysis? This will clear current phrases and meaning.");
-      } catch (e) {
-        // Fallback to true if confirm is blocked by sandbox iframe
-        confirmed = true;
-      }
-    }
-    if (!confirmed) return;
 
     const resetTrack: TrackLyricsData = {
       ...currentTrack,
@@ -479,39 +490,13 @@ export function useTrackSession(): UseTrackSessionResult {
         setLoadingStep("analyzing");
         const metadataResult = await aiClient.extractLyricsMetadata(lyricsData.lyrics, option.artist, option.title);
 
-        aiClient.fetchTrackMeaning(lyricsData.lyrics, {
-          title: option.title,
-          artists: [option.artist],
-          albumName: currentTrack.album,
-          coverUrl: currentTrack.coverUrl
-        }).then(result => {
-          setCurrentTrack(prev => {
-            if (!prev || prev.trackId !== currentTrack.trackId) return prev;
-
-            const langKey = targetLanguage.toLowerCase().trim();
-            let meaning = result.meanings.en;
-            if (langKey === "spanish") meaning = result.meanings.es;
-            if (langKey === "russian") meaning = result.meanings.ru;
-            if (langKey === "polish") meaning = result.meanings.pl;
-
-            const updated = {
-              ...prev,
-              sourceLanguage: result.originalLanguage || prev.sourceLanguage,
-              meaning,
-              meanings: result.meanings,
-              processingStatus: { ...prev.processingStatus, stage2_completed: true }
-            };
-            saveTrackData(prev.trackId, updated);
-            aiClient.saveTrackToSharedCache(updated).catch(e => console.error("Firestore cache upload failed:", e));
-            return updated;
-          });
-        }).catch(e => console.error("fetchTrackMeaning background failed:", e));
-
         const updatedTrack: TrackLyricsData = {
           ...currentTrack,
           rawLyrics: lyricsData.lyrics,
           source: (lyricsData.source as any) || "Manual",
-          sourceLanguage: currentTrack.sourceLanguage,
+          sourceLanguage: currentTrack.sourceLanguage || "English",
+          meaning: "",
+          meanings: { en: "", es: "", ru: "", pl: "" },
           authors: metadataResult?.authors,
           lines: splitLyricsIntoLines(currentTrack.trackId, lyricsData.lyrics),
           processingStatus: {
@@ -524,7 +509,11 @@ export function useTrackSession(): UseTrackSessionResult {
 
         setCurrentTrack(updatedTrack);
         saveTrackData(currentTrack.trackId, updatedTrack);
+        aiClient.saveTrackToSharedCache(updatedTrack).catch(e => console.error("Firestore cache upload failed:", e));
         setIsResourcesOpen(false);
+
+        // Automatically trigger translation/lecture generation for the newly selected lyrics
+        handleGenerateAnalysis(targetLanguage, callbacks, false, updatedTrack);
       } else {
         setLyricsFetchError(`No lyrics found for the selected version from ${option.source}.`);
       }
@@ -535,7 +524,7 @@ export function useTrackSession(): UseTrackSessionResult {
       setIsLoadingLyrics(false);
       setLoadingStep("idle");
     }
-  }, [currentTrack]);
+  }, [currentTrack, handleGenerateAnalysis]);
 
   const handleResetLyrics = useCallback((
     targetLanguage: string,

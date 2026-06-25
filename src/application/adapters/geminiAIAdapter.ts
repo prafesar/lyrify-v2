@@ -1,8 +1,60 @@
 import { AiPort, TrackMetadata, TrackMeaningResult, TrackMeaningEntry } from "../ports/aiPort";
-import { TrackLyricsData } from "../../services/musicService";
+import { TrackLyricsData, StructuredLectureBlock } from "../../services/musicService";
+import { PreparedLyricsInput } from "../../services/lyricsPreprocessor";
 import * as originalGeminiService from "../../services/geminiService";
 
+function isPreparedInput(input: any): input is PreparedLyricsInput {
+  return input && typeof input === 'object' && 'lines' in input && Array.isArray(input.lines);
+}
+
 export class GeminiAIAdapter implements AiPort {
+  async fetchStructuredLecture(
+    lyrics: string | PreparedLyricsInput,
+    forceRegenerate?: boolean
+  ): Promise<StructuredLectureBlock[]> {
+    let rawLyrics = "";
+    let trackTitle = "";
+    let trackArtist = "";
+    let targetLang = "";
+
+    if (isPreparedInput(lyrics)) {
+      rawLyrics = lyrics.lines.map(l => l.text).join("\n");
+      trackTitle = lyrics.track.title;
+      trackArtist = lyrics.track.artists[0] || "Unknown";
+      targetLang = lyrics.targetLanguage;
+    } else {
+      rawLyrics = lyrics;
+      trackTitle = "Unknown Title";
+      trackArtist = "Unknown Artist";
+      targetLang = "English";
+    }
+
+    return originalGeminiService.fetchStructuredLecture(rawLyrics, trackTitle, trackArtist, targetLang, forceRegenerate);
+  }
+
+  async getCachedStructuredLecture(
+    lyrics: string | PreparedLyricsInput
+  ): Promise<StructuredLectureBlock[] | null> {
+    let rawLyrics = "";
+    let trackTitle = "";
+    let trackArtist = "";
+    let targetLang = "";
+
+    if (isPreparedInput(lyrics)) {
+      rawLyrics = lyrics.lines.map(l => l.text).join("\n");
+      trackTitle = lyrics.track.title;
+      trackArtist = lyrics.track.artists[0] || "Unknown";
+      targetLang = lyrics.targetLanguage;
+    } else {
+      rawLyrics = lyrics;
+      trackTitle = "Unknown Title";
+      trackArtist = "Unknown Artist";
+      targetLang = "English";
+    }
+
+    return originalGeminiService.getCachedStructuredLecture(rawLyrics, trackTitle, trackArtist, targetLang);
+  }
+
   async fetchTrackMeaning(
     lyrics: string,
     metadata: TrackMetadata,
@@ -35,8 +87,19 @@ export class GeminiAIAdapter implements AiPort {
     return originalGeminiService.generateSongMeaning(lyrics, artist, title, targetLanguage, metadata);
   }
 
-  async translateLyrics(lyrics: string, targetLanguage: string): Promise<string> {
-    return originalGeminiService.translateLyrics(lyrics, targetLanguage);
+  async translateLyrics(lyrics: string | PreparedLyricsInput, targetLanguage?: string): Promise<string> {
+    let rawLyrics = "";
+    let targetLang = "";
+
+    if (isPreparedInput(lyrics)) {
+      rawLyrics = lyrics.lines.map(l => l.text).join("\n");
+      targetLang = lyrics.targetLanguage;
+    } else {
+      rawLyrics = lyrics;
+      targetLang = targetLanguage || "";
+    }
+
+    return originalGeminiService.translateLyrics(rawLyrics, targetLang);
   }
 
   async extractLyricsMetadata(
@@ -162,21 +225,62 @@ export class GeminiAIAdapter implements AiPort {
   }
 
   async getLineTranslations(
-    lyrics: string,
-    trackKey: string,
-    targetLanguage: string
+    lyrics: string | PreparedLyricsInput,
+    trackKey?: string,
+    targetLanguage?: string
   ): Promise<any[]> {
-    const lyricsHash = await originalGeminiService.computeLyricsHash(lyrics);
-    return originalGeminiService.getLineTranslations(lyrics, trackKey, lyricsHash, targetLanguage);
+    let finalTrackKey = trackKey || "";
+    let finalTargetLang = targetLanguage || "";
+
+    if (isPreparedInput(lyrics)) {
+      if (!finalTrackKey) {
+        finalTrackKey = await this.computeTrackKey(lyrics.track.title, lyrics.track.artists);
+      }
+      if (!finalTargetLang) {
+        finalTargetLang = lyrics.targetLanguage;
+      }
+    } else {
+      if (!finalTrackKey) {
+        finalTrackKey = "unknown-track";
+      }
+      if (!finalTargetLang) {
+        finalTargetLang = "English";
+      }
+    }
+
+    const lyricsHash = await this.computeLyricsHash(lyrics);
+    return originalGeminiService.getLineTranslations(lyrics, finalTrackKey, lyricsHash, finalTargetLang);
   }
 
   async getPhraseAnalysis(
-    lyrics: string,
-    trackKey: string,
-    targetLanguage: string
+    lyrics: string | PreparedLyricsInput,
+    trackKey?: string,
+    targetLanguage?: string
   ): Promise<any[]> {
-    const lyricsHash = await originalGeminiService.computeLyricsHash(lyrics);
-    return originalGeminiService.getPhraseAnalysis(lyrics, targetLanguage, trackKey, lyricsHash);
+    let finalTrackKey = trackKey || "";
+    let finalTargetLang = targetLanguage || "";
+    let rawLyrics = "";
+
+    if (isPreparedInput(lyrics)) {
+      rawLyrics = lyrics.lines.map(l => l.text).join("\n");
+      if (!finalTrackKey) {
+        finalTrackKey = await this.computeTrackKey(lyrics.track.title, lyrics.track.artists);
+      }
+      if (!finalTargetLang) {
+        finalTargetLang = lyrics.targetLanguage;
+      }
+    } else {
+      rawLyrics = lyrics;
+      if (!finalTrackKey) {
+        finalTrackKey = "unknown-track";
+      }
+      if (!finalTargetLang) {
+        finalTargetLang = "English";
+      }
+    }
+
+    const lyricsHash = await this.computeLyricsHash(lyrics);
+    return originalGeminiService.getPhraseAnalysis(rawLyrics, finalTargetLang, finalTrackKey, lyricsHash);
   }
 
   async saveTrackToSharedCache(track: TrackLyricsData): Promise<void> {
@@ -187,7 +291,7 @@ export class GeminiAIAdapter implements AiPort {
     return originalGeminiService.computeTrackKey(title, artists);
   }
 
-  async computeLyricsHash(lyrics: string): Promise<string> {
+  async computeLyricsHash(lyrics: string | PreparedLyricsInput): Promise<string> {
     return originalGeminiService.computeLyricsHash(lyrics);
   }
 

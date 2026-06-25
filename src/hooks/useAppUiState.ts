@@ -46,6 +46,9 @@ export function useAppUiState() {
   const [isStarFilterActive, setIsStarFilterActive] = useState<boolean>(
     () => userPreferencesRepository.getBoolPreference("cantolex_star_filter_active", false)
   );
+  const [lecturePromptVariant, setLecturePromptVariant] = useState<"compact" | "rich">(
+    () => (userPreferencesRepository.getPreference("lyrify_lecture_variant", "compact") as "compact" | "rich")
+  );
   const [previewLyricsMode, setPreviewLyricsMode] = useState<"original" | "translation">("original");
 
   const [popoverData, setPopoverData] = useState<PopoverDataInfo | null>(null);
@@ -77,6 +80,11 @@ export function useAppUiState() {
   const handleOnboardingDismiss = useCallback(() => {
     userPreferencesRepository.setPreference("cantolex_onboarding_dismissed", "true");
     setOnboardingCompleted(true);
+  }, []);
+
+  const handleSetLecturePromptVariant = useCallback((variant: "compact" | "rich") => {
+    setLecturePromptVariant(variant);
+    userPreferencesRepository.setPreference("lyrify_lecture_variant", variant);
   }, []);
 
   const handleOnboardingSelect = useCallback(async (track: any, handleTrackSelect: (track: any) => Promise<void>) => {
@@ -203,6 +211,7 @@ ${result.explanation}`);
     setTargetLanguage,
     theme,
     setTheme,
+    lecturePromptVariant,
     lyricsDisplayMode,
     isStarFilterActive,
     previewLyricsMode,
@@ -229,6 +238,7 @@ ${result.explanation}`);
     
     handleSetLyricsDisplayMode,
     handleToggleStarFilter,
+    handleSetLecturePromptVariant,
     handleOnboardingDismiss,
     handleOnboardingSelect,
     handleNextStepClick,

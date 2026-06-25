@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import { LogOut, User, Shield, Info, Moon, ChevronRight, Languages, RefreshCcw, LogIn } from 'lucide-react';
+import { LogOut, User, Shield, Info, Moon, ChevronRight, Languages, RefreshCcw, LogIn, Sparkles } from 'lucide-react';
 import { logOut, signIn } from '../lib/firebase';
 import { type User as FirebaseUser } from 'firebase/auth';
 import { SUPPORTED_LANGUAGES } from '../lib/languages';
@@ -12,11 +12,23 @@ interface SettingsViewProps {
   setTargetLanguage: (lang: string) => void;
   theme: string;
   setTheme: (theme: string) => void;
+  lecturePromptVariant: 'compact' | 'rich';
+  setLecturePromptVariant: (variant: 'compact' | 'rich') => void;
   onResetData: () => void;
   onClose: () => void;
 }
 
-export default function SettingsView({ user, targetLanguage, setTargetLanguage, theme, setTheme, onResetData, onClose }: SettingsViewProps) {
+export default function SettingsView({ 
+  user, 
+  targetLanguage, 
+  setTargetLanguage, 
+  theme, 
+  setTheme, 
+  lecturePromptVariant,
+  setLecturePromptVariant,
+  onResetData, 
+  onClose 
+}: SettingsViewProps) {
   const [confirmReset, setConfirmReset] = React.useState(false);
   const { uiLanguage, setUiLanguage, t } = useTranslation();
 
@@ -118,6 +130,36 @@ export default function SettingsView({ user, targetLanguage, setTargetLanguage, 
               <option value="solarized" className="bg-app-bg text-app-fg">{t('settings.themeSolarized')}</option>
               <option value="solarized-emerald" className="bg-app-bg text-app-fg">{t('settings.themeSolarizedEmerald')}</option>
             </select>
+          </div>
+
+          {/* AI Lecture Breakdown Setting */}
+          <div className="p-4 rounded-3xl bg-app-card border border-app-card-border shadow-app-card flex flex-col gap-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-xl bg-app-accent/10 text-app-accent">
+                  <Sparkles size={18} />
+                </div>
+                <div className="flex flex-col">
+                  <span className="font-medium text-sm">{t('settings.lecturePromptVariant')}</span>
+                  <span className="text-[10px] text-app-fg opacity-40">{t('settings.lecturePromptVariantDesc')}</span>
+                </div>
+              </div>
+              <select 
+                value={lecturePromptVariant}
+                onChange={(e) => setLecturePromptVariant(e.target.value as 'compact' | 'rich')}
+                className="bg-transparent text-sm font-bold text-app-fg outline-none text-right cursor-pointer"
+              >
+                <option value="compact" className="bg-app-bg text-app-fg">{t('settings.lecturePromptVariantCompact')}</option>
+                <option value="rich" className="bg-app-bg text-app-fg">{t('settings.lecturePromptVariantRich')}</option>
+              </select>
+            </div>
+            <div className="text-[11px] text-app-fg/60 bg-app-bg/50 p-3 rounded-2xl border border-app-card-border/50 leading-relaxed select-none">
+              {lecturePromptVariant === 'compact' ? (
+                <span>{t('settings.lecturePromptVariantCompactDesc')}</span>
+              ) : (
+                <span>{t('settings.lecturePromptVariantRichDesc')}</span>
+              )}
+            </div>
           </div>
         </div>
       </div>

@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { trackSessionFacade } from "../application";
-import { aiClient } from "../application/adapters/geminiAIAdapter";
 import { 
   trackCacheRepository, 
   recentHistoryRepository, 
@@ -8,10 +7,9 @@ import {
 } from "../application/adapters/browserUserDataRepository";
 import { TrackLyricsData } from "../services/musicService";
 
-// Mock the dependencies of the Facade
-vi.mock("../application/adapters/geminiAIAdapter", () => {
+const { mockAiClient } = vi.hoisted(() => {
   return {
-    aiClient: {
+    mockAiClient: {
       normalizeString: vi.fn(),
       getTrackMeaningFromCache: vi.fn(),
       fetchTrackMeaning: vi.fn(),
@@ -21,9 +19,39 @@ vi.mock("../application/adapters/geminiAIAdapter", () => {
       saveTrackToSharedCache: vi.fn(),
       computeTrackKey: vi.fn(),
       computeLyricsHash: vi.fn(),
+      fetchStructuredLecture: vi.fn(),
+      getCachedStructuredLecture: vi.fn().mockResolvedValue(null),
     },
   };
 });
+
+// Mock the dependencies of the Facade
+vi.mock("../application/adapters/geminiAIAdapter", () => {
+  return {
+    aiClient: mockAiClient,
+  };
+});
+
+vi.mock("../application/adapters/workerAIAdapter", () => {
+  return {
+    WorkerAIAdapter: class {
+      normalizeString = mockAiClient.normalizeString;
+      getTrackMeaningFromCache = mockAiClient.getTrackMeaningFromCache;
+      fetchTrackMeaning = mockAiClient.fetchTrackMeaning;
+      getLineTranslations = mockAiClient.getLineTranslations;
+      getPhraseAnalysis = mockAiClient.getPhraseAnalysis;
+      extractLyricsMetadata = mockAiClient.extractLyricsMetadata;
+      saveTrackToSharedCache = mockAiClient.saveTrackToSharedCache;
+      computeTrackKey = mockAiClient.computeTrackKey;
+      computeLyricsHash = mockAiClient.computeLyricsHash;
+      fetchStructuredLecture = mockAiClient.fetchStructuredLecture;
+      getCachedStructuredLecture = mockAiClient.getCachedStructuredLecture;
+    },
+  };
+});
+
+const aiClient = mockAiClient;
+
 
 vi.mock("../application/adapters/browserUserDataRepository", () => {
   return {
@@ -115,35 +143,22 @@ describe("TrackSessionFacade Unit Tests", () => {
       const mockLyricsData = { lyrics: "Look at the stars\nLook how they shine", source: "MockLrc" };
       vi.mocked(fetchLyrics).mockResolvedValue(mockLyricsData);
 
-      const mockMeaningResult = {
-        originalLanguage: "English",
-        difficulty: "beginner" as const,
-        meanings: {
-          en: "Overview of Yellow",
-          es: "Overview Spanish",
-          ru: "Overview Russian",
-          pl: "Overview Polish",
-        },
-      };
-
       const mockTranslations = [
         { originalText: "Look at the stars", translation: "Mira las estrellas", language: "es" },
         { originalText: "Look how they shine", translation: "Mira cómo brillan", language: "es" },
       ];
 
       vi.mocked(aiClient.computeTrackKey).mockResolvedValue("track-coldplay-yellow");
-      vi.mocked(aiClient.fetchTrackMeaning).mockResolvedValue(mockMeaningResult);
       vi.mocked(aiClient.getLineTranslations).mockResolvedValue(mockTranslations);
       vi.mocked(aiClient.saveTrackToSharedCache).mockResolvedValue();
 
       const updated = await trackSessionFacade.analyzeSongMeaningAndTranslations(initialTrack, "Spanish");
 
       expect(fetchLyrics).toHaveBeenCalledWith("Coldplay", "Yellow");
-      expect(aiClient.fetchTrackMeaning).toHaveBeenCalled();
       expect(aiClient.getLineTranslations).toHaveBeenCalled();
       expect(trackCacheRepository.saveTrackData).toHaveBeenCalled();
       expect(updated.rawLyrics).toBe(mockLyricsData.lyrics);
-      expect(updated.meaning).toBe("Overview Spanish");
+      expect(updated.meaning).toBe("");
       expect(updated.lines[0].translation).toBe("Mira las estrellas");
     });
   });
@@ -170,8 +185,73 @@ describe("TrackSessionFacade Unit Tests", () => {
 
       const result = await trackSessionFacade.runDeepPhraseAnalysis(track, "Russian");
 
-      expect(aiClient.getPhraseAnalysis).toHaveBeenCalledWith("Hello from the other side", "track-adele-hello", "Russian");
+      expect(aiClient.getPhraseAnalysis).toHaveBeenCalledWith(
+        expect.objectContaining({
+          track: { title: "Hello", artists: ["adele"] },
+          targetLanguage: "ru"
+        }),
+        "track-adele-hello",
+        "Russian"
+      );
       expect(result.processingStatus.stage3_completed).toBe(true);
+      expect(result.lines[0].phrases).toHaveLength(1);
+      expect(result.lines[0].phrases[0].text).toBe("the other side");
+    });
+
+    it("should match phrases using lineKey and fall back to lineIndex", async () => {
+      const track: TrackLyricsData = {
+        trackId: "track-xyz",
+        artist: "Adele",
+        title: "Hello",
+        rawLyrics: "Hello from the other side\nThis is another line",
+        lines: [
+          { id: "track-xyz:line:0", index: 0, original: "Hello from the other side", lineKey: "982bcb7c", phrases: [] },
+          { id: "track-xyz:line:1", index: 1, original: "This is another line", lineKey: "abcdef12", phrases: [] }
+        ],
+        processingStatus: { stage1_completed: true, stage2_completed: true, stage3_completed: false },
+        lastUpdated: Date.now(),
+      };
+
+      const mockPhrases = [
+        { lineKey: "982bcb7c", lineIndex: 99, text: "the other side", translation: "другая сторона", explanation: "Idiom", language: "ru" },
+        { lineKeys: ["abcdef12"], lineIndex: 99, text: "another line", translation: "другая строка", explanation: "Noun", language: "ru" }
+      ];
+
+      vi.mocked(aiClient.computeTrackKey).mockResolvedValue("track-adele-hello");
+      vi.mocked(aiClient.getPhraseAnalysis).mockResolvedValue(mockPhrases);
+      vi.mocked(aiClient.saveTrackToSharedCache).mockResolvedValue();
+
+      const result = await trackSessionFacade.runDeepPhraseAnalysis(track, "Russian");
+
+      expect(result.lines[0].phrases).toHaveLength(1);
+      expect(result.lines[0].phrases[0].text).toBe("the other side");
+      expect(result.lines[1].phrases).toHaveLength(1);
+      expect(result.lines[1].phrases[0].text).toBe("another line");
+    });
+
+    it("should safely match by lineIndex when runtime lines do not contain lineKeys", async () => {
+      const track: TrackLyricsData = {
+        trackId: "track-xyz-no-key",
+        artist: "Adele",
+        title: "Hello",
+        rawLyrics: "Hello from the other side",
+        lines: [
+          { id: "track-xyz:line:0", index: 0, original: "Hello from the other side", phrases: [] }
+        ],
+        processingStatus: { stage1_completed: true, stage2_completed: true, stage3_completed: false },
+        lastUpdated: Date.now(),
+      };
+
+      const mockPhrases = [
+        { lineKey: "982bcb7c", lineIndex: 0, text: "the other side", translation: "другая сторона", explanation: "Idiom", language: "ru" }
+      ];
+
+      vi.mocked(aiClient.computeTrackKey).mockResolvedValue("track-adele-hello");
+      vi.mocked(aiClient.getPhraseAnalysis).mockResolvedValue(mockPhrases);
+      vi.mocked(aiClient.saveTrackToSharedCache).mockResolvedValue();
+
+      const result = await trackSessionFacade.runDeepPhraseAnalysis(track, "Russian");
+
       expect(result.lines[0].phrases).toHaveLength(1);
       expect(result.lines[0].phrases[0].text).toBe("the other side");
     });

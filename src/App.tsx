@@ -601,6 +601,7 @@ export default function App() {
     setTargetLanguage,
     theme,
     setTheme,
+    lecturePromptVariant,
     lyricsDisplayMode,
     isStarFilterActive,
     previewLyricsMode,
@@ -624,6 +625,7 @@ export default function App() {
     
     handleSetLyricsDisplayMode,
     handleToggleStarFilter,
+    handleSetLecturePromptVariant,
     handleOnboardingDismiss,
     handleOnboardingSelect,
     handleNextStepClick,
@@ -861,6 +863,26 @@ export default function App() {
     if (!container) return;
     const currentScrollY = container.scrollTop;
     
+    // Check if the current active tab has content. If not, never hide the toolbar.
+    const hasContent = !currentTrack ? false : (
+      activeTab === "lyrics" ? !!currentTrack.rawLyrics :
+      activeTab === "analysis" ? !!(currentTrack.lectureBlocks && currentTrack.lectureBlocks.length > 0) :
+      activeTab === "cards" ? !!(currentTrack.meaning || (currentTrack.phrases && currentTrack.phrases.length > 0) || currentTrack.lines?.some(l => l.phrases && l.phrases.length > 0)) :
+      true
+    );
+
+    // If the active tab has no content, or the scroll container's scrollable height is too small to comfortably scroll,
+    // we keep the toolbar visible to avoid infinite layouts collapsing and page flickering/shaking.
+    const maxScrollable = container.scrollHeight - container.clientHeight;
+    const isScrollableEnough = maxScrollable > 250;
+
+    if (!hasContent || !isScrollableEnough) {
+      setIsScrolledDown(false);
+      setIsToolbarVisible(true);
+      lastScrollYRef.current = currentScrollY;
+      return;
+    }
+
     // Scrolled down past 120px threshold
     const scrolled = currentScrollY > 120;
     setIsScrolledDown(scrolled);
@@ -1432,88 +1454,32 @@ export default function App() {
               // Fallback to external lookup if not in cache
               const trackData = await getTrackDetails(currentRoute.id);
               if (trackData && active) {
-                // Check shared/server cache
-                try {
-                  const sharedCacheResult = await aiClient.getTrackMeaningFromCache(
-                    trackData.title,
-                    [trackData.artist],
-                    targetLanguage
-                  );
-                  if (sharedCacheResult && (sharedCacheResult.meanings || sharedCacheResult.rawLyrics)) {
-                    const langKey = targetLanguage.toLowerCase().trim();
-                    let meaning = sharedCacheResult.meanings?.en || "";
-                    if (langKey === 'spanish') meaning = sharedCacheResult.meanings?.es || "";
-                    if (langKey === 'russian') meaning = sharedCacheResult.meanings?.ru || "";
-                    if (langKey === 'polish') meaning = sharedCacheResult.meanings?.pl || "";
+                const initialTrack: TrackLyricsData = {
+                  trackId: String(trackData.id),
+                  itunesTrackId: String(trackData.id),
+                  artist: trackData.artist,
+                  artistId: trackData.artistId,
+                  title: trackData.title,
+                  album: trackData.album,
+                  albumId: trackData.albumId,
+                  coverUrl: trackData.coverUrl,
+                  audioUrl: trackData.audioUrl,
+                  appleMusicUrl: trackData.appleMusicUrl,
+                  rawLyrics: "",
+                  source: null,
+                  sourceLanguage: "English",
+                  lines: [],
+                  processingStatus: {
+                    stage1_completed: false,
+                    stage2_completed: false,
+                    stage3_completed: false,
+                  },
+                  lastUpdated: Date.now(),
+                };
 
-                    const hasLyricsAndLinesCache = !!(sharedCacheResult.rawLyrics && sharedCacheResult.lines && sharedCacheResult.lines.length > 0);
-
-                    const fullTrack: TrackLyricsData = {
-                      trackId: String(trackData.id),
-                      itunesTrackId: String(trackData.id),
-                      title: trackData.title,
-                      artist: trackData.artist,
-                      artistId: trackData.artistId,
-                      album: trackData.album,
-                      albumId: trackData.albumId,
-                      coverUrl: trackData.coverUrl,
-                      audioUrl: trackData.audioUrl,
-                      appleMusicUrl: trackData.appleMusicUrl,
-                      rawLyrics: hasLyricsAndLinesCache ? sharedCacheResult.rawLyrics : "",
-                      source: hasLyricsAndLinesCache ? (sharedCacheResult.source as any || "LRCLib") : null,
-                      sourceLanguage: sharedCacheResult.originalLanguage || "English",
-                      meaning,
-                      meanings: sharedCacheResult.meanings,
-                      difficulty: sharedCacheResult.difficulty,
-                      promptVersion: sharedCacheResult.promptVersion,
-                      lines: hasLyricsAndLinesCache ? sharedCacheResult.lines : [],
-                      processingStatus: {
-                        stage1_completed: hasLyricsAndLinesCache,
-                        stage2_completed: true,
-                        stage3_completed: hasLyricsAndLinesCache ? sharedCacheResult.lines.some((l: any) => l.phrases && l.phrases.length > 0) : false
-                      },
-                      lastUpdated: Date.now()
-                    };
-
-                    if (active) {
-                      saveTrackData(fullTrack.trackId, fullTrack);
-                      await handleTrackSelect(fullTrack);
-                    }
-                  } else {
-                    // Shared cache not found: fallback to initialTrack creation
-                    const initialTrack: TrackLyricsData = {
-                      trackId: String(trackData.id),
-                      itunesTrackId: String(trackData.id),
-                      artist: trackData.artist,
-                      artistId: trackData.artistId,
-                      title: trackData.title,
-                      album: trackData.album,
-                      albumId: trackData.albumId,
-                      coverUrl: trackData.coverUrl,
-                      audioUrl: trackData.audioUrl,
-                      appleMusicUrl: trackData.appleMusicUrl,
-                      rawLyrics: "",
-                      source: null,
-                      sourceLanguage: "English",
-                      lines: [],
-                      processingStatus: {
-                        stage1_completed: false,
-                        stage2_completed: false,
-                        stage3_completed: false,
-                      },
-                      lastUpdated: Date.now(),
-                    };
-
-                    if (active) {
-                      await saveTrackData(initialTrack.trackId, initialTrack);
-                      await handleTrackSelect(initialTrack);
-                    }
-                  }
-                } catch (cacheErr) {
-                  console.error("[RouteLoaderSync] Shared cache read/setup fallback:", cacheErr);
-                  if (active) {
-                    await handleTrackSelect(trackData);
-                  }
+                if (active) {
+                  await saveTrackData(initialTrack.trackId, initialTrack);
+                  await handleTrackSelect(initialTrack);
                 }
               }
             }
@@ -2386,7 +2352,7 @@ export default function App() {
                         />
                         <span>
                           {loadingStep === "searching" ? t('lyrics.searchingLyrics') : 
-                           loadingStep === "meaning" ? t('lyrics.generatingPreview') : t('lyrics.analyzingTrack')}
+                           (loadingStep === "meaning" || loadingStep === "translating") ? t('lyrics.generatingPreview') : t('lyrics.analyzingTrack')}
                         </span>
                       </div>
                     </div>
@@ -3540,6 +3506,8 @@ export default function App() {
               setTargetLanguage={setTargetLanguage}
               theme={theme}
               setTheme={setTheme}
+              lecturePromptVariant={lecturePromptVariant}
+              setLecturePromptVariant={handleSetLecturePromptVariant}
               onResetData={resetUserData}
               onClose={() => goBack({ type: "explore" })}
             />

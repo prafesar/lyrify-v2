@@ -1,4 +1,5 @@
-import { GeminiAIAdapter, aiClient } from "./adapters/geminiAIAdapter";
+import { GeminiAIAdapter, aiClient as geminiAiClient } from "./adapters/geminiAIAdapter";
+import { WorkerAIAdapter } from "./adapters/workerAIAdapter";
 import { 
   BrowserUserDataRepository, 
   userDataRepository,
@@ -18,6 +19,17 @@ import { userDataMaintenanceService } from "./adapters/browserUserDataMaintenanc
 const lyricsProvider = new BrowserLyricsProvider();
 const musicMetadataProvider = new BrowserMusicMetadata();
 
+// ============================================================================
+// AI TRANSPORT CUTOVER POINT (PRODUCTION Rest API / CLOUDFLARE WORKER SWITCH)
+// ============================================================================
+// Switch entire application to Worker-based Rest API transport.
+// Active production Rest API transport connecting to api.cantolex.com
+export const aiClient = new WorkerAIAdapter();
+
+// Legacy / fallback client preserved for backward compatibility and rollbacks
+export const legacyAiClient = geminiAiClient;
+// ============================================================================
+
 // Compose/Wire the TrackSessionFacade inside the composition root
 export const trackSessionFacade = new TrackSessionFacade(
   aiClient,
@@ -29,7 +41,6 @@ export const trackSessionFacade = new TrackSessionFacade(
 );
 
 export { 
-  aiClient, 
   userDataRepository,
   studyCardsRepository,
   dailyTrackerRepository,
