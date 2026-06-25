@@ -1,5 +1,10 @@
 import { AiPort, TrackMetadata, TrackMeaningResult, TrackMeaningEntry } from "../ports/aiPort";
 import { TrackLyricsData, StructuredLectureBlock } from "../../services/musicService";
+import { PreparedLyricsInput } from "../../services/lyricsPreprocessor";
+
+function isPreparedInput(input: any): input is PreparedLyricsInput {
+  return input && typeof input === 'object' && 'lines' in input && Array.isArray(input.lines);
+}
 
 /**
  * WorkerAIAdapter (Placeholder Migration Seam)
@@ -56,33 +61,44 @@ export class WorkerAIAdapter implements AiPort {
   }
 
   async fetchStructuredLecture(
-    lyrics: string,
-    title: string,
-    artist: string,
-    targetLanguage: string,
+    lyrics: string | PreparedLyricsInput,
+    title?: string,
+    artist?: string,
+    targetLanguage?: string,
     forceRegenerate?: boolean
   ): Promise<StructuredLectureBlock[]> {
-    return this.postToWorker<StructuredLectureBlock[]>("/lecture/fetch", {
-      lyrics,
-      title,
-      artist,
-      targetLanguage,
-      forceRegenerate,
-    });
+    if (isPreparedInput(lyrics)) {
+      return this.postToWorker<StructuredLectureBlock[]>("/lecture/fetch", {
+        lyricsInput: lyrics,
+        forceRegenerate,
+      });
+    } else {
+      return this.postToWorker<StructuredLectureBlock[]>("/lecture/fetch", {
+        lyrics,
+        title,
+        artist,
+        targetLanguage,
+        forceRegenerate,
+      });
+    }
   }
 
   async getCachedStructuredLecture(
-    lyrics: string,
-    title: string,
-    artist: string,
-    targetLanguage: string
+    lyrics: string | PreparedLyricsInput,
+    title?: string,
+    artist?: string,
+    targetLanguage?: string
   ): Promise<StructuredLectureBlock[] | null> {
-    return this.postToWorker<StructuredLectureBlock[] | null>("/lecture/get-cached", {
-      lyrics,
-      title,
-      artist,
-      targetLanguage,
-    });
+    if (isPreparedInput(lyrics)) {
+      return this.postToWorker<StructuredLectureBlock[] | null>("/lecture/get-cached", lyrics);
+    } else {
+      return this.postToWorker<StructuredLectureBlock[] | null>("/lecture/get-cached", {
+        lyrics,
+        title,
+        artist,
+        targetLanguage,
+      });
+    }
   }
 
   async fetchTrackMeaning(
@@ -122,8 +138,17 @@ export class WorkerAIAdapter implements AiPort {
     throw new Error("WorkerAIAdapter is currently in placeholder state.");
   }
 
-  async translateLyrics(lyrics: string, targetLanguage: string): Promise<string> {
-    throw new Error("WorkerAIAdapter is currently in placeholder state.");
+  async translateLyrics(lyrics: string | PreparedLyricsInput, targetLanguage?: string): Promise<string> {
+    if (isPreparedInput(lyrics)) {
+      return this.postToWorker<string>("/translate", {
+        lyricsInput: lyrics,
+      });
+    } else {
+      return this.postToWorker<string>("/translate", {
+        lyrics,
+        targetLanguage,
+      });
+    }
   }
 
   async extractLyricsMetadata(

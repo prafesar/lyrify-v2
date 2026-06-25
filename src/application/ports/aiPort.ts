@@ -1,4 +1,5 @@
 import { TrackLyricsData, StructuredLectureBlock } from "../../services/musicService";
+import { PreparedLyricsInput } from "../../services/lyricsPreprocessor";
 
 export interface TrackMetadata {
   title: string;
@@ -49,18 +50,18 @@ export const TRANSLATION_PROMPT_VERSION = 4;
 
 export interface AiPort {
   fetchStructuredLecture(
-    lyrics: string,
-    title: string,
-    artist: string,
-    targetLanguage: string,
+    lyrics: string | PreparedLyricsInput,
+    title?: string,
+    artist?: string,
+    targetLanguage?: string,
     forceRegenerate?: boolean
   ): Promise<StructuredLectureBlock[]>;
 
   getCachedStructuredLecture(
-    lyrics: string,
-    title: string,
-    artist: string,
-    targetLanguage: string
+    lyrics: string | PreparedLyricsInput,
+    title?: string,
+    artist?: string,
+    targetLanguage?: string
   ): Promise<StructuredLectureBlock[] | null>;
 
   fetchTrackMeaning(
@@ -87,7 +88,7 @@ export interface AiPort {
     metadata?: Partial<TrackMetadata>
   ): Promise<string>;
 
-  translateLyrics(lyrics: string, targetLanguage: string): Promise<string>;
+  translateLyrics(lyrics: string | PreparedLyricsInput, targetLanguage?: string): Promise<string>;
 
   extractLyricsMetadata(
     lyrics: string,
