@@ -537,13 +537,15 @@ export class TrackSessionFacade {
     onUpdate?: (updated: TrackLyricsData) => void
   ) {
     if (!rawLyrics) return;
-    this.aiClient.getCachedStructuredLecture(rawLyrics, title, artist, targetLanguage)
+    const currentCached = this.trackCacheRepository.getCachedTrack(trackId);
+    const lyricsInput = currentCached?.preparedLyricsInput || rawLyrics;
+    this.aiClient.getCachedStructuredLecture(lyricsInput, title, artist, targetLanguage)
       .then(blocks => {
         if (blocks && blocks.length > 0) {
-          const currentCached = this.trackCacheRepository.getCachedTrack(trackId);
-          if (currentCached) {
+          const freshCached = this.trackCacheRepository.getCachedTrack(trackId);
+          if (freshCached) {
             const updated = {
-              ...currentCached,
+              ...freshCached,
               lectureBlocks: blocks
             };
             this.trackCacheRepository.saveTrackData(trackId, updated);

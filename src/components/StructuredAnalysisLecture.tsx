@@ -18,6 +18,7 @@ import { TrackLyricsData, StructuredLectureBlock, StructuredSectionPhrase } from
 import { PhraseStatus, normalizePhraseKey } from '../services/cardService';
 import ReactMarkdown from 'react-markdown';
 import { PhraseCard, PhraseCardStatus } from './PhraseCard';
+import { computeLineKey } from '../services/lyricsPreprocessor';
 
 interface StructuredAnalysisLectureProps {
   currentTrack: TrackLyricsData;
@@ -274,9 +275,17 @@ export const StructuredAnalysisLecture: React.FC<StructuredAnalysisLectureProps>
   };
 
   const getPhraseContextLines = (phrase: StructuredSectionPhrase) => {
-    if (phrase.lineIds && phrase.lineIds.length > 0) {
+    const phraseKeys = (phrase as any).lineKeys as string[] | undefined;
+    if ((phraseKeys && phraseKeys.length > 0) || (phrase.lineIds && phrase.lineIds.length > 0)) {
       return (currentTrack.lines || [])
-        .filter(l => phrase.lineIds?.includes(l.id))
+        .filter(l => {
+          if (phrase.lineIds?.includes(l.id)) return true;
+          if (phraseKeys && phraseKeys.length > 0) {
+            const key = computeLineKey(l.original);
+            return phraseKeys.includes(key);
+          }
+          return false;
+        })
         .map(l => ({
           lineId: l.id,
           original: l.original,

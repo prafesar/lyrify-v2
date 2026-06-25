@@ -1,7 +1,7 @@
 import { db } from '../lib/firebase';
 import { doc, getDoc, setDoc, serverTimestamp, collection, query, orderBy, limit, getDocs, where } from 'firebase/firestore';
-import { TrackLyricsData, StructuredLectureBlock } from "./musicService";
-import { PreparedLyricsInput } from "./lyricsPreprocessor";
+import { TrackLyricsData, StructuredLectureBlock, generateLineId } from "./musicService";
+import { PreparedLyricsInput, computeStableHash, parseRawLyrics } from "./lyricsPreprocessor";
 
 export enum Type {
   TYPE_UNSPECIFIED = "TYPE_UNSPECIFIED",
@@ -1886,10 +1886,32 @@ export function normalizeStructuredLecture(
   blocks: StructuredLectureBlock[],
   targetLanguage: string,
   title: string,
-  artist: string
+  artist: string,
+  lyrics?: string | PreparedLyricsInput
 ): StructuredLectureBlock[] {
   if (!Array.isArray(blocks)) {
     blocks = [];
+  }
+
+  // Extract lines for phrase lineKey matching
+  const preparedLines: Array<{ text: string; lineKey: string }> = [];
+  if (lyrics) {
+    if (isPreparedInput(lyrics)) {
+      lyrics.lines.forEach(l => {
+        preparedLines.push({
+          text: l.text,
+          lineKey: l.lineKey,
+        });
+      });
+    } else {
+      const parsed = parseRawLyrics(lyrics);
+      parsed.forEach(l => {
+        preparedLines.push({
+          text: l.text,
+          lineKey: l.lineKey,
+        });
+      });
+    }
   }
 
   // Define essential blocks configuration
@@ -1965,7 +1987,6 @@ export function normalizeStructuredLecture(
       const validPriorities = ["core", "colloquial", "cultural", "advanced"];
       let priority = typeof p.priority === "string" ? p.priority.toLowerCase().trim() : "";
       if (!validPriorities.includes(priority)) {
-        // Didactic fallback based on kind
         if (kind === "takeaways") {
           priority = "core";
         } else if (kind === "lexical_groups") {
@@ -1975,22 +1996,76 @@ export function normalizeStructuredLecture(
         }
       }
 
-      let type = typeof p.type === "string" ? p.type.trim() : "phrase";
-      if (!type) {
-        type = "phrase";
+      // Phrase type normalization to an allowed list of values
+      const allowedTypes = ["vocabulary", "grammar", "cultural", "idiom", "slang", "collocation", "phrasal_verb", "expression"];
+      let phraseType = typeof p.type === "string" ? p.type.toLowerCase().trim() : "phrase";
+      if (!phraseType || !allowedTypes.includes(phraseType)) {
+        if (phraseType === "verb") {
+          phraseType = "vocabulary";
+        } else if (phraseType === "idiomatic expression" || phraseType === "idiom") {
+          phraseType = "idiom";
+        } else {
+          phraseType = "expression";
+        }
       }
 
-      const id = typeof p.id === "string" && p.id ? p.id : `phr-${kind}-${Math.random().toString(36).substr(2, 9)}`;
+      // Generate stable, deterministic ID based on phrase text
+      const phraseId = `phr-${computeStableHash(text)}`;
+
+      // Setup phrase lineKeys & lineIds matching
+      const phraseLineKeys: string[] = [];
+      const phraseLineIds: string[] = [];
+
+      // If LLM returned pre-existing lineKeys
+      if (Array.isArray(p.lineKeys)) {
+        p.lineKeys.forEach((lk: any) => {
+          if (typeof lk === "string" && lk) {
+            phraseLineKeys.push(lk);
+          }
+        });
+      } else if (Array.isArray(p.lineIds)) {
+        p.lineIds.forEach((lid: any) => {
+          if (typeof lid === "string" && lid) {
+            phraseLineKeys.push(lid);
+          }
+        });
+      }
+
+      // Perform text-based substring matching fallback to ensure we ALWAYS have proper lineKey linkage
+      if (phraseLineKeys.length === 0 && preparedLines.length > 0) {
+        preparedLines.forEach(line => {
+          if (line.text.toLowerCase().includes(lowerText) || lowerText.includes(line.text.toLowerCase())) {
+            if (!phraseLineKeys.includes(line.lineKey)) {
+              phraseLineKeys.push(line.lineKey);
+            }
+          }
+        });
+      }
+
+      // Populate lineIds based on lineKeys matching for backward compatibility
+      phraseLineKeys.forEach(lk => {
+        const matchedLine = preparedLines.find(pl => pl.lineKey === lk);
+        if (matchedLine) {
+          const djbId = generateLineId(matchedLine.text);
+          if (!phraseLineIds.includes(djbId)) {
+            phraseLineIds.push(djbId);
+          }
+        }
+      });
+
+      const uniqueKeys = Array.from(new Set(phraseLineKeys));
+      const uniqueIds = Array.from(new Set(phraseLineIds));
 
       normalized.push({
-        id,
+        id: phraseId,
         text,
         translation,
         studyExample,
-        type,
-        priority,
+        type: phraseType,
+        priority: priority as any,
         source: "ai",
-        lineIds: Array.isArray(p.lineIds) ? p.lineIds : []
+        lineKeys: uniqueKeys,
+        lineIds: uniqueIds
       });
     });
 
@@ -2010,7 +2085,6 @@ export function normalizeStructuredLecture(
   // 1. Overview Block (Exactly 1)
   let mainOverview: StructuredLectureBlock;
   if (overviewBlocks.length > 0) {
-    // Keep the longest or first one
     const best = overviewBlocks.reduce((prev, current) => 
       (prev.text || "").length >= (current.text || "").length ? prev : current
     );
@@ -2025,6 +2099,8 @@ export function normalizeStructuredLecture(
       phrases: []
     };
   }
+  mainOverview.id = "block-overview";
+  mainOverview.order = 1;
   mainOverview.title = mainOverview.title && !genericTitles.has(mainOverview.title.toLowerCase().trim()) 
     ? mainOverview.title.trim() 
     : kindToDefaultTitle["overview"];
@@ -2049,6 +2125,8 @@ export function normalizeStructuredLecture(
       phrases: []
     };
   }
+  mainEmotions.id = "block-emotions";
+  mainEmotions.order = 2;
   mainEmotions.title = mainEmotions.title && !genericTitles.has(mainEmotions.title.toLowerCase().trim()) 
     ? mainEmotions.title.trim() 
     : kindToDefaultTitle["emotions"];
@@ -2057,29 +2135,29 @@ export function normalizeStructuredLecture(
   normalizedBlocks.push(mainEmotions);
 
   // 3. Sections Blocks (Multiple, 1 or more)
-  // Let's filter section blocks to ensure they have non-trivial text
   const cleanedSections = sectionsBlocks.filter(s => {
     const textLen = (s.text || "").trim().length;
-    return textLen > 10; // Must have some description
+    return textLen > 10;
   });
 
   if (cleanedSections.length > 0) {
     cleanedSections.forEach((s, idx) => {
       const sectionBlock = { ...s };
-      // Standardize title if too generic (e.g., Verse 1, Chorus)
       const cleanedTitle = sectionBlock.title ? sectionBlock.title.trim() : "";
       if (!cleanedTitle || genericTitles.has(cleanedTitle.toLowerCase())) {
         sectionBlock.title = `Thematic Narrative Phase ${idx + 1}`;
       }
+      sectionBlock.id = `block-sections-${idx}`;
+      sectionBlock.order = 3 + idx;
       sectionBlock.text = cleanBoilerplate(sectionBlock.text);
       sectionBlock.phrases = normalizePhrases(sectionBlock.phrases, "sections");
       normalizedBlocks.push(sectionBlock);
     });
   } else {
-    // If no section blocks were returned, construct a default one which matches the song
     normalizedBlocks.push({
-      id: "block-section-default",
+      id: "block-sections-default",
       kind: "sections",
+      order: 3,
       title: "Core Lyric Milestones & Meaning",
       text: `Let's work through the lyrical waves of this track. Pay attention to how sentence constructs evolve, the emotional undertones of the main verses, and the linguistic structures that form the song's heartbeat.`,
       source: "ai",
@@ -2104,11 +2182,12 @@ export function normalizeStructuredLecture(
       phrases: []
     };
   }
+  mainLexical.id = "block-lexical-groups";
+  mainLexical.order = 10;
   mainLexical.title = mainLexical.title && !genericTitles.has(mainLexical.title.toLowerCase().trim()) 
     ? mainLexical.title.trim() 
     : kindToDefaultTitle["lexical_groups"];
   mainLexical.text = cleanBoilerplate(mainLexical.text);
-  // Cap phrases on lexical groups softly to 25 items for readability
   const rawPhrases = normalizePhrases(mainLexical.phrases, "lexical_groups");
   mainLexical.phrases = rawPhrases.slice(0, 25);
   normalizedBlocks.push(mainLexical);
@@ -2130,17 +2209,17 @@ export function normalizeStructuredLecture(
       phrases: []
     };
   }
+  mainTakeaways.id = "block-takeaways";
+  mainTakeaways.order = 11;
   mainTakeaways.title = mainTakeaways.title && !genericTitles.has(mainTakeaways.title.toLowerCase().trim()) 
     ? mainTakeaways.title.trim() 
     : kindToDefaultTitle["takeaways"];
   mainTakeaways.text = cleanBoilerplate(mainTakeaways.text);
-  // Soft cap the takeaways phrases to 25 items maximum
   const tkPhrases = normalizePhrases(mainTakeaways.phrases, "takeaways");
   mainTakeaways.phrases = tkPhrases.slice(0, 25);
   normalizedBlocks.push(mainTakeaways);
 
   // 6. Notes Block (Optional, 0 or 1 block)
-  // Only include if yes and non-trivial
   if (notesBlocks.length > 0) {
     const best = notesBlocks.reduce((prev, current) => 
       (prev.text || "").length >= (current.text || "").length ? prev : current
@@ -2148,13 +2227,14 @@ export function normalizeStructuredLecture(
     const cleanedText = cleanBoilerplate(best.text);
     const notesPhrases = normalizePhrases(best.phrases, "notes");
     
-    // Check if truly meaningful and not just template boilerplate
     const isMeaningful = cleanedText.length > 15 && 
                          !cleanedText.toLowerCase().includes("shadow") && 
                          !cleanedText.toLowerCase().includes("you can practice");
     
     if (isMeaningful || notesPhrases.length > 0) {
       const mainNotes = { ...best };
+      mainNotes.id = "block-notes";
+      mainNotes.order = 12;
       mainNotes.title = mainNotes.title && !genericTitles.has(mainNotes.title.toLowerCase().trim()) 
         ? mainNotes.title.trim() 
         : kindToDefaultTitle["notes"];
@@ -2164,19 +2244,48 @@ export function normalizeStructuredLecture(
     }
   }
 
+  // Derive block lineKeys and lineIds post-processing
+  normalizedBlocks.forEach(b => {
+    const blockLineKeys = new Set<string>();
+    const blockLineIds = new Set<string>();
+    b.source = "ai";
+    if (b.phrases) {
+      b.phrases.forEach(p => {
+        if (p.lineKeys) p.lineKeys.forEach(lk => blockLineKeys.add(lk));
+        if (p.lineIds) p.lineIds.forEach(lid => blockLineIds.add(lid));
+      });
+    }
+    b.lineKeys = Array.from(blockLineKeys);
+    b.lineIds = Array.from(blockLineIds);
+  });
+
   return normalizedBlocks;
 }
 
 
 export async function getCachedStructuredLecture(
-  lyrics: string,
+  lyrics: string | PreparedLyricsInput,
   title: string,
   artist: string,
   targetLanguage: string
 ): Promise<StructuredLectureBlock[] | null> {
-  const trackKey = await computeTrackKey(title, [artist]);
-  const lyricsHash = await computeLyricsHash(lyrics);
-  const targetLanguageCode = getTargetLangCode2Letter(targetLanguage);
+  let rawLyrics: string;
+  let trackTitle = title;
+  let trackArtist = artist;
+  let targetLang = targetLanguage;
+
+  if (isPreparedInput(lyrics)) {
+    rawLyrics = lyrics.lines.map(l => l.text).join("\n");
+    trackTitle = lyrics.track.title;
+    trackArtist = lyrics.track.artists[0] || "Unknown";
+    targetLang = lyrics.targetLanguage;
+  } else {
+    rawLyrics = lyrics;
+  }
+
+  const trackKey = await computeTrackKey(trackTitle, [trackArtist]);
+  const lyricsHash = await computeLyricsHash(rawLyrics);
+  const targetLanguageCode = getTargetLangCode2Letter(targetLang);
   const docId = `lecture_${trackKey}_${lyricsHash}_${targetLanguageCode}_v${LECTURE_PROMPT_VERSION}`;
 
   try {
@@ -2185,7 +2294,7 @@ export async function getCachedStructuredLecture(
     if (cacheSnap.exists()) {
       const cachedBlocks = cacheSnap.data().lectureBlocks as StructuredLectureBlock[];
       if (cachedBlocks && cachedBlocks.length > 0) {
-        console.log(`[Cache Hit - Read Only] Lecture Analysis for "${title}" - "${artist}" (${targetLanguageCode})`);
+        console.log(`[Cache Hit - Read Only] Lecture Analysis for "${trackTitle}" - "${trackArtist}" (${targetLanguageCode})`);
         return cachedBlocks;
       }
     }
@@ -2197,15 +2306,29 @@ export async function getCachedStructuredLecture(
 
 
 export async function fetchStructuredLecture(
-  lyrics: string,
+  lyrics: string | PreparedLyricsInput,
   title: string,
   artist: string,
   targetLanguage: string,
   forceRegenerate: boolean = false
 ): Promise<StructuredLectureBlock[]> {
-  const trackKey = await computeTrackKey(title, [artist]);
-  const lyricsHash = await computeLyricsHash(lyrics);
-  const targetLanguageCode = getTargetLangCode2Letter(targetLanguage);
+  let rawLyrics: string;
+  let trackTitle = title;
+  let trackArtist = artist;
+  let targetLang = targetLanguage;
+
+  if (isPreparedInput(lyrics)) {
+    rawLyrics = lyrics.lines.map(l => l.text).join("\n");
+    trackTitle = lyrics.track.title;
+    trackArtist = lyrics.track.artists[0] || "Unknown";
+    targetLang = lyrics.targetLanguage;
+  } else {
+    rawLyrics = lyrics;
+  }
+
+  const trackKey = await computeTrackKey(trackTitle, [trackArtist]);
+  const lyricsHash = await computeLyricsHash(rawLyrics);
+  const targetLanguageCode = getTargetLangCode2Letter(targetLang);
   const docId = `lecture_${trackKey}_${lyricsHash}_${targetLanguageCode}_v${LECTURE_PROMPT_VERSION}`;
 
   if (!forceRegenerate) {
@@ -2213,7 +2336,7 @@ export async function fetchStructuredLecture(
       const cacheRef = doc(db, 'lecture_analysis_cache', docId);
       const cacheSnap = await getDoc(cacheRef);
       if (cacheSnap.exists()) {
-        console.log(`[Cache Hit] Lecture Analysis for "${title}" - "${artist}" (${targetLanguageCode})`);
+        console.log(`[Cache Hit] Lecture Analysis for "${trackTitle}" - "${trackArtist}" (${targetLanguageCode})`);
         const cachedBlocks = cacheSnap.data().lectureBlocks as StructuredLectureBlock[];
         if (cachedBlocks && cachedBlocks.length > 0) {
           return cachedBlocks;
@@ -2224,9 +2347,22 @@ export async function fetchStructuredLecture(
     }
   }
 
+  // Format the lyrics for the prompt using stable lineKeys if available
+  let lyricsPromptSection: string;
+  if (isPreparedInput(lyrics)) {
+    lyricsPromptSection = lyrics.lines
+      .map(line => `Line [Key: ${line.lineKey}]: ${line.text}`)
+      .join("\n");
+  } else {
+    const parsed = parseRawLyrics(rawLyrics);
+    lyricsPromptSection = parsed
+      .map(line => `Line [Key: ${line.lineKey}]: ${line.text}`)
+      .join("\n");
+  }
+
   const prompt = `Role: Senior Literary Scholar & Music Educator.
-Song Name: "${title}" by "${artist}".
-Target Language for Lecture/Analysis text: ${targetLanguage}.
+Song Name: "${trackTitle}" by "${trackArtist}".
+Target Language for Lecture/Analysis text: ${targetLang}.
 
 Instructions:
 Generate an outstanding, highly interactive, well-structured, and rich annotated language learning guide (didactic breakdown) of the song. No general boilerplate or robotic introductory text. The core goal of this guide is to extract, explain, and organize a comprehensive, high-density study set of useful expressions to move into the learner's active vocabulary. Focus on the vocabulary breakdown as the primary educational resource.
@@ -2272,22 +2408,17 @@ Generate a logical flow of blocks matching the following outline:
 
 PHRASE OBJECT SCHEMAS:
 For any blocks with a nested 'phrases' array, strictly populate:
-- 'id': UNIQUE id string (e.g. "phr-overview-1", "phr-sec-youth-3")
 - 'text': Canonical/base/dictionary form of the term (e.g. "to seek" instead of conjugated text, base singular nouns, etc.). NEVER copy-paste randomly truncated lyrics fragments. Must match song's source language.
-- 'translation': Concise, near-perfect translation suited for a flashcard back. Fits as a direct definition in ${targetLanguage}. No long descriptive text.
+- 'translation': Concise, near-perfect translation suited for a flashcard back. Fits as a direct definition in ${targetLang}. No long descriptive text.
 - 'studyExample': (Optional) An elegant, separate illustrative sentence demonstrating natural usage of this expression in a standard daily context.
-- 'type': Grammatical or semantic type (e.g. "idiom", "slang", "verb", "phrase", "expression", "grammar pattern").
-- 'priority': Essential didactic rating assigned exactly to one of these:
-  * "core": High-frequency words or crucial everyday structures.
-  * "colloquial": Informal slang, speech particles, or conversational idioms.
-  * "cultural": Context-bound references, historic/metaphorical idioms, or allusions.
-  * "advanced": Low-frequency/complex vocabulary or elevated aesthetic styles.
-- 'source': Always "ai"
+- 'type': Grammatical or semantic type (one of: "vocabulary", "grammar", "cultural", "idiom", "slang", "collocation", "phrasal_verb", "expression").
+- 'priority': Essential didactic rating assigned exactly to one of these: "core", "colloquial", "cultural", "advanced".
+- 'lineKeys': An array of stable lineKey strings (Key hash) from the lyrics lines where this phrase appears or is most relevant.
 
-Lyrics to analyze:
-${lyrics.substring(0, 4000)}
+Lyrics to analyze (with stable keys):
+${lyricsPromptSection}
 
-Return a valid JSON array of objects conforming exactly to the schema. Keep all explanations and translations in matches for ${targetLanguage}.`;
+Return a valid JSON array of objects conforming exactly to the schema. Keep all explanations and translations in matches for ${targetLang}.`;
 
   try {
     const response = await callGeminiApi({
@@ -2300,46 +2431,45 @@ Return a valid JSON array of objects conforming exactly to the schema. Keep all 
           items: {
             type: Type.OBJECT,
             properties: {
-              id: { type: Type.STRING },
               kind: { 
                 type: Type.STRING, 
                 enum: ['overview', 'emotions', 'sections', 'lexical_groups', 'takeaways', 'notes'] 
               },
               title: { type: Type.STRING },
               text: { type: Type.STRING },
-              source: { type: Type.STRING },
               phrases: {
                 type: Type.ARRAY,
                 items: {
                   type: Type.OBJECT,
                   properties: {
-                    id: { type: Type.STRING },
                     text: { type: Type.STRING },
                     translation: { type: Type.STRING },
                     studyExample: { type: Type.STRING },
-                    type: { type: Type.STRING },
-                    source: { type: Type.STRING },
+                    type: { 
+                      type: Type.STRING,
+                      enum: ["vocabulary", "grammar", "cultural", "idiom", "slang", "collocation", "phrasal_verb", "expression"]
+                    },
                     priority: { 
                       type: Type.STRING, 
                       enum: ["core", "colloquial", "cultural", "advanced"] 
                     },
-                    lineIds: {
+                    lineKeys: {
                       type: Type.ARRAY,
                       items: { type: Type.STRING }
                     }
                   },
-                  required: ["id", "text", "translation", "source"]
+                  required: ["text", "translation"]
                 }
               }
             },
-            required: ["id", "kind", "title", "text", "source"]
+            required: ["kind", "title", "text"]
           }
         }
       }
     });
 
     const rawBlocks = JSON.parse(response.text) as StructuredLectureBlock[];
-    const blocks = normalizeStructuredLecture(rawBlocks, targetLanguage, title, artist);
+    const blocks = normalizeStructuredLecture(rawBlocks, targetLang, trackTitle, trackArtist, lyrics);
     
     // Save to cache async
     if (blocks && blocks.length > 0) {
@@ -2347,7 +2477,7 @@ Return a valid JSON array of objects conforming exactly to the schema. Keep all 
         lectureBlocks: blocks,
         trackKey,
         lyricsHash,
-        targetLanguage: targetLanguage,
+        targetLanguage: targetLang,
         lecturePromptVersion: LECTURE_PROMPT_VERSION,
         createdAt: serverTimestamp(),
       }).catch(e => console.error("Cache write error (lecture_analysis_cache):", e));
@@ -2362,7 +2492,7 @@ Return a valid JSON array of objects conforming exactly to the schema. Keep all 
         id: "fallback-overview",
         kind: "overview",
         title: "Song Overview",
-        text: `Overview analysis for "${title}" by ${artist}. This track contains beautiful lyrical layers and serves as wonderful study material for learning. Connect each line with your heart to master the tone and meaning.`,
+        text: `Overview analysis for "${trackTitle}" by ${trackArtist}. This track contains beautiful lyrical layers and serves as wonderful study material for learning. Connect each line with your heart to master the tone and meaning.`,
         source: "ai",
         phrases: []
       }
