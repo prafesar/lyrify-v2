@@ -123,7 +123,7 @@ describe("Lyrics Preprocessor Helper", () => {
 
       expect(result.track.title).toBe("Yellow");
       expect(result.track.artists).toEqual(["coldplay"]);
-      expect(result.targetLanguage).toBe("Russian");
+      expect(result.targetLanguage).toBe("ru");
       expect(result.lines).toHaveLength(1);
       expect(result.lines[0].text).toBe("Look at the stars");
     });

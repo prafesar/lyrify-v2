@@ -188,7 +188,7 @@ describe("TrackSessionFacade Unit Tests", () => {
       expect(aiClient.getPhraseAnalysis).toHaveBeenCalledWith(
         expect.objectContaining({
           track: { title: "Hello", artists: ["adele"] },
-          targetLanguage: "Russian"
+          targetLanguage: "ru"
         }),
         "track-adele-hello",
         "Russian"

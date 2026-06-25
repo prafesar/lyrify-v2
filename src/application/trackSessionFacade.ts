@@ -6,6 +6,7 @@ import { LyricsProviderPort } from "./ports/lyricsProviderPort";
 import { MusicMetadataPort } from "./ports/musicMetadataPort";
 import { TrackLyricsData, Track, extractTrackMeaning } from "../services/musicService";
 import { prepareLyricsInput, computeLineKey, findMatchedTranslation } from "../services/lyricsPreprocessor";
+import { getLanguageCode } from "../lib/languages";
 
 export class TrackSessionFacade {
   constructor(
@@ -487,13 +488,13 @@ export class TrackSessionFacade {
             let meanings = freshCached.meanings;
             if (extractedMeaning) {
               meaning = extractedMeaning;
-              const langKey = targetLanguage.toLowerCase().trim();
+              const langCode = getLanguageCode(targetLanguage);
               meanings = {
                 ...freshCached.meanings,
-                en: langKey === 'english' ? extractedMeaning : (freshCached.meanings?.en || ""),
-                es: langKey === 'spanish' ? extractedMeaning : (freshCached.meanings?.es || ""),
-                ru: langKey === 'russian' ? extractedMeaning : (freshCached.meanings?.ru || ""),
-                pl: langKey === 'polish' ? extractedMeaning : (freshCached.meanings?.pl || "")
+                en: langCode === 'en' ? extractedMeaning : (freshCached.meanings?.en || ""),
+                es: langCode === 'es' ? extractedMeaning : (freshCached.meanings?.es || ""),
+                ru: langCode === 'ru' ? extractedMeaning : (freshCached.meanings?.ru || ""),
+                pl: langCode === 'pl' ? extractedMeaning : (freshCached.meanings?.pl || "")
               };
             }
             const updated = {

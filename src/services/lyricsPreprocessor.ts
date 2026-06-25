@@ -1,3 +1,5 @@
+import { getLanguageCode } from "../lib/languages";
+
 export interface PreparedLyricsLine {
   lineIndex: number;
   lineKey: string;
@@ -151,7 +153,7 @@ export function prepareLyricsInput(
       title: cleanTitle,
       artists: cleanArtists,
     },
-    targetLanguage,
+    targetLanguage: getLanguageCode(targetLanguage),
     source: sourceInfo,
     lines: structuredLines,
   };

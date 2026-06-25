@@ -23,6 +23,7 @@ import {
   mergeGeneratedPhrasesForLines
 } from "../services/lyricsAnalysisService";
 import { prepareLyricsInput } from "../services/lyricsPreprocessor";
+import { getLanguageCode } from "../lib/languages";
 
 export interface UseTrackSessionResult {
   currentTrack: TrackLyricsData | null;
@@ -381,13 +382,13 @@ export function useTrackSession(): UseTrackSessionResult {
           const extractedMeaning = extractTrackMeaning(blocks);
           if (extractedMeaning) {
             meaning = extractedMeaning;
-            const langKey = targetLanguage.toLowerCase().trim();
+            const langCode = getLanguageCode(targetLanguage);
             meanings = {
               ...trackData.meanings,
-              en: langKey === 'english' ? extractedMeaning : (trackData.meanings?.en || ""),
-              es: langKey === 'spanish' ? extractedMeaning : (trackData.meanings?.es || ""),
-              ru: langKey === 'russian' ? extractedMeaning : (trackData.meanings?.ru || ""),
-              pl: langKey === 'polish' ? extractedMeaning : (trackData.meanings?.pl || "")
+              en: langCode === 'en' ? extractedMeaning : (trackData.meanings?.en || ""),
+              es: langCode === 'es' ? extractedMeaning : (trackData.meanings?.es || ""),
+              ru: langCode === 'ru' ? extractedMeaning : (trackData.meanings?.ru || ""),
+              pl: langCode === 'pl' ? extractedMeaning : (trackData.meanings?.pl || "")
             };
           }
 
