@@ -117,17 +117,6 @@ describe("TrackSessionFacade Unit Tests", () => {
       const mockLyricsData = { lyrics: "Look at the stars\nLook how they shine", source: "MockLrc" };
       vi.mocked(fetchLyrics).mockResolvedValue(mockLyricsData);
 
-      const mockMeaningResult = {
-        originalLanguage: "English",
-        difficulty: "beginner" as const,
-        meanings: {
-          en: "Overview of Yellow",
-          es: "Overview Spanish",
-          ru: "Overview Russian",
-          pl: "Overview Polish",
-        },
-      };
-
       const mockTranslations = [
         { originalText: "Look at the stars", translation: "Mira las estrellas", language: "es" },
         { originalText: "Look how they shine", translation: "Mira cómo brillan", language: "es" },

@@ -1,4 +1,5 @@
-import { GeminiAIAdapter, aiClient } from "./adapters/geminiAIAdapter";
+import { GeminiAIAdapter, aiClient as geminiAiClient } from "./adapters/geminiAIAdapter";
+import { WorkerAIAdapter } from "./adapters/workerAIAdapter";
 import { 
   BrowserUserDataRepository, 
   userDataRepository,
@@ -18,6 +19,16 @@ import { userDataMaintenanceService } from "./adapters/browserUserDataMaintenanc
 const lyricsProvider = new BrowserLyricsProvider();
 const musicMetadataProvider = new BrowserMusicMetadata();
 
+// ============================================================================
+// AI TRANSPORT CUTOVER POINT (FUTURE EXTERNAL API / CLOUDFLARE WORKER SWITCH)
+// ============================================================================
+// To switch the entire application's AI layer to the Cloudflare Worker API:
+// 1. Swap the active declaration below to use `new WorkerAIAdapter()` instead of `geminiAiClient`.
+// This single point controls all AI translation, lecture, and analysis transport.
+export const aiClient = geminiAiClient; // Current active Gemini transport
+// export const aiClient = new WorkerAIAdapter(); // Future Cloudflare Worker transport
+// ============================================================================
+
 // Compose/Wire the TrackSessionFacade inside the composition root
 export const trackSessionFacade = new TrackSessionFacade(
   aiClient,
@@ -29,7 +40,6 @@ export const trackSessionFacade = new TrackSessionFacade(
 );
 
 export { 
-  aiClient, 
   userDataRepository,
   studyCardsRepository,
   dailyTrackerRepository,

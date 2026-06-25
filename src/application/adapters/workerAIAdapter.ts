@@ -253,9 +253,9 @@ export class WorkerAIAdapter implements AiPort {
   }
 
   async getPhraseAnalysis(
-    lyrics: string,
-    trackKey: string,
-    targetLanguage: string
+    lyrics: string | PreparedLyricsInput,
+    trackKey?: string,
+    targetLanguage?: string
   ): Promise<any[]> {
     throw new Error("WorkerAIAdapter is currently in placeholder state.");
   }

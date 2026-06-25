@@ -253,12 +253,34 @@ export class GeminiAIAdapter implements AiPort {
   }
 
   async getPhraseAnalysis(
-    lyrics: string,
-    trackKey: string,
-    targetLanguage: string
+    lyrics: string | PreparedLyricsInput,
+    trackKey?: string,
+    targetLanguage?: string
   ): Promise<any[]> {
-    const lyricsHash = await originalGeminiService.computeLyricsHash(lyrics);
-    return originalGeminiService.getPhraseAnalysis(lyrics, targetLanguage, trackKey, lyricsHash);
+    let finalTrackKey = trackKey || "";
+    let finalTargetLang = targetLanguage || "";
+    let rawLyrics = "";
+
+    if (isPreparedInput(lyrics)) {
+      rawLyrics = lyrics.track.rawLyrics || "";
+      if (!finalTrackKey) {
+        finalTrackKey = await this.computeTrackKey(lyrics.track.title, lyrics.track.artists);
+      }
+      if (!finalTargetLang) {
+        finalTargetLang = lyrics.targetLanguage;
+      }
+    } else {
+      rawLyrics = lyrics;
+      if (!finalTrackKey) {
+        finalTrackKey = "unknown-track";
+      }
+      if (!finalTargetLang) {
+        finalTargetLang = "English";
+      }
+    }
+
+    const lyricsHash = await this.computeLyricsHash(lyrics);
+    return originalGeminiService.getPhraseAnalysis(rawLyrics, finalTargetLang, finalTrackKey, lyricsHash);
   }
 
   async saveTrackToSharedCache(track: TrackLyricsData): Promise<void> {

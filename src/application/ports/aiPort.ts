@@ -177,9 +177,9 @@ export interface AiPort {
   ): Promise<any[]>;
 
   getPhraseAnalysis(
-    lyrics: string,
-    trackKey: string,
-    targetLanguage: string
+    lyrics: string | PreparedLyricsInput,
+    trackKey?: string,
+    targetLanguage?: string
   ): Promise<any[]>;
 
   saveTrackToSharedCache(track: TrackLyricsData): Promise<void>;
