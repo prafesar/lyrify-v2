@@ -534,7 +534,7 @@ export interface StructuredSectionPhrase {
 
 export interface StructuredLectureBlock {
   id: string;
-  kind: 'overview' | 'emotions' | 'sections' | 'lexical_groups' | 'takeaways' | 'notes' | 'summary' | 'themes' | 'motifs' | 'context' | 'important_lines';
+  kind: 'intro' | 'overview' | 'emotions' | 'sections' | 'lexical_groups' | 'takeaways' | 'notes' | 'summary' | 'themes' | 'motifs' | 'context' | 'important_lines';
   title?: string;
   text: string;
   source: 'ai' | 'manual';

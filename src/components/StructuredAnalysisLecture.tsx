@@ -58,7 +58,7 @@ export const StructuredAnalysisLecture: React.FC<StructuredAnalysisLectureProps>
     // Fallback migration to map legacy kinds to our modern 6-kind structure
     return rawBlocks.map(b => {
       let k = b.kind as string;
-      if (k === 'summary' || k === 'important_lines') k = 'overview';
+      if (k === 'intro' || k === 'summary' || k === 'important_lines') k = 'overview';
       if (k === 'themes' || k === 'motifs') k = 'emotions';
       if (k === 'context') k = 'overview';
       

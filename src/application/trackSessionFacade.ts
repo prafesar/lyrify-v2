@@ -219,8 +219,11 @@ export class TrackSessionFacade {
           };
         });
 
-        const overviewBlock = trackData.lectureBlocks?.find(b => b.kind === "overview");
-        const meaning = trackData.meaning || overviewBlock?.text || "";
+        const meaningBlock = trackData.lectureBlocks?.find(b => b.kind === "intro") || 
+                             trackData.lectureBlocks?.find(b => b.kind === "overview") || 
+                             trackData.lectureBlocks?.find(b => b.kind === "context") ||
+                             trackData.lectureBlocks?.[0];
+        const meaning = trackData.meaning || meaningBlock?.text || "";
 
         trackData = {
           ...trackData,
@@ -489,18 +492,21 @@ export class TrackSessionFacade {
         if (blocks && blocks.length > 0) {
           const freshCached = this.trackCacheRepository.getCachedTrack(trackId);
           if (freshCached) {
-            const overviewBlock = blocks.find(b => b.kind === "overview");
+            const meaningBlock = blocks.find(b => b.kind === "intro") || 
+                                 blocks.find(b => b.kind === "overview") || 
+                                 blocks.find(b => b.kind === "context") || 
+                                 blocks[0];
             let meaning = freshCached.meaning;
             let meanings = freshCached.meanings;
-            if (overviewBlock?.text) {
-              meaning = overviewBlock.text;
+            if (meaningBlock?.text) {
+              meaning = meaningBlock.text;
               const langKey = targetLanguage.toLowerCase().trim();
               meanings = {
                 ...freshCached.meanings,
-                en: langKey === 'english' ? overviewBlock.text : (freshCached.meanings?.en || ""),
-                es: langKey === 'spanish' ? overviewBlock.text : (freshCached.meanings?.es || ""),
-                ru: langKey === 'russian' ? overviewBlock.text : (freshCached.meanings?.ru || ""),
-                pl: langKey === 'polish' ? overviewBlock.text : (freshCached.meanings?.pl || "")
+                en: langKey === 'english' ? meaningBlock.text : (freshCached.meanings?.en || ""),
+                es: langKey === 'spanish' ? meaningBlock.text : (freshCached.meanings?.es || ""),
+                ru: langKey === 'russian' ? meaningBlock.text : (freshCached.meanings?.ru || ""),
+                pl: langKey === 'polish' ? meaningBlock.text : (freshCached.meanings?.pl || "")
               };
             }
             const updated = {

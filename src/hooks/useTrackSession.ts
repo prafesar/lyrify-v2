@@ -377,16 +377,19 @@ export function useTrackSession(): UseTrackSessionResult {
           
           let meaning = trackData.meaning || "";
           let meanings = trackData.meanings || { en: "", es: "", ru: "", pl: "" };
-          const overviewBlock = blocks.find(b => b.kind === "overview");
-          if (overviewBlock?.text) {
-            meaning = overviewBlock.text;
+          const meaningBlock = blocks.find(b => b.kind === "intro") || 
+                               blocks.find(b => b.kind === "overview") || 
+                               blocks.find(b => b.kind === "context") || 
+                               blocks[0];
+          if (meaningBlock?.text) {
+            meaning = meaningBlock.text;
             const langKey = targetLanguage.toLowerCase().trim();
             meanings = {
               ...trackData.meanings,
-              en: langKey === 'english' ? overviewBlock.text : (trackData.meanings?.en || ""),
-              es: langKey === 'spanish' ? overviewBlock.text : (trackData.meanings?.es || ""),
-              ru: langKey === 'russian' ? overviewBlock.text : (trackData.meanings?.ru || ""),
-              pl: langKey === 'polish' ? overviewBlock.text : (trackData.meanings?.pl || "")
+              en: langKey === 'english' ? meaningBlock.text : (trackData.meanings?.en || ""),
+              es: langKey === 'spanish' ? meaningBlock.text : (trackData.meanings?.es || ""),
+              ru: langKey === 'russian' ? meaningBlock.text : (trackData.meanings?.ru || ""),
+              pl: langKey === 'polish' ? meaningBlock.text : (trackData.meanings?.pl || "")
             };
           }
 

@@ -190,22 +190,12 @@ Quickly queries the backend cache to check if a structured lecture block set has
 
 ---
 
-### 4. Fetch or Generate Track Meaning (LEGACY / DEPRECATED)
-> ⚠️ **Status: LEGACY / DEPRECATED**. This standalone endpoint exists for backward compatibility but is excluded from the primary target design flow. Meaning summaries are now embedded inside the unified `/lecture/fetch` response under blocks of kind `intro`.
-
-- **Endpoint**: `/track-meaning/fetch`
-- **Method**: `POST`
-- **Request Payload**:
-  ```typescript
-  interface FetchTrackMeaningRequest {
-    lyrics: string;
-    metadata: {
-      title: string;
-      artists: string[];
-      targetLanguage?: string;
-    };
-  }
-  ```
+### 4. Fetch or Generate Track Meaning (LEGACY / NOT SUPPORTED)
+> ⚠️ **Status: REMOVED / NOT SUPPORTED ON V1 BACKEND**. In the target v1 cutover, the external API does not have an active standalone `track-meaning` endpoint. 
+> 
+> Instead, all track meaning logic is fully integrated into the **`/api/v1/lecture/fetch`** endpoint. The primary semantic source of the track's meaning/summary is the block with **`kind === "intro"`**. 
+> 
+> The client compatibility layers (`WorkerAIAdapter`) automatically resolve the track's central meaning/summary by extracting the text of the `"intro"` block (or falling back to `"overview"` / `"context"` kinds when reading older records) from the structured lecture response.
 
 ---
 

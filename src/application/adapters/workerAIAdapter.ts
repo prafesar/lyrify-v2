@@ -82,6 +82,10 @@ export class WorkerAIAdapter implements AiPort {
     return null;
   }
 
+  /**
+   * Compatibility wrapper. Track meaning is no longer an active, separate endpoint
+   * in the modern API flow. It is generated and delivered as part of the structured lecture (kind === "intro").
+   */
   async fetchTrackMeaning(
     lyrics: string,
     metadata: TrackMetadata,
@@ -96,8 +100,11 @@ export class WorkerAIAdapter implements AiPort {
         metadata.targetLanguage || "English"
       );
       const blocks = await this.fetchStructuredLecture(preparedInput);
-      const overviewBlock = blocks.find(b => b.kind === "overview" || b.kind === "context");
-      const text = overviewBlock ? overviewBlock.text : "Track context & breakdown available in study lecture.";
+      const meaningBlock = blocks.find(b => b.kind === "intro") || 
+                           blocks.find(b => b.kind === "overview") || 
+                           blocks.find(b => b.kind === "context") || 
+                           blocks[0];
+      const text = meaningBlock ? meaningBlock.text : "Track context & breakdown available in study lecture.";
       return {
         meaning: text,
         meanings: {
