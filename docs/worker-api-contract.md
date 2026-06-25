@@ -46,11 +46,19 @@ export interface PreparedLyricsInput {
 }
 
 export interface LineTranslationResult {
-  lineKey: string;
-  lineIndex: number;
-  originalText: string;
+  original: string;
   translation: string;
   language: string;
+  type: string;
+}
+
+export interface EnrichedClientLine {
+  lineKey: string;
+  lineIndex: number;
+  original: string;
+  translation: string;
+  language?: string | null;
+  blockType?: string;
 }
 
 export interface PhraseAnalysisResult {
@@ -63,7 +71,8 @@ export interface PhraseAnalysisResult {
 }
 ```
 
-- **`lineKey` (Canonical Key)**: The client and server match lines by `lineKey` (FNV-1a hash of normalized lowercase text), ensuring translations and breakdowns remain perfectly aligned even if line indexes shift slightly.
+- **Client-Side Line Enrichment**: The raw response from the translation API (`LineTranslationResult[]`) is mapped and aligned back to the source lines on the client. The client performs matching by computing a `lineKey` (FNV-1a hash of the normalized line text) to create stable, enriched local track structures (`EnrichedClientLine[]`).
+- **`lineKey` (Canonical Key)**: Ensures translations and breakdowns remain perfectly aligned even if line indexes shift slightly.
 - **`lineIndex`**: Serves purely to preserve original order.
 - **Track Normalization**: Track titles are stripped of bracketed additions (e.g., `(Live)` or `[Remastered]`) by the client during preparation to improve cache hit rates.
 
@@ -100,7 +109,7 @@ Any operational or execution error returns an appropriate HTTP status code (`400
 ### 1. Retrieve Line Translations (Canonical Integration)
 Generates or retrieves precise line-by-line translations for the track lines.
 
-- **Endpoint**: `/translations/fetch`
+- **Endpoint**: `/api/v1/translation/fetch`
 - **Method**: `POST`
 - **Request Payload**: `PreparedLyricsInput` (canonical format)
 - **Response Payload**: `LineTranslationResult[]`
@@ -108,11 +117,10 @@ Generates or retrieves precise line-by-line translations for the track lines.
   ```json
   [
     {
-      "lineKey": "982bcb7c",
-      "lineIndex": 0,
-      "originalText": "Hello from the other side",
+      "original": "Hello from the other side",
       "translation": "Привет с другой стороны",
-      "language": "es"
+      "language": "es",
+      "type": "verse"
     }
   ]
   ```
@@ -122,7 +130,7 @@ Generates or retrieves precise line-by-line translations for the track lines.
 ### 2. Retrieve Phrase / Study Analysis (Stage 3 Deep Analysis)
 Identifies high-value phrase segments (2-6 words each) for study, providing grammatical/cultural annotations.
 
-- **Endpoint**: `/phrases/fetch`
+- **Endpoint**: `/api/v1/phrases/fetch`
 - **Method**: `POST`
 - **Request Payload**: `PreparedLyricsInput` (canonical format)
 - **Response Payload**: `PhraseAnalysisResult[]`
@@ -145,7 +153,7 @@ Identifies high-value phrase segments (2-6 words each) for study, providing gram
 ### 3. Generate or Fetch Structured Lecture
 Generates or retrieves a comprehensive, structured lecture/learning breakdown of a song (cultural notes, active vocabulary themes).
 
-- **Endpoint**: `/lecture/fetch`
+- **Endpoint**: `/api/v1/lecture/fetch`
 - **Method**: `POST`
 - **Request Payload**: `PreparedLyricsInput` (canonical format)
 - **Response Payload**: `StructuredLectureBlock[]`
@@ -160,32 +168,6 @@ Generates or retrieves a comprehensive, structured lecture/learning breakdown of
       "source": "ai"
     }
   ]
-  ```
-
----
-
-### 3.1. Retrieve Cached Structured Lecture (Fast Lookup)
-Quickly queries the backend cache to check if a structured lecture block set has already been generated and saved. Unlike the active generation flow, this endpoint never initiates LLM processing, making it extremely fast and lightweight for background hydration.
-
-- **Endpoint**: `/lecture/cached/fetch`
-- **Method**: `POST`
-- **Request Payload**: `PreparedLyricsInput` (canonical format)
-- **Response Payload**: `StructuredLectureBlock[] | null`
-- **Example Response (`data` when cached)**:
-  ```json
-  [
-    {
-      "id": "block-1",
-      "kind": "intro",
-      "title": "Sociocultural Context & Message",
-      "text": "Intro text explaining the deeper background of this track...",
-      "source": "ai"
-    }
-  ]
-  ```
-- **Example Response (`data` when cache miss)**:
-  ```json
-  null
   ```
 
 ---

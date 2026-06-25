@@ -4,8 +4,8 @@ import { RecentHistoryRepositoryPort } from "./ports/recentHistoryRepositoryPort
 import { DailyTrackerRepositoryPort } from "./ports/dailyTrackerRepositoryPort";
 import { LyricsProviderPort } from "./ports/lyricsProviderPort";
 import { MusicMetadataPort } from "./ports/musicMetadataPort";
-import { TrackLyricsData, Track } from "../services/musicService";
-import { prepareLyricsInput, computeLineKey } from "../services/lyricsPreprocessor";
+import { TrackLyricsData, Track, extractTrackMeaning } from "../services/musicService";
+import { prepareLyricsInput, computeLineKey, findMatchedTranslation } from "../services/lyricsPreprocessor";
 
 export class TrackSessionFacade {
   constructor(
@@ -207,10 +207,7 @@ export class TrackSessionFacade {
           if (!line.original.trim()) {
             return line;
           }
-          const targetLineKey = computeLineKey(line.original);
-          const matched = translationsResult.find((t: any) => t.lineKey === targetLineKey)
-            || translationsResult.find((t: any) => (t.original || t.originalText) === line.original)
-            || translationsResult[idx];
+          const matched = findMatchedTranslation(line.original, idx, translationsResult);
 
           return {
             ...line,
@@ -219,11 +216,9 @@ export class TrackSessionFacade {
           };
         });
 
-        const meaningBlock = trackData.lectureBlocks?.find(b => b.kind === "intro") || 
-                             trackData.lectureBlocks?.find(b => b.kind === "overview") || 
-                             trackData.lectureBlocks?.find(b => b.kind === "context") ||
-                             trackData.lectureBlocks?.[0];
-        const meaning = trackData.meaning || meaningBlock?.text || "";
+        // Meaning is canonicalized from structured lecture blocks
+        const extractedMeaning = extractTrackMeaning(trackData.lectureBlocks);
+        const meaning = trackData.meaning || extractedMeaning || "";
 
         trackData = {
           ...trackData,
@@ -254,10 +249,7 @@ export class TrackSessionFacade {
         if (!line.original.trim()) {
           return line;
         }
-        const targetLineKey = computeLineKey(line.original);
-        const matched = translationsResult.find((t: any) => t.lineKey === targetLineKey)
-          || translationsResult.find((t: any) => (t.original || t.originalText) === line.original)
-          || translationsResult[idx];
+        const matched = findMatchedTranslation(line.original, idx, translationsResult);
 
         return {
           ...line,
@@ -429,10 +421,7 @@ export class TrackSessionFacade {
       if (!line.original.trim()) {
         return line;
       }
-      const targetLineKey = computeLineKey(line.original);
-      const matched = translationsResult.find((t: any) => t.lineKey === targetLineKey)
-        || translationsResult.find((t: any) => (t.original || t.originalText) === line.original)
-        || translationsResult[idx];
+      const matched = findMatchedTranslation(line.original, idx, translationsResult);
 
       return {
         ...line,
@@ -492,21 +481,18 @@ export class TrackSessionFacade {
         if (blocks && blocks.length > 0) {
           const freshCached = this.trackCacheRepository.getCachedTrack(trackId);
           if (freshCached) {
-            const meaningBlock = blocks.find(b => b.kind === "intro") || 
-                                 blocks.find(b => b.kind === "overview") || 
-                                 blocks.find(b => b.kind === "context") || 
-                                 blocks[0];
+            const extractedMeaning = extractTrackMeaning(blocks);
             let meaning = freshCached.meaning;
             let meanings = freshCached.meanings;
-            if (meaningBlock?.text) {
-              meaning = meaningBlock.text;
+            if (extractedMeaning) {
+              meaning = extractedMeaning;
               const langKey = targetLanguage.toLowerCase().trim();
               meanings = {
                 ...freshCached.meanings,
-                en: langKey === 'english' ? meaningBlock.text : (freshCached.meanings?.en || ""),
-                es: langKey === 'spanish' ? meaningBlock.text : (freshCached.meanings?.es || ""),
-                ru: langKey === 'russian' ? meaningBlock.text : (freshCached.meanings?.ru || ""),
-                pl: langKey === 'polish' ? meaningBlock.text : (freshCached.meanings?.pl || "")
+                en: langKey === 'english' ? extractedMeaning : (freshCached.meanings?.en || ""),
+                es: langKey === 'spanish' ? extractedMeaning : (freshCached.meanings?.es || ""),
+                ru: langKey === 'russian' ? extractedMeaning : (freshCached.meanings?.ru || ""),
+                pl: langKey === 'polish' ? extractedMeaning : (freshCached.meanings?.pl || "")
               };
             }
             const updated = {

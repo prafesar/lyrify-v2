@@ -1,5 +1,5 @@
 import { AiPort, TrackMetadata, TrackMeaningResult, TrackMeaningEntry } from "../ports/aiPort";
-import { TrackLyricsData, StructuredLectureBlock } from "../../services/musicService";
+import { TrackLyricsData, StructuredLectureBlock, extractTrackMeaning } from "../../services/musicService";
 import { PreparedLyricsInput, prepareLyricsInput, normalizeTrackTitle, normalizeArtists, computeStableHash } from "../../services/lyricsPreprocessor";
 
 function isPreparedInput(input: any): input is PreparedLyricsInput {
@@ -100,11 +100,7 @@ export class WorkerAIAdapter implements AiPort {
         metadata.targetLanguage || "English"
       );
       const blocks = await this.fetchStructuredLecture(preparedInput);
-      const meaningBlock = blocks.find(b => b.kind === "intro") || 
-                           blocks.find(b => b.kind === "overview") || 
-                           blocks.find(b => b.kind === "context") || 
-                           blocks[0];
-      const text = meaningBlock ? meaningBlock.text : "Track context & breakdown available in study lecture.";
+      const text = extractTrackMeaning(blocks) || "Track context & breakdown available in study lecture.";
       return {
         meaning: text,
         meanings: {

@@ -600,6 +600,15 @@ export function generateLineId(text: string): string {
   return `line_${(hash >>> 0).toString(16)}`;
 }
 
+export function extractTrackMeaning(blocks?: StructuredLectureBlock[]): string {
+  if (!blocks || blocks.length === 0) return "";
+  const meaningBlock = blocks.find(b => b.kind === "intro") || 
+                       blocks.find(b => b.kind === "overview") || 
+                       blocks.find(b => b.kind === "context") || 
+                       blocks[0];
+  return meaningBlock ? meaningBlock.text : "";
+}
+
 export function getCachedTrackData(trackId: string): TrackLyricsData | null {
   const track = sqliteService.getCachedTrack(trackId);
   if (!track) return null;

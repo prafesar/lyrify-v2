@@ -156,3 +156,22 @@ export function prepareLyricsInput(
     lines: structuredLines,
   };
 }
+
+/**
+ * Helper to match a translation result for a specific line.
+ * Prioritizes lineKey matching, falls back to raw line content (using original or originalText),
+ * and finally falls back to line index.
+ */
+export function findMatchedTranslation(
+  lineOriginal: string,
+  index: number,
+  translationsResult: any[]
+): any | undefined {
+  if (!translationsResult || translationsResult.length === 0) return undefined;
+  const targetLineKey = computeLineKey(lineOriginal);
+  return (
+    translationsResult.find((t: any) => t.lineKey === targetLineKey) ||
+    translationsResult.find((t: any) => (t.original || t.originalText) === lineOriginal) ||
+    translationsResult[index]
+  );
+}

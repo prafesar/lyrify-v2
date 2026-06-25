@@ -14,7 +14,8 @@ import {
   saveTrackData, 
   searchLyricsOptions, 
   fetchLyricsFromOption, 
-  clearCachedLyrics 
+  clearCachedLyrics,
+  extractTrackMeaning 
 } from "../services/musicService";
 import { 
   linkPhrasesToLines, 
@@ -377,19 +378,16 @@ export function useTrackSession(): UseTrackSessionResult {
           
           let meaning = trackData.meaning || "";
           let meanings = trackData.meanings || { en: "", es: "", ru: "", pl: "" };
-          const meaningBlock = blocks.find(b => b.kind === "intro") || 
-                               blocks.find(b => b.kind === "overview") || 
-                               blocks.find(b => b.kind === "context") || 
-                               blocks[0];
-          if (meaningBlock?.text) {
-            meaning = meaningBlock.text;
+          const extractedMeaning = extractTrackMeaning(blocks);
+          if (extractedMeaning) {
+            meaning = extractedMeaning;
             const langKey = targetLanguage.toLowerCase().trim();
             meanings = {
               ...trackData.meanings,
-              en: langKey === 'english' ? meaningBlock.text : (trackData.meanings?.en || ""),
-              es: langKey === 'spanish' ? meaningBlock.text : (trackData.meanings?.es || ""),
-              ru: langKey === 'russian' ? meaningBlock.text : (trackData.meanings?.ru || ""),
-              pl: langKey === 'polish' ? meaningBlock.text : (trackData.meanings?.pl || "")
+              en: langKey === 'english' ? extractedMeaning : (trackData.meanings?.en || ""),
+              es: langKey === 'spanish' ? extractedMeaning : (trackData.meanings?.es || ""),
+              ru: langKey === 'russian' ? extractedMeaning : (trackData.meanings?.ru || ""),
+              pl: langKey === 'polish' ? extractedMeaning : (trackData.meanings?.pl || "")
             };
           }
 
