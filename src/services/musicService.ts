@@ -1,7 +1,7 @@
 
 import { type Track, Artist, Album } from '../constants';
 import { sqliteService } from './sqliteService';
-import { PreparedLyricsInput } from './lyricsPreprocessor';
+import { PreparedLyricsInput, computeLineKey } from './lyricsPreprocessor';
 export type { Track };
 
 export interface LyricsData {
@@ -502,6 +502,7 @@ export interface LyricsLine {
   id: string;
   lineId?: string;
   lineTextHash?: string;
+  lineKey?: string;
   index: number;
   original: string;
   translation?: string;
@@ -608,6 +609,9 @@ export function getCachedTrackData(trackId: string): TrackLyricsData | null {
         line.lineId = generateLineId(line.original);
       }
       line.lineTextHash = generateLineId(line.original);
+      if (!line.lineKey) {
+        line.lineKey = computeLineKey(line.original);
+      }
       return line;
     });
   }
@@ -624,6 +628,9 @@ export function saveTrackData(trackId: string, data: TrackLyricsDataPatch) {
         line.lineId = generateLineId(line.original);
       }
       line.lineTextHash = generateLineId(line.original);
+      if (!line.lineKey) {
+        line.lineKey = computeLineKey(line.original);
+      }
       return line;
     });
   }
@@ -640,6 +647,7 @@ export function splitLyricsIntoLines(trackId: string, lyrics: string): LyricsLin
         id: `${trackId}:line:${idx}`,
         lineId: textHash,
         lineTextHash: textHash,
+        lineKey: computeLineKey(trimmed),
         index: idx,
         original: trimmed,
         phrases: []

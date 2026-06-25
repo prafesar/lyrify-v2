@@ -311,10 +311,10 @@ export class TrackSessionFacade {
     const updatedLines = enrichedTrack.lines.map(line => {
       const linePhrases = phraseAnalysisResult
         .filter((p: any) => {
-          if (p.lineKey) {
+          if (p.lineKey && line.lineKey) {
             return p.lineKey === line.lineKey;
           }
-          if (Array.isArray(p.lineKeys)) {
+          if (Array.isArray(p.lineKeys) && line.lineKey) {
             return p.lineKeys.includes(line.lineKey);
           }
           return p.lineIndex === line.index;
