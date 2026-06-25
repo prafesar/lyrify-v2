@@ -861,6 +861,26 @@ export default function App() {
     if (!container) return;
     const currentScrollY = container.scrollTop;
     
+    // Check if the current active tab has content. If not, never hide the toolbar.
+    const hasContent = !currentTrack ? false : (
+      activeTab === "lyrics" ? !!currentTrack.rawLyrics :
+      activeTab === "analysis" ? !!(currentTrack.lectureBlocks && currentTrack.lectureBlocks.length > 0) :
+      activeTab === "cards" ? !!(currentTrack.meaning || (currentTrack.phrases && currentTrack.phrases.length > 0) || currentTrack.lines?.some(l => l.phrases && l.phrases.length > 0)) :
+      true
+    );
+
+    // If the active tab has no content, or the scroll container's scrollable height is too small to comfortably scroll,
+    // we keep the toolbar visible to avoid infinite layouts collapsing and page flickering/shaking.
+    const maxScrollable = container.scrollHeight - container.clientHeight;
+    const isScrollableEnough = maxScrollable > 250;
+
+    if (!hasContent || !isScrollableEnough) {
+      setIsScrolledDown(false);
+      setIsToolbarVisible(true);
+      lastScrollYRef.current = currentScrollY;
+      return;
+    }
+
     // Scrolled down past 120px threshold
     const scrolled = currentScrollY > 120;
     setIsScrolledDown(scrolled);
