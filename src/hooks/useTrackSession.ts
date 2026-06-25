@@ -361,7 +361,7 @@ export function useTrackSession(): UseTrackSessionResult {
       const needsTranslation = force || !trackData.processingStatus.stage2_completed || isTranslationOutdated || !trackData.lines.some(l => l.translation);
 
       if (needsTranslation) {
-        setLoadingStep("meaning");
+        setLoadingStep("translating");
         trackData = await trackSessionFacade.analyzeSongMeaningAndTranslations(trackData, targetLanguage);
         setCurrentTrack(trackData);
         callbacks.loadCommunityTracks();
@@ -372,9 +372,6 @@ export function useTrackSession(): UseTrackSessionResult {
         try {
           const blocks = await aiClient.fetchStructuredLecture(
             trackData.preparedLyricsInput || trackData.rawLyrics,
-            trackData.title,
-            trackData.artist,
-            targetLanguage,
             force
           );
           
@@ -514,7 +511,7 @@ export function useTrackSession(): UseTrackSessionResult {
           lines: splitLyricsIntoLines(currentTrack.trackId, lyricsData.lyrics),
           processingStatus: {
             stage1_completed: true,
-            stage2_completed: true,
+            stage2_completed: false,
             stage3_completed: false,
           },
           lastUpdated: Date.now(),
@@ -524,6 +521,9 @@ export function useTrackSession(): UseTrackSessionResult {
         saveTrackData(currentTrack.trackId, updatedTrack);
         aiClient.saveTrackToSharedCache(updatedTrack).catch(e => console.error("Firestore cache upload failed:", e));
         setIsResourcesOpen(false);
+
+        // Automatically trigger translation/lecture generation for the newly selected lyrics
+        handleGenerateAnalysis(targetLanguage, callbacks, false, updatedTrack);
       } else {
         setLyricsFetchError(`No lyrics found for the selected version from ${option.source}.`);
       }
@@ -534,7 +534,7 @@ export function useTrackSession(): UseTrackSessionResult {
       setIsLoadingLyrics(false);
       setLoadingStep("idle");
     }
-  }, [currentTrack]);
+  }, [currentTrack, handleGenerateAnalysis]);
 
   const handleResetLyrics = useCallback((
     targetLanguage: string,

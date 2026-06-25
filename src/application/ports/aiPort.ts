@@ -51,17 +51,11 @@ export const TRANSLATION_PROMPT_VERSION = 4;
 export interface AiPort {
   fetchStructuredLecture(
     lyrics: string | PreparedLyricsInput,
-    title?: string,
-    artist?: string,
-    targetLanguage?: string,
     forceRegenerate?: boolean
   ): Promise<StructuredLectureBlock[]>;
 
   getCachedStructuredLecture(
-    lyrics: string | PreparedLyricsInput,
-    title?: string,
-    artist?: string,
-    targetLanguage?: string
+    lyrics: string | PreparedLyricsInput
   ): Promise<StructuredLectureBlock[] | null>;
 
   fetchTrackMeaning(
@@ -178,8 +172,8 @@ export interface AiPort {
 
   getLineTranslations(
     lyrics: string | PreparedLyricsInput,
-    trackKey: string,
-    targetLanguage: string
+    trackKey?: string,
+    targetLanguage?: string
   ): Promise<any[]>;
 
   getPhraseAnalysis(

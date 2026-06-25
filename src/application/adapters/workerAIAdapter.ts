@@ -62,9 +62,6 @@ export class WorkerAIAdapter implements AiPort {
 
   async fetchStructuredLecture(
     lyrics: string | PreparedLyricsInput,
-    title?: string,
-    artist?: string,
-    targetLanguage?: string,
     forceRegenerate?: boolean
   ): Promise<StructuredLectureBlock[]> {
     if (isPreparedInput(lyrics)) {
@@ -75,28 +72,19 @@ export class WorkerAIAdapter implements AiPort {
     } else {
       return this.postToWorker<StructuredLectureBlock[]>("/lecture/fetch", {
         lyrics,
-        title,
-        artist,
-        targetLanguage,
         forceRegenerate,
       });
     }
   }
 
   async getCachedStructuredLecture(
-    lyrics: string | PreparedLyricsInput,
-    title?: string,
-    artist?: string,
-    targetLanguage?: string
+    lyrics: string | PreparedLyricsInput
   ): Promise<StructuredLectureBlock[] | null> {
     if (isPreparedInput(lyrics)) {
       return this.postToWorker<StructuredLectureBlock[] | null>("/lecture/get-cached", lyrics);
     } else {
       return this.postToWorker<StructuredLectureBlock[] | null>("/lecture/get-cached", {
         lyrics,
-        title,
-        artist,
-        targetLanguage,
       });
     }
   }
@@ -258,8 +246,8 @@ export class WorkerAIAdapter implements AiPort {
 
   async getLineTranslations(
     lyrics: string | PreparedLyricsInput,
-    trackKey: string,
-    targetLanguage: string
+    trackKey?: string,
+    targetLanguage?: string
   ): Promise<any[]> {
     throw new Error("WorkerAIAdapter is currently in placeholder state.");
   }

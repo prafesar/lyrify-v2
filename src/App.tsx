@@ -2350,7 +2350,7 @@ export default function App() {
                         />
                         <span>
                           {loadingStep === "searching" ? t('lyrics.searchingLyrics') : 
-                           loadingStep === "meaning" ? t('lyrics.generatingPreview') : t('lyrics.analyzingTrack')}
+                           (loadingStep === "meaning" || loadingStep === "translating") ? t('lyrics.generatingPreview') : t('lyrics.analyzingTrack')}
                         </span>
                       </div>
                     </div>

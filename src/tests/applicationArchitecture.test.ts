@@ -80,15 +80,15 @@ describe('CantoLex Ports and Adapters Layer', () => {
 
     it('should delegate fetchStructuredLecture calls to the underlying service', async () => {
       vi.mocked(originalGeminiService.fetchStructuredLecture).mockResolvedValueOnce([]);
-      const result = await aiClient.fetchStructuredLecture('Lyrics', 'Title', 'Artist', 'Russian', true);
-      expect(originalGeminiService.fetchStructuredLecture).toHaveBeenCalledWith('Lyrics', 'Title', 'Artist', 'Russian', true);
+      const result = await aiClient.fetchStructuredLecture('Lyrics', true);
+      expect(originalGeminiService.fetchStructuredLecture).toHaveBeenCalledWith('Lyrics', 'Unknown Title', 'Unknown Artist', 'English', true);
       expect(result).toEqual([]);
     });
 
     it('should delegate getCachedStructuredLecture calls to the underlying service', async () => {
       vi.mocked(originalGeminiService.getCachedStructuredLecture).mockResolvedValueOnce(null);
-      const result = await aiClient.getCachedStructuredLecture('Lyrics', 'Title', 'Artist', 'Russian');
-      expect(originalGeminiService.getCachedStructuredLecture).toHaveBeenCalledWith('Lyrics', 'Title', 'Artist', 'Russian');
+      const result = await aiClient.getCachedStructuredLecture('Lyrics');
+      expect(originalGeminiService.getCachedStructuredLecture).toHaveBeenCalledWith('Lyrics', 'Unknown Title', 'Unknown Artist', 'English');
       expect(result).toBeNull();
     });
   });

@@ -201,7 +201,7 @@ export class TrackSessionFacade {
       };
 
       try {
-        const translationsResult = await this.aiClient.getLineTranslations(trackData.preparedLyricsInput || lyrics || "", trackKey, targetLanguage);
+        const translationsResult = await this.aiClient.getLineTranslations(trackData.preparedLyricsInput || lyrics || "");
         
         const updatedLines = trackData.lines.map((line, idx) => {
           if (!line.original.trim()) {
@@ -368,7 +368,7 @@ export class TrackSessionFacade {
       lines: this.lyricsProvider.splitLyricsIntoLines(track.trackId, manualLyrics),
       processingStatus: {
         stage1_completed: true,
-        stage2_completed: true,
+        stage2_completed: false,
         stage3_completed: false,
       },
       lastUpdated: Date.now(),
@@ -475,7 +475,7 @@ export class TrackSessionFacade {
     if (!rawLyrics) return;
     const currentCached = this.trackCacheRepository.getCachedTrack(trackId);
     const lyricsInput = currentCached?.preparedLyricsInput || rawLyrics;
-    this.aiClient.getCachedStructuredLecture(lyricsInput, title, artist, targetLanguage)
+    this.aiClient.getCachedStructuredLecture(lyricsInput)
       .then(blocks => {
         if (blocks && blocks.length > 0) {
           const freshCached = this.trackCacheRepository.getCachedTrack(trackId);
