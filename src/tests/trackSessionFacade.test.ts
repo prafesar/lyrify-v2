@@ -171,6 +171,37 @@ describe("TrackSessionFacade Unit Tests", () => {
       expect(result.lines[0].phrases).toHaveLength(1);
       expect(result.lines[0].phrases[0].text).toBe("the other side");
     });
+
+    it("should match phrases using lineKey and fall back to lineIndex", async () => {
+      const track: TrackLyricsData = {
+        trackId: "track-xyz",
+        artist: "Adele",
+        title: "Hello",
+        rawLyrics: "Hello from the other side\nThis is another line",
+        lines: [
+          { id: "track-xyz:line:0", index: 0, original: "Hello from the other side", lineKey: "982bcb7c", phrases: [] },
+          { id: "track-xyz:line:1", index: 1, original: "This is another line", lineKey: "abcdef12", phrases: [] }
+        ],
+        processingStatus: { stage1_completed: true, stage2_completed: true, stage3_completed: false },
+        lastUpdated: Date.now(),
+      };
+
+      const mockPhrases = [
+        { lineKey: "982bcb7c", lineIndex: 99, text: "the other side", translation: "другая сторона", explanation: "Idiom", language: "ru" },
+        { lineKeys: ["abcdef12"], lineIndex: 99, text: "another line", translation: "другая строка", explanation: "Noun", language: "ru" }
+      ];
+
+      vi.mocked(aiClient.computeTrackKey).mockResolvedValue("track-adele-hello");
+      vi.mocked(aiClient.getPhraseAnalysis).mockResolvedValue(mockPhrases);
+      vi.mocked(aiClient.saveTrackToSharedCache).mockResolvedValue();
+
+      const result = await trackSessionFacade.runDeepPhraseAnalysis(track, "Russian");
+
+      expect(result.lines[0].phrases).toHaveLength(1);
+      expect(result.lines[0].phrases[0].text).toBe("the other side");
+      expect(result.lines[1].phrases).toHaveLength(1);
+      expect(result.lines[1].phrases[0].text).toBe("another line");
+    });
   });
 
   describe("submitManualLyrics", () => {

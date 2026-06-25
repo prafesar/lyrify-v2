@@ -32,7 +32,7 @@ When you are ready to implement the Worker endpoints, you will only need to touc
 
 1. **`src/application/adapters/workerAIAdapter.ts`**:
    - Currently contains placeholder state throwing errors or returning empty structures.
-   - You will replace the placeholder methods (`getLineTranslations`, `getPhraseAnalysis`, `fetchStructuredLecture`) with standard HTTP `fetch` requests targeting your API endpoint using the payload definitions in `docs/worker-api-contract.md`.
+   - You will replace the placeholder methods (`getLineTranslations`, `getPhraseAnalysis`, `fetchStructuredLecture`, `getCachedStructuredLecture`) with standard HTTP `fetch` requests targeting your API endpoint using the payload definitions in `docs/worker-api-contract.md`.
 
 2. **`.env` and `.env.example`**:
    - Add environment variables like `VITE_WORKER_API_BASE_URL` or authentication secrets so the client can resolve the Worker API location.

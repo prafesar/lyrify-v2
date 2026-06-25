@@ -310,7 +310,15 @@ export class TrackSessionFacade {
 
     const updatedLines = enrichedTrack.lines.map(line => {
       const linePhrases = phraseAnalysisResult
-        .filter((p: any) => p.lineIndex === line.index)
+        .filter((p: any) => {
+          if (p.lineKey) {
+            return p.lineKey === line.lineKey;
+          }
+          if (Array.isArray(p.lineKeys)) {
+            return p.lineKeys.includes(line.lineKey);
+          }
+          return p.lineIndex === line.index;
+        })
         .map((p: any) => ({
           id: `${enrichedTrack.trackId}:p:${p.text.replace(/\s+/g, '_')}`,
           text: p.text,

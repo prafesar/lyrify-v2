@@ -162,6 +162,32 @@ Generates or retrieves a comprehensive, structured lecture/learning breakdown of
 
 ---
 
+### 3.1. Retrieve Cached Structured Lecture (Fast Lookup)
+Quickly queries the backend cache to check if a structured lecture block set has already been generated and saved. Unlike the active generation flow, this endpoint never initiates LLM processing, making it extremely fast and lightweight for background hydration.
+
+- **Endpoint**: `/lecture/cached/fetch`
+- **Method**: `POST`
+- **Request Payload**: `PreparedLyricsInput` (canonical format)
+- **Response Payload**: `StructuredLectureBlock[] | null`
+- **Example Response (`data` when cached)**:
+  ```json
+  [
+    {
+      "id": "block-1",
+      "kind": "intro",
+      "title": "Sociocultural Context & Message",
+      "text": "Intro text explaining the deeper background of this track...",
+      "source": "ai"
+    }
+  ]
+  ```
+- **Example Response (`data` when cache miss)**:
+  ```json
+  null
+  ```
+
+---
+
 ### 4. Fetch or Generate Track Meaning (LEGACY / DEPRECATED)
 > ⚠️ **Status: LEGACY / DEPRECATED**. This standalone endpoint exists for backward compatibility but is excluded from the primary target design flow. Meaning summaries are now embedded inside the unified `/lecture/fetch` response under blocks of kind `intro`.
 
