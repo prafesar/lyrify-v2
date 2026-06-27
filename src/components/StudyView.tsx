@@ -8,7 +8,7 @@ const reviewCard = (cardId: string, rating: Rating) => studyCardsRepository.revi
 const deleteFlashcard = (cardId: string) => studyCardsRepository.deleteFlashcard(cardId);
 import { Check, X, ArrowRight, Brain, Trash2, ChevronLeft, Clock, Music, PlayCircle, Volume2, Search, CheckCircle2 } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { getLocaleByName } from '../lib/languages';
+import { getLocale } from '../lib/languages';
 import { useTranslation } from '../lib/i18n';
 import { getCachedTrackData } from '../services/musicService';
 import { resolvePhraseContext } from '../services/lyricsAnalysisService';
@@ -318,7 +318,7 @@ export default function StudyView({ onBack, initialTrackId, onReviewCompleted, o
     }
     setTimeout(() => {
       const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = getLocaleByName(currentCard?.sourceLanguage || 'English');
+      utterance.lang = getLocale(currentCard?.sourceLanguage || 'English');
       utterance.rate = 0.9;
       utterance.onend = () => {
         setCurrentlySpeakingCardId(null);

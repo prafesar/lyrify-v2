@@ -1,5 +1,6 @@
 import { Track, TrackLyricsData } from "./musicService";
 import { Artist, Album } from "../constants";
+import { normalizeLanguageCode } from "../lib/languages";
 
 export class SqliteService {
   private worker: Worker | null = null;
@@ -585,11 +586,19 @@ export class SqliteService {
 
   // --- Recent Tracks ---
   public getRecentTracks(): Track[] {
+    this.recentTracks.forEach(t => {
+      if (t.sourceLanguage) {
+        t.sourceLanguage = normalizeLanguageCode(t.sourceLanguage) || t.sourceLanguage;
+      }
+    });
     return [...this.recentTracks];
   }
 
   public addRecentTrack(track: Track): void {
     const cleanTrack = { ...track };
+    if (cleanTrack.sourceLanguage) {
+      cleanTrack.sourceLanguage = normalizeLanguageCode(cleanTrack.sourceLanguage) || cleanTrack.sourceLanguage;
+    }
     if (!cleanTrack.id && cleanTrack.trackId) {
       cleanTrack.id = cleanTrack.trackId;
     }
@@ -676,6 +685,11 @@ export class SqliteService {
   // --- Library / Favorites & Playlists (SQLite Backed with Local fallback) ---
   public async getFavorites(): Promise<Track[]> {
     if (this.storageMode === "error") {
+      this.favorites.forEach(t => {
+        if (t.sourceLanguage) {
+          t.sourceLanguage = normalizeLanguageCode(t.sourceLanguage) || t.sourceLanguage;
+        }
+      });
       return [...this.favorites];
     }
     try {
@@ -691,24 +705,33 @@ export class SqliteService {
     } catch (err) {
       console.warn("[SqliteService] Failed to get favorites from worker, using cache:", err);
     }
+    this.favorites.forEach(t => {
+      if (t.sourceLanguage) {
+        t.sourceLanguage = normalizeLanguageCode(t.sourceLanguage) || t.sourceLanguage;
+      }
+    });
     return [...this.favorites];
   }
 
   public async toggleFavorite(track: Track): Promise<boolean> {
-    const trackId = String(track.id);
+    const cleanTrack = { ...track };
+    if (cleanTrack.sourceLanguage) {
+      cleanTrack.sourceLanguage = normalizeLanguageCode(cleanTrack.sourceLanguage) || cleanTrack.sourceLanguage;
+    }
+    const trackId = String(cleanTrack.id);
     const idx = this.favorites.findIndex((t) => String(t.id) === trackId);
     const isFavNow = idx === -1;
     if (idx !== -1) {
       this.favorites.splice(idx, 1);
     } else {
-      this.favorites.push(track);
+      this.favorites.push(cleanTrack);
     }
     this.saveFavoritesBackup(this.favorites);
     this.notify("favorites");
 
     if (this.storageMode !== "error") {
       try {
-        await this.sendWorkerMsg("TOGGLE_FAVORITE", { track });
+        await this.sendWorkerMsg("TOGGLE_FAVORITE", { track: cleanTrack });
       } catch (err) {
         console.warn("[SqliteService] Failed to save favorite toggle in worker:", err);
       }
@@ -719,6 +742,79 @@ export class SqliteService {
   public async isFavorite(trackId: string): Promise<boolean> {
     const tid = String(trackId);
     return this.favorites.some((t) => String(t.id) === tid);
+  }
+
+  public updateTrackInLibrary(trackId: string, updatedTrack: Track): void {
+    const tid = String(trackId);
+
+    // 1. Update in favorites
+    let favoritesUpdated = false;
+    this.favorites = this.favorites.map((t) => {
+      if (String(t.id || t.trackId) === tid) {
+        favoritesUpdated = true;
+        return { ...t, ...updatedTrack };
+      }
+      return t;
+    });
+
+    if (favoritesUpdated) {
+      this.saveFavoritesBackup(this.favorites);
+      this.notify("favorites");
+      if (this.storageMode !== "error") {
+        this.sendWorkerMsg("UPDATE_FAVORITE_TRACK", { track: updatedTrack }).catch((err) =>
+          console.warn("[SqliteService] Failed to update favorite track in worker:", err)
+        );
+      }
+    }
+
+    // 2. Update in recentTracks
+    let recentsUpdated = false;
+    this.recentTracks = this.recentTracks.map((t) => {
+      if (String(t.id || t.trackId) === tid) {
+        recentsUpdated = true;
+        return { ...t, ...updatedTrack };
+      }
+      return t;
+    });
+
+    if (recentsUpdated) {
+      this.saveRecentTracksBackup(this.recentTracks);
+      this.notify("recent_tracks");
+      if (this.storageMode !== "error") {
+        this.sendWorkerMsg("ADD_RECENT_TRACK", { track: updatedTrack }).catch((err) =>
+          console.warn("[SqliteService] Failed to update recent track in worker:", err)
+        );
+      }
+    }
+
+    // 3. Update in playlists
+    let playlistsUpdated = false;
+    this.playlists = this.playlists.map((playlist) => {
+      let playlistTrackUpdated = false;
+      const updatedTracks = (playlist.tracks || []).map((t: any) => {
+        if (String(t.id || t.trackId) === tid) {
+          playlistTrackUpdated = true;
+          return { ...t, ...updatedTrack };
+        }
+        return t;
+      });
+
+      if (playlistTrackUpdated) {
+        playlistsUpdated = true;
+        return { ...playlist, tracks: updatedTracks };
+      }
+      return playlist;
+    });
+
+    if (playlistsUpdated) {
+      this.savePlaylistsBackup(this.playlists);
+      this.notify("playlists");
+      if (this.storageMode !== "error") {
+        this.sendWorkerMsg("UPDATE_PLAYLIST_ITEM_TRACK", { trackId: tid, track: updatedTrack }).catch((err) =>
+          console.warn("[SqliteService] Failed to update playlist item track in worker:", err)
+        );
+      }
+    }
   }
 
   public async getFavoriteArtists(): Promise<Artist[]> {

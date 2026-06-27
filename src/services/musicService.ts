@@ -529,6 +529,7 @@ export interface StructuredSectionPhrase {
   type?: string;
   source: 'ai' | 'manual';
   lineIds?: string[];
+  lineKeys?: string[];
   priority?: "core" | "colloquial" | "cultural" | "advanced";
 }
 
@@ -539,7 +540,9 @@ export interface StructuredLectureBlock {
   text: string;
   source: 'ai' | 'manual';
   lineIds?: string[];
+  lineKeys?: string[];
   phrases?: StructuredSectionPhrase[];
+  order?: number;
 }
 
 export interface TrackLyricsData {

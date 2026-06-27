@@ -76,6 +76,11 @@ export class BrowserLibraryRepository implements LibraryRepositoryPort {
     return sqliteService.isFavorite(trackId);
   }
 
+  async updateTrackInLibrary(trackId: string, updatedTrack: Track): Promise<void> {
+    await this.checkAndMigrateLegacyData();
+    sqliteService.updateTrackInLibrary(trackId, updatedTrack);
+  }
+
   async getFavoriteArtists(): Promise<Artist[]> {
     await this.checkAndMigrateLegacyData();
     return sqliteService.getFavoriteArtists();

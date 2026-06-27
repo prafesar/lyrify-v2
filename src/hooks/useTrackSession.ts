@@ -4,7 +4,8 @@ import {
   recentHistoryRepository, 
   aiClient, 
   ANALYSIS_PROMPT_VERSION, 
-  TRANSLATION_PROMPT_VERSION 
+  TRANSLATION_PROMPT_VERSION,
+  libraryRepository
 } from "../application";
 import { 
   type TrackLyricsData, 
@@ -15,15 +16,18 @@ import {
   searchLyricsOptions, 
   fetchLyricsFromOption, 
   clearCachedLyrics,
-  extractTrackMeaning 
+  extractTrackMeaning,
+  generateLineId 
 } from "../services/musicService";
 import { 
   linkPhrasesToLines, 
   buildStarredLinesAnalysisInput, 
   mergeGeneratedPhrasesForLines
 } from "../services/lyricsAnalysisService";
-import { prepareLyricsInput } from "../services/lyricsPreprocessor";
-import { getLanguageCode } from "../lib/languages";
+import { prepareLyricsInput, findMatchedTranslation } from "../services/lyricsPreprocessor";
+import { checkServerCache } from "../services/serverCacheLookupService";
+import { getLanguageCode, detectDominantLanguage, cascadeTrackLanguageUpdate } from "../lib/languages";
+import { updateTrackCardsLanguage } from "../services/localCardService";
 
 export interface UseTrackSessionResult {
   currentTrack: TrackLyricsData | null;
@@ -131,6 +135,7 @@ export interface UseTrackSessionResult {
       loadCommunityTracks: () => void;
     }
   ) => Promise<void>;
+  handleSourceLanguageOverride: (newLang: string) => Promise<void>;
 }
 
 export function useTrackSession(): UseTrackSessionResult {
@@ -211,15 +216,69 @@ export function useTrackSession(): UseTrackSessionResult {
     setLoadingStep("searching");
 
     try {
-      const updatedTrack = await trackSessionFacade.analyzeSongMeaningAndTranslations(
-        currentTrack,
-        targetLanguage,
-        (step) => setLoadingStep(step as any)
-      );
+      let trackData = { ...currentTrack };
+      let cacheResult = null;
+      try {
+        cacheResult = await checkServerCache(trackData.title, [trackData.artist]);
+      } catch (e) {
+        console.warn("[PreflightCache] Error in preflight lookup during handleAnalyzeSong:", e);
+      }
 
-      setCurrentTrack(updatedTrack);
-      callbacks.updateRecentTracks(recentHistoryRepository.getRecentTracks());
-      callbacks.loadCommunityTracks();
+      if (cacheResult && cacheResult.hasTranslation) {
+        let lyrics = trackData.rawLyrics;
+        if (!lyrics) {
+          lyrics = cacheResult.translation.map((line: any) => line.original).join("\n");
+          trackData = {
+            ...trackData,
+            rawLyrics: lyrics,
+            source: trackData.source || "Manual",
+            lines: splitLyricsIntoLines(trackData.trackId, lyrics),
+            processingStatus: { ...trackData.processingStatus, stage1_completed: true }
+          };
+        }
+
+        const mergedLines = trackData.lines.map((line, idx) => {
+          const matched = findMatchedTranslation(line.original, idx, cacheResult.translation);
+          return {
+            ...line,
+            translation: matched ? matched.translation : (line.translation || ""),
+            language: matched ? matched.language : (line.language || "en")
+          };
+        });
+
+        const provider = typeof trackData.source === 'string' ? trackData.source : 'unknown';
+        const authors = trackData.authors ? trackData.authors.split(',').map((a: string) => a.trim()) : null;
+
+        trackData = {
+          ...trackData,
+          lines: mergedLines,
+          sourceLanguage: getLanguageCode(detectDominantLanguage(mergedLines) || trackData.sourceLanguage),
+          translationPromptVersion: TRANSLATION_PROMPT_VERSION,
+          processingStatus: { ...trackData.processingStatus, stage2_completed: true },
+          preparedLyricsInput: prepareLyricsInput(
+            trackData.title,
+            [trackData.artist],
+            lyrics,
+            targetLanguage,
+            { provider, url: trackData.lyricSource || null, authors }
+          )
+        };
+
+        setCurrentTrack(trackData);
+        saveTrackData(trackData.trackId, trackData);
+        callbacks.updateRecentTracks(recentHistoryRepository.getRecentTracks());
+        callbacks.loadCommunityTracks();
+      } else {
+        const updatedTrack = await trackSessionFacade.analyzeSongMeaningAndTranslations(
+          currentTrack,
+          targetLanguage,
+          (step) => setLoadingStep(step as any)
+        );
+
+        setCurrentTrack(updatedTrack);
+        callbacks.updateRecentTracks(recentHistoryRepository.getRecentTracks());
+        callbacks.loadCommunityTracks();
+      }
     } catch (err: any) {
       console.error("Manual fetch/meaning failed:", err);
       setLyricsFetchError(err.message || "Failed to fetch song data.");
@@ -334,6 +393,145 @@ export function useTrackSession(): UseTrackSessionResult {
     setAnalysisError(null);
     try {
       let trackData = { ...targetTrack };
+
+      // Perform preflight cache lookup
+      let cacheResult = null;
+      if (!force) {
+        try {
+          cacheResult = await checkServerCache(trackData.title, [trackData.artist]);
+        } catch (e) {
+          console.warn("[PreflightCache] Error in preflight lookup during handleGenerateAnalysis:", e);
+        }
+      }
+
+      if (cacheResult && cacheResult.hasTranslation) {
+        let lyrics = trackData.rawLyrics;
+        if (!lyrics) {
+          lyrics = cacheResult.translation.map((line: any) => line.original).join("\n");
+          trackData = {
+            ...trackData,
+            rawLyrics: lyrics,
+            source: trackData.source || "Manual",
+            lines: splitLyricsIntoLines(trackData.trackId, lyrics),
+            processingStatus: { ...trackData.processingStatus, stage1_completed: true }
+          };
+        }
+
+        const mergedLines = trackData.lines.map((line, idx) => {
+          const matched = findMatchedTranslation(line.original, idx, cacheResult.translation);
+          return {
+            ...line,
+            translation: matched ? matched.translation : (line.translation || ""),
+            language: matched ? matched.language : (line.language || "en")
+          };
+        });
+
+        const provider = typeof trackData.source === 'string' ? trackData.source : 'unknown';
+        const authors = trackData.authors ? trackData.authors.split(',').map((a: string) => a.trim()) : null;
+
+        trackData = {
+          ...trackData,
+          lines: mergedLines,
+          sourceLanguage: getLanguageCode(detectDominantLanguage(mergedLines) || trackData.sourceLanguage),
+          translationPromptVersion: TRANSLATION_PROMPT_VERSION,
+          processingStatus: { ...trackData.processingStatus, stage2_completed: true },
+          preparedLyricsInput: prepareLyricsInput(
+            trackData.title,
+            [trackData.artist],
+            lyrics,
+            targetLanguage,
+            { provider, url: trackData.lyricSource || null, authors }
+          )
+        };
+
+        setCurrentTrack(trackData);
+        saveTrackData(trackData.trackId, trackData);
+        callbacks.loadCommunityTracks();
+      }
+
+      if (cacheResult && cacheResult.hasLecture && cacheResult.lectureBlocks) {
+        let meaning = trackData.meaning || "";
+        let meanings = trackData.meanings || { en: "", es: "", ru: "", pl: "" };
+        const extractedMeaning = extractTrackMeaning(cacheResult.lectureBlocks);
+        if (extractedMeaning) {
+          meaning = extractedMeaning;
+          const langCode = getLanguageCode(targetLanguage);
+          meanings = {
+            ...trackData.meanings,
+            en: langCode === 'en' ? extractedMeaning : (trackData.meanings?.en || ""),
+            es: langCode === 'es' ? extractedMeaning : (trackData.meanings?.es || ""),
+            ru: langCode === 'ru' ? extractedMeaning : (trackData.meanings?.ru || ""),
+            pl: langCode === 'pl' ? extractedMeaning : (trackData.meanings?.pl || "")
+          };
+        }
+
+        // Extract all phrases from lectureBlocks and map to lines
+        const extractedPhrases: any[] = [];
+        if (Array.isArray(cacheResult.lectureBlocks)) {
+          for (const block of cacheResult.lectureBlocks) {
+            if (block && Array.isArray(block.phrases)) {
+              for (const p of block.phrases) {
+                extractedPhrases.push(p);
+              }
+            }
+          }
+        }
+
+        const updatedLines = trackData.lines.map((line, index) => {
+          const linePhrases = extractedPhrases
+            .filter((p: any) => {
+              if (p.lineKey && line.lineKey) {
+                return p.lineKey === line.lineKey;
+              }
+              if (Array.isArray(p.lineKeys) && line.lineKey) {
+                return p.lineKeys.includes(line.lineKey);
+              }
+              const lid = line.lineId || generateLineId(line.original);
+              if (p.lineId && lid) {
+                return p.lineId === lid;
+              }
+              if (Array.isArray(p.lineIds) && lid) {
+                return p.lineIds.includes(lid);
+              }
+              if (typeof p.lineIndex === 'number') {
+                return p.lineIndex === index;
+              }
+              const phraseText = p.text || p.phrase || "";
+              if (phraseText) {
+                const normPhrase = phraseText.trim().toLowerCase().replace(/[^\p{L}\p{N}\s']/gu, '');
+                const normLine = line.original.trim().toLowerCase().replace(/[^\p{L}\p{N}\s']/gu, '');
+                return normLine.includes(normPhrase);
+              }
+              return false;
+            })
+            .map((p: any) => ({
+              id: p.id || `${trackData.trackId}:p:${(p.text || p.phrase || "").replace(/\s+/g, '_')}`,
+              text: p.text || p.phrase || "",
+              translation: p.translation || "",
+              explanation: p.explanation || "",
+              language: p.language || p.targetLanguage || getLanguageCode(targetLanguage),
+              lemmas: p.lemmas || [],
+              type: 'phrase' as const
+            }));
+
+          return {
+            ...line,
+            phrases: linePhrases
+          };
+        });
+
+        trackData = {
+          ...trackData,
+          meaning,
+          meanings,
+          lines: updatedLines,
+          lectureBlocks: cacheResult.lectureBlocks,
+          processingStatus: { ...trackData.processingStatus, stage3_completed: true }
+        };
+        setCurrentTrack(trackData);
+        saveTrackData(trackData.trackId, trackData);
+      }
+
       let lyrics = trackData.rawLyrics;
 
       if (!lyrics) {
@@ -405,8 +603,11 @@ export function useTrackSession(): UseTrackSessionResult {
         }
       }
 
-      setLoadingStep("analyzing");
-      await runStage3(trackData, targetLanguage, force);
+      const skipStage3 = !force && cacheResult && cacheResult.hasLecture;
+      if (!skipStage3) {
+        setLoadingStep("analyzing");
+        await runStage3(trackData, targetLanguage, force);
+      }
     } catch (err: any) {
       console.error("Analysis generation failed:", err);
       setAnalysisError(err?.message || "An unexpected error occurred during deep analysis. Please try again.");
@@ -494,7 +695,7 @@ export function useTrackSession(): UseTrackSessionResult {
           ...currentTrack,
           rawLyrics: lyricsData.lyrics,
           source: (lyricsData.source as any) || "Manual",
-          sourceLanguage: currentTrack.sourceLanguage || "English",
+          sourceLanguage: getLanguageCode(currentTrack.sourceLanguage),
           meaning: "",
           meanings: { en: "", es: "", ru: "", pl: "" },
           authors: metadataResult?.authors,
@@ -571,7 +772,7 @@ export function useTrackSession(): UseTrackSessionResult {
       // Prepare payload
       const input = buildStarredLinesAnalysisInput(currentTrack);
 
-      // Call Gemini Targeted Analysis API
+      // Call CantoLex Targeted Analysis API
       const result = await aiClient.generateTargetedAnalysis(
         input.title,
         input.artist,
@@ -603,6 +804,19 @@ export function useTrackSession(): UseTrackSessionResult {
     } finally {
       setIsGeneratingAnalysis(false);
     }
+  }, [currentTrack]);
+
+  const handleSourceLanguageOverride = useCallback(async (newLang: string) => {
+    if (!currentTrack) return;
+    const oldLangName = getLanguageCode(currentTrack.sourceLanguage);
+    
+    const updatedTrack = cascadeTrackLanguageUpdate(currentTrack, oldLangName, newLang);
+
+    setCurrentTrack(updatedTrack);
+    saveTrackData(currentTrack.trackId, updatedTrack);
+
+    await updateTrackCardsLanguage(currentTrack.trackId, oldLangName, newLang);
+    await libraryRepository.updateTrackInLibrary(currentTrack.trackId, updatedTrack);
   }, [currentTrack]);
 
   const linkedTrack = useMemo(() => {
@@ -646,6 +860,7 @@ export function useTrackSession(): UseTrackSessionResult {
     handleManualLyricsSearch,
     handleSelectLyricOption,
     handleResetLyrics,
-    handleAnalyzeStarredLines
+    handleAnalyzeStarredLines,
+    handleSourceLanguageOverride
   };
 }

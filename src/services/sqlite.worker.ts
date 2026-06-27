@@ -501,6 +501,36 @@ self.onmessage = async (event) => {
         break;
       }
 
+      case "UPDATE_FAVORITE_TRACK": {
+        const { track } = payload;
+        const trackId = String(track.id || track.trackId);
+        db.exec({
+          sql: "INSERT OR REPLACE INTO favorite_tracks (id, title, artist, album, cover_url, track_json, added_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+          bind: [
+            trackId,
+            track.title,
+            track.artist,
+            track.album || "",
+            track.coverUrl || "",
+            JSON.stringify(track),
+            Date.now()
+          ]
+        });
+        self.postMessage({ type: "WRITE_OK", messageId });
+        break;
+      }
+
+      case "UPDATE_PLAYLIST_ITEM_TRACK": {
+        const { trackId, track } = payload;
+        const trackStr = JSON.stringify(track);
+        db.exec({
+          sql: "UPDATE playlist_items SET track_json = ? WHERE track_id = ?",
+          bind: [trackStr, String(trackId)]
+        });
+        self.postMessage({ type: "WRITE_OK", messageId });
+        break;
+      }
+
       case "IS_FAVORITE": {
         const { trackId } = payload;
         let exists = false;

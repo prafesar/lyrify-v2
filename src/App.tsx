@@ -43,10 +43,11 @@ import {
   FolderHeart,
   Edit3,
   Bookmark,
+  AlertCircle,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { Track, Artist, Album } from "./constants";
-import { SUPPORTED_LANGUAGES } from "./lib/languages";
+import { SUPPORTED_LANGUAGES, isExperimentalLanguage, normalizeLanguageCode } from "./lib/languages";
 import { useUserCards } from "./hooks/useUserCards";
 import { usePlayback } from "./hooks/usePlayback";
 import { useLibrarySearch } from "./hooks/useLibrarySearch";
@@ -685,7 +686,8 @@ export default function App() {
     handleGenerateAnalysis: handleGenerateAnalysisRaw,
     handleRegenerateAnalysis: handleRegenerateAnalysisRaw,
     handleManualLyricsSearch,
-    handleSelectLyricOption: handleSelectLyricOptionRaw
+    handleSelectLyricOption: handleSelectLyricOptionRaw,
+    handleSourceLanguageOverride
   } = useTrackSession();
 
   const {
@@ -703,6 +705,20 @@ export default function App() {
     recordTrackExploredAction,
     setDailyActivity
   } = useUserCards(recentTracks);
+
+  const usedLanguages = useMemo(() => {
+    const langs = new Set<string>();
+    if (currentTrack?.sourceLanguage) {
+      langs.add(currentTrack.sourceLanguage);
+    }
+    recentTracks.forEach(t => {
+      if (t.sourceLanguage) langs.add(t.sourceLanguage);
+    });
+    favoritesInApp.forEach(t => {
+      if (t.sourceLanguage) langs.add(t.sourceLanguage);
+    });
+    return Array.from(langs);
+  }, [currentTrack?.sourceLanguage, recentTracks, favoritesInApp]);
 
   const {
     activeLineIndex,
@@ -2668,17 +2684,8 @@ export default function App() {
                           {/* Control panel / Switches */}
                           <div className="flex items-center gap-1 bg-app-card border border-app-card-border rounded-xl p-1 shadow-sm shrink-0 h-10">
                             {(() => {
-                              const srcLangObj = SUPPORTED_LANGUAGES.find(l => 
-                                l.name.toLowerCase() === (currentTrack?.sourceLanguage || "English").toLowerCase() ||
-                                l.code.toLowerCase() === (currentTrack?.sourceLanguage || "English").toLowerCase()
-                              );
-                              const srcLangCode = srcLangObj ? srcLangObj.code : "EN";
-
-                              const targetLangObj = SUPPORTED_LANGUAGES.find(l => 
-                                l.name.toLowerCase() === (targetLanguage || "Russian").toLowerCase() ||
-                                l.code.toLowerCase() === (targetLanguage || "Russian").toLowerCase()
-                              );
-                              const targetLangCode = targetLangObj ? targetLangObj.code : "RU";
+                              const srcLangCode = (normalizeLanguageCode(currentTrack?.sourceLanguage) || "en").toUpperCase();
+                              const targetLangCode = (normalizeLanguageCode(targetLanguage) || "ru").toUpperCase();
 
                               const isSrcActive = lyricsDisplayMode === "lyrics" || lyricsDisplayMode === "both";
                               const isTargetActive = lyricsDisplayMode === "translation" || lyricsDisplayMode === "both";
@@ -4224,20 +4231,22 @@ export default function App() {
                       <p className="text-xs font-medium text-app-fg">
                         {t('lyricsSettings.sourceLanguageDesc')}
                       </p>
+                      {isExperimentalLanguage(currentTrack.sourceLanguage) && (
+                        <p className="text-[10px] text-yellow-500 font-semibold flex items-center gap-1 mt-1">
+                          <AlertCircle size={10} className="shrink-0" />
+                          AI can try this language, but analysis quality may vary.
+                        </p>
+                      )}
                     </div>
                     <LanguageSelector
                       label="Source"
                       value={currentTrack.sourceLanguage || "English"}
                       highlight
-                      onChange={(newLang) => {
-                        setCurrentTrack((prev) =>
-                          prev ? { ...prev, sourceLanguage: newLang } : null,
-                        );
-                        if (currentTrack.trackId) {
-                          saveTrackData(currentTrack.trackId, {
-                            sourceLanguage: newLang,
-                          });
-                        }
+                      usedLanguages={usedLanguages}
+                      showResourceHint={true}
+                      onChange={async (newLang) => {
+                        await handleSourceLanguageOverride(newLang);
+                        loadUserCards();
                       }}
                     />
                   </div>

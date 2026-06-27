@@ -58,21 +58,7 @@ export interface AiPort {
     lyrics: string | PreparedLyricsInput
   ): Promise<StructuredLectureBlock[] | null>;
 
-  fetchTrackMeaning(
-    lyrics: string,
-    metadata: TrackMetadata,
-    promptVersion?: number,
-    forceRegenerate?: boolean
-  ): Promise<TrackMeaningResult>;
-
   getOriginalLanguage(trackKey: string): Promise<string | null>;
-
-  getTrackMeaningFromCache(
-    title: string,
-    artists: string[],
-    targetLanguage?: string,
-    promptVersion?: number
-  ): Promise<TrackMeaningResult | null>;
 
   generateSongMeaning(
     lyrics: string,

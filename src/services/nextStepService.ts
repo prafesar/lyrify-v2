@@ -50,7 +50,7 @@ export function determineNextStep(
     return {
       type: 'TRANSLATE_LYRICS',
       label: 'Translate Lyric',
-      description: 'Translate original lyrics and analyze meaning using Gemini AI.'
+      description: 'Translate original lyrics and analyze meaning using CantoLex AI.'
     };
   }
 
@@ -60,7 +60,7 @@ export function determineNextStep(
     return {
       type: 'GENERATE_ANALYSIS',
       label: 'Generate Breakdown',
-      description: 'Run Gemini AI to translate lines and extract important vocabulary patterns.'
+      description: 'Run CantoLex AI to translate lines and extract important vocabulary patterns.'
     };
   }
 

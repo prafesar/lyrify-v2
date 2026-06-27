@@ -3,8 +3,9 @@ import { motion } from 'motion/react';
 import { LogOut, User, Shield, Info, Moon, ChevronRight, Languages, RefreshCcw, LogIn, Sparkles } from 'lucide-react';
 import { logOut, signIn } from '../lib/firebase';
 import { type User as FirebaseUser } from 'firebase/auth';
-import { SUPPORTED_LANGUAGES } from '../lib/languages';
+import { SUPPORTED_LANGUAGES, normalizeLanguageCode } from '../lib/languages';
 import { useTranslation } from '../lib/i18n';
+import LanguageSelector from './LanguageSelector';
 
 interface SettingsViewProps {
   user: FirebaseUser | null;
@@ -100,17 +101,12 @@ export default function SettingsView({
               </div>
               <span className="font-medium">{t('settings.targetLanguage')}</span>
             </div>
-            <select 
-              value={targetLanguage}
-              onChange={(e) => setTargetLanguage(e.target.value)}
-              className="bg-transparent text-sm font-bold text-app-fg outline-none text-right cursor-pointer"
-            >
-              {SUPPORTED_LANGUAGES.map(lang => (
-                <option key={lang.code} value={lang.name} className="bg-app-bg text-app-fg">
-                  {lang.name}
-                </option>
-              ))}
-            </select>
+            <LanguageSelector
+              label="Target"
+              value={normalizeLanguageCode(targetLanguage) || targetLanguage}
+              onChange={(newLangCode) => setTargetLanguage(newLangCode)}
+              showResourceHint={false}
+            />
           </div>
 
           <div className="p-4 rounded-3xl bg-app-card border border-app-card-border shadow-app-card flex items-center justify-between">

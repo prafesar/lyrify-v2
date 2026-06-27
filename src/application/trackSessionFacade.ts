@@ -6,7 +6,7 @@ import { LyricsProviderPort } from "./ports/lyricsProviderPort";
 import { MusicMetadataPort } from "./ports/musicMetadataPort";
 import { TrackLyricsData, Track, extractTrackMeaning } from "../services/musicService";
 import { prepareLyricsInput, computeLineKey, findMatchedTranslation } from "../services/lyricsPreprocessor";
-import { getLanguageCode } from "../lib/languages";
+import { getLanguageCode, detectDominantLanguage } from "../lib/languages";
 
 export class TrackSessionFacade {
   constructor(
@@ -95,7 +95,7 @@ export class TrackSessionFacade {
       appleMusicUrl: appleMusicUrl,
       rawLyrics: "",
       source: null,
-      sourceLanguage: track.sourceLanguage || "English",
+      sourceLanguage: getLanguageCode(track.sourceLanguage),
       meaning: track.meaning,
       meanings: track.meanings,
       difficulty: track.difficulty,
@@ -231,10 +231,10 @@ export class TrackSessionFacade {
             ru: meaning,
             pl: meaning
           },
-          difficulty: trackData.difficulty || "medium",
+          difficulty: trackData.difficulty || "intermediate",
           promptVersion: ANALYSIS_PROMPT_VERSION,
           translationPromptVersion: TRANSLATION_PROMPT_VERSION,
-          sourceLanguage: trackData.sourceLanguage || "English",
+          sourceLanguage: getLanguageCode(detectDominantLanguage(updatedLines) || trackData.sourceLanguage),
           lines: updatedLines,
           processingStatus: { ...trackData.processingStatus, stage2_completed: true }
         };
@@ -245,7 +245,7 @@ export class TrackSessionFacade {
         throw llmError;
       }
     } else {
-      // Meaning cached, but reload translations to confirm accuracy or ensure they're loaded
+      // Translation flow cached, but reload translations to confirm accuracy or ensure they're loaded
       const translationsResult = await this.aiClient.getLineTranslations(trackData.preparedLyricsInput || lyrics || "", trackKey, targetLanguage);
       const updatedLines = trackData.lines.map((line, idx) => {
         if (!line.original.trim()) {
@@ -262,7 +262,8 @@ export class TrackSessionFacade {
       trackData = {
         ...trackData,
         translationPromptVersion: TRANSLATION_PROMPT_VERSION,
-        lines: updatedLines
+        lines: updatedLines,
+        sourceLanguage: getLanguageCode(detectDominantLanguage(updatedLines) || trackData.sourceLanguage)
       };
     }
 
@@ -344,7 +345,7 @@ export class TrackSessionFacade {
   }
 
   /**
-   * Process manual lyrics submission and launches background info & meaning fetching.
+   * Process manual lyrics submission and extracts metadata for translation/lecture generation.
    */
   async submitManualLyrics(
     track: TrackLyricsData,
@@ -365,10 +366,10 @@ export class TrackSessionFacade {
       ...track,
       rawLyrics: manualLyrics,
       source: "Manual",
-      sourceLanguage: track.sourceLanguage || "English",
+      sourceLanguage: getLanguageCode(track.sourceLanguage),
       meaning: "",
       meanings: { en: "", es: "", ru: "", pl: "" },
-      difficulty: "medium",
+      difficulty: "intermediate",
       authors: metadataResult?.authors,
       lyricSource: "Manual Entry",
       lines: this.lyricsProvider.splitLyricsIntoLines(track.trackId, manualLyrics),
@@ -392,7 +393,7 @@ export class TrackSessionFacade {
       artist: track.artist,
       coverUrl: track.coverUrl || "",
       album: track.album || "",
-      difficulty: "medium"
+      difficulty: "intermediate"
     } as Track);
 
     if (callbacks.onBackgroundComplete) {
@@ -435,7 +436,8 @@ export class TrackSessionFacade {
     const updatedTrack = this.enrichWithPreparedLyricsInput({
       ...updatedTrackPre,
       translationPromptVersion: TRANSLATION_PROMPT_VERSION,
-      lines: updatedLines
+      lines: updatedLines,
+      sourceLanguage: getLanguageCode(detectDominantLanguage(updatedLines) || updatedTrackPre.sourceLanguage)
     }, targetLanguage);
 
     this.trackCacheRepository.saveTrackData(updatedTrack.trackId, updatedTrack);

@@ -140,13 +140,38 @@ async function startServer() {
     }
   });
 
-  // Vite middleware for development
+  let viteInstance: any = null;
+
   if (process.env.NODE_ENV !== "production") {
-    const vite = await createViteServer({
+    viteInstance = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
     });
-    app.use(vite.middlewares);
+  }
+
+  // Handle the /intro landing page explicitly
+  app.get('/intro', async (req, res, next) => {
+    try {
+      if (process.env.NODE_ENV !== "production") {
+        if (viteInstance) {
+          const fs = await import('fs');
+          let html = fs.readFileSync(path.resolve(process.cwd(), 'intro.html'), 'utf-8');
+          html = await viteInstance.transformIndexHtml(req.originalUrl || req.url, html);
+          res.status(200).set({ 'Content-Type': 'text/html' }).end(html);
+        } else {
+          res.sendFile(path.resolve(process.cwd(), 'intro.html'));
+        }
+      } else {
+        res.sendFile(path.join(process.cwd(), 'dist', 'intro.html'));
+      }
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  // Vite middleware or static serving for normal application
+  if (process.env.NODE_ENV !== "production") {
+    app.use(viteInstance.middlewares);
   } else {
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
