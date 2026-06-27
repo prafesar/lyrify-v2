@@ -15,7 +15,8 @@ import {
   searchLyricsOptions, 
   fetchLyricsFromOption, 
   clearCachedLyrics,
-  extractTrackMeaning 
+  extractTrackMeaning,
+  generateLineId 
 } from "../services/musicService";
 import { 
   linkPhrasesToLines, 
@@ -459,11 +460,68 @@ export function useTrackSession(): UseTrackSessionResult {
           };
         }
 
+        // Extract all phrases from lectureBlocks and map to lines
+        const extractedPhrases: any[] = [];
+        if (Array.isArray(cacheResult.lectureBlocks)) {
+          for (const block of cacheResult.lectureBlocks) {
+            if (block && Array.isArray(block.phrases)) {
+              for (const p of block.phrases) {
+                extractedPhrases.push(p);
+              }
+            }
+          }
+        }
+
+        const updatedLines = trackData.lines.map((line, index) => {
+          const linePhrases = extractedPhrases
+            .filter((p: any) => {
+              if (p.lineKey && line.lineKey) {
+                return p.lineKey === line.lineKey;
+              }
+              if (Array.isArray(p.lineKeys) && line.lineKey) {
+                return p.lineKeys.includes(line.lineKey);
+              }
+              const lid = line.lineId || generateLineId(line.original);
+              if (p.lineId && lid) {
+                return p.lineId === lid;
+              }
+              if (Array.isArray(p.lineIds) && lid) {
+                return p.lineIds.includes(lid);
+              }
+              if (typeof p.lineIndex === 'number') {
+                return p.lineIndex === index;
+              }
+              const phraseText = p.text || p.phrase || "";
+              if (phraseText) {
+                const normPhrase = phraseText.trim().toLowerCase().replace(/[^\p{L}\p{N}\s']/gu, '');
+                const normLine = line.original.trim().toLowerCase().replace(/[^\p{L}\p{N}\s']/gu, '');
+                return normLine.includes(normPhrase);
+              }
+              return false;
+            })
+            .map((p: any) => ({
+              id: p.id || `${trackData.trackId}:p:${(p.text || p.phrase || "").replace(/\s+/g, '_')}`,
+              text: p.text || p.phrase || "",
+              translation: p.translation || "",
+              explanation: p.explanation || "",
+              language: p.language || p.targetLanguage || getLanguageCode(targetLanguage),
+              lemmas: p.lemmas || [],
+              type: 'phrase' as const
+            }));
+
+          return {
+            ...line,
+            phrases: linePhrases
+          };
+        });
+
         trackData = {
           ...trackData,
           meaning,
           meanings,
-          lectureBlocks: cacheResult.lectureBlocks
+          lines: updatedLines,
+          lectureBlocks: cacheResult.lectureBlocks,
+          processingStatus: { ...trackData.processingStatus, stage3_completed: true }
         };
         setCurrentTrack(trackData);
         saveTrackData(trackData.trackId, trackData);
@@ -540,8 +598,11 @@ export function useTrackSession(): UseTrackSessionResult {
         }
       }
 
-      setLoadingStep("analyzing");
-      await runStage3(trackData, targetLanguage, force);
+      const skipStage3 = !force && cacheResult && cacheResult.hasLecture;
+      if (!skipStage3) {
+        setLoadingStep("analyzing");
+        await runStage3(trackData, targetLanguage, force);
+      }
     } catch (err: any) {
       console.error("Analysis generation failed:", err);
       setAnalysisError(err?.message || "An unexpected error occurred during deep analysis. Please try again.");

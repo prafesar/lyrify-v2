@@ -1,4 +1,3 @@
-import { normalizeTrackTitle, normalizeArtists } from "./lyricsPreprocessor";
 import { userPreferencesRepository } from "../application/adapters/browserUserDataRepository";
 
 export interface ServerCacheLookupResult {
@@ -15,10 +14,32 @@ export interface ServerCacheLookupResult {
   lectureBlocks: any[] | null;
 }
 
-export function computeLyricsKey(title: string, artists: string[]): string {
-  const cleanTitle = normalizeTrackTitle(title);
-  const cleanArtists = normalizeArtists(artists);
-  return `track-${cleanArtists.join("-")}-${cleanTitle.replace(/\s+/g, "-")}`.toLowerCase();
+export function normalizeString(str: string): string {
+  return (str || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .replace(/[^\p{L}\p{N}\s']/gu, '');
+}
+
+export async function computeSHA256(message: string): Promise<string> {
+  const msgBuffer = new TextEncoder().encode(message);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  return hashHex;
+}
+
+export async function computeLyricsKey(title: string, artists: string[]): Promise<string> {
+  const normTitle = normalizeString(title);
+  const artistsArray = Array.isArray(artists) ? artists : [artists as any as string];
+  const normArtists = artistsArray
+    .map(a => normalizeString(a))
+    .filter(Boolean)
+    .sort();
+  
+  const combined = [normTitle, ...normArtists].join('|');
+  return await computeSHA256(combined);
 }
 
 export async function checkServerCache(
@@ -26,7 +47,7 @@ export async function checkServerCache(
   artists: string[]
 ): Promise<ServerCacheLookupResult | null> {
   try {
-    const lyricsKey = computeLyricsKey(title, artists);
+    const lyricsKey = await computeLyricsKey(title, artists);
     const url = `https://api.cantolex.com/api/v1/tracks/cached?lyricsKey=${encodeURIComponent(lyricsKey)}`;
     
     const response = await fetch(url, {
