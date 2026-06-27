@@ -685,7 +685,8 @@ export default function App() {
     handleGenerateAnalysis: handleGenerateAnalysisRaw,
     handleRegenerateAnalysis: handleRegenerateAnalysisRaw,
     handleManualLyricsSearch,
-    handleSelectLyricOption: handleSelectLyricOptionRaw
+    handleSelectLyricOption: handleSelectLyricOptionRaw,
+    handleSourceLanguageOverride
   } = useTrackSession();
 
   const {
@@ -4230,14 +4231,8 @@ export default function App() {
                       value={currentTrack.sourceLanguage || "English"}
                       highlight
                       onChange={(newLang) => {
-                        setCurrentTrack((prev) =>
-                          prev ? { ...prev, sourceLanguage: newLang } : null,
-                        );
-                        if (currentTrack.trackId) {
-                          saveTrackData(currentTrack.trackId, {
-                            sourceLanguage: newLang,
-                          });
-                        }
+                        handleSourceLanguageOverride(newLang);
+                        loadUserCards();
                       }}
                     />
                   </div>

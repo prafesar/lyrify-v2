@@ -25,7 +25,8 @@ import {
 } from "../services/lyricsAnalysisService";
 import { prepareLyricsInput, findMatchedTranslation } from "../services/lyricsPreprocessor";
 import { checkServerCache } from "../services/serverCacheLookupService";
-import { getLanguageCode } from "../lib/languages";
+import { getLanguageCode, detectDominantLanguage, cascadeTrackLanguageUpdate } from "../lib/languages";
+import { updateTrackCardsLanguage } from "../services/localCardService";
 
 export interface UseTrackSessionResult {
   currentTrack: TrackLyricsData | null;
@@ -133,6 +134,7 @@ export interface UseTrackSessionResult {
       loadCommunityTracks: () => void;
     }
   ) => Promise<void>;
+  handleSourceLanguageOverride: (newLang: string) => Promise<void>;
 }
 
 export function useTrackSession(): UseTrackSessionResult {
@@ -249,6 +251,7 @@ export function useTrackSession(): UseTrackSessionResult {
         trackData = {
           ...trackData,
           lines: mergedLines,
+          sourceLanguage: detectDominantLanguage(mergedLines) || trackData.sourceLanguage || "English",
           translationPromptVersion: TRANSLATION_PROMPT_VERSION,
           processingStatus: { ...trackData.processingStatus, stage2_completed: true },
           preparedLyricsInput: prepareLyricsInput(
@@ -428,6 +431,7 @@ export function useTrackSession(): UseTrackSessionResult {
         trackData = {
           ...trackData,
           lines: mergedLines,
+          sourceLanguage: detectDominantLanguage(mergedLines) || trackData.sourceLanguage || "English",
           translationPromptVersion: TRANSLATION_PROMPT_VERSION,
           processingStatus: { ...trackData.processingStatus, stage2_completed: true },
           preparedLyricsInput: prepareLyricsInput(
@@ -801,6 +805,18 @@ export function useTrackSession(): UseTrackSessionResult {
     }
   }, [currentTrack]);
 
+  const handleSourceLanguageOverride = useCallback(async (newLang: string) => {
+    if (!currentTrack) return;
+    const oldLangName = currentTrack.sourceLanguage || "English";
+    
+    const updatedTrack = cascadeTrackLanguageUpdate(currentTrack, oldLangName, newLang);
+
+    setCurrentTrack(updatedTrack);
+    saveTrackData(currentTrack.trackId, updatedTrack);
+
+    await updateTrackCardsLanguage(currentTrack.trackId, oldLangName, newLang);
+  }, [currentTrack]);
+
   const linkedTrack = useMemo(() => {
     if (!currentTrack) return null;
     return linkPhrasesToLines(currentTrack);
@@ -842,6 +858,7 @@ export function useTrackSession(): UseTrackSessionResult {
     handleManualLyricsSearch,
     handleSelectLyricOption,
     handleResetLyrics,
-    handleAnalyzeStarredLines
+    handleAnalyzeStarredLines,
+    handleSourceLanguageOverride
   };
 }

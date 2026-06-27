@@ -6,7 +6,7 @@ import { LyricsProviderPort } from "./ports/lyricsProviderPort";
 import { MusicMetadataPort } from "./ports/musicMetadataPort";
 import { TrackLyricsData, Track, extractTrackMeaning } from "../services/musicService";
 import { prepareLyricsInput, computeLineKey, findMatchedTranslation } from "../services/lyricsPreprocessor";
-import { getLanguageCode } from "../lib/languages";
+import { getLanguageCode, detectDominantLanguage } from "../lib/languages";
 
 export class TrackSessionFacade {
   constructor(
@@ -234,7 +234,7 @@ export class TrackSessionFacade {
           difficulty: trackData.difficulty || "medium",
           promptVersion: ANALYSIS_PROMPT_VERSION,
           translationPromptVersion: TRANSLATION_PROMPT_VERSION,
-          sourceLanguage: trackData.sourceLanguage || "English",
+          sourceLanguage: detectDominantLanguage(updatedLines) || trackData.sourceLanguage || "English",
           lines: updatedLines,
           processingStatus: { ...trackData.processingStatus, stage2_completed: true }
         };
@@ -262,7 +262,8 @@ export class TrackSessionFacade {
       trackData = {
         ...trackData,
         translationPromptVersion: TRANSLATION_PROMPT_VERSION,
-        lines: updatedLines
+        lines: updatedLines,
+        sourceLanguage: detectDominantLanguage(updatedLines) || trackData.sourceLanguage || "English"
       };
     }
 

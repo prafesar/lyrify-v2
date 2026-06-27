@@ -1,5 +1,6 @@
 import { get, set } from 'idb-keyval';
 import { FSRS, generatorParameters, createEmptyCard, Rating, Card } from 'ts-fsrs';
+import { sameLanguage } from '../lib/languages';
 
 export type PhraseStatus = 'new' | 'learning' | 'known';
 
@@ -200,3 +201,22 @@ export async function reviewCard(cardId: string, rating: Rating) {
 
   await saveAllCards(cardsMap);
 }
+
+export async function updateTrackCardsLanguage(trackId: string, oldLanguage: string, newLanguage: string): Promise<void> {
+  const cardsMap = await getAllCards();
+  let modified = false;
+  for (const card of cardsMap.values()) {
+    if (card.trackId === trackId) {
+      const matches = sameLanguage(card.sourceLanguage, oldLanguage);
+      if (matches) {
+        card.sourceLanguage = newLanguage;
+        card.updatedAt = new Date();
+        modified = true;
+      }
+    }
+  }
+  if (modified) {
+    await saveAllCards(cardsMap);
+  }
+}
+
