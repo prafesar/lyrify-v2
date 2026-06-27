@@ -7,6 +7,7 @@ import {
   sameLanguage 
 } from '../lib/languages';
 import { addPhraseToStudy, getCards, updateTrackCardsLanguage } from '../services/localCardService';
+import { sqliteService } from '../services/sqliteService';
 
 // Setup crypto.randomUUID for the test runner
 if (typeof globalThis.crypto === 'undefined') {
@@ -208,6 +209,43 @@ describe('Track Language Cascade & Dominant Language Detection Tests', () => {
       // Card 4 (different track, matching language) -> Unchanged French
       const card4 = cards.find(c => c.trackId === 'different-track');
       expect(card4?.sourceLanguage).toBe('French');
+    });
+  });
+
+  describe('Part 5: Library & Recent Track Language Sync', () => {
+    it('should successfully update track language in favorites and recent history', async () => {
+      const trackId = 'track-sync-123';
+      const initialTrack = {
+        id: trackId,
+        trackId,
+        title: 'French Chanson',
+        artist: 'French Artist',
+        album: 'French Album',
+        sourceLanguage: 'French',
+        lines: [
+          { original: 'Bonjour', language: 'fr' }
+        ]
+      };
+
+      // 1. Setup - Add track as favorite and to recents
+      await sqliteService.toggleFavorite(initialTrack);
+      sqliteService.addRecentTrack(initialTrack);
+
+      // Verify they are stored as French
+      let favorites = await sqliteService.getFavorites();
+      let recents = sqliteService.getRecentTracks();
+      expect(favorites.find(t => String(t.id) === trackId)?.sourceLanguage).toBe('French');
+      expect(recents.find(t => String(t.id || t.trackId) === trackId)?.sourceLanguage).toBe('French');
+
+      // 2. Simulate User manual language change
+      const updatedTrack = cascadeTrackLanguageUpdate(initialTrack, 'French', 'Spanish');
+      sqliteService.updateTrackInLibrary(trackId, updatedTrack);
+
+      // 3. Verify they are correctly updated to Spanish
+      favorites = await sqliteService.getFavorites();
+      recents = sqliteService.getRecentTracks();
+      expect(favorites.find(t => String(t.id) === trackId)?.sourceLanguage).toBe('Spanish');
+      expect(recents.find(t => String(t.id || t.trackId) === trackId)?.sourceLanguage).toBe('Spanish');
     });
   });
 });

@@ -4,6 +4,7 @@ export interface LibraryRepositoryPort {
   getFavorites(): Promise<Track[]>;
   toggleFavorite(track: Track): Promise<boolean>;
   isFavorite(trackId: string): Promise<boolean>;
+  updateTrackInLibrary(trackId: string, updatedTrack: Track): Promise<void>;
 
   getFavoriteArtists(): Promise<Artist[]>;
   toggleFavoriteArtist(artist: Artist): Promise<boolean>;

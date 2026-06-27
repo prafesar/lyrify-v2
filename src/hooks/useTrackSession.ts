@@ -4,7 +4,8 @@ import {
   recentHistoryRepository, 
   aiClient, 
   ANALYSIS_PROMPT_VERSION, 
-  TRANSLATION_PROMPT_VERSION 
+  TRANSLATION_PROMPT_VERSION,
+  libraryRepository
 } from "../application";
 import { 
   type TrackLyricsData, 
@@ -815,6 +816,7 @@ export function useTrackSession(): UseTrackSessionResult {
     saveTrackData(currentTrack.trackId, updatedTrack);
 
     await updateTrackCardsLanguage(currentTrack.trackId, oldLangName, newLang);
+    await libraryRepository.updateTrackInLibrary(currentTrack.trackId, updatedTrack);
   }, [currentTrack]);
 
   const linkedTrack = useMemo(() => {
