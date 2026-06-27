@@ -55,26 +55,8 @@ export class GeminiAIAdapter implements AiPort {
     return originalGeminiService.getCachedStructuredLecture(rawLyrics, trackTitle, trackArtist, targetLang);
   }
 
-  async fetchTrackMeaning(
-    lyrics: string,
-    metadata: TrackMetadata,
-    promptVersion?: number,
-    forceRegenerate?: boolean
-  ): Promise<TrackMeaningResult> {
-    return originalGeminiService.fetchTrackMeaning(lyrics, metadata, promptVersion, forceRegenerate);
-  }
-
   async getOriginalLanguage(trackKey: string): Promise<string | null> {
     return originalGeminiService.getOriginalLanguage(trackKey);
-  }
-
-  async getTrackMeaningFromCache(
-    title: string,
-    artists: string[],
-    targetLanguage?: string,
-    promptVersion?: number
-  ): Promise<TrackMeaningResult | null> {
-    return originalGeminiService.getTrackMeaningFromCache(title, artists, targetLanguage, promptVersion);
   }
 
   async generateSongMeaning(

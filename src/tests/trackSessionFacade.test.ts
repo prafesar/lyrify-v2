@@ -11,8 +11,6 @@ const { mockAiClient } = vi.hoisted(() => {
   return {
     mockAiClient: {
       normalizeString: vi.fn(),
-      getTrackMeaningFromCache: vi.fn(),
-      fetchTrackMeaning: vi.fn(),
       getLineTranslations: vi.fn(),
       getPhraseAnalysis: vi.fn(),
       extractLyricsMetadata: vi.fn(),
@@ -36,8 +34,6 @@ vi.mock("../application/adapters/workerAIAdapter", () => {
   return {
     WorkerAIAdapter: class {
       normalizeString = mockAiClient.normalizeString;
-      getTrackMeaningFromCache = mockAiClient.getTrackMeaningFromCache;
-      fetchTrackMeaning = mockAiClient.fetchTrackMeaning;
       getLineTranslations = mockAiClient.getLineTranslations;
       getPhraseAnalysis = mockAiClient.getPhraseAnalysis;
       extractLyricsMetadata = mockAiClient.extractLyricsMetadata;
@@ -86,7 +82,6 @@ describe("TrackSessionFacade Unit Tests", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(searchITunes).mockResolvedValue([] as any);
-    vi.mocked(aiClient.getTrackMeaningFromCache).mockResolvedValue(null);
   });
 
   describe("selectTrack", () => {
@@ -116,7 +111,6 @@ describe("TrackSessionFacade Unit Tests", () => {
       const mockTrack = { id: "track-777", title: "New Song", artist: "New Artist" };
       vi.mocked(trackCacheRepository.getCachedTrack).mockReturnValue(null);
       vi.mocked(aiClient.normalizeString).mockImplementation((str) => str.toLowerCase().trim());
-      vi.mocked(aiClient.getTrackMeaningFromCache).mockResolvedValue(null);
 
       const result = await trackSessionFacade.selectTrack(mockTrack, "Russian");
 
@@ -270,11 +264,6 @@ describe("TrackSessionFacade Unit Tests", () => {
       };
 
       vi.mocked(aiClient.extractLyricsMetadata).mockResolvedValue({ authors: "Composer ABC" });
-      vi.mocked(aiClient.fetchTrackMeaning).mockResolvedValue({
-        originalLanguage: "English",
-        difficulty: "beginner",
-        meanings: { en: "Meaning", es: "Significado", ru: "Значение", pl: "Znaczenie" },
-      });
 
       const result = await trackSessionFacade.submitManualLyrics(track, "First Line\nSecond Line", "Spanish");
 

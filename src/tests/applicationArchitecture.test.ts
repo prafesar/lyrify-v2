@@ -10,7 +10,6 @@ vi.mock('../services/geminiService', async () => {
   const actual = await vi.importActual<typeof originalGeminiService>('../services/geminiService');
   return {
     ...actual,
-    fetchTrackMeaning: vi.fn(),
     translateLyrics: vi.fn(),
     fetchStructuredLecture: vi.fn(),
     getCachedStructuredLecture: vi.fn(),
@@ -56,19 +55,6 @@ describe('CantoLex Ports and Adapters Layer', () => {
     it('should normalize string accents and formatting correctly', () => {
       const result = aiClient.normalizeString('   Héllô   Wôrld!  ');
       expect(result).toBe('héllô wôrld');
-    });
-
-    it('should delegate fetchTrackMeaning calls directly to raw geminiService', async () => {
-      const mockResult = {
-        originalLanguage: 'Spanish',
-        difficulty: 'intermediate' as const,
-        meanings: { en: 'Song summary', es: 'Resumen', ru: 'Резюме', pl: 'Podsumowanie' },
-      };
-      vi.mocked(originalGeminiService.fetchTrackMeaning).mockResolvedValueOnce(mockResult);
-
-      const result = await aiClient.fetchTrackMeaning('lyrics content', { title: 'Test', artists: ['Artist'] });
-      expect(originalGeminiService.fetchTrackMeaning).toHaveBeenCalledWith('lyrics content', { title: 'Test', artists: ['Artist'] }, undefined, undefined);
-      expect(result).toEqual(mockResult);
     });
 
     it('should delegate translateLyrics calls to the underlying service', async () => {

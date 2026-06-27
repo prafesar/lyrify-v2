@@ -4230,8 +4230,8 @@ export default function App() {
                       label="Source"
                       value={currentTrack.sourceLanguage || "English"}
                       highlight
-                      onChange={(newLang) => {
-                        handleSourceLanguageOverride(newLang);
+                      onChange={async (newLang) => {
+                        await handleSourceLanguageOverride(newLang);
                         loadUserCards();
                       }}
                     />

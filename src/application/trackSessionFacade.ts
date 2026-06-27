@@ -245,7 +245,7 @@ export class TrackSessionFacade {
         throw llmError;
       }
     } else {
-      // Meaning cached, but reload translations to confirm accuracy or ensure they're loaded
+      // Translation flow cached, but reload translations to confirm accuracy or ensure they're loaded
       const translationsResult = await this.aiClient.getLineTranslations(trackData.preparedLyricsInput || lyrics || "", trackKey, targetLanguage);
       const updatedLines = trackData.lines.map((line, idx) => {
         if (!line.original.trim()) {
@@ -345,7 +345,7 @@ export class TrackSessionFacade {
   }
 
   /**
-   * Process manual lyrics submission and launches background info & meaning fetching.
+   * Process manual lyrics submission and extracts metadata for translation/lecture generation.
    */
   async submitManualLyrics(
     track: TrackLyricsData,
@@ -436,7 +436,8 @@ export class TrackSessionFacade {
     const updatedTrack = this.enrichWithPreparedLyricsInput({
       ...updatedTrackPre,
       translationPromptVersion: TRANSLATION_PROMPT_VERSION,
-      lines: updatedLines
+      lines: updatedLines,
+      sourceLanguage: detectDominantLanguage(updatedLines) || updatedTrackPre.sourceLanguage || "English"
     }, targetLanguage);
 
     this.trackCacheRepository.saveTrackData(updatedTrack.trackId, updatedTrack);

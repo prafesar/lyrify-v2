@@ -87,53 +87,8 @@ export class WorkerAIAdapter implements AiPort {
     return null;
   }
 
-  /**
-   * Compatibility wrapper. Track meaning is no longer an active, separate endpoint
-   * in the modern API flow. It is generated and delivered as part of the structured lecture (kind === "intro").
-   */
-  async fetchTrackMeaning(
-    lyrics: string,
-    metadata: TrackMetadata,
-    promptVersion?: number,
-    forceRegenerate?: boolean
-  ): Promise<TrackMeaningResult> {
-    try {
-      const preparedInput = prepareLyricsInput(
-        metadata.title,
-        metadata.artists,
-        lyrics,
-        metadata.targetLanguage || "English"
-      );
-      const blocks = await this.fetchStructuredLecture(preparedInput);
-      const text = extractTrackMeaning(blocks) || "Track context & breakdown available in study lecture.";
-      return {
-        meaning: text,
-        meanings: {
-          en: text,
-          es: text,
-          ru: text,
-          pl: text
-        }
-      };
-    } catch (e) {
-      return {
-        meaning: "Analysis available in Study Lecture.",
-        meanings: { en: "", es: "", ru: "", pl: "" }
-      };
-    }
-  }
-
   async getOriginalLanguage(trackKey: string): Promise<string | null> {
     return "en";
-  }
-
-  async getTrackMeaningFromCache(
-    title: string,
-    artists: string[],
-    targetLanguage?: string,
-    promptVersion?: number
-  ): Promise<TrackMeaningResult | null> {
-    return null;
   }
 
   async generateSongMeaning(
