@@ -52,6 +52,7 @@ export interface TranslationDictionary {
     appearance: string;
     themeDark: string;
     themeLight: string;
+    themeLyrifyLight: string;
     themeSolarized: string;
     themeSolarizedEmerald: string;
     account: string;
@@ -503,6 +504,7 @@ const en: TranslationDictionary = {
     appearance: 'Appearance',
     themeDark: 'Dark',
     themeLight: 'Light',
+    themeLyrifyLight: 'Lyrify Light',
     themeSolarized: 'Solarized',
     themeSolarizedEmerald: 'Solarized Emerald',
     account: 'Account',
@@ -954,6 +956,7 @@ const ru: TranslationDictionary = {
     appearance: 'Оформление',
     themeDark: 'Тёмная',
     themeLight: 'Светлая',
+    themeLyrifyLight: 'Светлая Lyrify',
     themeSolarized: 'Солнечная',
     themeSolarizedEmerald: 'Изумрудная солнечная',
     account: 'Аккаунт',
