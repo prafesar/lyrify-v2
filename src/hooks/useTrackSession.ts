@@ -22,7 +22,8 @@ import {
   buildStarredLinesAnalysisInput, 
   mergeGeneratedPhrasesForLines
 } from "../services/lyricsAnalysisService";
-import { prepareLyricsInput } from "../services/lyricsPreprocessor";
+import { prepareLyricsInput, findMatchedTranslation } from "../services/lyricsPreprocessor";
+import { checkServerCache } from "../services/serverCacheLookupService";
 import { getLanguageCode } from "../lib/languages";
 
 export interface UseTrackSessionResult {
@@ -211,15 +212,68 @@ export function useTrackSession(): UseTrackSessionResult {
     setLoadingStep("searching");
 
     try {
-      const updatedTrack = await trackSessionFacade.analyzeSongMeaningAndTranslations(
-        currentTrack,
-        targetLanguage,
-        (step) => setLoadingStep(step as any)
-      );
+      let trackData = { ...currentTrack };
+      let cacheResult = null;
+      try {
+        cacheResult = await checkServerCache(trackData.title, [trackData.artist]);
+      } catch (e) {
+        console.warn("[PreflightCache] Error in preflight lookup during handleAnalyzeSong:", e);
+      }
 
-      setCurrentTrack(updatedTrack);
-      callbacks.updateRecentTracks(recentHistoryRepository.getRecentTracks());
-      callbacks.loadCommunityTracks();
+      if (cacheResult && cacheResult.hasTranslation) {
+        let lyrics = trackData.rawLyrics;
+        if (!lyrics) {
+          lyrics = cacheResult.translation.map((line: any) => line.original).join("\n");
+          trackData = {
+            ...trackData,
+            rawLyrics: lyrics,
+            source: trackData.source || "Manual",
+            lines: splitLyricsIntoLines(trackData.trackId, lyrics),
+            processingStatus: { ...trackData.processingStatus, stage1_completed: true }
+          };
+        }
+
+        const mergedLines = trackData.lines.map((line, idx) => {
+          const matched = findMatchedTranslation(line.original, idx, cacheResult.translation);
+          return {
+            ...line,
+            translation: matched ? matched.translation : (line.translation || ""),
+            language: matched ? matched.language : (line.language || "en")
+          };
+        });
+
+        const provider = typeof trackData.source === 'string' ? trackData.source : 'unknown';
+        const authors = trackData.authors ? trackData.authors.split(',').map((a: string) => a.trim()) : null;
+
+        trackData = {
+          ...trackData,
+          lines: mergedLines,
+          translationPromptVersion: TRANSLATION_PROMPT_VERSION,
+          processingStatus: { ...trackData.processingStatus, stage2_completed: true },
+          preparedLyricsInput: prepareLyricsInput(
+            trackData.title,
+            [trackData.artist],
+            lyrics,
+            targetLanguage,
+            { provider, url: trackData.lyricSource || null, authors }
+          )
+        };
+
+        setCurrentTrack(trackData);
+        saveTrackData(trackData.trackId, trackData);
+        callbacks.updateRecentTracks(recentHistoryRepository.getRecentTracks());
+        callbacks.loadCommunityTracks();
+      } else {
+        const updatedTrack = await trackSessionFacade.analyzeSongMeaningAndTranslations(
+          currentTrack,
+          targetLanguage,
+          (step) => setLoadingStep(step as any)
+        );
+
+        setCurrentTrack(updatedTrack);
+        callbacks.updateRecentTracks(recentHistoryRepository.getRecentTracks());
+        callbacks.loadCommunityTracks();
+      }
     } catch (err: any) {
       console.error("Manual fetch/meaning failed:", err);
       setLyricsFetchError(err.message || "Failed to fetch song data.");
@@ -334,6 +388,87 @@ export function useTrackSession(): UseTrackSessionResult {
     setAnalysisError(null);
     try {
       let trackData = { ...targetTrack };
+
+      // Perform preflight cache lookup
+      let cacheResult = null;
+      if (!force) {
+        try {
+          cacheResult = await checkServerCache(trackData.title, [trackData.artist]);
+        } catch (e) {
+          console.warn("[PreflightCache] Error in preflight lookup during handleGenerateAnalysis:", e);
+        }
+      }
+
+      if (cacheResult && cacheResult.hasTranslation) {
+        let lyrics = trackData.rawLyrics;
+        if (!lyrics) {
+          lyrics = cacheResult.translation.map((line: any) => line.original).join("\n");
+          trackData = {
+            ...trackData,
+            rawLyrics: lyrics,
+            source: trackData.source || "Manual",
+            lines: splitLyricsIntoLines(trackData.trackId, lyrics),
+            processingStatus: { ...trackData.processingStatus, stage1_completed: true }
+          };
+        }
+
+        const mergedLines = trackData.lines.map((line, idx) => {
+          const matched = findMatchedTranslation(line.original, idx, cacheResult.translation);
+          return {
+            ...line,
+            translation: matched ? matched.translation : (line.translation || ""),
+            language: matched ? matched.language : (line.language || "en")
+          };
+        });
+
+        const provider = typeof trackData.source === 'string' ? trackData.source : 'unknown';
+        const authors = trackData.authors ? trackData.authors.split(',').map((a: string) => a.trim()) : null;
+
+        trackData = {
+          ...trackData,
+          lines: mergedLines,
+          translationPromptVersion: TRANSLATION_PROMPT_VERSION,
+          processingStatus: { ...trackData.processingStatus, stage2_completed: true },
+          preparedLyricsInput: prepareLyricsInput(
+            trackData.title,
+            [trackData.artist],
+            lyrics,
+            targetLanguage,
+            { provider, url: trackData.lyricSource || null, authors }
+          )
+        };
+
+        setCurrentTrack(trackData);
+        saveTrackData(trackData.trackId, trackData);
+        callbacks.loadCommunityTracks();
+      }
+
+      if (cacheResult && cacheResult.hasLecture && cacheResult.lectureBlocks) {
+        let meaning = trackData.meaning || "";
+        let meanings = trackData.meanings || { en: "", es: "", ru: "", pl: "" };
+        const extractedMeaning = extractTrackMeaning(cacheResult.lectureBlocks);
+        if (extractedMeaning) {
+          meaning = extractedMeaning;
+          const langCode = getLanguageCode(targetLanguage);
+          meanings = {
+            ...trackData.meanings,
+            en: langCode === 'en' ? extractedMeaning : (trackData.meanings?.en || ""),
+            es: langCode === 'es' ? extractedMeaning : (trackData.meanings?.es || ""),
+            ru: langCode === 'ru' ? extractedMeaning : (trackData.meanings?.ru || ""),
+            pl: langCode === 'pl' ? extractedMeaning : (trackData.meanings?.pl || "")
+          };
+        }
+
+        trackData = {
+          ...trackData,
+          meaning,
+          meanings,
+          lectureBlocks: cacheResult.lectureBlocks
+        };
+        setCurrentTrack(trackData);
+        saveTrackData(trackData.trackId, trackData);
+      }
+
       let lyrics = trackData.rawLyrics;
 
       if (!lyrics) {
