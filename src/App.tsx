@@ -43,10 +43,11 @@ import {
   FolderHeart,
   Edit3,
   Bookmark,
+  AlertCircle,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { Track, Artist, Album } from "./constants";
-import { SUPPORTED_LANGUAGES } from "./lib/languages";
+import { SUPPORTED_LANGUAGES, isExperimentalLanguage, normalizeLanguageCode } from "./lib/languages";
 import { useUserCards } from "./hooks/useUserCards";
 import { usePlayback } from "./hooks/usePlayback";
 import { useLibrarySearch } from "./hooks/useLibrarySearch";
@@ -704,6 +705,20 @@ export default function App() {
     recordTrackExploredAction,
     setDailyActivity
   } = useUserCards(recentTracks);
+
+  const usedLanguages = useMemo(() => {
+    const langs = new Set<string>();
+    if (currentTrack?.sourceLanguage) {
+      langs.add(currentTrack.sourceLanguage);
+    }
+    recentTracks.forEach(t => {
+      if (t.sourceLanguage) langs.add(t.sourceLanguage);
+    });
+    favoritesInApp.forEach(t => {
+      if (t.sourceLanguage) langs.add(t.sourceLanguage);
+    });
+    return Array.from(langs);
+  }, [currentTrack?.sourceLanguage, recentTracks, favoritesInApp]);
 
   const {
     activeLineIndex,
@@ -4225,11 +4240,19 @@ export default function App() {
                       <p className="text-xs font-medium text-app-fg">
                         {t('lyricsSettings.sourceLanguageDesc')}
                       </p>
+                      {isExperimentalLanguage(currentTrack.sourceLanguage) && (
+                        <p className="text-[10px] text-yellow-500 font-semibold flex items-center gap-1 mt-1">
+                          <AlertCircle size={10} className="shrink-0" />
+                          AI can try this language, but analysis quality may vary.
+                        </p>
+                      )}
                     </div>
                     <LanguageSelector
                       label="Source"
                       value={currentTrack.sourceLanguage || "English"}
                       highlight
+                      usedLanguages={usedLanguages}
+                      showResourceHint={true}
                       onChange={async (newLang) => {
                         await handleSourceLanguageOverride(newLang);
                         loadUserCards();

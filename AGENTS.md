@@ -1,29 +1,33 @@
-# Agent Guide — lyrify-v2
+# AGENTS.md
 
-## Current Working Reality
+## Как Работать С Этим Репозиторием
 
-- This project is iterated primarily through Google AI Studio prompts, so changes should be easy to request as focused edits to a small number of files.
-- Direct code edits are possible but inconvenient. Favor plans, prompt templates, and architectural seams that minimize manual file touching.
+- Этот проект развивается в основном через промпты для внешнего агента в Google AI Studio.
+- Предпочитай небольшие, хорошо ограниченные шаги и изменения с понятной проверкой результата.
+- Если задача затрагивает только один-два файла, сначала предложи более простой вариант: пользователь может внести такую правку вручную через UI Google AI Studio.
 
-## Architecture Constraints
+## Главные Ограничения
 
-- Keep the LLM integration behind `src/application/ports/aiPort.ts` and concrete adapters in `src/application/adapters/`.
-- `src/application/index.ts` is the composition root for selecting the active AI adapter. Prefer switching implementations there instead of changing UI code.
-- UI components, hooks, and view services should not directly own provider-specific Gemini or Worker request logic.
-- When adding new AI-powered features, extend the `AiPort` contract first, then implement the adapter, then wire UI to the port.
+- Не меняй серверную часть в этом репозитории и не придумывай backend-реализацию внутри клиента.
+- Если для клиентской задачи нужен серверный контракт, опирайся только на документы в `docs/`.
+- Не считай устаревшую Gemini-логику целевым runtime-path. Основной путь клиента должен идти через внешний API.
 
-## Migration Direction
+## Архитектурные Правила
 
-- The preferred migration path is `GeminiAIAdapter` now, `WorkerAIAdapter` later, with the rest of the app unchanged or minimally changed.
-- Future Cloudflare work should preserve one replaceable boundary for analysis, translation, phrase explanation, and caching.
-- If a proposed change would require editing many UI files to swap AI providers, stop and redesign around the adapter boundary first.
+- AI-граница должна проходить через `src/application/ports/aiPort.ts`.
+- Конкретные реализации AI-транспорта должны жить в `src/application/adapters/`.
+- Точка выбора активного AI-клиента — `src/application/index.ts`.
+- Не размещай transport-specific или provider-specific логику в UI-компонентах, хуках и случайных сервисах.
+- Если добавляется новая AI-функция, сначала расширяй `AiPort`, потом адаптер, потом подключай UI.
 
-## Product Invariants
+## Что Считается Правильным Направлением
 
-- Guest-first behavior must remain intact. Do not make auth mandatory for core track, lyrics, analysis, or study flows unless explicitly requested.
-- Treat `cantolex-monorepo` as the architectural reference, not as a source of copy-paste coupling. Reuse ideas and boundaries, not accidental complexity.
+- Перевод и разбор песни должны идти через внешний API.
+- Общий смысл песни должен жить внутри structured lecture / explanation flow, а не в отдельном meaning endpoint.
+- Пользовательский UI не должен содержать Gemini-specific терминологию.
 
-## Cloudflare Notes
+## Документация Для Агента
 
-- Target Cloudflare-compatible patterns for future backend work: HTTP `fetch`, Worker-safe APIs, secrets outside client code, and deployment via Wrangler.
-- Prefer documenting future Worker endpoints and contracts in repo docs before asking AI Studio to implement large refactors.
+- `docs/worker-api-contract.md` — текущий клиентский контракт внешнего API.
+- Если задача длинная и требует локальных инструкций именно для этого репозитория, можно добавлять новые документы в `docs/`.
+- Если документ больше не помогает выполнять текущие задачи агента, его лучше удалить или сократить.

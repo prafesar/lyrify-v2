@@ -72,7 +72,7 @@ describe('Track Language Cascade & Dominant Language Detection Tests', () => {
 
       // Majority: 'fr' (3 occurrences) vs 'en' (1 occurrence because '  ' is empty)
       const dominant = detectDominantLanguage(lines);
-      expect(dominant).toBe('French');
+      expect(dominant).toBe('fr');
     });
 
     it('should return null or fallback correctly if no lines with valid languages', () => {
@@ -123,7 +123,7 @@ describe('Track Language Cascade & Dominant Language Detection Tests', () => {
       // Cascade update French (fr) -> Spanish (es)
       const updatedTrack = cascadeTrackLanguageUpdate(initialTrack, 'French', 'Spanish');
 
-      expect(updatedTrack.sourceLanguage).toBe('Spanish');
+      expect(updatedTrack.sourceLanguage).toBe('es');
 
       // Matching line language fr -> es
       expect(updatedTrack.lines[0].language).toBe('es');
@@ -196,19 +196,19 @@ describe('Track Language Cascade & Dominant Language Detection Tests', () => {
 
       // Card 1 (French display name) -> Spanish
       const card1 = cards.find(c => c.text === 'Chanter' && c.trackId === trackId);
-      expect(card1?.sourceLanguage).toBe('Spanish');
+      expect(card1?.sourceLanguage).toBe('es');
 
       // Card 2 (fr code name) -> Spanish
       const card2 = cards.find(c => c.text === 'Danser' && c.trackId === trackId);
-      expect(card2?.sourceLanguage).toBe('Spanish');
+      expect(card2?.sourceLanguage).toBe('es');
 
       // Card 3 (English non-matching) -> Unchanged English
       const card3 = cards.find(c => c.text === 'Sing' && c.trackId === trackId);
-      expect(card3?.sourceLanguage).toBe('English');
+      expect(card3?.sourceLanguage).toBe('en');
 
       // Card 4 (different track, matching language) -> Unchanged French
       const card4 = cards.find(c => c.trackId === 'different-track');
-      expect(card4?.sourceLanguage).toBe('French');
+      expect(card4?.sourceLanguage).toBe('fr');
     });
   });
 
@@ -234,8 +234,8 @@ describe('Track Language Cascade & Dominant Language Detection Tests', () => {
       // Verify they are stored as French
       let favorites = await sqliteService.getFavorites();
       let recents = sqliteService.getRecentTracks();
-      expect(favorites.find(t => String(t.id) === trackId)?.sourceLanguage).toBe('French');
-      expect(recents.find(t => String(t.id || t.trackId) === trackId)?.sourceLanguage).toBe('French');
+      expect(favorites.find(t => String(t.id) === trackId)?.sourceLanguage).toBe('fr');
+      expect(recents.find(t => String(t.id || t.trackId) === trackId)?.sourceLanguage).toBe('fr');
 
       // 2. Simulate User manual language change
       const updatedTrack = cascadeTrackLanguageUpdate(initialTrack, 'French', 'Spanish');
@@ -244,8 +244,8 @@ describe('Track Language Cascade & Dominant Language Detection Tests', () => {
       // 3. Verify they are correctly updated to Spanish
       favorites = await sqliteService.getFavorites();
       recents = sqliteService.getRecentTracks();
-      expect(favorites.find(t => String(t.id) === trackId)?.sourceLanguage).toBe('Spanish');
-      expect(recents.find(t => String(t.id || t.trackId) === trackId)?.sourceLanguage).toBe('Spanish');
+      expect(favorites.find(t => String(t.id) === trackId)?.sourceLanguage).toBe('es');
+      expect(recents.find(t => String(t.id || t.trackId) === trackId)?.sourceLanguage).toBe('es');
     });
   });
 });

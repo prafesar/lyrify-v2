@@ -1,6 +1,6 @@
 import { get, set } from 'idb-keyval';
 import { FSRS, generatorParameters, createEmptyCard, Rating, Card } from 'ts-fsrs';
-import { sameLanguage } from '../lib/languages';
+import { sameLanguage, normalizeLanguageCode } from '../lib/languages';
 
 export type PhraseStatus = 'new' | 'learning' | 'known';
 
@@ -48,7 +48,21 @@ const STORAGE_KEY = 'lyrify_flashcards';
 
 async function getAllCards(): Promise<Map<string, Flashcard>> {
   const cards = await get(STORAGE_KEY);
-  return cards ? new Map(Object.entries(cards)) : new Map();
+  const map = cards ? new Map<string, Flashcard>(Object.entries(cards)) : new Map<string, Flashcard>();
+  let needsSave = false;
+  for (const card of map.values()) {
+    if (card.sourceLanguage) {
+      const normalized = normalizeLanguageCode(card.sourceLanguage);
+      if (normalized && normalized !== card.sourceLanguage) {
+        card.sourceLanguage = normalized;
+        needsSave = true;
+      }
+    }
+  }
+  if (needsSave) {
+    await saveAllCards(map);
+  }
+  return map;
 }
 
 async function saveAllCards(cards: Map<string, Flashcard>) {
@@ -102,7 +116,7 @@ export async function addPhraseToStudy(
     trackId: phraseData.trackId,
     trackTitle: phraseData.trackTitle,
     artist: phraseData.artist,
-    sourceLanguage: phraseData.sourceLanguage,
+    sourceLanguage: phraseData.sourceLanguage ? (normalizeLanguageCode(phraseData.sourceLanguage) || phraseData.sourceLanguage) : undefined,
     status,
     due: emptyCard.due,
     state: emptyCard.state,
@@ -209,7 +223,7 @@ export async function updateTrackCardsLanguage(trackId: string, oldLanguage: str
     if (card.trackId === trackId) {
       const matches = sameLanguage(card.sourceLanguage, oldLanguage);
       if (matches) {
-        card.sourceLanguage = newLanguage;
+        card.sourceLanguage = normalizeLanguageCode(newLanguage) || newLanguage;
         card.updatedAt = new Date();
         modified = true;
       }

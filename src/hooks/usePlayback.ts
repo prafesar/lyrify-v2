@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { type TrackLyricsData } from "../services/musicService";
 import { type Flashcard, userPreferencesRepository } from "../application";
 import { normalizePhraseKey } from "../services/cardService";
-import { SUPPORTED_LANGUAGES, getLocaleByName } from "../lib/languages";
+import { SUPPORTED_LANGUAGES, getLocale } from "../lib/languages";
 
 export interface UsePlaybackResult {
   activeLineIndex: number | null;
@@ -191,16 +191,7 @@ export function usePlayback(
       const utterance = new SpeechSynthesisUtterance(text);
       currentUtteranceRef.current = utterance;
 
-      if (lang) {
-        const norm = lang.toLowerCase().trim();
-        const found = SUPPORTED_LANGUAGES.find(
-          l => l.code.toLowerCase() === norm || l.name.toLowerCase() === norm || l.locale.toLowerCase() === norm
-        );
-        utterance.lang = found ? found.locale : getLocaleByName(currentTrack?.sourceLanguage || "English");
-      } else {
-        const sourceLang = currentTrack?.sourceLanguage || "English";
-        utterance.lang = getLocaleByName(sourceLang);
-      }
+      utterance.lang = getLocale(lang || currentTrack?.sourceLanguage || "English");
       utterance.rate = 0.95;
 
       if (onEnd) {

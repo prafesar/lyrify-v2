@@ -5,7 +5,7 @@ import { Track, TrackLyricsData } from '../services/musicService';
 import { ResumeViewModel } from '../services/resumeService';
 import { DailyProgressSummary } from '../application';
 import { shouldShowOnboarding } from '../services/onboardingService';
-import { SUPPORTED_LANGUAGES } from '../lib/languages';
+import { SUPPORTED_LANGUAGES, getLanguageByCode, normalizeLanguageCode } from '../lib/languages';
 import { OnboardingHero } from './OnboardingHero';
 import { useTranslation } from '../lib/i18n';
 
@@ -79,11 +79,11 @@ export const TracksHomeShell: React.FC<TracksHomeShellProps> = ({
   const [communityDifficultyFilter, setCommunityDifficultyFilter] = useState<string>('All');
   const { t, uiLanguage } = useTranslation();
 
-  const toggleLang = (langName: string) => {
+  const toggleLang = (langCode: string) => {
     setSelectedLanguages(prev => 
-      prev.includes(langName)
-        ? prev.filter(l => l !== langName)
-        : [...prev, langName]
+      prev.includes(langCode)
+        ? prev.filter(l => l !== langCode)
+        : [...prev, langCode]
     );
   };
 
@@ -91,11 +91,12 @@ export const TracksHomeShell: React.FC<TracksHomeShellProps> = ({
     setSelectedLanguages([]);
   };
 
-  const isLangSelected = (langName: string) => selectedLanguages.includes(langName);
+  const isLangSelected = (langCode: string) => selectedLanguages.includes(langCode);
 
   // Filter community tracks
   const filteredCommunityTracks = dynamicTracks.filter(t => {
-    const langMatch = selectedLanguages.length === 0 || selectedLanguages.includes(t.sourceLanguage);
+    const tCode = normalizeLanguageCode(t.sourceLanguage) || t.sourceLanguage;
+    const langMatch = selectedLanguages.length === 0 || selectedLanguages.includes(tCode);
     const diffMatch = communityDifficultyFilter === "All" || (t.difficulty && t.difficulty.toLowerCase().includes(communityDifficultyFilter.toLowerCase()));
     return langMatch && diffMatch;
   });
@@ -246,7 +247,7 @@ export const TracksHomeShell: React.FC<TracksHomeShellProps> = ({
                       {selectedLanguages.length === 0 
                         ? t('common.all') 
                         : selectedLanguages.length === 1 
-                        ? selectedLanguages[0] 
+                        ? (getLanguageByCode(selectedLanguages[0])?.displayName || selectedLanguages[0]) 
                         : t('tracks.countSelected', { count: selectedLanguages.length })}
                     </span>
                     <ChevronDown 
@@ -293,12 +294,12 @@ export const TracksHomeShell: React.FC<TracksHomeShellProps> = ({
                 </div>
                 <div className="flex flex-wrap gap-1.5 mt-1">
                   {SUPPORTED_LANGUAGES.map((lang) => {
-                    const active = isLangSelected(lang.name);
+                    const active = isLangSelected(lang.code);
                     return (
                       <button
-                        key={lang.name}
+                        key={lang.code}
                         type="button"
-                        onClick={() => toggleLang(lang.name)}
+                        onClick={() => toggleLang(lang.code)}
                         className={`px-3 py-1.5 rounded-full text-[10px] font-bold tracking-tight transition-all flex items-center gap-1 border cursor-pointer select-none ${
                           active
                             ? 'bg-app-accent text-white border-app-accent shadow-sm'
@@ -306,7 +307,7 @@ export const TracksHomeShell: React.FC<TracksHomeShellProps> = ({
                         }`}
                       >
                         {active && <Check size={10} strokeWidth={3} />}
-                        <span>{lang.name}</span>
+                        <span>{lang.displayName}</span>
                       </button>
                     );
                   })}
