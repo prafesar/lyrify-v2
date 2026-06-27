@@ -98,8 +98,18 @@ export class WorkerAIAdapter implements AiPort {
     targetLanguage: string,
     metadata?: Partial<TrackMetadata>
   ): Promise<string> {
-    const res = await this.fetchTrackMeaning(lyrics, { title, artists: [artist], targetLanguage });
-    return res.meaning;
+    try {
+      const preparedInput = prepareLyricsInput(
+        title,
+        [artist],
+        lyrics,
+        targetLanguage || "English"
+      );
+      const blocks = await this.fetchStructuredLecture(preparedInput);
+      return extractTrackMeaning(blocks) || "Track context & breakdown available in study lecture.";
+    } catch (e) {
+      return "Analysis available in Study Lecture.";
+    }
   }
 
   async translateLyrics(lyrics: string | PreparedLyricsInput, targetLanguage?: string): Promise<string> {

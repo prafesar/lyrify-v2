@@ -144,7 +144,7 @@ describe("TrackSessionFacade Unit Tests", () => {
 
       vi.mocked(aiClient.computeTrackKey).mockResolvedValue("track-coldplay-yellow");
       vi.mocked(aiClient.getLineTranslations).mockResolvedValue(mockTranslations);
-      vi.mocked(aiClient.saveTrackToSharedCache).mockResolvedValue();
+      vi.mocked(aiClient.saveTrackToSharedCache).mockResolvedValue(undefined);
 
       const updated = await trackSessionFacade.analyzeSongMeaningAndTranslations(initialTrack, "Spanish");
 
@@ -175,7 +175,7 @@ describe("TrackSessionFacade Unit Tests", () => {
 
       vi.mocked(aiClient.computeTrackKey).mockResolvedValue("track-adele-hello");
       vi.mocked(aiClient.getPhraseAnalysis).mockResolvedValue(mockPhrases);
-      vi.mocked(aiClient.saveTrackToSharedCache).mockResolvedValue();
+      vi.mocked(aiClient.saveTrackToSharedCache).mockResolvedValue(undefined);
 
       const result = await trackSessionFacade.runDeepPhraseAnalysis(track, "Russian");
 
@@ -213,7 +213,7 @@ describe("TrackSessionFacade Unit Tests", () => {
 
       vi.mocked(aiClient.computeTrackKey).mockResolvedValue("track-adele-hello");
       vi.mocked(aiClient.getPhraseAnalysis).mockResolvedValue(mockPhrases);
-      vi.mocked(aiClient.saveTrackToSharedCache).mockResolvedValue();
+      vi.mocked(aiClient.saveTrackToSharedCache).mockResolvedValue(undefined);
 
       const result = await trackSessionFacade.runDeepPhraseAnalysis(track, "Russian");
 
@@ -242,7 +242,7 @@ describe("TrackSessionFacade Unit Tests", () => {
 
       vi.mocked(aiClient.computeTrackKey).mockResolvedValue("track-adele-hello");
       vi.mocked(aiClient.getPhraseAnalysis).mockResolvedValue(mockPhrases);
-      vi.mocked(aiClient.saveTrackToSharedCache).mockResolvedValue();
+      vi.mocked(aiClient.saveTrackToSharedCache).mockResolvedValue(undefined);
 
       const result = await trackSessionFacade.runDeepPhraseAnalysis(track, "Russian");
 

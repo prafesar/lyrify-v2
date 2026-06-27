@@ -12,7 +12,7 @@ import { addPhraseToStudy, getCards, updateTrackCardsLanguage } from '../service
 if (typeof globalThis.crypto === 'undefined') {
   globalThis.crypto = {} as any;
 }
-globalThis.crypto.randomUUID = () => 'test-uuid-' + Math.random().toString(36).substr(2, 9);
+globalThis.crypto.randomUUID = () => ('test-uuid-' + Math.random().toString(36).substr(2, 9)) as `${string}-${string}-${string}-${string}-${string}`;
 
 // Mock idb-keyval so we can test actual indexedDB-backed cards
 const mockInMemoryStore = new Map<string, any>();

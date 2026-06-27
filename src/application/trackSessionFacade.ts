@@ -231,7 +231,7 @@ export class TrackSessionFacade {
             ru: meaning,
             pl: meaning
           },
-          difficulty: trackData.difficulty || "medium",
+          difficulty: trackData.difficulty || "intermediate",
           promptVersion: ANALYSIS_PROMPT_VERSION,
           translationPromptVersion: TRANSLATION_PROMPT_VERSION,
           sourceLanguage: detectDominantLanguage(updatedLines) || trackData.sourceLanguage || "English",
@@ -369,7 +369,7 @@ export class TrackSessionFacade {
       sourceLanguage: track.sourceLanguage || "English",
       meaning: "",
       meanings: { en: "", es: "", ru: "", pl: "" },
-      difficulty: "medium",
+      difficulty: "intermediate",
       authors: metadataResult?.authors,
       lyricSource: "Manual Entry",
       lines: this.lyricsProvider.splitLyricsIntoLines(track.trackId, manualLyrics),
@@ -393,7 +393,7 @@ export class TrackSessionFacade {
       artist: track.artist,
       coverUrl: track.coverUrl || "",
       album: track.album || "",
-      difficulty: "medium"
+      difficulty: "intermediate"
     } as Track);
 
     if (callbacks.onBackgroundComplete) {
