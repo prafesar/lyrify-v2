@@ -1,3 +1,4 @@
+import { normalizeTrackTitle, normalizeArtists } from "./lyricsPreprocessor";
 import { userPreferencesRepository } from "../application/adapters/browserUserDataRepository";
 
 export interface ServerCacheLookupResult {
@@ -14,12 +15,11 @@ export interface ServerCacheLookupResult {
   lectureBlocks: any[] | null;
 }
 
-export function normalizeString(str: string): string {
+export function normalizeCacheKeyString(str: string): string {
   return (str || '')
-    .trim()
     .toLowerCase()
-    .replace(/\s+/g, ' ')
-    .replace(/[^\p{L}\p{N}\s']/gu, '');
+    .trim()
+    .replace(/[^\w\s]/g, '');
 }
 
 export async function computeSHA256(message: string): Promise<string> {
@@ -31,14 +31,13 @@ export async function computeSHA256(message: string): Promise<string> {
 }
 
 export async function computeLyricsKey(title: string, artists: string[]): Promise<string> {
-  const normTitle = normalizeString(title);
-  const artistsArray = Array.isArray(artists) ? artists : [artists as any as string];
-  const normArtists = artistsArray
-    .map(a => normalizeString(a))
-    .filter(Boolean)
-    .sort();
-  
-  const combined = [normTitle, ...normArtists].join('|');
+  const cleanTitle = normalizeTrackTitle(title);
+  const cleanArtists = normalizeArtists(artists);
+
+  const normalizedTitle = normalizeCacheKeyString(cleanTitle);
+  const normalizedArtists = cleanArtists.map(normalizeCacheKeyString).filter(Boolean).sort();
+
+  const combined = [normalizedTitle, ...normalizedArtists].join('|');
   return await computeSHA256(combined);
 }
 

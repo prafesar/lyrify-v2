@@ -23,8 +23,7 @@ describe("ServerCacheLookupService Tests", () => {
   describe("computeLyricsKey", () => {
     it("should compute a normalized SHA-256 lyricsKey correctly", async () => {
       const key = await computeLyricsKey("Let It Be (Remastered 2011)", ["The Beatles", ""]);
-      expect(key).toHaveLength(64);
-      expect(key).toMatch(/^[0-9a-f]{64}$/);
+      expect(key).toBe("a4faa0be74d15df446393928d3bad8daacae91657a52f6158ad7b9906838bb58");
     });
   });
 
