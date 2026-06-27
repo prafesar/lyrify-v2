@@ -771,7 +771,7 @@ export function useTrackSession(): UseTrackSessionResult {
       // Prepare payload
       const input = buildStarredLinesAnalysisInput(currentTrack);
 
-      // Call Gemini Targeted Analysis API
+      // Call CantoLex Targeted Analysis API
       const result = await aiClient.generateTargetedAnalysis(
         input.title,
         input.artist,

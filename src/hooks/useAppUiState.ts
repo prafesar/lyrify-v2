@@ -174,7 +174,7 @@ Explanation:
 ${result.explanation}`);
     } catch (err) {
       console.error("Failed to explain phrase:", err);
-      alert("Failed to fetch explanations from Gemini.");
+      alert("Failed to fetch explanations from CantoLex AI.");
     } finally {
       setIsExplaining(false);
     }
