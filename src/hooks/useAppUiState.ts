@@ -5,6 +5,7 @@ import { normalizePhraseKey } from "../services/cardService";
 import { userPreferencesRepository, aiClient } from "../application";
 import { isOnboardingCompleted } from "../services/onboardingService";
 import { NavigationCoordinator } from "../services/navigationService";
+import { normalizeLanguageCode } from "../lib/languages";
 
 export interface EditingLineInfo {
   index: number;
@@ -34,9 +35,15 @@ const explainPhraseStructured = (phrase: string, targetLanguage: string) =>
 export function useAppUiState() {
   const [onboardingCompleted, setOnboardingCompleted] = useState(() => isOnboardingCompleted());
   const [activeTab, setActiveTab] = useState<"preview" | "lyrics" | "cards" | "analysis">("lyrics");
-  const [targetLanguage, setTargetLanguage] = useState(
-    () => userPreferencesRepository.getPreference("lyrify_target_lang", "Russian")
+  const [targetLanguage, setTargetLanguageInternal] = useState(
+    () => normalizeLanguageCode(userPreferencesRepository.getPreference("lyrify_target_lang", "Russian")) || "ru"
   );
+
+  const setTargetLanguage = useCallback((lang: string) => {
+    const code = normalizeLanguageCode(lang) || lang;
+    setTargetLanguageInternal(code);
+    userPreferencesRepository.setPreference("lyrify_target_lang", code);
+  }, []);
   const [theme, setTheme] = useState(
     () => userPreferencesRepository.getPreference("lyrify_theme", "light")
   );

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { History, ChevronRight, Search, Globe, Music, ChevronDown, Check, X, MoreVertical, Disc } from 'lucide-react';
 import { Track, TrackLyricsData } from '../services/musicService';
@@ -78,6 +78,34 @@ export const TracksHomeShell: React.FC<TracksHomeShellProps> = ({
   const [isLangPanelOpen, setIsLangPanelOpen] = useState<boolean>(false);
   const [communityDifficultyFilter, setCommunityDifficultyFilter] = useState<string>('All');
   const { t, uiLanguage } = useTranslation();
+
+  const filterLanguages = useMemo(() => {
+    const codes = new Set<string>();
+    dynamicTracks.forEach(track => {
+      const code = normalizeLanguageCode(track.sourceLanguage);
+      if (code) {
+        codes.add(code);
+      } else if (track.sourceLanguage) {
+        codes.add(track.sourceLanguage.trim().toLowerCase());
+      }
+    });
+
+    if (codes.size === 0) {
+      return SUPPORTED_LANGUAGES;
+    }
+
+    return Array.from(codes).map(code => {
+      const lang = getLanguageByCode(code);
+      if (lang) return lang;
+      return {
+        code,
+        displayName: code.charAt(0).toUpperCase() + code.slice(1),
+        name: code.charAt(0).toUpperCase() + code.slice(1),
+        locale: 'en-US',
+        resourceLevel: 'experimental' as const
+      };
+    }).sort((a, b) => a.displayName.localeCompare(b.displayName));
+  }, [dynamicTracks]);
 
   const toggleLang = (langCode: string) => {
     setSelectedLanguages(prev => 
@@ -293,7 +321,7 @@ export const TracksHomeShell: React.FC<TracksHomeShellProps> = ({
                   )}
                 </div>
                 <div className="flex flex-wrap gap-1.5 mt-1">
-                  {SUPPORTED_LANGUAGES.map((lang) => {
+                  {filterLanguages.map((lang) => {
                     const active = isLangSelected(lang.code);
                     return (
                       <button

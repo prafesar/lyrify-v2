@@ -2684,17 +2684,8 @@ export default function App() {
                           {/* Control panel / Switches */}
                           <div className="flex items-center gap-1 bg-app-card border border-app-card-border rounded-xl p-1 shadow-sm shrink-0 h-10">
                             {(() => {
-                              const srcLangObj = SUPPORTED_LANGUAGES.find(l => 
-                                l.name.toLowerCase() === (currentTrack?.sourceLanguage || "English").toLowerCase() ||
-                                l.code.toLowerCase() === (currentTrack?.sourceLanguage || "English").toLowerCase()
-                              );
-                              const srcLangCode = srcLangObj ? srcLangObj.code : "EN";
-
-                              const targetLangObj = SUPPORTED_LANGUAGES.find(l => 
-                                l.name.toLowerCase() === (targetLanguage || "Russian").toLowerCase() ||
-                                l.code.toLowerCase() === (targetLanguage || "Russian").toLowerCase()
-                              );
-                              const targetLangCode = targetLangObj ? targetLangObj.code : "RU";
+                              const srcLangCode = (normalizeLanguageCode(currentTrack?.sourceLanguage) || "en").toUpperCase();
+                              const targetLangCode = (normalizeLanguageCode(targetLanguage) || "ru").toUpperCase();
 
                               const isSrcActive = lyricsDisplayMode === "lyrics" || lyricsDisplayMode === "both";
                               const isTargetActive = lyricsDisplayMode === "translation" || lyricsDisplayMode === "both";

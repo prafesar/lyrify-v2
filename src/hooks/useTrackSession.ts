@@ -252,7 +252,7 @@ export function useTrackSession(): UseTrackSessionResult {
         trackData = {
           ...trackData,
           lines: mergedLines,
-          sourceLanguage: detectDominantLanguage(mergedLines) || trackData.sourceLanguage || "English",
+          sourceLanguage: getLanguageCode(detectDominantLanguage(mergedLines) || trackData.sourceLanguage),
           translationPromptVersion: TRANSLATION_PROMPT_VERSION,
           processingStatus: { ...trackData.processingStatus, stage2_completed: true },
           preparedLyricsInput: prepareLyricsInput(
@@ -432,7 +432,7 @@ export function useTrackSession(): UseTrackSessionResult {
         trackData = {
           ...trackData,
           lines: mergedLines,
-          sourceLanguage: detectDominantLanguage(mergedLines) || trackData.sourceLanguage || "English",
+          sourceLanguage: getLanguageCode(detectDominantLanguage(mergedLines) || trackData.sourceLanguage),
           translationPromptVersion: TRANSLATION_PROMPT_VERSION,
           processingStatus: { ...trackData.processingStatus, stage2_completed: true },
           preparedLyricsInput: prepareLyricsInput(
@@ -695,7 +695,7 @@ export function useTrackSession(): UseTrackSessionResult {
           ...currentTrack,
           rawLyrics: lyricsData.lyrics,
           source: (lyricsData.source as any) || "Manual",
-          sourceLanguage: currentTrack.sourceLanguage || "English",
+          sourceLanguage: getLanguageCode(currentTrack.sourceLanguage),
           meaning: "",
           meanings: { en: "", es: "", ru: "", pl: "" },
           authors: metadataResult?.authors,
@@ -808,7 +808,7 @@ export function useTrackSession(): UseTrackSessionResult {
 
   const handleSourceLanguageOverride = useCallback(async (newLang: string) => {
     if (!currentTrack) return;
-    const oldLangName = currentTrack.sourceLanguage || "English";
+    const oldLangName = getLanguageCode(currentTrack.sourceLanguage);
     
     const updatedTrack = cascadeTrackLanguageUpdate(currentTrack, oldLangName, newLang);
 

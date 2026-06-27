@@ -257,7 +257,7 @@ export function usePlayback(
     }, 8000);
 
     setIsListeningForSpeech(true);
-    recognitionRef.current.lang = getLocaleByName(currentTrack?.sourceLanguage || "English");
+    recognitionRef.current.lang = getLocale(currentTrack?.sourceLanguage || "English");
 
     recognitionRef.current.onresult = (event: any) => {
       clearTimeout(timeoutId);

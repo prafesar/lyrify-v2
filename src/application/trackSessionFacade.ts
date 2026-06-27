@@ -95,7 +95,7 @@ export class TrackSessionFacade {
       appleMusicUrl: appleMusicUrl,
       rawLyrics: "",
       source: null,
-      sourceLanguage: track.sourceLanguage || "English",
+      sourceLanguage: getLanguageCode(track.sourceLanguage),
       meaning: track.meaning,
       meanings: track.meanings,
       difficulty: track.difficulty,
@@ -234,7 +234,7 @@ export class TrackSessionFacade {
           difficulty: trackData.difficulty || "intermediate",
           promptVersion: ANALYSIS_PROMPT_VERSION,
           translationPromptVersion: TRANSLATION_PROMPT_VERSION,
-          sourceLanguage: detectDominantLanguage(updatedLines) || trackData.sourceLanguage || "English",
+          sourceLanguage: getLanguageCode(detectDominantLanguage(updatedLines) || trackData.sourceLanguage),
           lines: updatedLines,
           processingStatus: { ...trackData.processingStatus, stage2_completed: true }
         };
@@ -263,7 +263,7 @@ export class TrackSessionFacade {
         ...trackData,
         translationPromptVersion: TRANSLATION_PROMPT_VERSION,
         lines: updatedLines,
-        sourceLanguage: detectDominantLanguage(updatedLines) || trackData.sourceLanguage || "English"
+        sourceLanguage: getLanguageCode(detectDominantLanguage(updatedLines) || trackData.sourceLanguage)
       };
     }
 
@@ -366,7 +366,7 @@ export class TrackSessionFacade {
       ...track,
       rawLyrics: manualLyrics,
       source: "Manual",
-      sourceLanguage: track.sourceLanguage || "English",
+      sourceLanguage: getLanguageCode(track.sourceLanguage),
       meaning: "",
       meanings: { en: "", es: "", ru: "", pl: "" },
       difficulty: "intermediate",
@@ -437,7 +437,7 @@ export class TrackSessionFacade {
       ...updatedTrackPre,
       translationPromptVersion: TRANSLATION_PROMPT_VERSION,
       lines: updatedLines,
-      sourceLanguage: detectDominantLanguage(updatedLines) || updatedTrackPre.sourceLanguage || "English"
+      sourceLanguage: getLanguageCode(detectDominantLanguage(updatedLines) || updatedTrackPre.sourceLanguage)
     }, targetLanguage);
 
     this.trackCacheRepository.saveTrackData(updatedTrack.trackId, updatedTrack);

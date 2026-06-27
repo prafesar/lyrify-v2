@@ -42,6 +42,8 @@ describe('Track Language Cascade & Dominant Language Detection Tests', () => {
       expect(normalizeLanguageCode('en')).toBe('en');
       expect(normalizeLanguageCode('French')).toBe('fr');
       expect(normalizeLanguageCode('FR')).toBe('fr');
+      expect(normalizeLanguageCode('Lithuanian')).toBe('lt');
+      expect(normalizeLanguageCode('lt')).toBe('lt');
       expect(normalizeLanguageCode('invalid-language-code-value')).toBeNull();
     });
 
@@ -50,12 +52,14 @@ describe('Track Language Cascade & Dominant Language Detection Tests', () => {
       expect(getLanguageDisplayName('FR')).toBe('French');
       expect(getLanguageDisplayName('es')).toBe('Spanish');
       expect(getLanguageDisplayName('ru')).toBe('Russian');
+      expect(getLanguageDisplayName('lt')).toBe('Lithuanian');
     });
 
     it('should correctly identify if same language is used', () => {
       expect(sameLanguage('English', 'en')).toBe(true);
       expect(sameLanguage('en', 'EN')).toBe(true);
       expect(sameLanguage('French', 'fr')).toBe(true);
+      expect(sameLanguage('Lithuanian', 'lt')).toBe(true);
       expect(sameLanguage('English', 'fr')).toBe(false);
     });
 
@@ -221,6 +225,7 @@ describe('Track Language Cascade & Dominant Language Detection Tests', () => {
         title: 'French Chanson',
         artist: 'French Artist',
         album: 'French Album',
+        coverUrl: '',
         sourceLanguage: 'French',
         lines: [
           { original: 'Bonjour', language: 'fr' }
