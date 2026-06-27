@@ -1,0 +1,593 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    
+    <!-- Primary SEO Metadata -->
+    <title>Lyrify - Learn Languages through Music & Song Lyrics</title>
+    <meta name="description" content="Turn your favorite songs into personalized language lessons. Study translations, slang, and cultural context, master words with SRS flashcards, and perfect pronunciation." />
+    <meta name="keywords" content="learn languages, study spanish, learn french, language music, song lyrics translation, SRS flashcards, shadowing practice, language learning app" />
+    
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://cantolex.app/intro" />
+    <meta property="og:title" content="Lyrify - Learn Languages through Music & Song Lyrics" />
+    <meta property="og:description" content="Turn song lyrics into interactive language lessons with AI commentary, SRS vocabulary flashcards, and instant shadowing feedback." />
+    <meta property="og:image" content="/og-image.png" />
+
+    <!-- Twitter -->
+    <meta property="twitter:card" content="summary_large_image" />
+    <meta property="twitter:title" content="Lyrify - Learn Languages through Music & Song Lyrics" />
+    <meta property="twitter:description" content="Turn song lyrics into interactive language lessons with AI commentary, SRS vocabulary flashcards, and instant shadowing feedback." />
+
+    <!-- Import App CSS (Tailwind CSS) -->
+    <link rel="stylesheet" href="/src/index.css" />
+  </head>
+  <body class="bg-gray-50 text-gray-900 font-sans selection:bg-indigo-500 selection:text-white">
+    <!-- Header -->
+    <header class="sticky top-0 z-50 backdrop-blur-md bg-white/80 border-b border-gray-100 transition-all duration-300">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+        <!-- Logo -->
+        <a href="/" class="flex items-center gap-2 group">
+          <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-600 to-indigo-500 flex items-center justify-center shadow-md shadow-indigo-100 group-hover:scale-105 transition-all">
+            <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+            </svg>
+          </div>
+          <span class="text-xl font-bold tracking-tight bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">Lyrify</span>
+        </a>
+
+        <!-- Desktop Navigation -->
+        <nav class="hidden md:flex items-center gap-8 text-sm font-medium text-gray-600">
+          <a href="#why-music" class="hover:text-indigo-600 transition-colors">Why Music</a>
+          <a href="#features" class="hover:text-indigo-600 transition-colors">Features</a>
+          <a href="#how-it-works" class="hover:text-indigo-600 transition-colors">How It Works</a>
+          <a href="#faq" class="hover:text-indigo-600 transition-colors">FAQ</a>
+        </nav>
+
+        <!-- CTA -->
+        <div class="flex items-center gap-4">
+          <a href="/" class="hidden sm:inline-flex text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors">Sign In</a>
+          <a href="/" class="inline-flex items-center justify-center px-4 py-2 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-500 rounded-xl shadow-sm hover:shadow-md active:scale-95 transition-all duration-200">
+            Open App
+          </a>
+        </div>
+      </div>
+    </header>
+
+    <!-- Hero Section -->
+    <section class="relative overflow-hidden pt-12 pb-20 lg:pt-20 lg:pb-32 bg-gradient-to-b from-indigo-50/40 via-white to-gray-50">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-8 items-center">
+          
+          <!-- Hero Text -->
+          <div class="lg:col-span-7 space-y-8 text-center lg:text-left">
+            <div class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-indigo-50 border border-indigo-100 text-xs font-semibold text-indigo-700 uppercase tracking-wider">
+              <span>🎵</span> Language Learning Through Songs
+            </div>
+            
+            <h1 class="text-4xl sm:text-5xl lg:text-6xl font-black tracking-tight text-gray-900 leading-tight">
+              Master Languages <br />
+              <span class="bg-gradient-to-r from-indigo-600 via-violet-600 to-indigo-500 bg-clip-text text-transparent">Through the Power of Music</span>
+            </h1>
+            
+            <p class="text-lg sm:text-xl text-gray-600 font-normal leading-relaxed max-w-2xl mx-auto lg:mx-0">
+              Turn your favorite songs into personalized language lessons. Translate lyrics line-by-line, understand cultural slang, build custom flashcards, and perfect your accent with real-time shadowing feedback.
+            </p>
+
+            <div class="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-4">
+              <a href="/" class="w-full sm:w-auto inline-flex items-center justify-center px-8 py-4 text-base font-bold text-white bg-indigo-600 hover:bg-indigo-500 rounded-2xl shadow-lg hover:shadow-xl shadow-indigo-200 hover:-translate-y-0.5 active:scale-95 transition-all duration-200">
+                Start Studying For Free
+                <svg class="w-5 h-5 ml-2 -mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                </svg>
+              </a>
+              <a href="#features" class="w-full sm:w-auto inline-flex items-center justify-center px-8 py-4 text-base font-bold text-gray-700 bg-white hover:bg-gray-50 border border-gray-200 rounded-2xl shadow-sm hover:shadow active:scale-95 transition-all duration-200">
+                See Features
+              </a>
+            </div>
+
+            <!-- Small Stats/Trust -->
+            <div class="grid grid-cols-3 gap-4 pt-4 max-w-md mx-auto lg:mx-0 text-left border-t border-gray-100">
+              <div>
+                <p class="text-2xl sm:text-3xl font-extrabold text-indigo-600">40+</p>
+                <p class="text-xs font-medium text-gray-500 mt-0.5 uppercase tracking-wider">Languages</p>
+              </div>
+              <div>
+                <p class="text-2xl sm:text-3xl font-extrabold text-indigo-600">100%</p>
+                <p class="text-xs font-medium text-gray-500 mt-0.5 uppercase tracking-wider">Guest Friendly</p>
+              </div>
+              <div>
+                <p class="text-2xl sm:text-3xl font-extrabold text-indigo-600">AI</p>
+                <p class="text-xs font-medium text-gray-500 mt-0.5 uppercase tracking-wider">Powered Lessons</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Hero Graphic/Interactive Mockup -->
+          <div class="lg:col-span-5 relative">
+            <div class="relative mx-auto max-w-md lg:max-w-none">
+              <!-- Decorative background glow -->
+              <div class="absolute -inset-4 bg-gradient-to-r from-indigo-500 to-violet-500 rounded-3xl blur-2xl opacity-10 animate-pulse"></div>
+              
+              <!-- Mockup Container -->
+              <div class="relative bg-slate-900 text-white rounded-3xl shadow-2xl border border-slate-800 overflow-hidden font-mono text-xs">
+                <!-- Top Status Bar -->
+                <div class="px-4 py-3 bg-slate-950 border-b border-slate-800 flex items-center justify-between">
+                  <div class="flex items-center gap-1.5">
+                    <span class="w-3 h-3 rounded-full bg-red-500"></span>
+                    <span class="w-3 h-3 rounded-full bg-yellow-500"></span>
+                    <span class="w-3 h-3 rounded-full bg-green-500"></span>
+                  </div>
+                  <div class="text-slate-400 font-semibold text-[10px] tracking-wide uppercase">Lyrify Player</div>
+                  <div class="w-6"></div>
+                </div>
+
+                <!-- Lyric Interface Mockup -->
+                <div class="p-6 space-y-6">
+                  <!-- Song title card -->
+                  <div class="flex items-center gap-4 bg-slate-800/40 p-3 rounded-xl border border-slate-800">
+                    <div class="w-10 h-10 rounded-lg bg-indigo-600 flex items-center justify-center font-bold text-white shadow">
+                      ♫
+                    </div>
+                    <div>
+                      <h4 class="font-bold text-white text-sm">Cielito Lindo</h4>
+                      <p class="text-[10px] text-slate-400">Spanish • Traditional Folk</p>
+                    </div>
+                  </div>
+
+                  <!-- Dynamic Lyrics Lines -->
+                  <div class="space-y-4">
+                    <!-- Line 1: Studied -->
+                    <div class="space-y-1.5">
+                      <div class="flex items-start gap-2.5">
+                        <span class="text-indigo-400 mt-0.5">▶</span>
+                        <div>
+                          <p class="text-sm font-semibold text-white tracking-wide">De la sierra, morena</p>
+                          <p class="text-xs text-slate-400 italic font-sans">From the dark mountains</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- Line 2: Active / Highlighted -->
+                    <div class="bg-indigo-950/40 border-l-2 border-indigo-500 pl-3 py-2 rounded-r-lg space-y-2">
+                      <div>
+                        <p class="text-sm font-bold text-indigo-300 tracking-wide">Vienen bajando, un par de ojitos negros</p>
+                        <p class="text-xs text-slate-400 italic font-sans mt-0.5">They are coming down, a pair of beautiful dark eyes</p>
+                      </div>
+                      
+                      <!-- AI Commentary Popover -->
+                      <div class="bg-slate-900 border border-indigo-900/60 p-2.5 rounded-lg text-[11px] font-sans text-slate-200 leading-relaxed space-y-1">
+                        <p class="text-indigo-400 font-bold font-mono text-[9px] uppercase tracking-wider">★ AI LINGUISTIC BREAKDOWN</p>
+                        <p><strong class="text-white">vienen bajando</strong> — Progressive construction (coming down). Emphasizes ongoing, active movement.</p>
+                        <p><strong class="text-white">ojitos</strong> — Diminutive of <span class="italic">ojos</span> (eyes). In Spanish, <span class="italic">-itos</span> expresses affection and tenderness, not just size.</p>
+                      </div>
+                    </div>
+
+                    <!-- Line 3: Regular -->
+                    <div class="opacity-60 pl-6">
+                      <p class="text-xs text-slate-300">Canta y no llores</p>
+                      <p class="text-[10px] text-slate-500 font-sans italic">Sing and don't cry</p>
+                    </div>
+                  </div>
+
+                  <!-- Interaction Stats -->
+                  <div class="pt-4 border-t border-slate-800 flex items-center justify-between text-slate-400 text-[10px] font-sans">
+                    <div class="flex items-center gap-1">
+                      <span class="text-emerald-500">●</span> Shadowing Accent Score: <strong class="text-emerald-400">94%</strong>
+                    </div>
+                    <button class="px-2.5 py-1 bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 rounded-md font-semibold font-mono text-[9px] hover:bg-indigo-600 hover:text-white transition-all uppercase">
+                      + Save to SRS Deck
+                    </button>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </section>
+
+    <!-- Why Music Section -->
+    <section id="why-music" class="py-20 bg-white">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="max-w-3xl mx-auto text-center space-y-4">
+          <h2 class="text-3xl sm:text-4xl font-extrabold tracking-tight text-gray-900">
+            Why Music is the Ultimate Language Tool
+          </h2>
+          <p class="text-lg text-gray-600">
+            Traditional textbooks teach dry rules. Music teaches the real, living language with emotional memory.
+          </p>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-8 mt-16">
+          <!-- Card 1 -->
+          <div class="p-8 rounded-2xl bg-gray-50 hover:bg-indigo-50/20 hover:shadow-md transition-all duration-300 border border-gray-100 group">
+            <div class="w-12 h-12 rounded-xl bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold text-lg mb-6 group-hover:scale-110 transition-all">
+              🧠
+            </div>
+            <h3 class="text-xl font-bold text-gray-900 mb-3">Activates Rhythmic Memory</h3>
+            <p class="text-gray-600 leading-relaxed">
+              Words set to melody stimulate the brain's audio cortex. You naturally retain vocabulary, pronunciation patterns, and syntax without boring rote memorization.
+            </p>
+          </div>
+
+          <!-- Card 2 -->
+          <div class="p-8 rounded-2xl bg-gray-50 hover:bg-indigo-50/20 hover:shadow-md transition-all duration-300 border border-gray-100 group">
+            <div class="w-12 h-12 rounded-xl bg-violet-100 text-violet-600 flex items-center justify-center font-bold text-lg mb-6 group-hover:scale-110 transition-all">
+              🎭
+            </div>
+            <h3 class="text-xl font-bold text-gray-900 mb-3">Authentic Cultural Slang</h3>
+            <p class="text-gray-600 leading-relaxed">
+              Absorb authentic colloquialisms, idioms, and metaphors straight from the streets, and understand context that literal word-for-word translation tools miss.
+            </p>
+          </div>
+
+          <!-- Card 3 -->
+          <div class="p-8 rounded-2xl bg-gray-50 hover:bg-indigo-50/20 hover:shadow-md transition-all duration-300 border border-gray-100 group">
+            <div class="w-12 h-12 rounded-xl bg-pink-100 text-pink-600 flex items-center justify-center font-bold text-lg mb-6 group-hover:scale-110 transition-all">
+              🗣️
+            </div>
+            <h3 class="text-xl font-bold text-gray-900 mb-3">Flawless Pronunciation</h3>
+            <p class="text-gray-600 leading-relaxed">
+              Perfect your pronunciation using vocal shadowing. Mimicking actual songs naturally trains your mouth muscles, phrasing rhythm, accent, and pitch.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Value Blocks / Key Features -->
+    <section id="features" class="py-20 bg-gray-50 border-y border-gray-100">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        
+        <div class="max-w-3xl mx-auto text-center space-y-4 mb-16">
+          <span class="text-indigo-600 font-bold uppercase tracking-wider text-xs">Features Overview</span>
+          <h2 class="text-3xl sm:text-4xl font-extrabold tracking-tight text-gray-900">
+            Unpack Lyrics with AI-Driven Precision
+          </h2>
+          <p class="text-lg text-gray-600">
+            Lyrify combines cutting-edge AI language analytics with the natural science of musical memory.
+          </p>
+        </div>
+
+        <!-- Feature 1: Interactive Lyric Interface -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center py-8">
+          <div class="lg:col-span-6 space-y-6">
+            <div class="w-10 h-10 rounded-lg bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold">
+              01
+            </div>
+            <h3 class="text-2xl sm:text-3xl font-extrabold text-gray-900 tracking-tight">
+              Interactive Lyrics Player
+            </h3>
+            <p class="text-gray-600 leading-relaxed text-base">
+              Listen to songs and read synchronized lyrics in original and target languages simultaneously. Quickly switch between lyrics display modes (Lyrics Only, Translation Only, or Both side-by-side) to build visual and auditory connections.
+            </p>
+            <ul class="space-y-2 text-sm text-gray-600 font-medium">
+              <li class="flex items-center gap-2">
+                <span class="text-emerald-500">✓</span> High-fidelity line-by-line alignment
+              </li>
+              <li class="flex items-center gap-2">
+                <span class="text-emerald-500">✓</span> Instant word/phrase translation on click
+              </li>
+              <li class="flex items-center gap-2">
+                <span class="text-emerald-500">✓</span> Toggleable translations to test active comprehension
+              </li>
+            </ul>
+          </div>
+          <div class="lg:col-span-6">
+            <div class="aspect-video rounded-2xl bg-white border border-gray-100 shadow-sm p-6 flex flex-col justify-center space-y-4">
+              <div class="space-y-1.5 border-b border-gray-100 pb-4">
+                <div class="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Lyrics Settings</div>
+                <div class="flex items-center justify-between">
+                  <span class="font-bold text-gray-800 text-xs sm:text-sm">Display Mode</span>
+                  <div class="inline-flex bg-gray-100 p-1 rounded-lg text-xs font-semibold">
+                    <span class="px-2.5 py-1 rounded bg-white text-indigo-600 shadow-sm">Both</span>
+                    <span class="px-2.5 py-1 text-gray-500">Original</span>
+                    <span class="px-2.5 py-1 text-gray-500">Translation</span>
+                  </div>
+                </div>
+              </div>
+              <div class="space-y-3">
+                <div class="p-3 bg-indigo-50/50 rounded-xl border border-indigo-100/40">
+                  <span class="text-[10px] font-bold text-indigo-600 block uppercase">ORIGINAL</span>
+                  <p class="text-sm font-bold text-indigo-900">Pardonne-moi pour ce mensonge</p>
+                </div>
+                <div class="p-3 bg-gray-50 rounded-xl border border-gray-100">
+                  <span class="text-[10px] font-bold text-gray-500 block uppercase">TRANSLATION</span>
+                  <p class="text-sm font-semibold text-gray-800">Forgive me for this lie</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Feature 2: Deep AI Explanations -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center py-12 lg:py-20 border-t border-gray-100">
+          <div class="lg:col-span-6 lg:order-2 space-y-6">
+            <div class="w-10 h-10 rounded-lg bg-violet-100 text-violet-600 flex items-center justify-center font-bold">
+              02
+            </div>
+            <h3 class="text-2xl sm:text-3xl font-extrabold text-gray-900 tracking-tight">
+              Deep AI Breakdown & Essays
+            </h3>
+            <p class="text-gray-600 leading-relaxed text-base">
+              Get an instant, customized linguistic breakdown of any track. Powered by Gemini, Lyrify creates detailed articles explaining overall song meaning, critical grammatical formulas, cultural slang background, and vocabulary worksheets.
+            </p>
+            <ul class="space-y-2 text-sm text-gray-600 font-medium">
+              <li class="flex items-center gap-2">
+                <span class="text-emerald-500">✓</span> Slang, idioms, and colloquial context
+              </li>
+              <li class="flex items-center gap-2">
+                <span class="text-emerald-500">✓</span> Choose between Compact (focused) or Rich (exhaustive) essays
+              </li>
+              <li class="flex items-center gap-2">
+                <span class="text-emerald-500">✓</span> Direct dictionary saving from generated lists
+              </li>
+            </ul>
+          </div>
+          <div class="lg:col-span-6 lg:order-1">
+            <div class="rounded-2xl bg-white border border-gray-100 shadow-sm p-6 space-y-4">
+              <div class="flex items-center gap-2 border-b border-gray-100 pb-3">
+                <span class="text-lg">✨</span>
+                <span class="font-bold text-sm text-gray-900">Grammar & Slang Highlights</span>
+              </div>
+              <div class="space-y-3 font-sans text-xs">
+                <div class="p-3 bg-violet-50/50 border border-violet-100 rounded-xl space-y-1">
+                  <span class="font-bold text-violet-700">Je ne regrette rien</span>
+                  <p class="text-gray-600 leading-relaxed">Double negative with <code class="bg-violet-100/60 px-1 py-0.5 rounded text-violet-800 text-[10px]">ne ... rien</code>. Standard written French retains <code class="text-violet-800">ne</code>, whereas spoken French often drops it: <span class="italic font-semibold text-gray-800">"Je regrette rien."</span></p>
+                </div>
+                <div class="p-3 bg-violet-50/50 border border-violet-100 rounded-xl space-y-1">
+                  <span class="font-bold text-violet-700">No hay de qué</span>
+                  <p class="text-gray-600 leading-relaxed">A very common Spanish idiomatic phrase used to respond to "Gracias". Literally means <span class="italic">"there is nothing of what (to thank)"</span>. Equivalent to "Don't mention it".</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Feature 3: Spaced Repetition (SRS) -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center py-8 border-t border-gray-100">
+          <div class="lg:col-span-6 space-y-6">
+            <div class="w-10 h-10 rounded-lg bg-pink-100 text-pink-600 flex items-center justify-center font-bold">
+              03
+            </div>
+            <h3 class="text-2xl sm:text-3xl font-extrabold text-gray-900 tracking-tight">
+              Spaced Repetition (SRS) Flashcards
+            </h3>
+            <p class="text-gray-600 leading-relaxed text-base">
+              Say goodbye to manual card entry. Save any word or grammatical lyric structure directly into your study deck with a single tap. Lyrify runs an industry-standard 5-box Spaced Repetition algorithm (supporting offline persistence) to schedule reviews just as you are about to forget.
+            </p>
+            <ul class="space-y-2 text-sm text-gray-600 font-medium">
+              <li class="flex items-center gap-2">
+                <span class="text-emerald-500">✓</span> Smart scheduling intervals based on box level
+              </li>
+              <li class="flex items-center gap-2">
+                <span class="text-emerald-500">✓</span> Flashcards include the original audio fragment and song context
+              </li>
+              <li class="flex items-center gap-2">
+                <span class="text-emerald-500">✓</span> SQLite / IndexedDB browser local storage ensures fast local-first speed
+              </li>
+            </ul>
+          </div>
+          <div class="lg:col-span-6">
+            <div class="rounded-2xl bg-white border border-gray-100 shadow-sm p-6 flex flex-col justify-center items-center space-y-6">
+              <div class="w-full flex justify-between items-center text-xs font-semibold text-gray-400">
+                <span>BOX 2 • READY TO REVIEW</span>
+                <span>1 of 12</span>
+              </div>
+              
+              <!-- Flashcard Front/Back mockup -->
+              <div class="w-full max-w-sm border border-gray-100 bg-gradient-to-tr from-indigo-50/10 to-indigo-50/50 p-6 rounded-2xl shadow-sm text-center space-y-4">
+                <div class="text-xs font-bold uppercase tracking-widest text-indigo-600">FRANCE • CHANSON</div>
+                <h4 class="text-lg sm:text-xl font-extrabold text-gray-800">"La Vie en Rose"</h4>
+                <p class="text-sm font-semibold text-gray-600 bg-white/80 py-2 px-4 rounded-xl border border-indigo-50">What is the literal meaning of "La Vie en Rose"?</p>
+              </div>
+
+              <!-- Action buttons -->
+              <div class="flex gap-4 w-full max-w-sm">
+                <button class="flex-1 py-3 bg-red-50 text-red-600 border border-red-100 rounded-xl text-xs font-bold hover:bg-red-100 transition-colors">Hard (Reset)</button>
+                <button class="flex-1 py-3 bg-emerald-50 text-emerald-600 border border-emerald-100 rounded-xl text-xs font-bold hover:bg-emerald-100 transition-colors">Easy (Box +1)</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- How It Works (Step-by-Step Scenario) -->
+    <section id="how-it-works" class="py-20 bg-white">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        
+        <div class="max-w-3xl mx-auto text-center space-y-4 mb-20">
+          <span class="text-indigo-600 font-bold uppercase tracking-wider text-xs">Workflow</span>
+          <h2 class="text-3xl sm:text-4xl font-extrabold tracking-tight text-gray-900">
+            How Your Daily Lesson Works
+          </h2>
+          <p class="text-lg text-gray-600">
+            No registration needed. Start your linguistic journey in 4 easy steps.
+          </p>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-8 relative">
+          <!-- Connector line -->
+          <div class="hidden md:block absolute top-16 left-[10%] right-[10%] h-0.5 bg-indigo-100 z-0"></div>
+
+          <!-- Step 1 -->
+          <div class="relative z-10 space-y-4 text-center">
+            <div class="w-12 h-12 rounded-full bg-indigo-600 text-white font-bold text-sm mx-auto flex items-center justify-center border-4 border-white shadow-md">
+              1
+            </div>
+            <h3 class="text-lg font-bold text-gray-900 mt-4">Search a Song</h3>
+            <p class="text-sm text-gray-500 leading-relaxed px-4">
+              Enter any song title or artist, or paste your own lyrics directly in the editor.
+            </p>
+          </div>
+
+          <!-- Step 2 -->
+          <div class="relative z-10 space-y-4 text-center">
+            <div class="w-12 h-12 rounded-full bg-indigo-600 text-white font-bold text-sm mx-auto flex items-center justify-center border-4 border-white shadow-md">
+              2
+            </div>
+            <h3 class="text-lg font-bold text-gray-900 mt-4">Explore AI Translation</h3>
+            <p class="text-sm text-gray-500 leading-relaxed px-4">
+              Study the interactive lyrics side-by-side and read deep AI breakdowns of cultural grammar.
+            </p>
+          </div>
+
+          <!-- Step 3 -->
+          <div class="relative z-10 space-y-4 text-center">
+            <div class="w-12 h-12 rounded-full bg-indigo-600 text-white font-bold text-sm mx-auto flex items-center justify-center border-4 border-white shadow-md">
+              3
+            </div>
+            <h3 class="text-lg font-bold text-gray-900 mt-4">Save Vocabulary</h3>
+            <p class="text-sm text-gray-500 leading-relaxed px-4">
+              Click unfamiliar words/phrases to save them as customized flashcards instantly.
+            </p>
+          </div>
+
+          <!-- Step 4 -->
+          <div class="relative z-10 space-y-4 text-center">
+            <div class="w-12 h-12 rounded-full bg-indigo-600 text-white font-bold text-sm mx-auto flex items-center justify-center border-4 border-white shadow-md">
+              4
+            </div>
+            <h3 class="text-lg font-bold text-gray-900 mt-4">Shadow and Speak</h3>
+            <p class="text-sm text-gray-500 leading-relaxed px-4">
+              Speak lines aloud to get instant AI-powered shadowing scores and pronunciation reviews.
+            </p>
+          </div>
+        </div>
+
+        <div class="text-center mt-16">
+          <a href="/" class="inline-flex items-center justify-center px-8 py-4 text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-500 rounded-xl shadow shadow-indigo-100 active:scale-95 transition-all">
+            Launch Your First Lesson
+          </a>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- FAQ Section -->
+    <section id="faq" class="py-20 bg-gray-50 border-t border-gray-100">
+      <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+        
+        <div class="text-center space-y-4 mb-16">
+          <h2 class="text-3xl font-extrabold tracking-tight text-gray-900">
+            Frequently Asked Questions
+          </h2>
+          <p class="text-lg text-gray-600">
+            Got questions about Lyrify? Here is what you need to know.
+          </p>
+        </div>
+
+        <div class="space-y-4">
+          <!-- FAQ 1 -->
+          <details class="group bg-white rounded-2xl border border-gray-100 p-6 [&_summary::-webkit-details-marker]:hidden transition-all duration-300">
+            <summary class="flex items-center justify-between cursor-pointer focus:outline-none">
+              <span class="text-base sm:text-lg font-bold text-gray-900 pr-4">How does Lyrify help me learn faster than traditional apps?</span>
+              <span class="text-indigo-600 font-bold transition duration-300 group-open:-rotate-180">
+                ▼
+              </span>
+            </summary>
+            <p class="mt-4 text-sm sm:text-base text-gray-600 leading-relaxed pl-1 border-t border-gray-50 pt-3">
+              Music triggers your emotional and rhythmic memory centers, which are distinct from analytical memorization circuits. By linking real-world slang, natural speech rhythms, and authentic melodies to context-aware translation annotations, you absorb vocabulary up to 3 times faster and retain details permanently.
+            </p>
+          </details>
+
+          <!-- FAQ 2 -->
+          <details class="group bg-white rounded-2xl border border-gray-100 p-6 [&_summary::-webkit-details-marker]:hidden transition-all duration-300">
+            <summary class="flex items-center justify-between cursor-pointer focus:outline-none">
+              <span class="text-base sm:text-lg font-bold text-gray-900 pr-4">What languages can I study on Lyrify?</span>
+              <span class="text-indigo-600 font-bold transition duration-300 group-open:-rotate-180">
+                ▼
+              </span>
+            </summary>
+            <p class="mt-4 text-sm sm:text-base text-gray-600 leading-relaxed pl-1 border-t border-gray-50 pt-3">
+              We support over 40 distinct languages! Key languages include Spanish, French, Italian, German, Japanese, Korean, Portuguese, and Chinese, but our AI engine can process experimental rare languages, providing translation layers and parsing lyrics seamlessly.
+            </p>
+          </details>
+
+          <!-- FAQ 3 -->
+          <details class="group bg-white rounded-2xl border border-gray-100 p-6 [&_summary::-webkit-details-marker]:hidden transition-all duration-300">
+            <summary class="flex items-center justify-between cursor-pointer focus:outline-none">
+              <span class="text-base sm:text-lg font-bold text-gray-900 pr-4">Is Lyrify completely free to use?</span>
+              <span class="text-indigo-600 font-bold transition duration-300 group-open:-rotate-180">
+                ▼
+              </span>
+            </summary>
+            <p class="mt-4 text-sm sm:text-base text-gray-600 leading-relaxed pl-1 border-t border-gray-50 pt-3">
+              Yes, 100% free! Lyrify is guest-first by default. All of your saved flashcards, playlists, study sessions, and history are saved locally on your device via sandboxed browser SQLite databases, ensuring absolute data privacy and instantaneous local-first loading.
+            </p>
+          </details>
+
+          <!-- FAQ 4 -->
+          <details class="group bg-white rounded-2xl border border-gray-100 p-6 [&_summary::-webkit-details-marker]:hidden transition-all duration-300">
+            <summary class="flex items-center justify-between cursor-pointer focus:outline-none">
+              <span class="text-base sm:text-lg font-bold text-gray-900 pr-4">Can I analyze my own song lyrics?</span>
+              <span class="text-indigo-600 font-bold transition duration-300 group-open:-rotate-180">
+                ▼
+              </span>
+            </summary>
+            <p class="mt-4 text-sm sm:text-base text-gray-600 leading-relaxed pl-1 border-t border-gray-50 pt-3">
+              Absolutely! If you have a specific song that is not in our iTunes directory, you can paste its original lyrics in our Custom Lyrics Analyzer. Our AI will automatically identify the language, align the translation, and build the entire study workbench for you.
+            </p>
+          </details>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- Bottom CTA Section -->
+    <section class="relative py-20 bg-slate-900 overflow-hidden text-center">
+      <!-- Gradient glow background -->
+      <div class="absolute -top-40 left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-gradient-to-r from-indigo-500 to-violet-500 rounded-full blur-3xl opacity-20"></div>
+      
+      <div class="relative z-10 max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
+        <h2 class="text-3xl sm:text-4xl lg:text-5xl font-black tracking-tight text-white leading-tight">
+          Ready to Stop Memorizing <br />and Start Singing?
+        </h2>
+        <p class="text-base sm:text-lg text-slate-300 max-w-2xl mx-auto">
+          Lyrify is free, guest-first, and runs entirely in your browser. Experience the magic of music-powered language acquisition.
+        </p>
+        <div>
+          <a href="/" class="inline-flex items-center justify-center px-10 py-4 text-base font-bold text-white bg-indigo-600 hover:bg-indigo-500 rounded-2xl shadow-lg shadow-indigo-950 hover:shadow-xl active:scale-95 transition-all">
+            Launch Lyrify App Now
+            <svg class="w-5 h-5 ml-2 -mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+            </svg>
+          </a>
+        </div>
+        <p class="text-xs text-slate-500">No account required. Runs locally in your web browser.</p>
+      </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="bg-slate-950 text-slate-400 py-12 border-t border-slate-900 text-sm">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="flex flex-col md:flex-row items-center justify-between gap-6 border-b border-slate-900 pb-8">
+          <div class="flex items-center gap-2">
+            <div class="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center font-bold text-white">
+              ♫
+            </div>
+            <span class="text-base font-bold text-white tracking-tight">Lyrify</span>
+          </div>
+          <p class="text-xs text-slate-500 text-center md:text-right max-w-md">
+            Lyrify turns original song lyrics into immersive language study workbenches. Designed to stimulate rapid phonetic acquisition and long-term vocabulary retention.
+          </p>
+        </div>
+        <div class="flex flex-col md:flex-row items-center justify-between gap-4 pt-8 text-xs text-slate-500">
+          <p>&copy; 2026 Lyrify / CantoLex. All rights reserved.</p>
+          <div class="flex gap-6">
+            <a href="/" class="hover:text-slate-300">Open App</a>
+            <a href="#features" class="hover:text-slate-300">Features</a>
+            <a href="#faq" class="hover:text-slate-300">FAQ</a>
+          </div>
+        </div>
+      </div>
+    </footer>
+  </body>
+</html>
