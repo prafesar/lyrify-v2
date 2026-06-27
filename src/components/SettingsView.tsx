@@ -121,6 +121,7 @@ export default function SettingsView({
               onChange={(e) => setTheme(e.target.value)}
               className="bg-transparent text-sm font-bold text-app-fg outline-none text-right cursor-pointer"
             >
+              <option value="lyrify-light" className="bg-app-bg text-app-fg">{t('settings.themeLyrifyLight')}</option>
               <option value="dark" className="bg-app-bg text-app-fg">{t('settings.themeDark')}</option>
               <option value="light" className="bg-app-bg text-app-fg">{t('settings.themeLight')}</option>
               <option value="solarized" className="bg-app-bg text-app-fg">{t('settings.themeSolarized')}</option>

@@ -43,6 +43,17 @@
     --glow-color: var(--accent);
   }
 
+  [data-theme='lyrify-light'] {
+    --background: #f9fafb;
+    --foreground: #111827;
+    --card: #ffffff;
+    --card-border: rgba(79, 70, 229, 0.08);
+    --card-shadow: 0 10px 25px -5px rgba(79, 70, 229, 0.05), 0 8px 16px -6px rgba(79, 70, 229, 0.03);
+    --muted: #4b5563;
+    --accent: #4f46e5;
+    --glow-color: rgba(99, 102, 241, 0.15);
+  }
+
   [data-theme='solarized'] {
     --background: #fdf6e3;
     --foreground: #073642;
@@ -76,7 +87,8 @@
     display: none;
   }
 
-  [data-theme='dark'] .bg-accent-glow {
+  [data-theme='dark'] .bg-accent-glow,
+  [data-theme='lyrify-light'] .bg-accent-glow {
     display: block;
   }
 
