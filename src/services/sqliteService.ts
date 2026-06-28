@@ -1,5 +1,5 @@
 import { Track, TrackLyricsData } from "./musicService";
-import { Artist, Album } from "../constants";
+import { Artist, Album, AnalysisMode, AnalysisVariant } from "../constants";
 import { normalizeLanguageCode } from "../lib/languages";
 
 export class SqliteService {
@@ -16,6 +16,7 @@ export class SqliteService {
   private favoriteArtists: Artist[] = [];
   private favoriteAlbums: Album[] = [];
   private playlists: any[] = [];
+  private analysisVariants: Record<string, { variant: AnalysisVariant; payload: any }> = {};
 
   // Track async callbacks for background writes/commands
   private pendingCallbacks = new Map<string, { resolve: (res?: any) => void; reject: (err: any) => void }>();
@@ -61,6 +62,11 @@ export class SqliteService {
         const trackCacheBackup = localStorage.getItem("cantolex_track_cache_backup");
         if (trackCacheBackup) {
           this.trackCache = JSON.parse(trackCacheBackup) || {};
+        }
+
+        const analysisVariantsBackup = localStorage.getItem("cantolex_analysis_variants_backup");
+        if (analysisVariantsBackup) {
+          this.analysisVariants = JSON.parse(analysisVariantsBackup) || {};
         }
       }
     } catch (e) {
@@ -289,6 +295,24 @@ export class SqliteService {
     }
   }
 
+  private async seedAnalysisVariantsToWorker() {
+    try {
+      console.log("[SqliteService] Seeding analysis variants backup to SQLite worker...");
+      const keys = Object.keys(this.analysisVariants);
+      if (keys.length > 0) {
+        for (const key of keys) {
+          const item = this.analysisVariants[key];
+          await this.sendWorkerMsgInternal("SAVE_ANALYSIS_VARIANT", {
+            variant: item.variant,
+            payload: item.payload
+          });
+        }
+      }
+    } catch (err) {
+      console.warn("[SqliteService] Failed to seed analysis variants to worker:", err);
+    }
+  }
+
   // --- Change Listener Subscription System ---
   public subscribe(listener: (event: string) => void): () => void {
     this.changeListeners.add(listener);
@@ -330,7 +354,7 @@ export class SqliteService {
           const { type, payload, messageId } = event.data;
 
           if (type === "INIT_OK") {
-            const { preferences, recentHistory, trackCache, favorites, favoriteArtists, favoriteAlbums, playlists, storageMode: sMode } = payload;
+            const { preferences, recentHistory, trackCache, favorites, favoriteArtists, favoriteAlbums, playlists, analysisVariants, storageMode: sMode } = payload;
             this.storageMode = sMode || "opfs";
 
             // Merge SQLite database preferences with our current in-memory cache,
@@ -400,6 +424,7 @@ export class SqliteService {
               this.favoriteArtists = this.getFavoriteArtistsBackup();
               this.favoriteAlbums = this.getFavoriteAlbumsBackup();
               this.playlists = this.getPlaylistsBackup();
+              this.analysisVariants = this.getAnalysisVariantsBackup();
 
               // Seed everything to the transient worker, fully awaiting it
               await this.seedRecentTracksToWorker();
@@ -408,6 +433,7 @@ export class SqliteService {
               await this.seedFavoriteAlbumsToWorker();
               await this.seedPlaylistsToWorker();
               await this.seedTrackCacheToWorker();
+              await this.seedAnalysisVariantsToWorker();
             } else {
               // OPFS Mode: Check if worker has populated collections on a per-domain basis
 
@@ -473,6 +499,20 @@ export class SqliteService {
                   await this.seedTrackCacheToWorker();
                 }
               }
+
+              // 5. Analysis Variants Domain
+              if (analysisVariants && Object.keys(analysisVariants).length > 0) {
+                this.analysisVariants = {
+                  ...analysisVariants,
+                  ...this.analysisVariants
+                };
+                this.saveAnalysisVariantsBackup(this.analysisVariants);
+              } else {
+                this.analysisVariants = this.getAnalysisVariantsBackup();
+                if (Object.keys(this.analysisVariants).length > 0) {
+                  await this.seedAnalysisVariantsToWorker();
+                }
+              }
             }
 
             this.isInitialized = true;
@@ -488,6 +528,7 @@ export class SqliteService {
             this.favoriteArtists = this.getFavoriteArtistsBackup();
             this.favoriteAlbums = this.getFavoriteAlbumsBackup();
             this.playlists = this.getPlaylistsBackup();
+            this.analysisVariants = this.getAnalysisVariantsBackup();
 
             this.isInitialized = true;
             resolve();
@@ -666,6 +707,7 @@ export class SqliteService {
     this.favoriteArtists = [];
     this.favoriteAlbums = [];
     this.playlists = [];
+    this.analysisVariants = {};
     try {
       if (typeof window !== "undefined" && window.localStorage) {
         localStorage.removeItem("cantolex_sqlite_prefs_sync");
@@ -675,6 +717,7 @@ export class SqliteService {
         localStorage.removeItem("cantolex_favorite_albums_backup");
         localStorage.removeItem("cantolex_playlists_backup");
         localStorage.removeItem("cantolex_track_cache_backup");
+        localStorage.removeItem("cantolex_analysis_variants_backup");
       }
     } catch (e) {
       console.warn("[SqliteService] Failed to clear local sync cache:", e);
@@ -1004,6 +1047,103 @@ export class SqliteService {
         console.warn("[SqliteService] Failed to delete playlist in worker:", err);
       }
     }
+  }
+
+  private getAnalysisVariantsBackup(): Record<string, { variant: AnalysisVariant; payload: any }> {
+    try {
+      if (typeof window !== "undefined" && window.localStorage) {
+        const val = localStorage.getItem("cantolex_analysis_variants_backup");
+        if (val) {
+          return JSON.parse(val);
+        }
+      }
+    } catch (e) {
+      console.warn("[SqliteService] Failed to read analysis variants backup from localStorage:", e);
+    }
+    return {};
+  }
+
+  private saveAnalysisVariantsBackup(variants: Record<string, { variant: AnalysisVariant; payload: any }>) {
+    try {
+      if (typeof window !== "undefined" && window.localStorage) {
+        localStorage.setItem("cantolex_analysis_variants_backup", JSON.stringify(variants));
+      }
+    } catch (e) {
+      console.warn("[SqliteService] Failed to write analysis variants backup to localStorage:", e);
+    }
+  }
+
+  public async saveAnalysisVariant(variant: AnalysisVariant, payload: any): Promise<void> {
+    const key = `${variant.trackId}_${variant.mode}_${variant.targetLanguage}`;
+    this.analysisVariants[key] = { variant, payload };
+    this.saveAnalysisVariantsBackup(this.analysisVariants);
+    this.notify("analysis_variants");
+
+    if (this.storageMode !== "error") {
+      try {
+        await this.sendWorkerMsg("SAVE_ANALYSIS_VARIANT", { variant, payload });
+      } catch (err) {
+        console.warn("[SqliteService] Failed to save analysis variant in worker:", err);
+      }
+    }
+  }
+
+  public async getAnalysisVariant(
+    trackId: string,
+    mode: AnalysisMode,
+    targetLanguage: string
+  ): Promise<{ variant: AnalysisVariant; payload: any } | null> {
+    const key = `${trackId}_${mode}_${targetLanguage}`;
+    const cached = this.analysisVariants[key];
+    if (cached) {
+      return cached;
+    }
+
+    if (this.storageMode === "error") {
+      return null;
+    }
+
+    try {
+      const variants = await this.getAnalysisVariantsForTrack(trackId);
+      const match = variants.find(
+        (item) => item.variant.mode === mode && item.variant.targetLanguage === targetLanguage
+      );
+      return match || null;
+    } catch (err) {
+      console.warn("[SqliteService] Failed to load analysis variant from worker:", err);
+      return null;
+    }
+  }
+
+  public async getAnalysisVariantsForTrack(
+    trackId: string
+  ): Promise<Array<{ variant: AnalysisVariant; payload: any }>> {
+    if (this.storageMode === "error") {
+      return Object.values(this.analysisVariants).filter(
+        (item) => String(item.variant.trackId) === String(trackId)
+      );
+    }
+
+    try {
+      const res = await this.sendWorkerMsg<Array<{ variant: AnalysisVariant; payload: any }>>(
+        "GET_ANALYSIS_VARIANTS_FOR_TRACK",
+        { trackId }
+      );
+      if (res) {
+        res.forEach((item) => {
+          const key = `${item.variant.trackId}_${item.variant.mode}_${item.variant.targetLanguage}`;
+          this.analysisVariants[key] = item;
+        });
+        this.saveAnalysisVariantsBackup(this.analysisVariants);
+        return res;
+      }
+    } catch (err) {
+      console.warn("[SqliteService] Failed to fetch analysis variants from worker, using local cache:", err);
+    }
+
+    return Object.values(this.analysisVariants).filter(
+      (item) => String(item.variant.trackId) === String(trackId)
+    );
   }
 }
 

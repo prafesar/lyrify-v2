@@ -319,4 +319,116 @@ describe("SQLite Service Integration Smoke Tests", () => {
     expect(cachedAfterInit?.lines?.[0].isStarred).toBe(true);
     expect(cachedAfterInit?.lines?.[1].explanation?.summary).toBe("Insight for 2");
   });
+
+  it("should successfully save and retrieve multiple distinct analysis variants for a single track without overwriting each other", async () => {
+    await sqliteService.clearAllUserData();
+
+    const variantVocab = {
+      id: "var_vocab_1",
+      trackId: "track_abc",
+      mode: "vocabulary" as const,
+      targetLanguage: "ru",
+      sourceLanguage: "en",
+      status: "completed",
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    };
+    const payloadVocab = { words: [{ word: "hello", translation: "привет" }] };
+
+    const variantPhrases = {
+      id: "var_phrases_2",
+      trackId: "track_abc",
+      mode: "phrases" as const,
+      targetLanguage: "ru",
+      sourceLanguage: "en",
+      status: "completed",
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    };
+    const payloadPhrases = { phrases: [{ phrase: "how are you", translation: "как дела" }] };
+
+    await sqliteService.saveAnalysisVariant(variantVocab, payloadVocab);
+    await sqliteService.saveAnalysisVariant(variantPhrases, payloadPhrases);
+
+    // Get specific variant by trackId + mode + targetLanguage
+    const retrievedVocab = await sqliteService.getAnalysisVariant("track_abc", "vocabulary", "ru");
+    expect(retrievedVocab).not.toBeNull();
+    expect(retrievedVocab?.variant.id).toBe("var_vocab_1");
+    expect(retrievedVocab?.payload).toEqual(payloadVocab);
+
+    const retrievedPhrases = await sqliteService.getAnalysisVariant("track_abc", "phrases", "ru");
+    expect(retrievedPhrases).not.toBeNull();
+    expect(retrievedPhrases?.variant.id).toBe("var_phrases_2");
+    expect(retrievedPhrases?.payload).toEqual(payloadPhrases);
+
+    // Get all variants for a specific track
+    const allVariants = await sqliteService.getAnalysisVariantsForTrack("track_abc");
+    expect(allVariants.length).toBe(2);
+    const modes = allVariants.map(v => v.variant.mode);
+    expect(modes).toContain("vocabulary");
+    expect(modes).toContain("phrases");
+  });
+
+  it("should survive reload/hydration and preserve multiple analysis variants across fresh instances", async () => {
+    await sqliteService.clearAllUserData();
+
+    const variantStyle = {
+      id: "var_style_3",
+      trackId: "track_xyz",
+      mode: "style" as const,
+      targetLanguage: "en",
+      sourceLanguage: "fr",
+      status: "completed",
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    };
+    const payloadStyle = { tone: "poetic" };
+
+    await sqliteService.saveAnalysisVariant(variantStyle, payloadStyle);
+
+    // Create a fresh instance representing window reload
+    const freshService = new SqliteService();
+    await freshService.init();
+
+    const restored = await freshService.getAnalysisVariant("track_xyz", "style", "en");
+    expect(restored).not.toBeNull();
+    expect(restored?.variant.id).toBe("var_style_3");
+    expect(restored?.payload).toEqual(payloadStyle);
+  });
+
+  it("should not affect or regress the existing track cache when saving analysis variants", async () => {
+    await sqliteService.clearAllUserData();
+
+    // 1. Save track cache data
+    const mockTrackData = {
+      id: "track_123",
+      rawLyrics: "Some lyrics",
+      processingStatus: { stage1_completed: true }
+    };
+    sqliteService.saveTrackData("track_123", mockTrackData);
+
+    // 2. Save an analysis variant for the same track
+    const variantStyle = {
+      id: "var_style_123",
+      trackId: "track_123",
+      mode: "style" as const,
+      targetLanguage: "en",
+      sourceLanguage: "fr",
+      status: "completed",
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    };
+    const payloadStyle = { tone: "lyrical" };
+    await sqliteService.saveAnalysisVariant(variantStyle, payloadStyle);
+
+    // 3. Verify track cache remains untouched
+    const cachedTrack = sqliteService.getCachedTrack("track_123");
+    expect(cachedTrack).not.toBeNull();
+    expect(cachedTrack?.rawLyrics).toBe("Some lyrics");
+
+    // 4. Verify analysis variant is stored correctly
+    const storedVariant = await sqliteService.getAnalysisVariant("track_123", "style", "en");
+    expect(storedVariant).not.toBeNull();
+    expect(storedVariant?.payload).toEqual(payloadStyle);
+  });
 });

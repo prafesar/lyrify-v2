@@ -162,6 +162,35 @@ function bootstrapDb(sqlite3: any) {
             );
           `);
         }
+      },
+      {
+        version: 4,
+        up: (database: any) => {
+          // Analysis variants metadata table
+          database.exec(`
+            CREATE TABLE IF NOT EXISTS analysis_variants (
+              id TEXT PRIMARY KEY,
+              track_id TEXT NOT NULL,
+              mode TEXT NOT NULL,
+              target_language TEXT NOT NULL,
+              source_language TEXT NOT NULL,
+              status TEXT NOT NULL,
+              prompt_version INTEGER,
+              created_at INTEGER NOT NULL,
+              updated_at INTEGER NOT NULL,
+              UNIQUE(track_id, mode, target_language)
+            );
+          `);
+
+          // Analysis variant payloads detail table
+          database.exec(`
+            CREATE TABLE IF NOT EXISTS analysis_variant_payloads (
+              variant_id TEXT PRIMARY KEY,
+              payload_json TEXT NOT NULL,
+              FOREIGN KEY (variant_id) REFERENCES analysis_variants (id) ON DELETE CASCADE
+            );
+          `);
+        }
       }
     ];
 
@@ -344,6 +373,40 @@ async function init() {
       error("Error reading playlists at init:", e);
     }
 
+    const analysisVariants: Record<string, { variant: any, payload: any }> = {};
+    try {
+      db.exec({
+        sql: `
+          SELECT v.id, v.track_id, v.mode, v.target_language, v.source_language, v.status, v.prompt_version, v.created_at, v.updated_at, p.payload_json
+          FROM analysis_variants v
+          LEFT JOIN analysis_variant_payloads p ON v.id = p.variant_id
+        `,
+        rowMode: "object",
+        callback: (row: any) => {
+          try {
+            const variant = {
+              id: row.id,
+              trackId: row.track_id,
+              mode: row.mode,
+              targetLanguage: row.target_language,
+              sourceLanguage: row.source_language,
+              status: row.status,
+              promptVersion: row.prompt_version !== null ? Number(row.prompt_version) : undefined,
+              createdAt: Number(row.created_at),
+              updatedAt: Number(row.updated_at),
+            };
+            const payloadObj = JSON.parse(row.payload_json);
+            const key = `${row.track_id}_${row.mode}_${row.target_language}`;
+            analysisVariants[key] = { variant, payload: payloadObj };
+          } catch (e) {
+            error("Error parsing analysis variant in init:", e);
+          }
+        }
+      });
+    } catch (e) {
+      error("Error reading analysis variants at init:", e);
+    }
+
     self.postMessage({
       type: "INIT_OK",
       payload: {
@@ -354,6 +417,7 @@ async function init() {
         favoriteArtists,
         favoriteAlbums,
         playlists,
+        analysisVariants,
         storageMode,
       },
     });
@@ -433,6 +497,84 @@ self.onmessage = async (event) => {
         break;
       }
 
+      case "SAVE_ANALYSIS_VARIANT": {
+        const { variant, payload: payloadObj } = payload;
+        
+        // Delete any existing variant with same trackId, mode, targetLanguage to ensure clean replacement without unique index conflict
+        db.exec({
+          sql: "DELETE FROM analysis_variants WHERE track_id = ? AND mode = ? AND target_language = ?",
+          bind: [String(variant.trackId), String(variant.mode), String(variant.targetLanguage)]
+        });
+
+        // Insert variant metadata
+        db.exec({
+          sql: `
+            INSERT INTO analysis_variants (id, track_id, mode, target_language, source_language, status, prompt_version, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `,
+          bind: [
+            String(variant.id),
+            String(variant.trackId),
+            String(variant.mode),
+            String(variant.targetLanguage),
+            String(variant.sourceLanguage),
+            String(variant.status),
+            variant.promptVersion !== undefined && variant.promptVersion !== null ? Number(variant.promptVersion) : null,
+            Number(variant.createdAt),
+            Number(variant.updatedAt)
+          ]
+        });
+
+        // Insert variant payload
+        db.exec({
+          sql: "INSERT OR REPLACE INTO analysis_variant_payloads (variant_id, payload_json) VALUES (?, ?)",
+          bind: [String(variant.id), JSON.stringify(payloadObj)]
+        });
+
+        self.postMessage({ type: "WRITE_OK", messageId });
+        break;
+      }
+
+      case "GET_ANALYSIS_VARIANTS_FOR_TRACK": {
+        const { trackId } = payload;
+        const list: Array<{ variant: any, payload: any }> = [];
+        try {
+          db.exec({
+            sql: `
+              SELECT v.id, v.track_id, v.mode, v.target_language, v.source_language, v.status, v.prompt_version, v.created_at, v.updated_at, p.payload_json
+              FROM analysis_variants v
+              LEFT JOIN analysis_variant_payloads p ON v.id = p.variant_id
+              WHERE v.track_id = ?
+            `,
+            bind: [String(trackId)],
+            rowMode: "object",
+            callback: (row: any) => {
+              try {
+                const variant = {
+                  id: row.id,
+                  trackId: row.track_id,
+                  mode: row.mode,
+                  targetLanguage: row.target_language,
+                  sourceLanguage: row.source_language,
+                  status: row.status,
+                  promptVersion: row.prompt_version !== null && row.prompt_version !== undefined ? Number(row.prompt_version) : undefined,
+                  createdAt: Number(row.created_at),
+                  updatedAt: Number(row.updated_at),
+                };
+                const payloadObj = JSON.parse(row.payload_json);
+                list.push({ variant, payload: payloadObj });
+              } catch (e) {
+                error("Error parsing analysis variant row:", e);
+              }
+            }
+          });
+        } catch (e) {
+          error("Error selecting analysis variants for track:", e);
+        }
+        self.postMessage({ type: "QUERY_OK", payload: list, messageId });
+        break;
+      }
+
       case "CLEAR_ALL": {
         db.exec("DELETE FROM preferences");
         db.exec("DELETE FROM recent_history");
@@ -442,6 +584,12 @@ self.onmessage = async (event) => {
         db.exec("DELETE FROM favorite_albums");
         db.exec("DELETE FROM playlists");
         db.exec("DELETE FROM playlist_items");
+        try {
+          db.exec("DELETE FROM analysis_variants");
+          db.exec("DELETE FROM analysis_variant_payloads");
+        } catch (e) {
+          error("Error clearing analysis variants in CLEAR_ALL:", e);
+        }
         self.postMessage({ type: "WRITE_OK", messageId });
         break;
       }

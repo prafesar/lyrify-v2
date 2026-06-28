@@ -1,5 +1,20 @@
 import { StructuredLectureBlock } from "./services/musicService";
 
+export type AnalysisMode = "vocabulary" | "phrases" | "style";
+
+export interface AnalysisVariant {
+  id: string;
+  trackId: string;
+  mode: AnalysisMode;
+  targetLanguage: string;
+  sourceLanguage: string;
+  status: string;
+  promptVersion?: number;
+  createdAt: number;
+  updatedAt: number;
+}
+
+
 export interface StructuredAnalysis {
   meaning: string;
   phrases: {
