@@ -5,8 +5,11 @@ import {
   getLanguageByCode, 
   getLanguageDisplayName, 
   normalizeLanguageCode,
-  isExperimentalLanguage
+  isExperimentalLanguage,
+  getLocalizedLanguageName,
+  getNativeLanguageName
 } from '../lib/languages';
+import { useTranslation } from '../lib/i18n';
 
 interface LanguageSelectorProps {
   label: string;
@@ -32,6 +35,7 @@ export default function LanguageSelector({
   isSimpleList = false,
   hideLabelPrefix = false
 }: LanguageSelectorProps) {
+  const { uiLanguage, t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState('');
   const containerRef = useRef<HTMLDivElement>(null);
@@ -78,9 +82,13 @@ export default function LanguageSelector({
     // Filter overall list by search
     const filtered = ALL_LANGUAGES.filter(lang => {
       if (!searchLower) return true;
+      const localized = getLocalizedLanguageName(lang.code, uiLanguage).toLowerCase();
+      const native = getNativeLanguageName(lang.code).toLowerCase();
       return (
         lang.displayName.toLowerCase().includes(searchLower) ||
-        lang.code.toLowerCase().includes(searchLower)
+        lang.code.toLowerCase().includes(searchLower) ||
+        localized.includes(searchLower) ||
+        native.includes(searchLower)
       );
     });
 
@@ -104,7 +112,7 @@ export default function LanguageSelector({
       popular: popularGroup,
       experimental: remainingGroup
     };
-  }, [search, normalizedUsedCodes]);
+  }, [search, normalizedUsedCodes, uiLanguage]);
 
   const totalFilteredCount = 
     groupedLanguages.used.length + 
@@ -132,7 +140,9 @@ export default function LanguageSelector({
           className="text-sm font-bold tracking-tight"
           style={highlight ? { color: 'var(--accent)' } : { color: 'var(--app-fg)' }}
         >
-          {selectedOption?.displayName || selectedLang?.displayName || getLanguageDisplayName(value)}
+          {isSimpleList
+            ? (selectedOption?.displayName || selectedLang?.displayName || getLanguageDisplayName(value))
+            : getLocalizedLanguageName(selectedCode, uiLanguage)}
         </span>
         <ChevronDown size={12} className={`opacity-40 transition-transform duration-200 ${isOpen ? 'rotate-180 text-app-accent opacity-100' : ''}`} />
       </button>
@@ -148,7 +158,7 @@ export default function LanguageSelector({
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search language or code..."
+                placeholder={t('languageSelector.searchPlaceholder')}
                 className="bg-transparent text-xs w-full outline-none text-app-fg placeholder-app-fg/30 font-medium"
                 autoFocus
               />
@@ -164,11 +174,12 @@ export default function LanguageSelector({
                   lang={opt}
                   isSelected={opt.code === selectedCode}
                   onSelect={handleSelect}
+                  isSimpleList={true}
                 />
               ))
             ) : totalFilteredCount === 0 ? (
               <div className="py-6 text-center text-xs text-app-fg opacity-40 font-medium">
-                No languages found
+                {t('languageSelector.noLanguages')}
               </div>
             ) : (
               <>
@@ -176,7 +187,7 @@ export default function LanguageSelector({
                 {groupedLanguages.used.length > 0 && (
                   <div>
                     <div className="px-2.5 py-1 text-[8px] font-black uppercase text-app-accent tracking-widest bg-app-accent/5 rounded-md mb-1 inline-block ml-1">
-                      Your Languages
+                      {t('languageSelector.yourLanguages')}
                     </div>
                     <div className="space-y-0.5">
                       {groupedLanguages.used.map(lang => (
@@ -185,6 +196,7 @@ export default function LanguageSelector({
                           lang={lang}
                           isSelected={lang.code === selectedCode}
                           onSelect={handleSelect}
+                          uiLanguage={uiLanguage}
                         />
                       ))}
                     </div>
@@ -195,7 +207,7 @@ export default function LanguageSelector({
                 {groupedLanguages.popular.length > 0 && (
                   <div>
                     <div className="px-2.5 py-1 text-[8px] font-black uppercase text-app-fg opacity-40 tracking-widest bg-app-fg/5 rounded-md mb-1 inline-block ml-1">
-                      Popular Languages
+                      {t('languageSelector.popularLanguages')}
                     </div>
                     <div className="space-y-0.5">
                       {groupedLanguages.popular.map(lang => (
@@ -204,6 +216,7 @@ export default function LanguageSelector({
                           lang={lang}
                           isSelected={lang.code === selectedCode}
                           onSelect={handleSelect}
+                          uiLanguage={uiLanguage}
                         />
                       ))}
                     </div>
@@ -214,7 +227,7 @@ export default function LanguageSelector({
                 {groupedLanguages.experimental.length > 0 && (
                   <div>
                     <div className="px-2.5 py-1 text-[8px] font-black uppercase text-yellow-500/80 tracking-widest bg-yellow-500/5 rounded-md mb-1 inline-block ml-1">
-                      Experimental Languages
+                      {t('languageSelector.experimentalLanguages')}
                     </div>
                     <div className="space-y-0.5">
                       {groupedLanguages.experimental.map(lang => (
@@ -223,6 +236,7 @@ export default function LanguageSelector({
                           lang={lang}
                           isSelected={lang.code === selectedCode}
                           onSelect={handleSelect}
+                          uiLanguage={uiLanguage}
                         />
                       ))}
                     </div>
@@ -237,7 +251,7 @@ export default function LanguageSelector({
             <div className="mt-2 p-2 bg-yellow-500/5 rounded-xl border border-yellow-500/10 flex gap-1.5 items-start">
               <AlertCircle size={12} className="text-yellow-500 shrink-0 mt-0.5" />
               <p className="text-[9px] text-yellow-600/90 leading-normal font-medium">
-                AI can try this language, but analysis quality may vary.
+                {t('languageSelector.experimentalWarning')}
               </p>
             </div>
           )}
@@ -251,9 +265,22 @@ interface LanguageItemProps {
   lang: any;
   isSelected: boolean;
   onSelect: (code: string) => void;
+  uiLanguage?: string;
+  isSimpleList?: boolean;
 }
 
-function LanguageItem({ lang, isSelected, onSelect }: LanguageItemProps) {
+function LanguageItem({ lang, isSelected, onSelect, uiLanguage, isSimpleList }: LanguageItemProps) {
+  const displayName = useMemo(() => {
+    if (isSimpleList) {
+      return lang.displayName;
+    }
+    if (!uiLanguage) return lang.displayName;
+    const nativeName = getNativeLanguageName(lang.code);
+    const localizedName = getLocalizedLanguageName(lang.code, uiLanguage);
+    const isDifferent = nativeName.toLowerCase() !== localizedName.toLowerCase();
+    return isDifferent ? `${localizedName} (${nativeName})` : localizedName;
+  }, [lang, isSimpleList, uiLanguage]);
+
   return (
     <button
       type="button"
@@ -264,18 +291,18 @@ function LanguageItem({ lang, isSelected, onSelect }: LanguageItemProps) {
           : 'text-app-fg hover:bg-app-fg/5 hover:text-app-fg'
       }`}
     >
-      <div className="flex items-center gap-1.5">
-        <span>{lang.displayName}</span>
-        <span className="text-[8px] font-mono opacity-30 bg-app-fg/5 px-1 py-0.5 rounded uppercase">
+      <div className="flex items-center gap-1.5 min-w-0 flex-1 mr-2">
+        <span className="truncate">{displayName}</span>
+        <span className="text-[8px] font-mono opacity-30 bg-app-fg/5 px-1 py-0.5 rounded uppercase shrink-0">
           {lang.code}
         </span>
         {lang.resourceLevel === 'experimental' && (
-          <span className="text-[7px] font-black uppercase text-yellow-600 bg-yellow-500/10 px-1 py-0.5 rounded tracking-tighter">
+          <span className="text-[7px] font-black uppercase text-yellow-600 bg-yellow-500/10 px-1 py-0.5 rounded tracking-tighter shrink-0">
             Rare
           </span>
         )}
       </div>
-      {isSelected && <Check size={12} className="text-app-accent" />}
+      {isSelected && <Check size={12} className="text-app-accent shrink-0" />}
     </button>
   );
 }

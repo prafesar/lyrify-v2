@@ -4238,7 +4238,7 @@ export default function App() {
                       {isExperimentalLanguage(currentTrack.sourceLanguage) && (
                         <p className="text-[10px] text-yellow-500 font-semibold flex items-center gap-1 mt-1">
                           <AlertCircle size={10} className="shrink-0" />
-                          AI can try this language, but analysis quality may vary.
+                          {t('languageSelector.experimentalWarning')}
                         </p>
                       )}
                     </div>

@@ -453,6 +453,14 @@ export interface TranslationDictionary {
     learning: string;
     known: string;
   };
+  languageSelector: {
+    searchPlaceholder: string;
+    noLanguages: string;
+    yourLanguages: string;
+    popularLanguages: string;
+    experimentalLanguages: string;
+    experimentalWarning: string;
+  };
 }
 
 const en: TranslationDictionary = {
@@ -905,6 +913,14 @@ const en: TranslationDictionary = {
     learning: 'Learning',
     known: 'Known',
   },
+  languageSelector: {
+    searchPlaceholder: 'Search language or code...',
+    noLanguages: 'No languages found',
+    yourLanguages: 'Your Languages',
+    popularLanguages: 'Popular Languages',
+    experimentalLanguages: 'Experimental Languages',
+    experimentalWarning: 'AI can try this language, but analysis quality may vary.'
+  }
 };
 
 type DeepPartial<T> = {
@@ -1392,6 +1408,14 @@ const ru: TranslationDictionary = {
     learning: 'Изучаю',
     known: 'Знаю',
   },
+  languageSelector: {
+    searchPlaceholder: 'Поиск языка или кода...',
+    noLanguages: 'Языки не найдены',
+    yourLanguages: 'Ваши языки',
+    popularLanguages: 'Популярные языки',
+    experimentalLanguages: 'Экспериментальные языки',
+    experimentalWarning: 'ИИ может попробовать этот язык, но качество анализа может отличаться.'
+  }
 };
 
 const es: TranslationDictionary = {
@@ -1844,6 +1868,14 @@ const es: TranslationDictionary = {
     learning: 'Estudiando',
     known: 'Conocido',
   },
+  languageSelector: {
+    searchPlaceholder: 'Buscar idioma o código...',
+    noLanguages: 'No se encontraron idiomas',
+    yourLanguages: 'Tus idiomas',
+    popularLanguages: 'Idiomas populares',
+    experimentalLanguages: 'Idiomas experimentales',
+    experimentalWarning: 'El IA puede probar este idioma, pero la calidad del análisis puede variar.'
+  }
 };
 
 const de: TranslationDictionary = {
@@ -2296,6 +2328,14 @@ const de: TranslationDictionary = {
     learning: 'Lernen',
     known: 'Bekannt',
   },
+  languageSelector: {
+    searchPlaceholder: 'Sprache oder Code suchen...',
+    noLanguages: 'Keine Sprachen gefunden',
+    yourLanguages: 'Ihre Sprachen',
+    popularLanguages: 'Beliebte Sprachen',
+    experimentalLanguages: 'Experimentelle Sprachen',
+    experimentalWarning: 'KI kann diese Sprache ausprobieren, die Qualität der Analyse kann jedoch variieren.'
+  }
 };
 
 const fr: TranslationDictionary = createDictionary({
@@ -2521,6 +2561,14 @@ const fr: TranslationDictionary = createDictionary({
     backToDeck: 'Retour au deck',
     shadowingScore: 'Retour sur le shadowing',
   },
+  languageSelector: {
+    searchPlaceholder: 'Rechercher une langue ou un code...',
+    noLanguages: 'Aucune langue trouvée',
+    yourLanguages: 'Vos langues',
+    popularLanguages: 'Langues populaires',
+    experimentalLanguages: 'Langues expérimentales',
+    experimentalWarning: 'L\'IA peut essayer cette langue, mais la qualité de l\'analyse peut varier.'
+  }
 });
 
 const it: TranslationDictionary = createDictionary({
@@ -2746,6 +2794,14 @@ const it: TranslationDictionary = createDictionary({
     backToDeck: 'Torna al mazzo',
     shadowingScore: 'Feedback sullo shadowing',
   },
+  languageSelector: {
+    searchPlaceholder: 'Cerca lingua o codice...',
+    noLanguages: 'Nessuna lingua trovata',
+    yourLanguages: 'Le tue lingue',
+    popularLanguages: 'Lingue popolari',
+    experimentalLanguages: 'Lingue sperimentali',
+    experimentalWarning: 'L\'IA può provare questa lingua, ma la qualità dell\'analisi può variare.'
+  }
 });
 
 const zh: TranslationDictionary = createDictionary({
@@ -2971,6 +3027,14 @@ const zh: TranslationDictionary = createDictionary({
     backToDeck: '返回卡组',
     shadowingScore: '跟读反馈',
   },
+  languageSelector: {
+    searchPlaceholder: '搜索语言或代码...',
+    noLanguages: '未找到语言',
+    yourLanguages: '您的语言',
+    popularLanguages: '热门语言',
+    experimentalLanguages: '实验性语言',
+    experimentalWarning: '人工智能可以尝试这种语言，但分析质量可能会有所不同。'
+  }
 });
 
 const dictionaries: Record<UiLanguage, TranslationDictionary> = { en, ru, es, de, fr, it, zh };
