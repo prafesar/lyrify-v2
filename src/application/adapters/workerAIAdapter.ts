@@ -2,6 +2,8 @@ import { AiPort, TrackMetadata, TrackMeaningResult, TrackMeaningEntry } from "..
 import { TrackLyricsData, StructuredLectureBlock, extractTrackMeaning } from "../../services/musicService";
 import { PreparedLyricsInput, prepareLyricsInput, normalizeTrackTitle, normalizeArtists, computeStableHash } from "../../services/lyricsPreprocessor";
 import { userPreferencesRepository } from "./browserUserDataRepository";
+import { AnalysisMode } from "../../constants";
+import { mapLegacyToCanonicalMode, mapCanonicalToLegacyRequest } from "../../services/analysisMode";
 
 function isPreparedInput(input: any): input is PreparedLyricsInput {
   return input && typeof input === 'object' && 'lines' in input && Array.isArray(input.lines);
@@ -73,7 +75,11 @@ export class WorkerAIAdapter implements AiPort {
         "English"
       );
     }
-    const variant = userPreferencesRepository.getPreference("lyrify_lecture_variant", "compact");
+    const modePref = userPreferencesRepository.getPreference("lyrify_analysis_mode", null);
+    const canonicalMode = mapLegacyToCanonicalMode(
+      modePref || userPreferencesRepository.getPreference("lyrify_lecture_variant", "compact")
+    );
+    const variant = mapCanonicalToLegacyRequest(canonicalMode);
     return this.postToWorker<StructuredLectureBlock[]>("/api/v1/lecture/fetch", preparedInput, {
       "x-lyrify-lecture-variant": variant
     });
@@ -258,7 +264,11 @@ export class WorkerAIAdapter implements AiPort {
       );
     }
 
-    const variant = userPreferencesRepository.getPreference("lyrify_lecture_variant", "compact");
+    const modePref = userPreferencesRepository.getPreference("lyrify_analysis_mode", null);
+    const canonicalMode = mapLegacyToCanonicalMode(
+      modePref || userPreferencesRepository.getPreference("lyrify_lecture_variant", "compact")
+    );
+    const variant = mapCanonicalToLegacyRequest(canonicalMode);
     const blocks = await this.postToWorker<any[]>("/api/v1/lecture/fetch", preparedInput, {
       "x-lyrify-lecture-variant": variant
     });

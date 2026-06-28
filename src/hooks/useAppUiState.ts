@@ -6,6 +6,8 @@ import { userPreferencesRepository, aiClient } from "../application";
 import { isOnboardingCompleted } from "../services/onboardingService";
 import { NavigationCoordinator } from "../services/navigationService";
 import { normalizeLanguageCode } from "../lib/languages";
+import { AnalysisMode } from "../constants";
+import { mapLegacyToCanonicalMode, mapCanonicalToLegacyRequest } from "../services/analysisMode";
 
 export interface EditingLineInfo {
   index: number;
@@ -56,6 +58,15 @@ export function useAppUiState() {
   const [lecturePromptVariant, setLecturePromptVariant] = useState<"compact" | "rich">(
     () => (userPreferencesRepository.getPreference("lyrify_lecture_variant", "compact") as "compact" | "rich")
   );
+  const [analysisMode, setAnalysisModeInternal] = useState<AnalysisMode>(
+    () => {
+      const stored = userPreferencesRepository.getPreference("lyrify_analysis_mode", null);
+      if (stored) return stored as AnalysisMode;
+      // Fallback/compatibility with legacy settings
+      const legacyVariant = userPreferencesRepository.getPreference("lyrify_lecture_variant", "compact");
+      return mapLegacyToCanonicalMode(legacyVariant);
+    }
+  );
   const [previewLyricsMode, setPreviewLyricsMode] = useState<"original" | "translation">("original");
 
   const [popoverData, setPopoverData] = useState<PopoverDataInfo | null>(null);
@@ -92,6 +103,17 @@ export function useAppUiState() {
   const handleSetLecturePromptVariant = useCallback((variant: "compact" | "rich") => {
     setLecturePromptVariant(variant);
     userPreferencesRepository.setPreference("lyrify_lecture_variant", variant);
+    const canonical = mapLegacyToCanonicalMode(variant);
+    setAnalysisModeInternal(canonical);
+    userPreferencesRepository.setPreference("lyrify_analysis_mode", canonical);
+  }, []);
+
+  const handleSetAnalysisMode = useCallback((mode: AnalysisMode) => {
+    setAnalysisModeInternal(mode);
+    userPreferencesRepository.setPreference("lyrify_analysis_mode", mode);
+    const legacyVariant = mapCanonicalToLegacyRequest(mode);
+    setLecturePromptVariant(legacyVariant);
+    userPreferencesRepository.setPreference("lyrify_lecture_variant", legacyVariant);
   }, []);
 
   const handleOnboardingSelect = useCallback(async (track: any, handleTrackSelect: (track: any) => Promise<void>) => {
@@ -219,6 +241,7 @@ ${result.explanation}`);
     theme,
     setTheme,
     lecturePromptVariant,
+    analysisMode,
     lyricsDisplayMode,
     isStarFilterActive,
     previewLyricsMode,
@@ -246,6 +269,7 @@ ${result.explanation}`);
     handleSetLyricsDisplayMode,
     handleToggleStarFilter,
     handleSetLecturePromptVariant,
+    handleSetAnalysisMode,
     handleOnboardingDismiss,
     handleOnboardingSelect,
     handleNextStepClick,
