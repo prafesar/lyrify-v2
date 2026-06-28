@@ -395,7 +395,17 @@ async function init() {
               createdAt: Number(row.created_at),
               updatedAt: Number(row.updated_at),
             };
-            const payloadObj = JSON.parse(row.payload_json);
+            let payloadObj: any = null;
+            if (row.payload_json) {
+              try {
+                payloadObj = JSON.parse(row.payload_json);
+              } catch (parseErr) {
+                error(`[init] Failed to parse payload JSON for variant ${row.id}:`, parseErr);
+                payloadObj = null;
+              }
+            } else {
+              error(`[init] Missing payload JSON for variant ${row.id}`);
+            }
             const key = `${row.track_id}_${row.mode}_${row.target_language}`;
             analysisVariants[key] = { variant, payload: payloadObj };
           } catch (e) {
@@ -500,38 +510,55 @@ self.onmessage = async (event) => {
       case "SAVE_ANALYSIS_VARIANT": {
         const { variant, payload: payloadObj } = payload;
         
-        // Delete any existing variant with same trackId, mode, targetLanguage to ensure clean replacement without unique index conflict
-        db.exec({
-          sql: "DELETE FROM analysis_variants WHERE track_id = ? AND mode = ? AND target_language = ?",
-          bind: [String(variant.trackId), String(variant.mode), String(variant.targetLanguage)]
-        });
+        try {
+          db.exec("BEGIN TRANSACTION;");
 
-        // Insert variant metadata
-        db.exec({
-          sql: `
-            INSERT INTO analysis_variants (id, track_id, mode, target_language, source_language, status, prompt_version, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-          `,
-          bind: [
-            String(variant.id),
-            String(variant.trackId),
-            String(variant.mode),
-            String(variant.targetLanguage),
-            String(variant.sourceLanguage),
-            String(variant.status),
-            variant.promptVersion !== undefined && variant.promptVersion !== null ? Number(variant.promptVersion) : null,
-            Number(variant.createdAt),
-            Number(variant.updatedAt)
-          ]
-        });
+          // Delete any existing variant with same trackId, mode, targetLanguage to ensure clean replacement without unique index conflict
+          db.exec({
+            sql: "DELETE FROM analysis_variants WHERE track_id = ? AND mode = ? AND target_language = ?",
+            bind: [String(variant.trackId), String(variant.mode), String(variant.targetLanguage)]
+          });
 
-        // Insert variant payload
-        db.exec({
-          sql: "INSERT OR REPLACE INTO analysis_variant_payloads (variant_id, payload_json) VALUES (?, ?)",
-          bind: [String(variant.id), JSON.stringify(payloadObj)]
-        });
+          // Insert variant metadata
+          db.exec({
+            sql: `
+              INSERT INTO analysis_variants (id, track_id, mode, target_language, source_language, status, prompt_version, created_at, updated_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `,
+            bind: [
+              String(variant.id),
+              String(variant.trackId),
+              String(variant.mode),
+              String(variant.targetLanguage),
+              String(variant.sourceLanguage),
+              String(variant.status),
+              variant.promptVersion !== undefined && variant.promptVersion !== null ? Number(variant.promptVersion) : null,
+              Number(variant.createdAt),
+              Number(variant.updatedAt)
+            ]
+          });
 
-        self.postMessage({ type: "WRITE_OK", messageId });
+          // Insert variant payload
+          db.exec({
+            sql: "INSERT OR REPLACE INTO analysis_variant_payloads (variant_id, payload_json) VALUES (?, ?)",
+            bind: [String(variant.id), JSON.stringify(payloadObj)]
+          });
+
+          db.exec("COMMIT;");
+          self.postMessage({ type: "WRITE_OK", messageId });
+        } catch (err: any) {
+          try {
+            db.exec("ROLLBACK;");
+          } catch (rollbackErr) {
+            error("Failed to rollback SAVE_ANALYSIS_VARIANT transaction:", rollbackErr);
+          }
+          error("Error in SAVE_ANALYSIS_VARIANT transaction:", err);
+          self.postMessage({
+            type: "ERROR",
+            payload: `SAVE_ANALYSIS_VARIANT failed: ${err.message || String(err)}`,
+            messageId,
+          });
+        }
         break;
       }
 
@@ -561,7 +588,17 @@ self.onmessage = async (event) => {
                   createdAt: Number(row.created_at),
                   updatedAt: Number(row.updated_at),
                 };
-                const payloadObj = JSON.parse(row.payload_json);
+                let payloadObj: any = null;
+                if (row.payload_json) {
+                  try {
+                    payloadObj = JSON.parse(row.payload_json);
+                  } catch (parseErr) {
+                    error(`[GET_ANALYSIS_VARIANTS_FOR_TRACK] Failed to parse payload JSON for variant ${row.id}:`, parseErr);
+                    payloadObj = null;
+                  }
+                } else {
+                  error(`[GET_ANALYSIS_VARIANTS_FOR_TRACK] Missing payload JSON for variant ${row.id}`);
+                }
                 list.push({ variant, payload: payloadObj });
               } catch (e) {
                 error("Error parsing analysis variant row:", e);

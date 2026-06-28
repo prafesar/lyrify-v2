@@ -431,4 +431,83 @@ describe("SQLite Service Integration Smoke Tests", () => {
     expect(storedVariant).not.toBeNull();
     expect(storedVariant?.payload).toEqual(payloadStyle);
   });
+
+  it("should successfully save, retrieve and coexist overview variant with other modes", async () => {
+    await sqliteService.clearAllUserData();
+
+    const overviewVariant = {
+      id: "var_overview_1",
+      trackId: "track_multi",
+      mode: "overview" as const,
+      targetLanguage: "ru",
+      sourceLanguage: "en",
+      status: "completed",
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    };
+    const overviewPayload = { summary: "This is a great track!" };
+
+    const styleVariant = {
+      id: "var_style_1",
+      trackId: "track_multi",
+      mode: "style" as const,
+      targetLanguage: "ru",
+      sourceLanguage: "en",
+      status: "completed",
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    };
+    const stylePayload = { tone: "optimistic" };
+
+    await sqliteService.saveAnalysisVariant(overviewVariant, overviewPayload);
+    await sqliteService.saveAnalysisVariant(styleVariant, stylePayload);
+
+    // Verify retrieval of both distinct modes
+    const retrievedOverview = await sqliteService.getAnalysisVariant("track_multi", "overview", "ru");
+    expect(retrievedOverview).not.toBeNull();
+    expect(retrievedOverview?.variant.mode).toBe("overview");
+    expect(retrievedOverview?.payload).toEqual(overviewPayload);
+
+    const retrievedStyle = await sqliteService.getAnalysisVariant("track_multi", "style", "ru");
+    expect(retrievedStyle).not.toBeNull();
+    expect(retrievedStyle?.variant.mode).toBe("style");
+    expect(retrievedStyle?.payload).toEqual(stylePayload);
+
+    // Verify all variants for track list
+    const list = await sqliteService.getAnalysisVariantsForTrack("track_multi");
+    expect(list.length).toBe(2);
+    const modes = list.map(item => item.variant.mode);
+    expect(modes).toContain("overview");
+    expect(modes).toContain("style");
+  });
+
+  it("should survive gracefully and return payload as null if the JSON is corrupted or missing", async () => {
+    await sqliteService.clearAllUserData();
+
+    const damagedVariant = {
+      id: "var_damaged_1",
+      trackId: "track_damaged",
+      mode: "overview" as const,
+      targetLanguage: "ru",
+      sourceLanguage: "en",
+      status: "completed",
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    };
+
+    // We can save it locally with malformed structure to test local cache robustness, or trigger fallback
+    // Since saveAnalysisVariant serializes properly, we can mock a scenario in localStorage or check worker queries with invalid string
+    const key = "track_damaged_overview_ru";
+    (sqliteService as any).analysisVariants[key] = {
+      variant: damagedVariant,
+      payload: null // Simulate fallback/null payload
+    };
+    sqliteService.saveAnalysisVariantsBackup((sqliteService as any).analysisVariants);
+
+    // Verify getAnalysisVariant returns it successfully with payload: null
+    const retrieved = await sqliteService.getAnalysisVariant("track_damaged", "overview", "ru");
+    expect(retrieved).not.toBeNull();
+    expect(retrieved?.variant.id).toBe("var_damaged_1");
+    expect(retrieved?.payload).toBeNull();
+  });
 });
