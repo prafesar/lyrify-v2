@@ -38,9 +38,10 @@ export default function SettingsView({
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: 10 }}
-      className="flex-1 overflow-y-auto px-6 py-8 max-w-5xl mx-auto w-full scrollbar-hide"
+      className="flex-1 overflow-y-auto w-full scrollbar-hide"
     >
-      <div className="flex items-center justify-between mb-8">
+      <div className="max-w-5xl mx-auto w-full px-6 py-8">
+        <div className="flex items-center justify-between mb-8">
         <h2 className="text-xs font-black uppercase tracking-[0.3em] px-2" style={{ color: 'var(--accent)' }}>{t('settings.title')}</h2>
       </div>
 
@@ -80,19 +81,23 @@ export default function SettingsView({
               </div>
               <span className="font-medium">{t('settings.uiLanguage')}</span>
             </div>
-            <select 
+            <LanguageSelector
+              label="App"
               value={uiLanguage}
-              onChange={(e) => setUiLanguage(e.target.value as any)}
-              className="bg-transparent text-sm font-bold text-app-fg outline-none text-right cursor-pointer"
-            >
-              <option value="en" className="bg-app-bg text-app-fg">English</option>
-              <option value="ru" className="bg-app-bg text-app-fg">Русский</option>
-              <option value="es" className="bg-app-bg text-app-fg">Español</option>
-              <option value="de" className="bg-app-bg text-app-fg">Deutsch</option>
-              <option value="fr" className="bg-app-bg text-app-fg">Français</option>
-              <option value="it" className="bg-app-bg text-app-fg">Italiano</option>
-              <option value="zh" className="bg-app-bg text-app-fg">中文（普通话）</option>
-            </select>
+              onChange={(newLangCode) => setUiLanguage(newLangCode as any)}
+              isSimpleList={true}
+              hideLabelPrefix={true}
+              options={[
+                { code: 'en', displayName: 'English' },
+                { code: 'ru', displayName: 'Русский' },
+                { code: 'es', displayName: 'Español' },
+                { code: 'de', displayName: 'Deutsch' },
+                { code: 'fr', displayName: 'Français' },
+                { code: 'it', displayName: 'Italiano' },
+                { code: 'zh', displayName: '中文（普通话）' }
+              ]}
+              showResourceHint={false}
+            />
           </div>
 
           {/* Target Language Dropdown */}
@@ -111,6 +116,7 @@ export default function SettingsView({
               value={normalizeLanguageCode(targetLanguage) || targetLanguage}
               onChange={(newLangCode) => setTargetLanguage(newLangCode)}
               showResourceHint={false}
+              hideLabelPrefix={true}
             />
           </div>
 
@@ -256,6 +262,7 @@ export default function SettingsView({
             <span className="font-mono text-app-fg opacity-20">0.8.2-beta</span>
           </div>
         </div>
+      </div>
       </div>
       
       <div className="h-20" />

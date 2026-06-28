@@ -15,6 +15,10 @@ interface LanguageSelectorProps {
   highlight?: boolean;
   usedLanguages?: string[];
   showResourceHint?: boolean;
+  // New props for customization:
+  options?: Array<{ code: string; displayName: string }>;
+  isSimpleList?: boolean;
+  hideLabelPrefix?: boolean;
 }
 
 export default function LanguageSelector({ 
@@ -23,7 +27,10 @@ export default function LanguageSelector({
   onChange, 
   highlight,
   usedLanguages = [],
-  showResourceHint = true
+  showResourceHint = true,
+  options,
+  isSimpleList = false,
+  hideLabelPrefix = false
 }: LanguageSelectorProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState('');
@@ -47,6 +54,12 @@ export default function LanguageSelector({
   const selectedLang = useMemo(() => {
     return getLanguageByCode(selectedCode);
   }, [selectedCode]);
+
+  // If a custom list of options is provided, find the selected one from it
+  const selectedOption = useMemo(() => {
+    if (!options) return null;
+    return options.find(opt => opt.code === selectedCode);
+  }, [options, selectedCode]);
 
   // Normalize used languages to codes
   const normalizedUsedCodes = useMemo(() => {
@@ -105,42 +118,55 @@ export default function LanguageSelector({
   };
 
   return (
-    <div ref={containerRef} className="relative inline-block text-left z-50">
+    <div ref={containerRef} className={`relative inline-block text-left ${isOpen ? 'z-[60]' : 'z-10'}`}>
       {/* Trigger Button */}
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
         className="flex items-center gap-1.5 bg-app-card px-3 py-1.5 rounded-xl border border-app-card-border hover:border-app-accent/40 hover:bg-app-card-hover transition-all duration-200 cursor-pointer text-left select-none"
       >
-        <span className="text-[8px] font-black uppercase text-app-fg opacity-30 tracking-widest">{label}:</span>
+        {!hideLabelPrefix && (
+          <span className="text-[8px] font-black uppercase text-app-fg opacity-30 tracking-widest">{label}:</span>
+        )}
         <span 
-          className="text-[11px] font-bold tracking-tight"
+          className="text-sm font-bold tracking-tight"
           style={highlight ? { color: 'var(--accent)' } : { color: 'var(--app-fg)' }}
         >
-          {selectedLang?.displayName || getLanguageDisplayName(value)}
+          {selectedOption?.displayName || selectedLang?.displayName || getLanguageDisplayName(value)}
         </span>
         <ChevronDown size={12} className={`opacity-40 transition-transform duration-200 ${isOpen ? 'rotate-180 text-app-accent opacity-100' : ''}`} />
       </button>
 
       {/* Dropdown Menu */}
       {isOpen && (
-        <div className="absolute right-0 mt-2 w-64 rounded-2xl bg-app-card border border-app-card-border shadow-2xl p-2 flex flex-col max-h-[380px] overflow-hidden backdrop-blur-md">
+        <div className={`absolute right-0 mt-2 ${isSimpleList ? 'w-52' : 'w-64'} rounded-2xl bg-app-card border border-app-card-border shadow-2xl p-2 flex flex-col max-h-[380px] overflow-hidden backdrop-blur-md`}>
           {/* Search Header */}
-          <div className="flex items-center gap-2 px-2.5 py-2 bg-app-bg/50 rounded-xl border border-app-card-border/60 mb-2">
-            <Search size={14} className="text-app-fg opacity-30 shrink-0" />
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search language or code..."
-              className="bg-transparent text-xs w-full outline-none text-app-fg placeholder-app-fg/30 font-medium"
-              autoFocus
-            />
-          </div>
+          {!isSimpleList && (
+            <div className="flex items-center gap-2 px-2.5 py-2 bg-app-bg/50 rounded-xl border border-app-card-border/60 mb-2">
+              <Search size={14} className="text-app-fg opacity-30 shrink-0" />
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search language or code..."
+                className="bg-transparent text-xs w-full outline-none text-app-fg placeholder-app-fg/30 font-medium"
+                autoFocus
+              />
+            </div>
+          )}
 
           {/* List Content */}
-          <div className="flex-1 overflow-y-auto space-y-3.5 pr-1 scrollbar-thin">
-            {totalFilteredCount === 0 ? (
+          <div className={`${isSimpleList ? 'space-y-1' : 'space-y-3.5'} flex-1 overflow-y-auto pr-1 scrollbar-thin`}>
+            {isSimpleList && options ? (
+              options.map(opt => (
+                <LanguageItem 
+                  key={opt.code}
+                  lang={opt}
+                  isSelected={opt.code === selectedCode}
+                  onSelect={handleSelect}
+                />
+              ))
+            ) : totalFilteredCount === 0 ? (
               <div className="py-6 text-center text-xs text-app-fg opacity-40 font-medium">
                 No languages found
               </div>
@@ -207,7 +233,7 @@ export default function LanguageSelector({
           </div>
 
           {/* Warning / Hint footer */}
-          {showResourceHint && isExperimentalLanguage(selectedCode) && (
+          {!isSimpleList && showResourceHint && isExperimentalLanguage(selectedCode) && (
             <div className="mt-2 p-2 bg-yellow-500/5 rounded-xl border border-yellow-500/10 flex gap-1.5 items-start">
               <AlertCircle size={12} className="text-yellow-500 shrink-0 mt-0.5" />
               <p className="text-[9px] text-yellow-600/90 leading-normal font-medium">

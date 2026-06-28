@@ -1743,8 +1743,9 @@ export default function App() {
               initial={{ opacity: 0, scale: 0.98 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.98 }}
-              className="flex-1 overflow-y-auto px-6 pt-8 pb-32 max-w-5xl mx-auto w-full scrollbar-hide"
+              className="flex-1 overflow-y-auto w-full scrollbar-hide"
             >
+              <div className="max-w-5xl mx-auto w-full px-6 pt-8 pb-32">
               {/* 🎯 Daily Goal Details (Daily Milestones) */}
               {!searchResults.length && !artistDetails && !albumDetails && (
                 <DailyProgressBlock
@@ -2332,6 +2333,7 @@ export default function App() {
                   </motion.div>
                 )}
               </AnimatePresence>
+              </div>
             </motion.div>
           )}
 
@@ -2350,8 +2352,9 @@ export default function App() {
                 onTouchStart={registerUserScrollInteraction}
                 onTouchMove={registerUserScrollInteraction}
                 onMouseDown={registerUserScrollInteraction}
-                className="flex-1 overflow-y-auto px-4 sm:px-8 pt-0 sm:pt-0 pb-12 scrollbar-hide relative w-full max-w-5xl mx-auto"
+                className="flex-1 overflow-y-auto scrollbar-hide relative w-full"
               >
+                <div className="max-w-5xl mx-auto w-full px-4 sm:px-8 pt-0 sm:pt-0 pb-12">
                 <div className="mb-2 px-3 sm:px-6 pt-6 sm:pt-8 animate-in fade-in duration-300">
                   {isLoadingLyrics && (
                     <div className="flex items-center justify-end h-6 mb-1">
@@ -3479,6 +3482,7 @@ export default function App() {
                     )}
                   </div>
                 )}
+              </div>
               </div>
             </motion.div>
           )}
