@@ -89,6 +89,9 @@ export default function SettingsView({
               <option value="ru" className="bg-app-bg text-app-fg">Русский</option>
               <option value="es" className="bg-app-bg text-app-fg">Español</option>
               <option value="de" className="bg-app-bg text-app-fg">Deutsch</option>
+              <option value="fr" className="bg-app-bg text-app-fg">Français</option>
+              <option value="it" className="bg-app-bg text-app-fg">Italiano</option>
+              <option value="zh" className="bg-app-bg text-app-fg">中文（普通话）</option>
             </select>
           </div>
 
