@@ -90,3 +90,35 @@ export interface Track {
   lastfmUrl?: string;
   documentId?: string;
 }
+
+export type WordFormStatus = "new" | "seen" | "learning" | "known" | "ignored";
+
+export interface ExtractedWordForm {
+  surface: string;
+  normalizedSurface: string;
+  language: string;
+  translation?: string;
+  explanation?: string;
+}
+
+export interface ExtractedWordFormWithCount extends ExtractedWordForm {
+  count: number;
+}
+
+export interface StoredWordForm extends ExtractedWordForm {
+  id: string;
+  createdAt: number;
+}
+
+export interface TrackWordFormRelation {
+  trackId: string;
+  wordFormId: string;
+  occurrencesCount: number;
+}
+
+export interface UserWordFormStatus {
+  wordFormId: string;
+  status: WordFormStatus;
+  updatedAt: number;
+}
+

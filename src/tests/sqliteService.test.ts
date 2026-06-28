@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { sqliteService, SqliteService } from "../services/sqliteService";
+import { WordFormExtractor } from "../services/wordFormExtractor";
 
 describe("SQLite Service Integration Smoke Tests", () => {
   beforeEach(async () => {
@@ -509,5 +510,111 @@ describe("SQLite Service Integration Smoke Tests", () => {
     expect(retrieved).not.toBeNull();
     expect(retrieved?.variant.id).toBe("var_damaged_1");
     expect(retrieved?.payload).toBeNull();
+  });
+
+  describe("WordFormExtractor & SQLite Word Forms Support", () => {
+    it("should correctly clean punctuation and extract word forms with occurrences counts", () => {
+      const lyrics = "Love, love, LOVE! I love you, baby!";
+      const forms = WordFormExtractor.extractWordForms(lyrics, "en");
+
+      // We expect unique words: "love", "i", "you", "baby"
+      expect(forms.length).toBe(4);
+
+      const loveForm = forms.find((f) => f.normalizedSurface === "love");
+      expect(loveForm).toBeDefined();
+      expect(loveForm?.count).toBe(4);
+      expect(loveForm?.language).toBe("en");
+      // Since "love" lowercase exists, surface should be lowercase
+      expect(loveForm?.surface).toBe("love");
+
+      const babyForm = forms.find((f) => f.normalizedSurface === "baby");
+      expect(babyForm).toBeDefined();
+      expect(babyForm?.count).toBe(1);
+      expect(babyForm?.surface).toBe("baby");
+    });
+
+    it("should handle non-English text with spaces (e.g., Russian)", () => {
+      const lyrics = "Привет, мир! О, прекрасный приветливый мир.";
+      const forms = WordFormExtractor.extractWordForms(lyrics, "ru");
+
+      const mirForm = forms.find((f) => f.normalizedSurface === "мир");
+      expect(mirForm).toBeDefined();
+      expect(mirForm?.count).toBe(2);
+      expect(mirForm?.language).toBe("ru");
+    });
+
+    it("should extract, store, and retrieve track word forms under SqliteService", async () => {
+      const trackId = "track_word_test_1";
+      const lyrics = "Dance dance dance, singing a song.";
+      
+      await sqliteService.extractAndStoreTrackWordForms(trackId, lyrics, "en");
+      
+      const forms = await sqliteService.getTrackWordForms(trackId);
+      expect(forms.length).toBe(4); // "dance", "singing", "a", "song"
+
+      const danceForm = forms.find((f) => f.normalizedSurface === "dance");
+      expect(danceForm).toBeDefined();
+      expect(danceForm?.count).toBe(3);
+      expect(danceForm?.status).toBe("new"); // Default status is "new"
+    });
+
+    it("should support updating and reading user knowledge status per word form", async () => {
+      const trackId = "track_word_test_2";
+      const lyrics = "Learning is fun, learning is life.";
+      
+      await sqliteService.extractAndStoreTrackWordForms(trackId, lyrics, "en");
+      const formsBefore = await sqliteService.getTrackWordForms(trackId);
+      
+      const learningForm = formsBefore.find((f) => f.normalizedSurface === "learning");
+      expect(learningForm).toBeDefined();
+      expect(learningForm?.status).toBe("new");
+
+      // Set to "learning"
+      await sqliteService.setUserWordFormStatus(learningForm!.id, "learning");
+
+      // Re-fetch to verify updated status
+      const formsAfter = await sqliteService.getTrackWordForms(trackId);
+      const learningFormAfter = formsAfter.find((f) => f.normalizedSurface === "learning");
+      expect(learningFormAfter?.status).toBe("learning");
+      expect(learningFormAfter?.updatedAt).toBeDefined();
+
+      // Ensure other word forms are still "new"
+      const funForm = formsAfter.find((f) => f.normalizedSurface === "fun");
+      expect(funForm?.status).toBe("new");
+    });
+
+    it("should compute correct known/unknown word counts and statistics", async () => {
+      const trackId = "track_word_test_3";
+      const lyrics = "First second third fourth fifth.";
+      
+      await sqliteService.extractAndStoreTrackWordForms(trackId, lyrics, "en");
+      const forms = await sqliteService.getTrackWordForms(trackId);
+      
+      const first = forms.find((f) => f.normalizedSurface === "first");
+      const second = forms.find((f) => f.normalizedSurface === "second");
+      const third = forms.find((f) => f.normalizedSurface === "third");
+
+      // Mark first as known, second as learning, third as ignored
+      await sqliteService.setUserWordFormStatus(first!.id, "known");
+      await sqliteService.setUserWordFormStatus(second!.id, "learning");
+      await sqliteService.setUserWordFormStatus(third!.id, "ignored");
+
+      const stats = await sqliteService.getTrackWordFormStats(trackId);
+      // Total distinct: 5
+      expect(stats.totalCount).toBe(5);
+      expect(stats.knownCount).toBe(1);      // first
+      expect(stats.learningCount).toBe(1);   // second
+      expect(stats.ignoredCount).toBe(1);    // third
+      expect(stats.newCount).toBe(2);        // fourth, fifth
+      
+      // Unknown count is total - known - ignored = 5 - 1 - 1 = 3 (learning + new)
+      expect(stats.unknownCount).toBe(3);
+
+      // Verify individual lookup dictionary status
+      const statuses = await sqliteService.getTrackWordFormStatuses(trackId);
+      expect(statuses[first!.id]).toBe("known");
+      expect(statuses[second!.id]).toBe("learning");
+      expect(statuses[third!.id]).toBe("ignored");
+    });
   });
 });
