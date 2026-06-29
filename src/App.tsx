@@ -2625,7 +2625,10 @@ export default function App() {
                           handleAnalyzeSong();
                         } else if (actionType === 'GENERATE_ANALYSIS') {
                           setActiveTab('analysis');
-                          handleGenerateAnalysis();
+                          handleSetAnalysisModeAndSwitch('overview');
+                          setTimeout(() => {
+                            handleGenerateAnalysis(true);
+                          }, 50);
                         } else if (actionType === 'SAVE_PHRASES') {
                           setActiveTab('analysis'); // Переход на вкладку детального разбора песни
                         } else if (actionType === 'GO_TO_STUDY') {

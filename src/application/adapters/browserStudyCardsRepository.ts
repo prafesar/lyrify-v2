@@ -36,7 +36,7 @@ export class BrowserStudyCardsRepository implements StudyCardsRepositoryPort {
   ): Promise<string> {
     const cardId = await originalCardService.addPhraseToStudy(phraseData, status);
     const cards = await originalCardService.getCards();
-    const card = cards.find(c => c.id === cardId);
+    const card = cards?.find(c => c.id === cardId);
     if (card) {
       await WordFormBridgeService.syncCardToWordForms(card);
     }

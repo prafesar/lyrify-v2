@@ -608,11 +608,23 @@ export function useTrackSession(
     const targetTrack = customTrack || currentTrack;
     if (!targetTrack || isGeneratingAnalysis) return;
 
-    const hasPhrases = targetTrack.lines.some(l => l.phrases && l.phrases.length > 0);
-    const completed = targetTrack.processingStatus.stage3_completed && hasPhrases;
-    const hasLecture = targetTrack.lectureBlocks && targetTrack.lectureBlocks.length > 0;
+    const modePref = userPreferencesRepository.getPreference("lyrify_analysis_mode", null);
+    const canonicalMode = mapLegacyToCanonicalMode(
+      modePref || userPreferencesRepository.getPreference("lyrify_lecture_variant", "compact")
+    );
+    const langCode = getLanguageCode(targetLanguage);
 
-    if (!force && completed && hasLecture) return;
+    let hasLocalVariant = false;
+    try {
+      const localVariant = await sqliteService.getAnalysisVariant(targetTrack.trackId, canonicalMode, langCode);
+      if (localVariant && localVariant.payload && localVariant.payload.length > 0) {
+        hasLocalVariant = true;
+      }
+    } catch (e) {
+      console.warn("[useTrackSession] preflight check failed:", e);
+    }
+
+    if (!force && hasLocalVariant) return;
 
     setIsGeneratingAnalysis(true);
     setAnalysisError(null);
@@ -695,6 +707,27 @@ export function useTrackSession(
           };
         }
 
+        // Save server cache variant directly to SQLite for the active mode
+        try {
+          const activeModePref = userPreferencesRepository.getPreference("lyrify_analysis_mode", null);
+          const activeCanonicalMode = mapLegacyToCanonicalMode(
+            activeModePref || userPreferencesRepository.getPreference("lyrify_lecture_variant", "compact")
+          );
+          const activeLangCode = getLanguageCode(targetLanguage);
+          await sqliteService.saveAnalysisVariant({
+            id: `${trackData.trackId}_${activeCanonicalMode}_${activeLangCode}`,
+            trackId: trackData.trackId,
+            mode: activeCanonicalMode,
+            targetLanguage: activeLangCode,
+            sourceLanguage: trackData.sourceLanguage || "en",
+            status: "completed",
+            createdAt: Date.now(),
+            updatedAt: Date.now()
+          }, cacheResult.lectureBlocks);
+        } catch (err) {
+          console.warn("[useTrackSession] Failed to save server cache variant in SQLite:", err);
+        }
+
         // Extract all phrases from lectureBlocks and map to lines
         const extractedPhrases: any[] = [];
         if (Array.isArray(cacheResult.lectureBlocks)) {
@@ -758,6 +791,7 @@ export function useTrackSession(
           lectureBlocks: cacheResult.lectureBlocks,
           processingStatus: { ...trackData.processingStatus, stage3_completed: true }
         };
+        setDisplayedLectureBlocks(cacheResult.lectureBlocks);
         setCurrentTrack(trackData);
         saveTrackData(trackData.trackId, trackData);
       }
@@ -819,9 +853,9 @@ export function useTrackSession(
         }
       }
 
-      if (force || (!trackData.lectureBlocks || trackData.lectureBlocks.length === 0) || (localVariant && localVariant.payload !== trackData.lectureBlocks)) {
-        let blocks = localVariant ? localVariant.payload : null;
-        
+      let blocks = localVariant ? localVariant.payload : null;
+
+      if (force || !blocks) {
         if (!blocks) {
           setLoadingStep("lecture");
           try {
