@@ -48,6 +48,7 @@ interface StructuredAnalysisLectureProps {
     unknownCount: number;
   } | null;
   availableAnalysisModes?: AnalysisMode[];
+  analysisError?: string | null;
 }
 
 export const StructuredAnalysisLecture: React.FC<StructuredAnalysisLectureProps> = ({
@@ -62,7 +63,8 @@ export const StructuredAnalysisLecture: React.FC<StructuredAnalysisLectureProps>
   analysisMode,
   handleSetAnalysisMode,
   wordFormStats,
-  availableAnalysisModes = []
+  availableAnalysisModes = [],
+  analysisError
 }) => {
   // Ordered target kinds of the blocks
   const targetKinds = ['overview', 'emotions', 'sections', 'lexical_groups', 'takeaways', 'notes'] as const;
@@ -424,35 +426,68 @@ export const StructuredAnalysisLecture: React.FC<StructuredAnalysisLectureProps>
 
       {/* Structured Continuous List of Blocks */}
       <div className="space-y-6">
-        {blocks.map((block) => {
-          const isModelEditingText = editingBlockId === block.id && editingField === 'text';
-          const isModelEditingTitle = editingBlockId === block.id && editingField === 'title';
+        {blocks.length === 0 ? (
+          <div className="py-20 flex flex-col items-center justify-center text-center space-y-8 font-sans max-w-md mx-auto" id="mode-empty-state">
+            <div className="w-16 h-16 rounded-[1.5rem] bg-app-card border border-app-card-border/40 flex items-center justify-center text-app-fg opacity-20">
+              <BookOpen size={32} />
+            </div>
+            <div className="space-y-3">
+              <h3 className="text-xl font-bold text-app-fg tracking-tight capitalize">No {analysisMode || 'Breakdown'} Yet</h3>
+              <p className="text-sm text-app-fg opacity-50 font-medium leading-relaxed px-4">
+                Generate a custom, mode-specific breakdown for this track in <strong className="text-app-fg capitalize">{analysisMode}</strong> mode. Each mode focuses on different aspects of the lyrics and vocabulary.
+              </p>
+            </div>
 
-          return (
-            <section 
-              key={block.id} 
-              id={`block-${block.id}`} 
-              className="space-y-3 animate-in fade-in duration-300 scroll-mt-24 group/section"
-            >
-              
-              {/* Kind Marker Tag -- ultra minimalist inline label block */}
-              <div className="flex items-center justify-between pb-0.5">
-                <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-app-accent opacity-50 shrink-0 select-none">
-                  {block.kind}
-                </span>
-
-                {/* Optional tiny manual section deleter */}
-                {block.source === 'manual' && !editingBlockId && (
-                  <button
-                    type="button"
-                    onClick={() => deleteBlockBlock(block.id)}
-                    className="opacity-0 group-hover/section:opacity-60 hover:!opacity-100 p-1 text-app-muted hover:text-red-400 transition-opacity duration-200 cursor-pointer text-[10px] font-bold uppercase tracking-wider"
-                    title="Delete section"
-                  >
-                    Delete
-                  </button>
-                )}
+            {analysisError && (
+              <div id="analysis-error-banner" className="w-full p-5 rounded-[1.5rem] bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs text-center space-y-2">
+                <p className="font-bold uppercase tracking-wider text-[10px]">Breakdown Error</p>
+                <p className="opacity-90">{analysisError}</p>
               </div>
+            )}
+
+            {handleRegenerateAnalysis && (
+              <div className="pt-2">
+                <button
+                  type="button"
+                  onClick={handleRegenerateAnalysis}
+                  className="px-8 py-4 rounded-2xl bg-app-fg text-app-bg font-black uppercase tracking-[0.18em] text-[10px] shadow-xl hover:scale-[1.03] transition-all flex items-center gap-2.5 cursor-pointer hover:bg-app-fg-hover"
+                >
+                  <Sparkles size={14} className="text-app-bg" />
+                  Generate AI {analysisMode || 'Breakdown'}
+                </button>
+              </div>
+            )}
+          </div>
+        ) : (
+          blocks.map((block) => {
+            const isModelEditingText = editingBlockId === block.id && editingField === 'text';
+            const isModelEditingTitle = editingBlockId === block.id && editingField === 'title';
+
+            return (
+              <section 
+                key={block.id} 
+                id={`block-${block.id}`} 
+                className="space-y-3 animate-in fade-in duration-300 scroll-mt-24 group/section"
+              >
+                
+                {/* Kind Marker Tag -- ultra minimalist inline label block */}
+                <div className="flex items-center justify-between pb-0.5">
+                  <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-app-accent opacity-50 shrink-0 select-none">
+                    {block.kind}
+                  </span>
+
+                  {/* Optional tiny manual section deleter */}
+                  {block.source === 'manual' && !editingBlockId && (
+                    <button
+                      type="button"
+                      onClick={() => deleteBlockBlock(block.id)}
+                      className="opacity-0 group-hover/section:opacity-60 hover:!opacity-100 p-1 text-app-muted hover:text-red-400 transition-opacity duration-200 cursor-pointer text-[10px] font-bold uppercase tracking-wider"
+                      title="Delete section"
+                    >
+                      Delete
+                    </button>
+                  )}
+                </div>
 
               {/* Editable Block Title */}
               <div className="relative group/title">
@@ -739,11 +774,12 @@ export const StructuredAnalysisLecture: React.FC<StructuredAnalysisLectureProps>
 
             </section>
           );
-        })}
+        })
+      )}
       </div>
 
       {/* Regeneration action panel at the deep bottom */}
-      {handleRegenerateAnalysis && (
+      {handleRegenerateAnalysis && blocks.length > 0 && (
         <div className="border border-app-card-border/30 rounded-3xl p-6 flex flex-col md:flex-row items-center justify-between gap-6 mt-10" id="reset-lecture-block">
           <div className="space-y-2 text-center md:text-left w-full">
             <button
