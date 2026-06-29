@@ -616,5 +616,22 @@ describe("SQLite Service Integration Smoke Tests", () => {
       expect(statuses[second!.id]).toBe("learning");
       expect(statuses[third!.id]).toBe("ignored");
     });
+
+    it("should extract word forms and make stats available to UI/state layer when track with lyrics is opened", async () => {
+      const trackId = "track_integration_open_test";
+      const lyrics = "Hello world! This is a test. Hello world again.";
+      const sourceLanguage = "en";
+
+      // Simulate opening/loading of a track with lyrics by calling extract and store
+      await sqliteService.extractAndStoreTrackWordForms(trackId, lyrics, sourceLanguage);
+
+      // Verify that stats are correctly computed and loaded for UI consumption
+      const stats = await sqliteService.getTrackWordFormStats(trackId);
+      expect(stats).toBeDefined();
+      expect(stats.totalCount).toBeGreaterThan(0);
+      expect(stats.unknownCount).toBe(stats.totalCount); // since all are brand new
+      expect(stats.knownCount).toBe(0);
+      expect(stats.learningCount).toBe(0);
+    });
   });
 });

@@ -690,7 +690,8 @@ export default function App() {
     handleManualLyricsSearch,
     handleSelectLyricOption: handleSelectLyricOptionRaw,
     handleSourceLanguageOverride,
-    handleSwitchAnalysisMode
+    handleSwitchAnalysisMode,
+    wordFormStats
   } = useTrackSession();
 
   const {
@@ -3372,6 +3373,7 @@ export default function App() {
                           handleRegenerateAnalysis={handleRegenerateAnalysis}
                           analysisMode={analysisMode}
                           handleSetAnalysisMode={handleSetAnalysisModeAndSwitch}
+                          wordFormStats={wordFormStats}
                         />
                       </motion.div>
                     ) : (

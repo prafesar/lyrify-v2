@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useEffect } from "react";
 import { 
   trackSessionFacade, 
   recentHistoryRepository, 
@@ -145,6 +145,18 @@ export interface UseTrackSessionResult {
     targetLang: string,
     callbacks: { loadCommunityTracks: () => void }
   ) => Promise<void>;
+  wordFormStats: WordFormStats | null;
+  setWordFormStats: React.Dispatch<React.SetStateAction<WordFormStats | null>>;
+}
+
+export interface WordFormStats {
+  totalCount: number;
+  knownCount: number;
+  learningCount: number;
+  seenCount: number;
+  newCount: number;
+  ignoredCount: number;
+  unknownCount: number;
 }
 
 export function useTrackSession(): UseTrackSessionResult {
@@ -160,6 +172,56 @@ export function useTrackSession(): UseTrackSessionResult {
   const [isSearchingOptions, setIsSearchingOptions] = useState(false);
   const [manualSearchQuery, setManualSearchQuery] = useState("");
   const [isResourcesOpen, setIsResourcesOpen] = useState(false);
+  const [wordFormStats, setWordFormStats] = useState<WordFormStats | null>(null);
+
+  useEffect(() => {
+    if (!currentTrack || !currentTrack.trackId || !currentTrack.rawLyrics) {
+      setWordFormStats(null);
+      return;
+    }
+
+    let isCancelled = false;
+
+    const extractAndFetchStats = async () => {
+      try {
+        // 1. Extract and store word forms
+        await sqliteService.extractAndStoreTrackWordForms(
+          currentTrack.trackId,
+          currentTrack.rawLyrics,
+          currentTrack.sourceLanguage || "en"
+        );
+
+        // 2. Fetch stats
+        const stats = await sqliteService.getTrackWordFormStats(currentTrack.trackId);
+        if (!isCancelled) {
+          setWordFormStats(stats);
+        }
+      } catch (err) {
+        console.error("[useTrackSession] Error processing word forms & stats:", err);
+      }
+    };
+
+    extractAndFetchStats();
+
+    // 3. Subscribe to updates
+    const unsubscribe = sqliteService.subscribe(async (event) => {
+      if (event === "word_forms" || event === "word_form_status_changed") {
+        try {
+          const stats = await sqliteService.getTrackWordFormStats(currentTrack.trackId);
+          if (!isCancelled) {
+            setWordFormStats(stats);
+          }
+        } catch (err) {
+          console.error("[useTrackSession] Error reloading stats on subscription event:", err);
+        }
+      }
+    });
+
+    return () => {
+      isCancelled = true;
+      unsubscribe();
+    };
+  }, [currentTrack?.trackId, currentTrack?.rawLyrics, currentTrack?.sourceLanguage]);
 
   const handleTrackSelect = useCallback(async (
     track: any,
@@ -1024,6 +1086,8 @@ export function useTrackSession(): UseTrackSessionResult {
     handleResetLyrics,
     handleAnalyzeStarredLines,
     handleSourceLanguageOverride,
-    handleSwitchAnalysisMode
+    handleSwitchAnalysisMode,
+    wordFormStats,
+    setWordFormStats
   };
 }
