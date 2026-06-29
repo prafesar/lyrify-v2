@@ -498,12 +498,7 @@ describe("SQLite Service Integration Smoke Tests", () => {
 
     // We can save it locally with malformed structure to test local cache robustness, or trigger fallback
     // Since saveAnalysisVariant serializes properly, we can mock a scenario in localStorage or check worker queries with invalid string
-    const key = "track_damaged_overview_ru";
-    (sqliteService as any).analysisVariants[key] = {
-      variant: damagedVariant,
-      payload: null // Simulate fallback/null payload
-    };
-    sqliteService.saveAnalysisVariantsBackup((sqliteService as any).analysisVariants);
+    await sqliteService.saveAnalysisVariant(damagedVariant, null);
 
     // Verify getAnalysisVariant returns it successfully with payload: null
     const retrieved = await sqliteService.getAnalysisVariant("track_damaged", "overview", "ru");

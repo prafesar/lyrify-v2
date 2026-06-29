@@ -71,7 +71,7 @@ export interface PhraseCardProps {
   headerRightActions?: React.ReactNode;
   
   // Metadata / UI language translations
-  uiLanguage?: 'ru' | 'en';
+  uiLanguage?: string;
   
   // Dynamic display options
   hideTranslation?: boolean;
