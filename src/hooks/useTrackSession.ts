@@ -28,6 +28,10 @@ import { prepareLyricsInput, findMatchedTranslation } from "../services/lyricsPr
 import { checkServerCache } from "../services/serverCacheLookupService";
 import { getLanguageCode, detectDominantLanguage, cascadeTrackLanguageUpdate } from "../lib/languages";
 import { updateTrackCardsLanguage } from "../services/localCardService";
+import { sqliteService } from "../services/sqliteService";
+import { AnalysisMode } from "../constants";
+import { mapLegacyToCanonicalMode, mapCanonicalToLegacyRequest } from "../services/analysisMode";
+import { userPreferencesRepository } from "../application/adapters/browserUserDataRepository";
 
 export interface UseTrackSessionResult {
   currentTrack: TrackLyricsData | null;
@@ -136,6 +140,11 @@ export interface UseTrackSessionResult {
     }
   ) => Promise<void>;
   handleSourceLanguageOverride: (newLang: string) => Promise<void>;
+  handleSwitchAnalysisMode: (
+    mode: AnalysisMode,
+    targetLang: string,
+    callbacks: { loadCommunityTracks: () => void }
+  ) => Promise<void>;
 }
 
 export function useTrackSession(): UseTrackSessionResult {
@@ -567,20 +576,58 @@ export function useTrackSession(): UseTrackSessionResult {
         callbacks.loadCommunityTracks();
       }
 
-      if (force || !trackData.lectureBlocks || trackData.lectureBlocks.length === 0) {
-        setLoadingStep("lecture");
+      const modePref = userPreferencesRepository.getPreference("lyrify_analysis_mode", null);
+      const canonicalMode = mapLegacyToCanonicalMode(
+        modePref || userPreferencesRepository.getPreference("lyrify_lecture_variant", "compact")
+      );
+      const langCode = getLanguageCode(targetLanguage);
+      
+      let localVariant = null;
+      if (!force) {
         try {
-          const blocks = await aiClient.fetchStructuredLecture(
-            trackData.preparedLyricsInput || trackData.rawLyrics,
-            force
-          );
-          
+          localVariant = await sqliteService.getAnalysisVariant(trackData.trackId, canonicalMode, langCode);
+        } catch (e) {
+          console.warn("[useTrackSession] Failed to load local variant:", e);
+        }
+      }
+
+      if (force || (!trackData.lectureBlocks || trackData.lectureBlocks.length === 0) || (localVariant && localVariant.payload !== trackData.lectureBlocks)) {
+        let blocks = localVariant ? localVariant.payload : null;
+        
+        if (!blocks) {
+          setLoadingStep("lecture");
+          try {
+            blocks = await aiClient.fetchStructuredLecture(
+              trackData.preparedLyricsInput || trackData.rawLyrics,
+              force
+            );
+            
+            // Save to SQLite
+            try {
+              await sqliteService.saveAnalysisVariant({
+                id: `${trackData.trackId}_${canonicalMode}_${langCode}`,
+                trackId: trackData.trackId,
+                mode: canonicalMode,
+                targetLanguage: langCode,
+                sourceLanguage: trackData.sourceLanguage || "en",
+                status: "completed",
+                createdAt: Date.now(),
+                updatedAt: Date.now()
+              }, blocks);
+            } catch (err) {
+              console.warn("[useTrackSession] Failed to save variant in SQLite:", err);
+            }
+          } catch (e) {
+            console.error("Failed to generate lecture blocks:", e);
+          }
+        }
+        
+        if (blocks) {
           let meaning = trackData.meaning || "";
           let meanings = trackData.meanings || { en: "", es: "", ru: "", pl: "" };
           const extractedMeaning = extractTrackMeaning(blocks);
           if (extractedMeaning) {
             meaning = extractedMeaning;
-            const langCode = getLanguageCode(targetLanguage);
             meanings = {
               ...trackData.meanings,
               en: langCode === 'en' ? extractedMeaning : (trackData.meanings?.en || ""),
@@ -590,16 +637,56 @@ export function useTrackSession(): UseTrackSessionResult {
             };
           }
 
+          // Extract all phrases from lectureBlocks and map to lines
+          const extractedPhrases: any[] = [];
+          if (Array.isArray(blocks)) {
+            for (const block of blocks) {
+              if (block && Array.isArray(block.phrases)) {
+                for (const p of block.phrases) {
+                  extractedPhrases.push(p);
+                }
+              }
+            }
+          }
+
+          const updatedLines = trackData.lines.map((line) => {
+            const linePhrases = extractedPhrases
+              .filter((p: any) => {
+                if (p.lineKey && line.lineKey) {
+                  return p.lineKey === line.lineKey;
+                }
+                if (p.text) {
+                  const normPhrase = p.text.trim().toLowerCase().replace(/[^\p{L}\p{N}\s']/gu, '');
+                  const normLine = line.original.trim().toLowerCase().replace(/[^\p{L}\p{N}\s']/gu, '');
+                  return normLine.includes(normPhrase);
+                }
+                return false;
+              })
+              .map((p: any) => ({
+                id: p.id || `${trackData.trackId}:p:${(p.text || p.phrase || "").replace(/\s+/g, '_')}`,
+                text: p.text || p.phrase || "",
+                translation: p.translation || "",
+                explanation: p.explanation || "",
+                language: p.language || p.targetLanguage || langCode,
+                lemmas: p.lemmas || [],
+                type: 'phrase' as const
+              }));
+
+            return {
+              ...line,
+              phrases: linePhrases
+            };
+          });
+
           trackData = {
             ...trackData,
             meaning,
             meanings,
+            lines: updatedLines,
             lectureBlocks: blocks
           };
           setCurrentTrack(trackData);
           saveTrackData(trackData.trackId, trackData);
-        } catch (e) {
-          console.error("Failed to generate lecture blocks:", e);
         }
       }
 
@@ -657,6 +744,81 @@ export function useTrackSession(): UseTrackSessionResult {
   ) => {
     handleGenerateAnalysis(targetLanguage, callbacks, true);
   }, [handleGenerateAnalysis]);
+
+  const handleSwitchAnalysisMode = useCallback(async (
+    mode: AnalysisMode,
+    targetLang: string,
+    callbacks: { loadCommunityTracks: () => void }
+  ) => {
+    if (!currentTrack) return;
+    
+    // 1. Try to load local variant from SQLite
+    const langCode = getLanguageCode(targetLang);
+    try {
+      const localVariant = await sqliteService.getAnalysisVariant(currentTrack.trackId, mode, langCode);
+      if (localVariant && localVariant.payload) {
+        const blocks = localVariant.payload;
+        
+        // Extract phrases and map to lines
+        const extractedPhrases: any[] = [];
+        if (Array.isArray(blocks)) {
+          for (const block of blocks) {
+            if (block && Array.isArray(block.phrases)) {
+              for (const p of block.phrases) {
+                extractedPhrases.push(p);
+              }
+            }
+          }
+        }
+        
+        const updatedLines = currentTrack.lines.map((line) => {
+          const linePhrases = extractedPhrases
+            .filter((p: any) => p.lineKey && line.lineKey && p.lineKey === line.lineKey)
+            .map((p: any) => ({
+              id: p.id || `${currentTrack.trackId}:p:${(p.text || p.phrase || "").replace(/\s+/g, '_')}`,
+              text: p.text || p.phrase || "",
+              translation: p.translation || "",
+              explanation: p.explanation || "",
+              language: p.language || p.targetLanguage || langCode,
+              lemmas: p.lemmas || [],
+              type: 'phrase' as const
+            }));
+            
+          return {
+            ...line,
+            phrases: linePhrases
+          };
+        });
+        
+        const extractedMeaning = extractTrackMeaning(blocks) || currentTrack.meaning;
+        const meanings = {
+          ...currentTrack.meanings,
+          [langCode]: extractedMeaning || ""
+        };
+        
+        const updatedTrack: TrackLyricsData = {
+          ...currentTrack,
+          meaning: extractedMeaning,
+          meanings,
+          lines: updatedLines,
+          lectureBlocks: blocks
+        };
+        
+        setCurrentTrack(updatedTrack);
+        saveTrackData(updatedTrack.trackId, updatedTrack);
+        return;
+      }
+    } catch (e) {
+      console.warn("[useTrackSession] Error switching to local mode variant:", e);
+    }
+    
+    // 2. If not found, trigger generation for this mode
+    userPreferencesRepository.setPreference("lyrify_analysis_mode", mode);
+    const legacyVariant = mapCanonicalToLegacyRequest(mode);
+    userPreferencesRepository.setPreference("lyrify_lecture_variant", legacyVariant);
+    
+    await handleGenerateAnalysis(targetLang, callbacks, false);
+  }, [currentTrack, handleGenerateAnalysis]);
 
   const handleManualLyricsSearch = useCallback(async (customArtist?: string, customTitle?: string) => {
     if (!currentTrack) return;
@@ -861,6 +1023,7 @@ export function useTrackSession(): UseTrackSessionResult {
     handleSelectLyricOption,
     handleResetLyrics,
     handleAnalyzeStarredLines,
-    handleSourceLanguageOverride
+    handleSourceLanguageOverride,
+    handleSwitchAnalysisMode
   };
 }

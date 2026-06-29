@@ -46,7 +46,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
-import { Track, Artist, Album } from "./constants";
+import { Track, Artist, Album, AnalysisMode } from "./constants";
 import { SUPPORTED_LANGUAGES, isExperimentalLanguage, normalizeLanguageCode } from "./lib/languages";
 import { useUserCards } from "./hooks/useUserCards";
 import { usePlayback } from "./hooks/usePlayback";
@@ -603,6 +603,7 @@ export default function App() {
     theme,
     setTheme,
     lecturePromptVariant,
+    analysisMode,
     lyricsDisplayMode,
     isStarFilterActive,
     previewLyricsMode,
@@ -627,6 +628,7 @@ export default function App() {
     handleSetLyricsDisplayMode,
     handleToggleStarFilter,
     handleSetLecturePromptVariant,
+    handleSetAnalysisMode,
     handleOnboardingDismiss,
     handleOnboardingSelect,
     handleNextStepClick,
@@ -687,7 +689,8 @@ export default function App() {
     handleRegenerateAnalysis: handleRegenerateAnalysisRaw,
     handleManualLyricsSearch,
     handleSelectLyricOption: handleSelectLyricOptionRaw,
-    handleSourceLanguageOverride
+    handleSourceLanguageOverride,
+    handleSwitchAnalysisMode
   } = useTrackSession();
 
   const {
@@ -1139,6 +1142,13 @@ export default function App() {
 
   const handleGenerateAnalysis = async (force: boolean = false, customTrack?: TrackLyricsData) => {
     await handleGenerateAnalysisRaw(targetLanguage, { loadCommunityTracks }, force, customTrack);
+  };
+
+  const handleSetAnalysisModeAndSwitch = async (mode: AnalysisMode) => {
+    handleSetAnalysisMode(mode);
+    if (currentTrack) {
+      await handleSwitchAnalysisMode(mode, targetLanguage, { loadCommunityTracks });
+    }
   };
 
   const handleRegenerateAnalysis = async () => {
@@ -3360,6 +3370,8 @@ export default function App() {
                           }}
                           isGeneratingAnalysis={isGeneratingAnalysis}
                           handleRegenerateAnalysis={handleRegenerateAnalysis}
+                          analysisMode={analysisMode}
+                          handleSetAnalysisMode={handleSetAnalysisModeAndSwitch}
                         />
                       </motion.div>
                     ) : (

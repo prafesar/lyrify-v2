@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { TrackLyricsData, StructuredLectureBlock, StructuredSectionPhrase } from '../services/musicService';
 import { PhraseStatus, normalizePhraseKey } from '../services/cardService';
+import { AnalysisMode } from '../constants';
 import ReactMarkdown from 'react-markdown';
 import { PhraseCard, PhraseCardStatus } from './PhraseCard';
 import { computeLineKey } from '../services/lyricsPreprocessor';
@@ -35,6 +36,8 @@ interface StructuredAnalysisLectureProps {
     type?: string
   ) => void;
   speak: (text: string, onEnd?: () => void, lang?: string) => void;
+  analysisMode?: AnalysisMode;
+  handleSetAnalysisMode?: (mode: AnalysisMode) => void;
 }
 
 export const StructuredAnalysisLecture: React.FC<StructuredAnalysisLectureProps> = ({
@@ -45,7 +48,9 @@ export const StructuredAnalysisLecture: React.FC<StructuredAnalysisLectureProps>
   targetLanguage,
   phraseMetadata,
   handleSetAnalysisPhraseStatus,
-  speak
+  speak,
+  analysisMode,
+  handleSetAnalysisMode
 }) => {
   // Ordered target kinds of the blocks
   const targetKinds = ['overview', 'emotions', 'sections', 'lexical_groups', 'takeaways', 'notes'] as const;
@@ -362,6 +367,29 @@ export const StructuredAnalysisLecture: React.FC<StructuredAnalysisLectureProps>
   return (
     <div className="w-full font-sans text-app-fg select-text leading-relaxed pb-32" id="structured-lecture-analysis">
       
+      {/* Mode Switcher segmented control / pill buttons */}
+      {analysisMode && handleSetAnalysisMode && (
+        <div className="flex flex-wrap items-center gap-1 p-1 bg-app-card border border-app-card-border/40 rounded-2xl mb-6 max-w-lg shadow-sm" id="analysis-mode-selector">
+          {(['overview', 'vocabulary', 'phrases', 'style'] as const).map((mode) => {
+            const isActive = analysisMode === mode;
+            return (
+              <button
+                key={mode}
+                type="button"
+                onClick={() => handleSetAnalysisMode(mode)}
+                className={`flex-1 min-w-[70px] px-3.5 py-2 rounded-xl text-xs font-bold capitalize transition-all duration-200 cursor-pointer text-center select-none ${
+                  isActive
+                    ? 'bg-app-accent text-white shadow-sm'
+                    : 'text-app-muted hover:text-app-fg hover:bg-app-muted/5'
+                }`}
+              >
+                {mode}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       {/* Structured Continuous List of Blocks */}
       <div className="space-y-6">
         {blocks.map((block) => {

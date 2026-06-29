@@ -80,7 +80,11 @@ export class WorkerAIAdapter implements AiPort {
       modePref || userPreferencesRepository.getPreference("lyrify_lecture_variant", "compact")
     );
     const variant = mapCanonicalToLegacyRequest(canonicalMode);
-    return this.postToWorker<StructuredLectureBlock[]>("/api/v1/lecture/fetch", preparedInput, {
+    const requestBody = {
+      ...preparedInput,
+      analysisMode: canonicalMode
+    };
+    return this.postToWorker<StructuredLectureBlock[]>("/api/v1/lecture/fetch", requestBody, {
       "x-lyrify-lecture-variant": variant
     });
   }
@@ -269,7 +273,11 @@ export class WorkerAIAdapter implements AiPort {
       modePref || userPreferencesRepository.getPreference("lyrify_lecture_variant", "compact")
     );
     const variant = mapCanonicalToLegacyRequest(canonicalMode);
-    const blocks = await this.postToWorker<any[]>("/api/v1/lecture/fetch", preparedInput, {
+    const requestBody = {
+      ...preparedInput,
+      analysisMode: canonicalMode
+    };
+    const blocks = await this.postToWorker<any[]>("/api/v1/lecture/fetch", requestBody, {
       "x-lyrify-lecture-variant": variant
     });
     const results: any[] = [];
