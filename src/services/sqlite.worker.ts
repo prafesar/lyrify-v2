@@ -162,6 +162,74 @@ function bootstrapDb(sqlite3: any) {
             );
           `);
         }
+      },
+      {
+        version: 4,
+        up: (database: any) => {
+          // Analysis variants metadata table
+          database.exec(`
+            CREATE TABLE IF NOT EXISTS analysis_variants (
+              id TEXT PRIMARY KEY,
+              track_id TEXT NOT NULL,
+              mode TEXT NOT NULL,
+              target_language TEXT NOT NULL,
+              source_language TEXT NOT NULL,
+              status TEXT NOT NULL,
+              prompt_version INTEGER,
+              created_at INTEGER NOT NULL,
+              updated_at INTEGER NOT NULL,
+              UNIQUE(track_id, mode, target_language)
+            );
+          `);
+
+          // Analysis variant payloads detail table
+          database.exec(`
+            CREATE TABLE IF NOT EXISTS analysis_variant_payloads (
+              variant_id TEXT PRIMARY KEY,
+              payload_json TEXT NOT NULL,
+              FOREIGN KEY (variant_id) REFERENCES analysis_variants (id) ON DELETE CASCADE
+            );
+          `);
+        }
+      },
+      {
+        version: 5,
+        up: (database: any) => {
+          // Word forms vocabulary table
+          database.exec(`
+            CREATE TABLE IF NOT EXISTS word_forms (
+              id TEXT PRIMARY KEY,
+              language TEXT NOT NULL,
+              surface TEXT NOT NULL,
+              normalized_surface TEXT NOT NULL,
+              translation TEXT,
+              explanation TEXT,
+              created_at INTEGER NOT NULL,
+              UNIQUE(language, normalized_surface)
+            );
+          `);
+
+          // Track to word forms relational bridge
+          database.exec(`
+            CREATE TABLE IF NOT EXISTS track_word_forms (
+              track_id TEXT NOT NULL,
+              word_form_id TEXT NOT NULL,
+              occurrences_count INTEGER NOT NULL,
+              PRIMARY KEY (track_id, word_form_id),
+              FOREIGN KEY (word_form_id) REFERENCES word_forms (id) ON DELETE CASCADE
+            );
+          `);
+
+          // User word form knowledge status tracker
+          database.exec(`
+            CREATE TABLE IF NOT EXISTS user_word_form_status (
+              word_form_id TEXT PRIMARY KEY,
+              status TEXT NOT NULL,
+              updated_at INTEGER NOT NULL,
+              FOREIGN KEY (word_form_id) REFERENCES word_forms (id) ON DELETE CASCADE
+            );
+          `);
+        }
       }
     ];
 
@@ -344,6 +412,50 @@ async function init() {
       error("Error reading playlists at init:", e);
     }
 
+    const analysisVariants: Record<string, { variant: any, payload: any }> = {};
+    try {
+      db.exec({
+        sql: `
+          SELECT v.id, v.track_id, v.mode, v.target_language, v.source_language, v.status, v.prompt_version, v.created_at, v.updated_at, p.payload_json
+          FROM analysis_variants v
+          LEFT JOIN analysis_variant_payloads p ON v.id = p.variant_id
+        `,
+        rowMode: "object",
+        callback: (row: any) => {
+          try {
+            const variant = {
+              id: row.id,
+              trackId: row.track_id,
+              mode: row.mode,
+              targetLanguage: row.target_language,
+              sourceLanguage: row.source_language,
+              status: row.status,
+              promptVersion: row.prompt_version !== null ? Number(row.prompt_version) : undefined,
+              createdAt: Number(row.created_at),
+              updatedAt: Number(row.updated_at),
+            };
+            let payloadObj: any = null;
+            if (row.payload_json) {
+              try {
+                payloadObj = JSON.parse(row.payload_json);
+              } catch (parseErr) {
+                error(`[init] Failed to parse payload JSON for variant ${row.id}:`, parseErr);
+                payloadObj = null;
+              }
+            } else {
+              error(`[init] Missing payload JSON for variant ${row.id}`);
+            }
+            const key = `${row.track_id}_${row.mode}_${row.target_language}`;
+            analysisVariants[key] = { variant, payload: payloadObj };
+          } catch (e) {
+            error("Error parsing analysis variant in init:", e);
+          }
+        }
+      });
+    } catch (e) {
+      error("Error reading analysis variants at init:", e);
+    }
+
     self.postMessage({
       type: "INIT_OK",
       payload: {
@@ -354,6 +466,7 @@ async function init() {
         favoriteArtists,
         favoriteAlbums,
         playlists,
+        analysisVariants,
         storageMode,
       },
     });
@@ -433,6 +546,294 @@ self.onmessage = async (event) => {
         break;
       }
 
+      case "SAVE_ANALYSIS_VARIANT": {
+        const { variant, payload: payloadObj } = payload;
+        
+        try {
+          db.exec("BEGIN TRANSACTION;");
+
+          // Delete any existing variant with same trackId, mode, targetLanguage to ensure clean replacement without unique index conflict
+          db.exec({
+            sql: "DELETE FROM analysis_variants WHERE track_id = ? AND mode = ? AND target_language = ?",
+            bind: [String(variant.trackId), String(variant.mode), String(variant.targetLanguage)]
+          });
+
+          // Insert variant metadata
+          db.exec({
+            sql: `
+              INSERT INTO analysis_variants (id, track_id, mode, target_language, source_language, status, prompt_version, created_at, updated_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `,
+            bind: [
+              String(variant.id),
+              String(variant.trackId),
+              String(variant.mode),
+              String(variant.targetLanguage),
+              String(variant.sourceLanguage),
+              String(variant.status),
+              variant.promptVersion !== undefined && variant.promptVersion !== null ? Number(variant.promptVersion) : null,
+              Number(variant.createdAt),
+              Number(variant.updatedAt)
+            ]
+          });
+
+          // Insert variant payload
+          db.exec({
+            sql: "INSERT OR REPLACE INTO analysis_variant_payloads (variant_id, payload_json) VALUES (?, ?)",
+            bind: [String(variant.id), JSON.stringify(payloadObj)]
+          });
+
+          db.exec("COMMIT;");
+          self.postMessage({ type: "WRITE_OK", messageId });
+        } catch (err: any) {
+          try {
+            db.exec("ROLLBACK;");
+          } catch (rollbackErr) {
+            error("Failed to rollback SAVE_ANALYSIS_VARIANT transaction:", rollbackErr);
+          }
+          error("Error in SAVE_ANALYSIS_VARIANT transaction:", err);
+          self.postMessage({
+            type: "ERROR",
+            payload: `SAVE_ANALYSIS_VARIANT failed: ${err.message || String(err)}`,
+            messageId,
+          });
+        }
+        break;
+      }
+
+      case "GET_ANALYSIS_VARIANTS_FOR_TRACK": {
+        const { trackId } = payload;
+        const list: Array<{ variant: any, payload: any }> = [];
+        try {
+          db.exec({
+            sql: `
+              SELECT v.id, v.track_id, v.mode, v.target_language, v.source_language, v.status, v.prompt_version, v.created_at, v.updated_at, p.payload_json
+              FROM analysis_variants v
+              LEFT JOIN analysis_variant_payloads p ON v.id = p.variant_id
+              WHERE v.track_id = ?
+            `,
+            bind: [String(trackId)],
+            rowMode: "object",
+            callback: (row: any) => {
+              try {
+                const variant = {
+                  id: row.id,
+                  trackId: row.track_id,
+                  mode: row.mode,
+                  targetLanguage: row.target_language,
+                  sourceLanguage: row.source_language,
+                  status: row.status,
+                  promptVersion: row.prompt_version !== null && row.prompt_version !== undefined ? Number(row.prompt_version) : undefined,
+                  createdAt: Number(row.created_at),
+                  updatedAt: Number(row.updated_at),
+                };
+                let payloadObj: any = null;
+                if (row.payload_json) {
+                  try {
+                    payloadObj = JSON.parse(row.payload_json);
+                  } catch (parseErr) {
+                    error(`[GET_ANALYSIS_VARIANTS_FOR_TRACK] Failed to parse payload JSON for variant ${row.id}:`, parseErr);
+                    payloadObj = null;
+                  }
+                } else {
+                  error(`[GET_ANALYSIS_VARIANTS_FOR_TRACK] Missing payload JSON for variant ${row.id}`);
+                }
+                list.push({ variant, payload: payloadObj });
+              } catch (e) {
+                error("Error parsing analysis variant row:", e);
+              }
+            }
+          });
+        } catch (e) {
+          error("Error selecting analysis variants for track:", e);
+        }
+        self.postMessage({ type: "QUERY_OK", payload: list, messageId });
+        break;
+      }
+
+      case "SAVE_TRACK_WORD_FORMS": {
+        const { trackId, wordForms } = payload;
+        try {
+          db.exec("BEGIN TRANSACTION;");
+
+          // Clear existing relations for this track to do an upsert/overwrite
+          db.exec({
+            sql: "DELETE FROM track_word_forms WHERE track_id = ?",
+            bind: [String(trackId)]
+          });
+
+          for (const wf of wordForms) {
+            let wordFormId: string | null = null;
+            
+            // Try to find if word_form already exists
+            db.exec({
+              sql: "SELECT id FROM word_forms WHERE language = ? AND normalized_surface = ?",
+              bind: [String(wf.language), String(wf.normalizedSurface)],
+              rowMode: "object",
+              callback: (row: any) => {
+                wordFormId = row.id;
+              }
+            });
+
+            if (!wordFormId) {
+              // Generate standard random/unique id for wordform
+              wordFormId = "wf_" + Math.random().toString(36).substring(2, 11) + "_" + Date.now();
+              db.exec({
+                sql: `
+                  INSERT INTO word_forms (id, language, surface, normalized_surface, created_at)
+                  VALUES (?, ?, ?, ?, ?)
+                `,
+                bind: [
+                  wordFormId,
+                  String(wf.language),
+                  String(wf.surface),
+                  String(wf.normalizedSurface),
+                  Date.now()
+                ]
+              });
+            }
+
+            // Insert relational bridge
+            db.exec({
+              sql: `
+                INSERT INTO track_word_forms (track_id, word_form_id, occurrences_count)
+                VALUES (?, ?, ?)
+              `,
+              bind: [
+                String(trackId),
+                wordFormId,
+                Number(wf.count)
+              ]
+            });
+          }
+
+          db.exec("COMMIT;");
+          self.postMessage({ type: "WRITE_OK", messageId });
+        } catch (err: any) {
+          try {
+            db.exec("ROLLBACK;");
+          } catch (rollbackErr) {
+            error("Failed to rollback SAVE_TRACK_WORD_FORMS transaction:", rollbackErr);
+          }
+          error("Error in SAVE_TRACK_WORD_FORMS:", err);
+          self.postMessage({
+            type: "ERROR",
+            payload: `SAVE_TRACK_WORD_FORMS failed: ${err.message || String(err)}`,
+            messageId
+          });
+        }
+        break;
+      }
+
+      case "GET_TRACK_WORD_FORMS": {
+        const { trackId } = payload;
+        const list: any[] = [];
+        try {
+          db.exec({
+            sql: `
+              SELECT wf.id, wf.language, wf.surface, wf.normalized_surface, wf.translation, wf.explanation, twf.occurrences_count, uwfs.status, uwfs.updated_at
+              FROM track_word_forms twf
+              INNER JOIN word_forms wf ON twf.word_form_id = wf.id
+              LEFT JOIN user_word_form_status uwfs ON wf.id = uwfs.word_form_id
+              WHERE twf.track_id = ?
+            `,
+            bind: [String(trackId)],
+            rowMode: "object",
+            callback: (row: any) => {
+              list.push({
+                id: row.id,
+                language: row.language,
+                surface: row.surface,
+                normalizedSurface: row.normalized_surface,
+                translation: row.translation || undefined,
+                explanation: row.explanation || undefined,
+                count: Number(row.occurrences_count),
+                status: row.status || "new",
+                updatedAt: row.updated_at ? Number(row.updated_at) : undefined
+              });
+            }
+          });
+        } catch (err: any) {
+          error("Error in GET_TRACK_WORD_FORMS:", err);
+        }
+        self.postMessage({ type: "QUERY_OK", payload: list, messageId });
+        break;
+      }
+
+      case "SET_USER_WORD_FORM_STATUS": {
+        const { wordFormId, status, updatedAt } = payload;
+        try {
+          db.exec({
+            sql: `
+              INSERT OR REPLACE INTO user_word_form_status (word_form_id, status, updated_at)
+              VALUES (?, ?, ?)
+            `,
+            bind: [String(wordFormId), String(status), Number(updatedAt)]
+          });
+          self.postMessage({ type: "WRITE_OK", messageId });
+        } catch (err: any) {
+          error("Error in SET_USER_WORD_FORM_STATUS:", err);
+          self.postMessage({
+            type: "ERROR",
+            payload: `SET_USER_WORD_FORM_STATUS failed: ${err.message || String(err)}`,
+            messageId
+          });
+        }
+        break;
+      }
+
+      case "GET_TRACK_WORD_FORM_STATS": {
+        const { trackId } = payload;
+        let totalCount = 0;
+        let knownCount = 0;
+        let learningCount = 0;
+        let seenCount = 0;
+        let newCount = 0;
+        let ignoredCount = 0;
+        try {
+          db.exec({
+            sql: `
+              SELECT COALESCE(uwfs.status, 'new') AS status, COUNT(DISTINCT wf.id) AS unique_words
+              FROM track_word_forms twf
+              INNER JOIN word_forms wf ON twf.word_form_id = wf.id
+              LEFT JOIN user_word_form_status uwfs ON wf.id = uwfs.word_form_id
+              WHERE twf.track_id = ?
+              GROUP BY COALESCE(uwfs.status, 'new')
+            `,
+            bind: [String(trackId)],
+            rowMode: "object",
+            callback: (row: any) => {
+              const status = row.status;
+              const count = Number(row.unique_words);
+              totalCount += count;
+              if (status === "known") knownCount = count;
+              else if (status === "learning") learningCount = count;
+              else if (status === "seen") seenCount = count;
+              else if (status === "ignored") ignoredCount = count;
+              else if (status === "new") newCount = count;
+            }
+          });
+        } catch (err: any) {
+          error("Error in GET_TRACK_WORD_FORM_STATS:", err);
+        }
+        
+        const unknownCount = totalCount - knownCount - ignoredCount;
+        self.postMessage({
+          type: "QUERY_OK",
+          payload: {
+            totalCount,
+            knownCount,
+            learningCount,
+            seenCount,
+            newCount,
+            ignoredCount,
+            unknownCount
+          },
+          messageId
+        });
+        break;
+      }
+
       case "CLEAR_ALL": {
         db.exec("DELETE FROM preferences");
         db.exec("DELETE FROM recent_history");
@@ -442,6 +843,15 @@ self.onmessage = async (event) => {
         db.exec("DELETE FROM favorite_albums");
         db.exec("DELETE FROM playlists");
         db.exec("DELETE FROM playlist_items");
+        try {
+          db.exec("DELETE FROM analysis_variants");
+          db.exec("DELETE FROM analysis_variant_payloads");
+          db.exec("DELETE FROM track_word_forms");
+          db.exec("DELETE FROM user_word_form_status");
+          db.exec("DELETE FROM word_forms");
+        } catch (e) {
+          error("Error clearing analysis variants in CLEAR_ALL:", e);
+        }
         self.postMessage({ type: "WRITE_OK", messageId });
         break;
       }

@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { TrackLyricsData, StructuredLectureBlock, StructuredSectionPhrase } from '../services/musicService';
 import { PhraseStatus, normalizePhraseKey } from '../services/cardService';
+import { AnalysisMode } from '../constants';
 import ReactMarkdown from 'react-markdown';
 import { PhraseCard, PhraseCardStatus } from './PhraseCard';
 import { computeLineKey } from '../services/lyricsPreprocessor';
@@ -35,6 +36,18 @@ interface StructuredAnalysisLectureProps {
     type?: string
   ) => void;
   speak: (text: string, onEnd?: () => void, lang?: string) => void;
+  analysisMode?: AnalysisMode;
+  handleSetAnalysisMode?: (mode: AnalysisMode) => void;
+  wordFormStats?: {
+    totalCount: number;
+    knownCount: number;
+    learningCount: number;
+    seenCount: number;
+    newCount: number;
+    ignoredCount: number;
+    unknownCount: number;
+  } | null;
+  availableAnalysisModes?: AnalysisMode[];
 }
 
 export const StructuredAnalysisLecture: React.FC<StructuredAnalysisLectureProps> = ({
@@ -45,7 +58,11 @@ export const StructuredAnalysisLecture: React.FC<StructuredAnalysisLectureProps>
   targetLanguage,
   phraseMetadata,
   handleSetAnalysisPhraseStatus,
-  speak
+  speak,
+  analysisMode,
+  handleSetAnalysisMode,
+  wordFormStats,
+  availableAnalysisModes = []
 }) => {
   // Ordered target kinds of the blocks
   const targetKinds = ['overview', 'emotions', 'sections', 'lexical_groups', 'takeaways', 'notes'] as const;
@@ -362,6 +379,49 @@ export const StructuredAnalysisLecture: React.FC<StructuredAnalysisLectureProps>
   return (
     <div className="w-full font-sans text-app-fg select-text leading-relaxed pb-32" id="structured-lecture-analysis">
       
+      {/* Mode Switcher segmented control / pill buttons */}
+      {((analysisMode && handleSetAnalysisMode) || wordFormStats) && (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+          {analysisMode && handleSetAnalysisMode && (
+            <div className="flex flex-wrap items-center gap-1 p-1 bg-app-card border border-app-card-border/40 rounded-2xl max-w-lg shadow-sm flex-1 sm:flex-initial" id="analysis-mode-selector">
+              {(['overview', 'vocabulary', 'phrases', 'style'] as const).map((mode) => {
+                const isActive = analysisMode === mode;
+                const isSaved = availableAnalysisModes.includes(mode);
+                return (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => handleSetAnalysisMode(mode)}
+                    className={`flex-1 min-w-[70px] px-3.5 py-2 rounded-xl text-xs font-bold capitalize transition-all duration-200 cursor-pointer text-center select-none ${
+                      isActive
+                        ? 'bg-app-accent text-white shadow-sm'
+                        : 'text-app-muted hover:text-app-fg hover:bg-app-muted/5'
+                    }`}
+                  >
+                    <span className="flex items-center justify-center gap-1.5">
+                      {isSaved && (
+                        <span 
+                          className={`w-1.5 h-1.5 rounded-full ${isActive ? 'bg-white' : 'bg-emerald-500 animate-pulse'}`}
+                          title="Available offline"
+                        />
+                      )}
+                      <span>{mode}</span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {wordFormStats && wordFormStats.totalCount > 0 && (
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-app-card/30 border border-app-card-border/20 rounded-xl text-xs text-app-muted shadow-sm self-start sm:self-center" id="word-form-stats-indicator">
+              <span className="inline-block w-2 h-2 rounded-full bg-app-accent/70"></span>
+              <span>Unknown words: <strong className="text-app-fg">{wordFormStats.unknownCount}</strong> / {wordFormStats.totalCount}</span>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Structured Continuous List of Blocks */}
       <div className="space-y-6">
         {blocks.map((block) => {

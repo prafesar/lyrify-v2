@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { sqliteService, SqliteService } from "../services/sqliteService";
+import { WordFormExtractor } from "../services/wordFormExtractor";
 
 describe("SQLite Service Integration Smoke Tests", () => {
   beforeEach(async () => {
@@ -318,5 +319,369 @@ describe("SQLite Service Integration Smoke Tests", () => {
     expect(cachedAfterInit).not.toBeNull();
     expect(cachedAfterInit?.lines?.[0].isStarred).toBe(true);
     expect(cachedAfterInit?.lines?.[1].explanation?.summary).toBe("Insight for 2");
+  });
+
+  it("should successfully save and retrieve multiple distinct analysis variants for a single track without overwriting each other", async () => {
+    await sqliteService.clearAllUserData();
+
+    const variantVocab = {
+      id: "var_vocab_1",
+      trackId: "track_abc",
+      mode: "vocabulary" as const,
+      targetLanguage: "ru",
+      sourceLanguage: "en",
+      status: "completed",
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    };
+    const payloadVocab = { words: [{ word: "hello", translation: "привет" }] };
+
+    const variantPhrases = {
+      id: "var_phrases_2",
+      trackId: "track_abc",
+      mode: "phrases" as const,
+      targetLanguage: "ru",
+      sourceLanguage: "en",
+      status: "completed",
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    };
+    const payloadPhrases = { phrases: [{ phrase: "how are you", translation: "как дела" }] };
+
+    await sqliteService.saveAnalysisVariant(variantVocab, payloadVocab);
+    await sqliteService.saveAnalysisVariant(variantPhrases, payloadPhrases);
+
+    // Get specific variant by trackId + mode + targetLanguage
+    const retrievedVocab = await sqliteService.getAnalysisVariant("track_abc", "vocabulary", "ru");
+    expect(retrievedVocab).not.toBeNull();
+    expect(retrievedVocab?.variant.id).toBe("var_vocab_1");
+    expect(retrievedVocab?.payload).toEqual(payloadVocab);
+
+    const retrievedPhrases = await sqliteService.getAnalysisVariant("track_abc", "phrases", "ru");
+    expect(retrievedPhrases).not.toBeNull();
+    expect(retrievedPhrases?.variant.id).toBe("var_phrases_2");
+    expect(retrievedPhrases?.payload).toEqual(payloadPhrases);
+
+    // Get all variants for a specific track
+    const allVariants = await sqliteService.getAnalysisVariantsForTrack("track_abc");
+    expect(allVariants.length).toBe(2);
+    const modes = allVariants.map(v => v.variant.mode);
+    expect(modes).toContain("vocabulary");
+    expect(modes).toContain("phrases");
+  });
+
+  it("should survive reload/hydration and preserve multiple analysis variants across fresh instances", async () => {
+    await sqliteService.clearAllUserData();
+
+    const variantStyle = {
+      id: "var_style_3",
+      trackId: "track_xyz",
+      mode: "style" as const,
+      targetLanguage: "en",
+      sourceLanguage: "fr",
+      status: "completed",
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    };
+    const payloadStyle = { tone: "poetic" };
+
+    await sqliteService.saveAnalysisVariant(variantStyle, payloadStyle);
+
+    // Create a fresh instance representing window reload
+    const freshService = new SqliteService();
+    await freshService.init();
+
+    const restored = await freshService.getAnalysisVariant("track_xyz", "style", "en");
+    expect(restored).not.toBeNull();
+    expect(restored?.variant.id).toBe("var_style_3");
+    expect(restored?.payload).toEqual(payloadStyle);
+  });
+
+  it("should not affect or regress the existing track cache when saving analysis variants", async () => {
+    await sqliteService.clearAllUserData();
+
+    // 1. Save track cache data
+    const mockTrackData = {
+      id: "track_123",
+      rawLyrics: "Some lyrics",
+      processingStatus: { stage1_completed: true }
+    };
+    sqliteService.saveTrackData("track_123", mockTrackData);
+
+    // 2. Save an analysis variant for the same track
+    const variantStyle = {
+      id: "var_style_123",
+      trackId: "track_123",
+      mode: "style" as const,
+      targetLanguage: "en",
+      sourceLanguage: "fr",
+      status: "completed",
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    };
+    const payloadStyle = { tone: "lyrical" };
+    await sqliteService.saveAnalysisVariant(variantStyle, payloadStyle);
+
+    // 3. Verify track cache remains untouched
+    const cachedTrack = sqliteService.getCachedTrack("track_123");
+    expect(cachedTrack).not.toBeNull();
+    expect(cachedTrack?.rawLyrics).toBe("Some lyrics");
+
+    // 4. Verify analysis variant is stored correctly
+    const storedVariant = await sqliteService.getAnalysisVariant("track_123", "style", "en");
+    expect(storedVariant).not.toBeNull();
+    expect(storedVariant?.payload).toEqual(payloadStyle);
+  });
+
+  it("should successfully save, retrieve and coexist overview variant with other modes", async () => {
+    await sqliteService.clearAllUserData();
+
+    const overviewVariant = {
+      id: "var_overview_1",
+      trackId: "track_multi",
+      mode: "overview" as const,
+      targetLanguage: "ru",
+      sourceLanguage: "en",
+      status: "completed",
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    };
+    const overviewPayload = { summary: "This is a great track!" };
+
+    const styleVariant = {
+      id: "var_style_1",
+      trackId: "track_multi",
+      mode: "style" as const,
+      targetLanguage: "ru",
+      sourceLanguage: "en",
+      status: "completed",
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    };
+    const stylePayload = { tone: "optimistic" };
+
+    await sqliteService.saveAnalysisVariant(overviewVariant, overviewPayload);
+    await sqliteService.saveAnalysisVariant(styleVariant, stylePayload);
+
+    // Verify retrieval of both distinct modes
+    const retrievedOverview = await sqliteService.getAnalysisVariant("track_multi", "overview", "ru");
+    expect(retrievedOverview).not.toBeNull();
+    expect(retrievedOverview?.variant.mode).toBe("overview");
+    expect(retrievedOverview?.payload).toEqual(overviewPayload);
+
+    const retrievedStyle = await sqliteService.getAnalysisVariant("track_multi", "style", "ru");
+    expect(retrievedStyle).not.toBeNull();
+    expect(retrievedStyle?.variant.mode).toBe("style");
+    expect(retrievedStyle?.payload).toEqual(stylePayload);
+
+    // Verify all variants for track list
+    const list = await sqliteService.getAnalysisVariantsForTrack("track_multi");
+    expect(list.length).toBe(2);
+    const modes = list.map(item => item.variant.mode);
+    expect(modes).toContain("overview");
+    expect(modes).toContain("style");
+  });
+
+  it("should survive gracefully and return payload as null if the JSON is corrupted or missing", async () => {
+    await sqliteService.clearAllUserData();
+
+    const damagedVariant = {
+      id: "var_damaged_1",
+      trackId: "track_damaged",
+      mode: "overview" as const,
+      targetLanguage: "ru",
+      sourceLanguage: "en",
+      status: "completed",
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    };
+
+    // We can save it locally with malformed structure to test local cache robustness, or trigger fallback
+    // Since saveAnalysisVariant serializes properly, we can mock a scenario in localStorage or check worker queries with invalid string
+    await sqliteService.saveAnalysisVariant(damagedVariant, null);
+
+    // Verify getAnalysisVariant returns it successfully with payload: null
+    const retrieved = await sqliteService.getAnalysisVariant("track_damaged", "overview", "ru");
+    expect(retrieved).not.toBeNull();
+    expect(retrieved?.variant.id).toBe("var_damaged_1");
+    expect(retrieved?.payload).toBeNull();
+  });
+
+  describe("WordFormExtractor & SQLite Word Forms Support", () => {
+    it("should correctly clean punctuation and extract word forms with occurrences counts", () => {
+      const lyrics = "Love, love, LOVE! I love you, baby!";
+      const forms = WordFormExtractor.extractWordForms(lyrics, "en");
+
+      // We expect unique words: "love", "i", "you", "baby"
+      expect(forms.length).toBe(4);
+
+      const loveForm = forms.find((f) => f.normalizedSurface === "love");
+      expect(loveForm).toBeDefined();
+      expect(loveForm?.count).toBe(4);
+      expect(loveForm?.language).toBe("en");
+      // Since "love" lowercase exists, surface should be lowercase
+      expect(loveForm?.surface).toBe("love");
+
+      const babyForm = forms.find((f) => f.normalizedSurface === "baby");
+      expect(babyForm).toBeDefined();
+      expect(babyForm?.count).toBe(1);
+      expect(babyForm?.surface).toBe("baby");
+    });
+
+    it("should handle non-English text with spaces (e.g., Russian)", () => {
+      const lyrics = "Привет, мир! О, прекрасный приветливый мир.";
+      const forms = WordFormExtractor.extractWordForms(lyrics, "ru");
+
+      const mirForm = forms.find((f) => f.normalizedSurface === "мир");
+      expect(mirForm).toBeDefined();
+      expect(mirForm?.count).toBe(2);
+      expect(mirForm?.language).toBe("ru");
+    });
+
+    it("should extract, store, and retrieve track word forms under SqliteService", async () => {
+      const trackId = "track_word_test_1";
+      const lyrics = "Dance dance dance, singing a song.";
+      
+      await sqliteService.extractAndStoreTrackWordForms(trackId, lyrics, "en");
+      
+      const forms = await sqliteService.getTrackWordForms(trackId);
+      expect(forms.length).toBe(4); // "dance", "singing", "a", "song"
+
+      const danceForm = forms.find((f) => f.normalizedSurface === "dance");
+      expect(danceForm).toBeDefined();
+      expect(danceForm?.count).toBe(3);
+      expect(danceForm?.status).toBe("new"); // Default status is "new"
+    });
+
+    it("should support updating and reading user knowledge status per word form", async () => {
+      const trackId = "track_word_test_2";
+      const lyrics = "Learning is fun, learning is life.";
+      
+      await sqliteService.extractAndStoreTrackWordForms(trackId, lyrics, "en");
+      const formsBefore = await sqliteService.getTrackWordForms(trackId);
+      
+      const learningForm = formsBefore.find((f) => f.normalizedSurface === "learning");
+      expect(learningForm).toBeDefined();
+      expect(learningForm?.status).toBe("new");
+
+      // Set to "learning"
+      await sqliteService.setUserWordFormStatus(learningForm!.id, "learning");
+
+      // Re-fetch to verify updated status
+      const formsAfter = await sqliteService.getTrackWordForms(trackId);
+      const learningFormAfter = formsAfter.find((f) => f.normalizedSurface === "learning");
+      expect(learningFormAfter?.status).toBe("learning");
+      expect(learningFormAfter?.updatedAt).toBeDefined();
+
+      // Ensure other word forms are still "new"
+      const funForm = formsAfter.find((f) => f.normalizedSurface === "fun");
+      expect(funForm?.status).toBe("new");
+    });
+
+    it("should compute correct known/unknown word counts and statistics", async () => {
+      const trackId = "track_word_test_3";
+      const lyrics = "First second third fourth fifth.";
+      
+      await sqliteService.extractAndStoreTrackWordForms(trackId, lyrics, "en");
+      const forms = await sqliteService.getTrackWordForms(trackId);
+      
+      const first = forms.find((f) => f.normalizedSurface === "first");
+      const second = forms.find((f) => f.normalizedSurface === "second");
+      const third = forms.find((f) => f.normalizedSurface === "third");
+
+      // Mark first as known, second as learning, third as ignored
+      await sqliteService.setUserWordFormStatus(first!.id, "known");
+      await sqliteService.setUserWordFormStatus(second!.id, "learning");
+      await sqliteService.setUserWordFormStatus(third!.id, "ignored");
+
+      const stats = await sqliteService.getTrackWordFormStats(trackId);
+      // Total distinct: 5
+      expect(stats.totalCount).toBe(5);
+      expect(stats.knownCount).toBe(1);      // first
+      expect(stats.learningCount).toBe(1);   // second
+      expect(stats.ignoredCount).toBe(1);    // third
+      expect(stats.newCount).toBe(2);        // fourth, fifth
+      
+      // Unknown count is total - known - ignored = 5 - 1 - 1 = 3 (learning + new)
+      expect(stats.unknownCount).toBe(3);
+
+      // Verify individual lookup dictionary status
+      const statuses = await sqliteService.getTrackWordFormStatuses(trackId);
+      expect(statuses[first!.id]).toBe("known");
+      expect(statuses[second!.id]).toBe("learning");
+      expect(statuses[third!.id]).toBe("ignored");
+    });
+
+    it("should extract word forms and make stats available to UI/state layer when track with lyrics is opened", async () => {
+      const trackId = "track_integration_open_test";
+      const lyrics = "Hello world! This is a test. Hello world again.";
+      const sourceLanguage = "en";
+
+      // Simulate opening/loading of a track with lyrics by calling extract and store
+      await sqliteService.extractAndStoreTrackWordForms(trackId, lyrics, sourceLanguage);
+
+      // Verify that stats are correctly computed and loaded for UI consumption
+      const stats = await sqliteService.getTrackWordFormStats(trackId);
+      expect(stats).toBeDefined();
+      expect(stats.totalCount).toBeGreaterThan(0);
+      expect(stats.unknownCount).toBe(stats.totalCount); // since all are brand new
+      expect(stats.knownCount).toBe(0);
+      expect(stats.learningCount).toBe(0);
+    });
+
+    it("should correctly update available analysis modes when saving an analysis variant", async () => {
+      const trackId = "track_availability_test";
+      const variantOverview = {
+        id: "variant_1",
+        trackId,
+        mode: "overview" as const,
+        targetLanguage: "ru",
+        sourceLanguage: "en",
+        status: "completed",
+        createdAt: Date.now(),
+        updatedAt: Date.now()
+      };
+
+      const variantPhrases = {
+        id: "variant_2",
+        trackId,
+        mode: "phrases" as const,
+        targetLanguage: "ru",
+        sourceLanguage: "en",
+        status: "completed",
+        createdAt: Date.now(),
+        updatedAt: Date.now()
+      };
+
+      // Initially no variants
+      const initialVariants = await sqliteService.getAnalysisVariantsForTrack(trackId);
+      expect(initialVariants).toHaveLength(0);
+
+      let eventReceived = false;
+      const unsubscribe = sqliteService.subscribe((event) => {
+        if (event === "analysis_variants") {
+          eventReceived = true;
+        }
+      });
+
+      // Save overview
+      await sqliteService.saveAnalysisVariant(variantOverview, { blocks: [] });
+      
+      const afterOverview = await sqliteService.getAnalysisVariantsForTrack(trackId);
+      expect(afterOverview).toHaveLength(1);
+      expect(afterOverview[0].variant.mode).toBe("overview");
+      expect(eventReceived).toBe(true);
+
+      // Save phrases
+      eventReceived = false;
+      await sqliteService.saveAnalysisVariant(variantPhrases, { blocks: [] });
+      const afterPhrases = await sqliteService.getAnalysisVariantsForTrack(trackId);
+      expect(afterPhrases).toHaveLength(2);
+      expect(afterPhrases.map(item => item.variant.mode)).toContain("overview");
+      expect(afterPhrases.map(item => item.variant.mode)).toContain("phrases");
+      expect(eventReceived).toBe(true);
+
+      unsubscribe();
+    });
   });
 });

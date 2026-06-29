@@ -236,3 +236,73 @@ export function cascadeTrackLanguageUpdate(
     phrases: updatedPhrases
   };
 }
+
+export interface LanguageLocalizedNames {
+  native: string;
+  en: string;
+  ru: string;
+  es: string;
+  de: string;
+  fr: string;
+  it: string;
+  zh: string;
+}
+
+export const LOCALIZED_LANGUAGES: Record<string, LanguageLocalizedNames> = {
+  en: { native: 'English', en: 'English', ru: 'Английский', es: 'Inglés', de: 'Englisch', fr: 'Anglais', it: 'Inglese', zh: '英语' },
+  es: { native: 'Español', en: 'Spanish', ru: 'Испанский', es: 'Español', de: 'Spanisch', fr: 'Espagnol', it: 'Spagnolo', zh: '西班牙语' },
+  ru: { native: 'Русский', en: 'Russian', ru: 'Русский', es: 'Ruso', de: 'Russisch', fr: 'Russe', it: 'Russo', zh: '俄语' },
+  fr: { native: 'Français', en: 'French', ru: 'Французский', es: 'Francés', de: 'Französisch', fr: 'Français', it: 'Francese', zh: '法语' },
+  de: { native: 'Deutsch', en: 'German', ru: 'Немецкий', es: 'Alemán', de: 'Deutsch', fr: 'Allemand', it: 'Tedesco', zh: '德语' },
+  pl: { native: 'Polski', en: 'Polish', ru: 'Польский', es: 'Polaco', de: 'Polnisch', fr: 'Polonais', it: 'Polacco', zh: '波兰语' },
+  ja: { native: '日本語', en: 'Japanese', ru: 'Японский', es: 'Japonés', de: 'Japanisch', fr: 'Japonais', it: 'Giapponese', zh: '日语' },
+  ko: { native: '한국어', en: 'Korean', ru: 'Корейский', es: 'Coreano', de: 'Koreanisch', fr: 'Coréen', it: 'Coreano', zh: '韩语' },
+  zh: { native: '中文', en: 'Mandarin Chinese', ru: 'Китайский (мандарин)', es: 'Chino mandarín', de: 'Mandarin-Chinesisch', fr: 'Chinois mandarin', it: 'Cinese mandarino', zh: '中文（普通话）' },
+  it: { native: 'Italiano', en: 'Italian', ru: 'Итальянский', es: 'Italiano', de: 'Italienisch', fr: 'Italien', it: 'Italiano', zh: '意大利语' },
+  pt: { native: 'Português', en: 'Portuguese', ru: 'Португальский', es: 'Portugués', de: 'Portugiesisch', fr: 'Portugais', it: 'Portoghese', zh: '葡萄牙语' },
+  ar: { native: 'العربية', en: 'Arabic', ru: 'Арабский', es: 'Árabe', de: 'Arabisch', fr: 'Arabe', it: 'Arabo', zh: '阿拉伯语' },
+  hi: { native: 'हिन्दी', en: 'Hindi', ru: 'Хинди', es: 'Hindi', de: 'Hindi', fr: 'Hindi', it: 'Hindi', zh: '印地语' },
+  lt: { native: 'Lietuvių', en: 'Lithuanian', ru: 'Литовский', es: 'Lituano', de: 'Litauisch', fr: 'Lituanien', it: 'Lituano', zh: '立陶宛语' },
+  id: { native: 'Bahasa Indonesia', en: 'Indonesian', ru: 'Индонезийский', es: 'Indonesio', de: 'Indonesisch', fr: 'Indonésien', it: 'Indonesiano', zh: '印尼语' },
+  bn: { native: 'বাংলা', en: 'Bengali', ru: 'Бенгальский', es: 'Bengalí', de: 'Bengalisch', fr: 'Bengali', it: 'Bengalese', zh: '孟加拉语' },
+  vi: { native: 'Tiếng Việt', en: 'Vietnamese', ru: 'Вьетнамский', es: 'Vietnamita', de: 'Vietnamesisch', fr: 'Vietnamien', it: 'Vietnamita', zh: '越南语' },
+  ur: { native: 'اردو', en: 'Urdu', ru: 'Урду', es: 'Urdu', de: 'Urdu', fr: 'Ourdou', it: 'Urdu', zh: '乌尔都语' },
+  sv: { native: 'Svenska', en: 'Swedish', ru: 'Шведский', es: 'Sueco', de: 'Schwedisch', fr: 'Suédois', it: 'Svedese', zh: '瑞典语' },
+  da: { native: 'Dansk', en: 'Danish', ru: 'Датский', es: 'Danés', de: 'Dänisch', fr: 'Danois', it: 'Danese', zh: '丹麦语' },
+  no: { native: 'Norsk', en: 'Norwegian', ru: 'Норвежский', es: 'Noruego', de: 'Norwegisch', fr: 'Norvégien', it: 'Norvegese', zh: '挪威语' },
+  fi: { native: 'Suomi', en: 'Finnish', ru: 'Финский', es: 'Finlandés', de: 'Finnisch', fr: 'Finnois', it: 'Finlandese', zh: '芬兰语' },
+  tr: { native: 'Türkçe', en: 'Turkish', ru: 'Turco', es: 'Turco', de: 'Türkisch', fr: 'Turc', it: 'Turco', zh: '土耳其语' },
+  nl: { native: 'Nederlands', en: 'Dutch', ru: 'Нидерландский', es: 'Neerlandés', de: 'Niederländisch', fr: 'Néerlandais', it: 'Olandese', zh: '荷兰语' },
+  uk: { native: 'Українська', en: 'Ukrainian', ru: 'Украинский', es: 'Ucraniano', de: 'Ukrainisch', fr: 'Ukrainien', it: 'Ucraino', zh: '乌克兰语' },
+  el: { native: 'Ελληνικά', en: 'Greek', ru: 'Греческий', es: 'Griego', de: 'Griechisch', fr: 'Grec', it: 'Greco', zh: '希腊语' },
+  he: { native: 'עברית', en: 'Hebrew', ru: 'Иврит', es: 'Hebreo', de: 'Hebräisch', fr: 'Hébreu', it: 'Ebraico', zh: '希伯来语' },
+  cs: { native: 'Čeština', en: 'Czech', ru: 'Чешский', es: 'Checo', de: 'Tschechisch', fr: 'Tchèque', it: 'Ceco', zh: '捷克语' },
+  hu: { native: 'Magyar', en: 'Hungarian', ru: 'Венгерский', es: 'Húngaro', de: 'Ungarisch', fr: 'Hongrois', it: 'Ungherese', zh: '匈牙利语' },
+  ro: { native: 'Română', en: 'Romanian', ru: 'Румынский', es: 'Rumano', de: 'Rumänisch', fr: 'Roumain', it: 'Rumeno', zh: '罗马尼亚语' },
+  sk: { native: 'Slovenčina', en: 'Slovak', ru: 'Словацкий', es: 'Eslovaco', de: 'Slowakisch', fr: 'Slovaque', it: 'Slovacco', zh: '斯洛伐克语' },
+  bg: { native: 'Български', en: 'Bulgarian', ru: 'Болгарский', es: 'Búlgaro', de: 'Bulgarisch', fr: 'Bulgare', it: 'Bulgaro', zh: '保加利亚语' },
+  hr: { native: 'Hrvatski', en: 'Croatian', ru: 'Хорватский', es: 'Croata', de: 'Kroatisch', fr: 'Croate', it: 'Croato', zh: '克罗地亚语' },
+  sr: { native: 'Српски', en: 'Serbian', ru: 'Сербский', es: 'Serbio', de: 'Serbisch', fr: 'Serbe', it: 'Serbo', zh: '塞尔维亚语' },
+  sl: { native: 'Slovenščina', en: 'Slovenian', ru: 'Словенский', es: 'Esloveno', de: 'Slowenisch', fr: 'Slovène', it: 'Sloveno', zh: '斯洛文尼亚语' },
+  et: { native: 'Eesti', en: 'Estonian', ru: 'Эстонский', es: 'Estonio', de: 'Estnisch', fr: 'Estonien', it: 'Estone', zh: '爱沙尼亚语' },
+  lv: { native: 'Latviešu', en: 'Latvian', ru: 'Латышский', es: 'Letón', de: 'Lettisch', fr: 'Letton', it: 'Lettone', zh: '拉脱维亚语' },
+  th: { native: 'ไทย', en: 'Thai', ru: 'Тайский', es: 'Tailandés', de: 'Thailändisch', fr: 'Thaïlandais', it: 'Tailandese', zh: '泰语' },
+  ms: { native: 'Bahasa Melayu', en: 'Malay', ru: 'Малайский', es: 'Malayo', de: 'Malaiisch', fr: 'Malais', it: 'Malese', zh: '马来语' },
+  fa: { native: 'فارسی', en: 'Persian', ru: 'Persian', es: 'Persa', de: 'Persisch', fr: 'Persan', it: 'Persiano', zh: '波斯语' }
+};
+
+export function getLocalizedLanguageName(code: string | null | undefined, uiLanguage: string): string {
+  if (!code) return 'English';
+  const norm = normalizeLanguageCode(code) || 'en';
+  const loc = LOCALIZED_LANGUAGES[norm];
+  if (!loc) {
+    return getLanguageDisplayName(code);
+  }
+  return loc[uiLanguage as keyof LanguageLocalizedNames] || loc.en;
+}
+
+export function getNativeLanguageName(code: string | null | undefined): string {
+  if (!code) return 'English';
+  const norm = normalizeLanguageCode(code) || 'en';
+  return LOCALIZED_LANGUAGES[norm]?.native || getLanguageDisplayName(code);
+}

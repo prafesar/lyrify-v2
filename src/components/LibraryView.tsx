@@ -257,8 +257,9 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
   };
 
   return (
-    <div className="w-full flex-1 overflow-y-auto px-6 pt-6 pb-32 max-w-5xl mx-auto scrollbar-hide" id="cantolex-library-view-main">
-      <AnimatePresence mode="wait">
+    <div className="w-full flex-1 overflow-y-auto scrollbar-hide" id="cantolex-library-view-main">
+      <div className="max-w-5xl mx-auto w-full px-6 pt-6 pb-32">
+        <AnimatePresence mode="wait">
         {!activeSelectedPlaylist ? (
           <motion.div
             key="library-root"
@@ -1029,6 +1030,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
           </div>
         )}
       </AnimatePresence>
+      </div>
     </div>
   );
 };

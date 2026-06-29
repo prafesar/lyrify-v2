@@ -46,7 +46,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
-import { Track, Artist, Album } from "./constants";
+import { Track, Artist, Album, AnalysisMode } from "./constants";
 import { SUPPORTED_LANGUAGES, isExperimentalLanguage, normalizeLanguageCode } from "./lib/languages";
 import { useUserCards } from "./hooks/useUserCards";
 import { usePlayback } from "./hooks/usePlayback";
@@ -603,6 +603,7 @@ export default function App() {
     theme,
     setTheme,
     lecturePromptVariant,
+    analysisMode,
     lyricsDisplayMode,
     isStarFilterActive,
     previewLyricsMode,
@@ -627,6 +628,7 @@ export default function App() {
     handleSetLyricsDisplayMode,
     handleToggleStarFilter,
     handleSetLecturePromptVariant,
+    handleSetAnalysisMode,
     handleOnboardingDismiss,
     handleOnboardingSelect,
     handleNextStepClick,
@@ -687,7 +689,10 @@ export default function App() {
     handleRegenerateAnalysis: handleRegenerateAnalysisRaw,
     handleManualLyricsSearch,
     handleSelectLyricOption: handleSelectLyricOptionRaw,
-    handleSourceLanguageOverride
+    handleSourceLanguageOverride,
+    handleSwitchAnalysisMode,
+    wordFormStats,
+    availableAnalysisModes
   } = useTrackSession();
 
   const {
@@ -1139,6 +1144,13 @@ export default function App() {
 
   const handleGenerateAnalysis = async (force: boolean = false, customTrack?: TrackLyricsData) => {
     await handleGenerateAnalysisRaw(targetLanguage, { loadCommunityTracks }, force, customTrack);
+  };
+
+  const handleSetAnalysisModeAndSwitch = async (mode: AnalysisMode) => {
+    handleSetAnalysisMode(mode);
+    if (currentTrack) {
+      await handleSwitchAnalysisMode(mode, targetLanguage, { loadCommunityTracks });
+    }
   };
 
   const handleRegenerateAnalysis = async () => {
@@ -1743,8 +1755,9 @@ export default function App() {
               initial={{ opacity: 0, scale: 0.98 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.98 }}
-              className="flex-1 overflow-y-auto px-6 pt-8 pb-32 max-w-5xl mx-auto w-full scrollbar-hide"
+              className="flex-1 overflow-y-auto w-full scrollbar-hide"
             >
+              <div className="max-w-5xl mx-auto w-full px-6 pt-8 pb-32">
               {/* 🎯 Daily Goal Details (Daily Milestones) */}
               {!searchResults.length && !artistDetails && !albumDetails && (
                 <DailyProgressBlock
@@ -2332,6 +2345,7 @@ export default function App() {
                   </motion.div>
                 )}
               </AnimatePresence>
+              </div>
             </motion.div>
           )}
 
@@ -2350,8 +2364,9 @@ export default function App() {
                 onTouchStart={registerUserScrollInteraction}
                 onTouchMove={registerUserScrollInteraction}
                 onMouseDown={registerUserScrollInteraction}
-                className="flex-1 overflow-y-auto px-4 sm:px-8 pt-0 sm:pt-0 pb-12 scrollbar-hide relative w-full max-w-5xl mx-auto"
+                className="flex-1 overflow-y-auto scrollbar-hide relative w-full"
               >
+                <div className="max-w-5xl mx-auto w-full px-4 sm:px-8 pt-0 sm:pt-0 pb-12">
                 <div className="mb-2 px-3 sm:px-6 pt-6 sm:pt-8 animate-in fade-in duration-300">
                   {isLoadingLyrics && (
                     <div className="flex items-center justify-end h-6 mb-1">
@@ -3357,6 +3372,10 @@ export default function App() {
                           }}
                           isGeneratingAnalysis={isGeneratingAnalysis}
                           handleRegenerateAnalysis={handleRegenerateAnalysis}
+                          analysisMode={analysisMode}
+                          handleSetAnalysisMode={handleSetAnalysisModeAndSwitch}
+                          wordFormStats={wordFormStats}
+                          availableAnalysisModes={availableAnalysisModes}
                         />
                       </motion.div>
                     ) : (
@@ -3480,6 +3499,7 @@ export default function App() {
                   </div>
                 )}
               </div>
+              </div>
             </motion.div>
           )}
 
@@ -3513,8 +3533,8 @@ export default function App() {
               setTargetLanguage={setTargetLanguage}
               theme={theme}
               setTheme={setTheme}
-              lecturePromptVariant={lecturePromptVariant}
-              setLecturePromptVariant={handleSetLecturePromptVariant}
+              analysisMode={analysisMode}
+              setAnalysisMode={handleSetAnalysisMode}
               onResetData={resetUserData}
               onClose={() => goBack({ type: "explore" })}
             />
@@ -4234,7 +4254,7 @@ export default function App() {
                       {isExperimentalLanguage(currentTrack.sourceLanguage) && (
                         <p className="text-[10px] text-yellow-500 font-semibold flex items-center gap-1 mt-1">
                           <AlertCircle size={10} className="shrink-0" />
-                          AI can try this language, but analysis quality may vary.
+                          {t('languageSelector.experimentalWarning')}
                         </p>
                       )}
                     </div>

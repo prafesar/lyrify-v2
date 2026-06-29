@@ -1,6 +1,7 @@
 import { Track, TrackLyricsData } from "./musicService";
-import { Artist, Album } from "../constants";
+import { Artist, Album, AnalysisMode, AnalysisVariant, WordFormStatus, StoredWordForm, UserWordFormStatus } from "../constants";
 import { normalizeLanguageCode } from "../lib/languages";
+import { WordFormExtractor } from "./wordFormExtractor";
 
 export class SqliteService {
   private worker: Worker | null = null;
@@ -16,6 +17,10 @@ export class SqliteService {
   private favoriteArtists: Artist[] = [];
   private favoriteAlbums: Album[] = [];
   private playlists: any[] = [];
+  private analysisVariants: Record<string, { variant: AnalysisVariant; payload: any }> = {};
+  private wordForms: Record<string, StoredWordForm> = {};
+  private trackWordForms: Record<string, Array<{ wordFormId: string; count: number }>> = {};
+  private userWordFormStatus: Record<string, UserWordFormStatus> = {};
 
   // Track async callbacks for background writes/commands
   private pendingCallbacks = new Map<string, { resolve: (res?: any) => void; reject: (err: any) => void }>();
@@ -62,6 +67,13 @@ export class SqliteService {
         if (trackCacheBackup) {
           this.trackCache = JSON.parse(trackCacheBackup) || {};
         }
+
+        const analysisVariantsBackup = localStorage.getItem("cantolex_analysis_variants_backup");
+        if (analysisVariantsBackup) {
+          this.analysisVariants = JSON.parse(analysisVariantsBackup) || {};
+        }
+
+        this.getWordFormsBackup();
       }
     } catch (e) {
       console.warn("[SqliteService] Failed to read sync backups from localStorage under construction:", e);
@@ -289,6 +301,24 @@ export class SqliteService {
     }
   }
 
+  private async seedAnalysisVariantsToWorker() {
+    try {
+      console.log("[SqliteService] Seeding analysis variants backup to SQLite worker...");
+      const keys = Object.keys(this.analysisVariants);
+      if (keys.length > 0) {
+        for (const key of keys) {
+          const item = this.analysisVariants[key];
+          await this.sendWorkerMsgInternal("SAVE_ANALYSIS_VARIANT", {
+            variant: item.variant,
+            payload: item.payload
+          });
+        }
+      }
+    } catch (err) {
+      console.warn("[SqliteService] Failed to seed analysis variants to worker:", err);
+    }
+  }
+
   // --- Change Listener Subscription System ---
   public subscribe(listener: (event: string) => void): () => void {
     this.changeListeners.add(listener);
@@ -330,7 +360,7 @@ export class SqliteService {
           const { type, payload, messageId } = event.data;
 
           if (type === "INIT_OK") {
-            const { preferences, recentHistory, trackCache, favorites, favoriteArtists, favoriteAlbums, playlists, storageMode: sMode } = payload;
+            const { preferences, recentHistory, trackCache, favorites, favoriteArtists, favoriteAlbums, playlists, analysisVariants, storageMode: sMode } = payload;
             this.storageMode = sMode || "opfs";
 
             // Merge SQLite database preferences with our current in-memory cache,
@@ -400,6 +430,7 @@ export class SqliteService {
               this.favoriteArtists = this.getFavoriteArtistsBackup();
               this.favoriteAlbums = this.getFavoriteAlbumsBackup();
               this.playlists = this.getPlaylistsBackup();
+              this.analysisVariants = this.getAnalysisVariantsBackup();
 
               // Seed everything to the transient worker, fully awaiting it
               await this.seedRecentTracksToWorker();
@@ -408,6 +439,7 @@ export class SqliteService {
               await this.seedFavoriteAlbumsToWorker();
               await this.seedPlaylistsToWorker();
               await this.seedTrackCacheToWorker();
+              await this.seedAnalysisVariantsToWorker();
             } else {
               // OPFS Mode: Check if worker has populated collections on a per-domain basis
 
@@ -473,6 +505,20 @@ export class SqliteService {
                   await this.seedTrackCacheToWorker();
                 }
               }
+
+              // 5. Analysis Variants Domain
+              if (analysisVariants && Object.keys(analysisVariants).length > 0) {
+                this.analysisVariants = {
+                  ...analysisVariants,
+                  ...this.analysisVariants
+                };
+                this.saveAnalysisVariantsBackup(this.analysisVariants);
+              } else {
+                this.analysisVariants = this.getAnalysisVariantsBackup();
+                if (Object.keys(this.analysisVariants).length > 0) {
+                  await this.seedAnalysisVariantsToWorker();
+                }
+              }
             }
 
             this.isInitialized = true;
@@ -488,6 +534,7 @@ export class SqliteService {
             this.favoriteArtists = this.getFavoriteArtistsBackup();
             this.favoriteAlbums = this.getFavoriteAlbumsBackup();
             this.playlists = this.getPlaylistsBackup();
+            this.analysisVariants = this.getAnalysisVariantsBackup();
 
             this.isInitialized = true;
             resolve();
@@ -666,6 +713,10 @@ export class SqliteService {
     this.favoriteArtists = [];
     this.favoriteAlbums = [];
     this.playlists = [];
+    this.analysisVariants = {};
+    this.wordForms = {};
+    this.trackWordForms = {};
+    this.userWordFormStatus = {};
     try {
       if (typeof window !== "undefined" && window.localStorage) {
         localStorage.removeItem("cantolex_sqlite_prefs_sync");
@@ -675,6 +726,10 @@ export class SqliteService {
         localStorage.removeItem("cantolex_favorite_albums_backup");
         localStorage.removeItem("cantolex_playlists_backup");
         localStorage.removeItem("cantolex_track_cache_backup");
+        localStorage.removeItem("cantolex_analysis_variants_backup");
+        localStorage.removeItem("cantolex_word_forms_backup");
+        localStorage.removeItem("cantolex_track_word_forms_backup");
+        localStorage.removeItem("cantolex_user_word_form_status_backup");
       }
     } catch (e) {
       console.warn("[SqliteService] Failed to clear local sync cache:", e);
@@ -1004,6 +1059,333 @@ export class SqliteService {
         console.warn("[SqliteService] Failed to delete playlist in worker:", err);
       }
     }
+  }
+
+  private getAnalysisVariantsBackup(): Record<string, { variant: AnalysisVariant; payload: any }> {
+    try {
+      if (typeof window !== "undefined" && window.localStorage) {
+        const val = localStorage.getItem("cantolex_analysis_variants_backup");
+        if (val) {
+          return JSON.parse(val);
+        }
+      }
+    } catch (e) {
+      console.warn("[SqliteService] Failed to read analysis variants backup from localStorage:", e);
+    }
+    return {};
+  }
+
+  private saveAnalysisVariantsBackup(variants: Record<string, { variant: AnalysisVariant; payload: any }>) {
+    try {
+      if (typeof window !== "undefined" && window.localStorage) {
+        localStorage.setItem("cantolex_analysis_variants_backup", JSON.stringify(variants));
+      }
+    } catch (e) {
+      console.warn("[SqliteService] Failed to write analysis variants backup to localStorage:", e);
+    }
+  }
+
+  public async saveAnalysisVariant(variant: AnalysisVariant, payload: any): Promise<void> {
+    const key = `${variant.trackId}_${variant.mode}_${variant.targetLanguage}`;
+    this.analysisVariants[key] = { variant, payload };
+    this.saveAnalysisVariantsBackup(this.analysisVariants);
+    this.notify("analysis_variants");
+
+    if (this.storageMode !== "error") {
+      try {
+        await this.sendWorkerMsg("SAVE_ANALYSIS_VARIANT", { variant, payload });
+      } catch (err) {
+        console.warn("[SqliteService] Failed to save analysis variant in worker:", err);
+      }
+    }
+  }
+
+  public async getAnalysisVariant(
+    trackId: string,
+    mode: AnalysisMode,
+    targetLanguage: string
+  ): Promise<{ variant: AnalysisVariant; payload: any } | null> {
+    const key = `${trackId}_${mode}_${targetLanguage}`;
+    const cached = this.analysisVariants[key];
+    if (cached) {
+      return cached;
+    }
+
+    if (this.storageMode === "error") {
+      return null;
+    }
+
+    try {
+      const variants = await this.getAnalysisVariantsForTrack(trackId);
+      const match = variants.find(
+        (item) => item.variant.mode === mode && item.variant.targetLanguage === targetLanguage
+      );
+      return match || null;
+    } catch (err) {
+      console.warn("[SqliteService] Failed to load analysis variant from worker:", err);
+      return null;
+    }
+  }
+
+  public async getAnalysisVariantsForTrack(
+    trackId: string
+  ): Promise<Array<{ variant: AnalysisVariant; payload: any }>> {
+    if (this.storageMode === "error") {
+      return Object.values(this.analysisVariants).filter(
+        (item) => String(item.variant.trackId) === String(trackId)
+      );
+    }
+
+    try {
+      const res = await this.sendWorkerMsg<Array<{ variant: AnalysisVariant; payload: any }>>(
+        "GET_ANALYSIS_VARIANTS_FOR_TRACK",
+        { trackId }
+      );
+      if (res) {
+        res.forEach((item) => {
+          const key = `${item.variant.trackId}_${item.variant.mode}_${item.variant.targetLanguage}`;
+          this.analysisVariants[key] = item;
+        });
+        this.saveAnalysisVariantsBackup(this.analysisVariants);
+        return res;
+      }
+    } catch (err) {
+      console.warn("[SqliteService] Failed to fetch analysis variants from worker, using local cache:", err);
+    }
+
+    return Object.values(this.analysisVariants).filter(
+      (item) => String(item.variant.trackId) === String(trackId)
+    );
+  }
+
+  private getWordFormsBackup() {
+    try {
+      if (typeof window !== "undefined" && window.localStorage) {
+        const wf = localStorage.getItem("cantolex_word_forms_backup");
+        const twf = localStorage.getItem("cantolex_track_word_forms_backup");
+        const uwfs = localStorage.getItem("cantolex_user_word_form_status_backup");
+        if (wf) this.wordForms = JSON.parse(wf) || {};
+        if (twf) this.trackWordForms = JSON.parse(twf) || {};
+        if (uwfs) this.userWordFormStatus = JSON.parse(uwfs) || {};
+      }
+    } catch (e) {
+      console.warn("[SqliteService] Failed to read word forms backup from localStorage:", e);
+    }
+  }
+
+  private saveWordFormsBackup() {
+    try {
+      if (typeof window !== "undefined" && window.localStorage) {
+        localStorage.setItem("cantolex_word_forms_backup", JSON.stringify(this.wordForms));
+        localStorage.setItem("cantolex_track_word_forms_backup", JSON.stringify(this.trackWordForms));
+        localStorage.setItem("cantolex_user_word_form_status_backup", JSON.stringify(this.userWordFormStatus));
+      }
+    } catch (e) {
+      console.warn("[SqliteService] Failed to write word forms backup to localStorage:", e);
+    }
+  }
+
+  /**
+   * Extracts word forms from raw text, saves them to SQLite database and synchronizes the local cache.
+   */
+  public async extractAndStoreTrackWordForms(
+    trackId: string,
+    lyrics: string,
+    sourceLanguage?: string
+  ): Promise<void> {
+    const extracted = WordFormExtractor.extractWordForms(lyrics, sourceLanguage);
+
+    // Replicate/sync synchronously to in-memory fallback
+    const lang = (sourceLanguage || "en").toLowerCase();
+    const listForTrack: Array<{ wordFormId: string; count: number }> = [];
+
+    for (const wf of extracted) {
+      let existingId = Object.keys(this.wordForms).find(
+        (id) => this.wordForms[id].language === lang && this.wordForms[id].normalizedSurface === wf.normalizedSurface
+      );
+      if (!existingId) {
+        existingId = "wf_" + Math.random().toString(36).substring(2, 11) + "_" + Date.now();
+        this.wordForms[existingId] = {
+          id: existingId,
+          language: lang,
+          surface: wf.surface,
+          normalizedSurface: wf.normalizedSurface,
+          createdAt: Date.now()
+        };
+      }
+      listForTrack.push({ wordFormId: existingId, count: wf.count });
+    }
+    this.trackWordForms[trackId] = listForTrack;
+    this.saveWordFormsBackup();
+    this.notify("word_forms");
+
+    if (this.storageMode !== "error") {
+      try {
+        await this.sendWorkerMsg("SAVE_TRACK_WORD_FORMS", {
+          trackId,
+          wordForms: extracted
+        });
+      } catch (err) {
+        console.warn("[SqliteService] Failed to save track word forms in worker:", err);
+      }
+    }
+  }
+
+  /**
+   * Retrieves the complete word forms list for a given track, including occurrences count and learning status.
+   */
+  public async getTrackWordForms(
+    trackId: string
+  ): Promise<Array<{
+    id: string;
+    language: string;
+    surface: string;
+    normalizedSurface: string;
+    translation?: string;
+    explanation?: string;
+    count: number;
+    status: WordFormStatus;
+    updatedAt?: number;
+  }>> {
+    if (this.storageMode !== "error") {
+      try {
+        const res = await this.sendWorkerMsg<any[]>("GET_TRACK_WORD_FORMS", { trackId });
+        if (res) {
+          // Sync worker's version to our backup properties
+          const listForTrack: Array<{ wordFormId: string; count: number }> = [];
+          res.forEach((item) => {
+            this.wordForms[item.id] = {
+              id: item.id,
+              language: item.language,
+              surface: item.surface,
+              normalizedSurface: item.normalizedSurface,
+              translation: item.translation,
+              explanation: item.explanation,
+              createdAt: Date.now()
+            };
+            this.userWordFormStatus[item.id] = {
+              wordFormId: item.id,
+              status: item.status,
+              updatedAt: item.updatedAt || Date.now()
+            };
+            listForTrack.push({ wordFormId: item.id, count: item.count });
+          });
+          this.trackWordForms[trackId] = listForTrack;
+          this.saveWordFormsBackup();
+          return res;
+        }
+      } catch (err) {
+        console.warn("[SqliteService] Failed to load track word forms from worker, falling back:", err);
+      }
+    }
+
+    const localList = this.trackWordForms[trackId] || [];
+    return localList.map((item) => {
+      const wf = this.wordForms[item.wordFormId];
+      const uStatus = this.userWordFormStatus[item.wordFormId];
+      return {
+        id: item.wordFormId,
+        language: wf?.language || "en",
+        surface: wf?.surface || "",
+        normalizedSurface: wf?.normalizedSurface || "",
+        translation: wf?.translation,
+        explanation: wf?.explanation,
+        count: item.count,
+        status: uStatus?.status || "new",
+        updatedAt: uStatus?.updatedAt
+      };
+    });
+  }
+
+  /**
+   * Sets the knowledge/learning status for a specific word form.
+   */
+  public async setUserWordFormStatus(wordFormId: string, status: WordFormStatus): Promise<void> {
+    this.userWordFormStatus[wordFormId] = {
+      wordFormId,
+      status,
+      updatedAt: Date.now()
+    };
+    this.saveWordFormsBackup();
+    this.notify("word_form_status_changed");
+
+    if (this.storageMode !== "error") {
+      try {
+        await this.sendWorkerMsg("SET_USER_WORD_FORM_STATUS", {
+          wordFormId,
+          status,
+          updatedAt: Date.now()
+        });
+      } catch (err) {
+        console.warn("[SqliteService] Failed to set user word form status in worker:", err);
+      }
+    }
+  }
+
+  /**
+   * Reads a record of statuses for all word forms associated with a track.
+   */
+  public async getTrackWordFormStatuses(trackId: string): Promise<Record<string, WordFormStatus>> {
+    const list = await this.getTrackWordForms(trackId);
+    const statuses: Record<string, WordFormStatus> = {};
+    list.forEach((item) => {
+      statuses[item.id] = item.status;
+    });
+    return statuses;
+  }
+
+  /**
+   * Calculates unknown/known counts stats for a track's word forms.
+   */
+  public async getTrackWordFormStats(
+    trackId: string
+  ): Promise<{
+    totalCount: number;
+    knownCount: number;
+    learningCount: number;
+    seenCount: number;
+    newCount: number;
+    ignoredCount: number;
+    unknownCount: number;
+  }> {
+    if (this.storageMode !== "error") {
+      try {
+        const stats = await this.sendWorkerMsg<any>("GET_TRACK_WORD_FORM_STATS", { trackId });
+        if (stats) {
+          return stats;
+        }
+      } catch (err) {
+        console.warn("[SqliteService] Failed to get stats from worker, calculating locally:", err);
+      }
+    }
+
+    const list = await this.getTrackWordForms(trackId);
+    let totalCount = 0;
+    let knownCount = 0;
+    let learningCount = 0;
+    let seenCount = 0;
+    let newCount = 0;
+    let ignoredCount = 0;
+
+    list.forEach((item) => {
+      totalCount++;
+      if (item.status === "known") knownCount++;
+      else if (item.status === "learning") learningCount++;
+      else if (item.status === "seen") seenCount++;
+      else if (item.status === "ignored") ignoredCount++;
+      else newCount++;
+    });
+
+    const unknownCount = totalCount - knownCount - ignoredCount;
+    return {
+      totalCount,
+      knownCount,
+      learningCount,
+      seenCount,
+      newCount,
+      ignoredCount,
+      unknownCount
+    };
   }
 }
 

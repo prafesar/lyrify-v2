@@ -79,13 +79,30 @@ Error response:
 
 Request body:
 
-- тот же `PreparedLyricsInput`
+- тот же `PreparedLyricsInput`, плюс опциональное поле режима:
 
-Дополнительный заголовок:
+```ts
+type LectureRequestInput = PreparedLyricsInput & {
+  analysisMode?: "overview" | "vocabulary" | "phrases" | "style" | "compact" | "rich"
+}
+```
+
+Дополнительный заголовок совместимости:
 
 ```http
 x-lyrify-lecture-variant: compact | rich
 ```
+
+Правила:
+
+- основной способ выбора режима теперь `analysisMode` в body
+- `x-lyrify-lecture-variant` нужен только как legacy compatibility layer
+- клиент может продолжать отправлять и `analysisMode`, и legacy header одновременно на переходном этапе
+- canonical mode-модель для новых клиентских решений:
+  - `overview`
+  - `vocabulary`
+  - `phrases`
+  - `style`
 
 Success response:
 
@@ -125,8 +142,19 @@ Success response:
       priority?: "core" | "colloquial" | "cultural" | "advanced"
     }>
   }>
+  meta: {
+    cache: "bypass"
+    analysisMode: "overview" | "vocabulary" | "phrases" | "style"
+    legacyVariantUsed: "rich" | null
+  }
 }
 ```
+
+Примечания:
+
+- `cache: "bypass"` сейчас ожидаем для lecture flow
+- если сервер временно принял legacy `rich`, в `meta.analysisMode` клиент должен ориентироваться на canonical `phrases`
+- `legacyVariantUsed` нужен только как transition metadata и не должен становиться продуктовой осью UI
 
 Error response:
 
@@ -152,10 +180,18 @@ Error response:
 - `GET /api/v1/tracks/cached?lyricsKey=...`
 - `GET /api/v1/tracks/cached?limit=20`
 
+Важное уточнение:
+
+- на текущем этапе server-side cache считается устойчивым только для translation flow
+- lecture mode variants пока не считаются надежно server-cached contract surface
+- поэтому cached track lookup нельзя считать источником истины для mode-aware lecture variants
+
 ## Важные ограничения клиента
 
 - Сейчас нет отдельного cached lecture endpoint.
 - Поэтому `getCachedStructuredLecture()` в клиенте должен оставаться безопасным `null` / no-op path, который не ломает runtime.
+- `POST /api/v1/lecture/fetch` сейчас нужно считать uncached server path.
+- Если lecture payload нужен повторно, основной источник истины на текущем этапе — локальные `analysis_variants` в клиентском SQLite.
 - Если в UI или hooks добавляется новая AI-функция, transport mapping должен оставаться в adapter-layer, а не в компонентах.
 
 ## Что нельзя считать актуальным

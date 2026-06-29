@@ -1,5 +1,6 @@
 import { normalizeTrackTitle, normalizeArtists } from "./lyricsPreprocessor";
 import { userPreferencesRepository } from "../application/adapters/browserUserDataRepository";
+import { mapLegacyToCanonicalMode, mapCanonicalToLegacyRequest } from "./analysisMode";
 
 export interface ServerCacheLookupResult {
   hasTranslation: boolean;
@@ -66,14 +67,18 @@ export async function checkServerCache(
     }
 
     const data = json.data;
-    const variant = userPreferencesRepository.getPreference("lyrify_lecture_variant", "compact");
+    const modePref = userPreferencesRepository.getPreference("lyrify_analysis_mode", null);
+    const canonicalMode = mapLegacyToCanonicalMode(
+      modePref || userPreferencesRepository.getPreference("lyrify_lecture_variant", "compact")
+    );
+    const legacyVariant = mapCanonicalToLegacyRequest(canonicalMode);
     
     const hasTranslation = Array.isArray(data.translation) && data.translation.length > 0;
     
     let lectureBlocks: any[] | null = null;
-    if (variant === "rich" && Array.isArray(data.lectureRich) && data.lectureRich.length > 0) {
+    if (legacyVariant === "rich" && Array.isArray(data.lectureRich) && data.lectureRich.length > 0) {
       lectureBlocks = data.lectureRich;
-    } else if (variant === "compact" && Array.isArray(data.lectureCompact) && data.lectureCompact.length > 0) {
+    } else if (legacyVariant === "compact" && Array.isArray(data.lectureCompact) && data.lectureCompact.length > 0) {
       lectureBlocks = data.lectureCompact;
     }
 
