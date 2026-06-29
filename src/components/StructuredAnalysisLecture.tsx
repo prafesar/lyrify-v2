@@ -47,6 +47,7 @@ interface StructuredAnalysisLectureProps {
     ignoredCount: number;
     unknownCount: number;
   } | null;
+  availableAnalysisModes?: AnalysisMode[];
 }
 
 export const StructuredAnalysisLecture: React.FC<StructuredAnalysisLectureProps> = ({
@@ -60,7 +61,8 @@ export const StructuredAnalysisLecture: React.FC<StructuredAnalysisLectureProps>
   speak,
   analysisMode,
   handleSetAnalysisMode,
-  wordFormStats
+  wordFormStats,
+  availableAnalysisModes = []
 }) => {
   // Ordered target kinds of the blocks
   const targetKinds = ['overview', 'emotions', 'sections', 'lexical_groups', 'takeaways', 'notes'] as const;
@@ -384,6 +386,7 @@ export const StructuredAnalysisLecture: React.FC<StructuredAnalysisLectureProps>
             <div className="flex flex-wrap items-center gap-1 p-1 bg-app-card border border-app-card-border/40 rounded-2xl max-w-lg shadow-sm flex-1 sm:flex-initial" id="analysis-mode-selector">
               {(['overview', 'vocabulary', 'phrases', 'style'] as const).map((mode) => {
                 const isActive = analysisMode === mode;
+                const isSaved = availableAnalysisModes.includes(mode);
                 return (
                   <button
                     key={mode}
@@ -395,7 +398,15 @@ export const StructuredAnalysisLecture: React.FC<StructuredAnalysisLectureProps>
                         : 'text-app-muted hover:text-app-fg hover:bg-app-muted/5'
                     }`}
                   >
-                    {mode}
+                    <span className="flex items-center justify-center gap-1.5">
+                      {isSaved && (
+                        <span 
+                          className={`w-1.5 h-1.5 rounded-full ${isActive ? 'bg-white' : 'bg-emerald-500 animate-pulse'}`}
+                          title="Available offline"
+                        />
+                      )}
+                      <span>{mode}</span>
+                    </span>
                   </button>
                 );
               })}

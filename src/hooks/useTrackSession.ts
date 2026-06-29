@@ -147,6 +147,7 @@ export interface UseTrackSessionResult {
   ) => Promise<void>;
   wordFormStats: WordFormStats | null;
   setWordFormStats: React.Dispatch<React.SetStateAction<WordFormStats | null>>;
+  availableAnalysisModes: AnalysisMode[];
 }
 
 export interface WordFormStats {
@@ -173,6 +174,49 @@ export function useTrackSession(): UseTrackSessionResult {
   const [manualSearchQuery, setManualSearchQuery] = useState("");
   const [isResourcesOpen, setIsResourcesOpen] = useState(false);
   const [wordFormStats, setWordFormStats] = useState<WordFormStats | null>(null);
+  const [availableAnalysisModes, setAvailableAnalysisModes] = useState<AnalysisMode[]>([]);
+
+  useEffect(() => {
+    if (!currentTrack || !currentTrack.trackId) {
+      setAvailableAnalysisModes([]);
+      return;
+    }
+
+    let isCancelled = false;
+
+    const fetchAvailability = async () => {
+      try {
+        const variants = await sqliteService.getAnalysisVariantsForTrack(currentTrack.trackId);
+        if (!isCancelled) {
+          const modes = Array.from(new Set(variants.map((v) => v.variant.mode)));
+          setAvailableAnalysisModes(modes);
+        }
+      } catch (err) {
+        console.error("[useTrackSession] Error loading analysis variants availability:", err);
+      }
+    };
+
+    fetchAvailability();
+
+    const unsubscribe = sqliteService.subscribe(async (event) => {
+      if (event === "analysis_variants") {
+        try {
+          const variants = await sqliteService.getAnalysisVariantsForTrack(currentTrack.trackId);
+          if (!isCancelled) {
+            const modes = Array.from(new Set(variants.map((v) => v.variant.mode)));
+            setAvailableAnalysisModes(modes);
+          }
+        } catch (err) {
+          console.error("[useTrackSession] Error reloading analysis variants availability on event:", err);
+        }
+      }
+    });
+
+    return () => {
+      isCancelled = true;
+      unsubscribe();
+    };
+  }, [currentTrack?.trackId]);
 
   useEffect(() => {
     if (!currentTrack || !currentTrack.trackId || !currentTrack.rawLyrics) {
@@ -1088,6 +1132,7 @@ export function useTrackSession(): UseTrackSessionResult {
     handleSourceLanguageOverride,
     handleSwitchAnalysisMode,
     wordFormStats,
-    setWordFormStats
+    setWordFormStats,
+    availableAnalysisModes
   };
 }

@@ -628,5 +628,60 @@ describe("SQLite Service Integration Smoke Tests", () => {
       expect(stats.knownCount).toBe(0);
       expect(stats.learningCount).toBe(0);
     });
+
+    it("should correctly update available analysis modes when saving an analysis variant", async () => {
+      const trackId = "track_availability_test";
+      const variantOverview = {
+        id: "variant_1",
+        trackId,
+        mode: "overview" as const,
+        targetLanguage: "ru",
+        sourceLanguage: "en",
+        status: "completed",
+        createdAt: Date.now(),
+        updatedAt: Date.now()
+      };
+
+      const variantPhrases = {
+        id: "variant_2",
+        trackId,
+        mode: "phrases" as const,
+        targetLanguage: "ru",
+        sourceLanguage: "en",
+        status: "completed",
+        createdAt: Date.now(),
+        updatedAt: Date.now()
+      };
+
+      // Initially no variants
+      const initialVariants = await sqliteService.getAnalysisVariantsForTrack(trackId);
+      expect(initialVariants).toHaveLength(0);
+
+      let eventReceived = false;
+      const unsubscribe = sqliteService.subscribe((event) => {
+        if (event === "analysis_variants") {
+          eventReceived = true;
+        }
+      });
+
+      // Save overview
+      await sqliteService.saveAnalysisVariant(variantOverview, { blocks: [] });
+      
+      const afterOverview = await sqliteService.getAnalysisVariantsForTrack(trackId);
+      expect(afterOverview).toHaveLength(1);
+      expect(afterOverview[0].variant.mode).toBe("overview");
+      expect(eventReceived).toBe(true);
+
+      // Save phrases
+      eventReceived = false;
+      await sqliteService.saveAnalysisVariant(variantPhrases, { blocks: [] });
+      const afterPhrases = await sqliteService.getAnalysisVariantsForTrack(trackId);
+      expect(afterPhrases).toHaveLength(2);
+      expect(afterPhrases.map(item => item.variant.mode)).toContain("overview");
+      expect(afterPhrases.map(item => item.variant.mode)).toContain("phrases");
+      expect(eventReceived).toBe(true);
+
+      unsubscribe();
+    });
   });
 });
