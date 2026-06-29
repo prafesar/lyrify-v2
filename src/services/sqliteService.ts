@@ -1405,44 +1405,8 @@ export class SqliteService {
     ignoredCount: number;
     unknownCount: number;
   }> {
-    if (this.storageMode !== "error") {
-      try {
-        const stats = await this.sendWorkerMsg<any>("GET_TRACK_WORD_FORM_STATS", { trackId });
-        if (stats) {
-          return stats;
-        }
-      } catch (err) {
-        console.warn("[SqliteService] Failed to get stats from worker, calculating locally:", err);
-      }
-    }
-
-    const list = await this.getTrackWordForms(trackId);
-    let totalCount = 0;
-    let knownCount = 0;
-    let learningCount = 0;
-    let seenCount = 0;
-    let newCount = 0;
-    let ignoredCount = 0;
-
-    list.forEach((item) => {
-      totalCount++;
-      if (item.status === "known") knownCount++;
-      else if (item.status === "learning") learningCount++;
-      else if (item.status === "seen") seenCount++;
-      else if (item.status === "ignored") ignoredCount++;
-      else newCount++;
-    });
-
-    const unknownCount = totalCount - knownCount - ignoredCount;
-    return {
-      totalCount,
-      knownCount,
-      learningCount,
-      seenCount,
-      newCount,
-      ignoredCount,
-      unknownCount
-    };
+    const { TrackVocabularyStatsService } = await import("./trackVocabularyStatsService");
+    return TrackVocabularyStatsService.calculateTrackStats(trackId);
   }
 }
 
