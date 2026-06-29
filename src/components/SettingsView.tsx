@@ -13,8 +13,8 @@ interface SettingsViewProps {
   setTargetLanguage: (lang: string) => void;
   theme: string;
   setTheme: (theme: string) => void;
-  lecturePromptVariant: 'compact' | 'rich';
-  setLecturePromptVariant: (variant: 'compact' | 'rich') => void;
+  analysisMode: 'overview' | 'vocabulary' | 'phrases' | 'style';
+  setAnalysisMode: (mode: 'overview' | 'vocabulary' | 'phrases' | 'style') => void;
   onResetData: () => void;
   onClose: () => void;
 }
@@ -25,13 +25,38 @@ export default function SettingsView({
   setTargetLanguage, 
   theme, 
   setTheme, 
-  lecturePromptVariant,
-  setLecturePromptVariant,
+  analysisMode,
+  setAnalysisMode,
   onResetData, 
   onClose 
 }: SettingsViewProps) {
   const [confirmReset, setConfirmReset] = React.useState(false);
   const { uiLanguage, setUiLanguage, t } = useTranslation();
+
+  // Simple clean localizations for analysis perspective
+  const localizedModes = uiLanguage === 'ru' ? {
+    title: 'Режим разбора по умолчанию',
+    desc: 'Выберите режим лингвистического анализа CantoLex AI по умолчанию',
+    overview: 'Обзор',
+    vocabulary: 'Словарь',
+    phrases: 'Фразы',
+    style: 'Стиль',
+    overviewDesc: 'Режим обзора: кратко объясняет смысл трека и предлагает перейти к учебным режимам.',
+    vocabularyDesc: 'Режим словаря: фокусируется на словоформах, переводе лексики и комментариях.',
+    phrasesDesc: 'Режим фраз: содержит подробные идиоматические выражения и разговорные клише.',
+    styleDesc: 'Режим стиля: разбирает художественные приемы, сленг, регистры и культурный контекст.'
+  } : {
+    title: 'Default Analysis Mode',
+    desc: 'Choose default perspective for CantoLex AI linguistic analysis',
+    overview: 'Overview',
+    vocabulary: 'Vocabulary',
+    phrases: 'Phrases',
+    style: 'Style',
+    overviewDesc: 'Overview mode: Explains the track and offers quick links to learning modes.',
+    vocabularyDesc: 'Vocabulary mode: Focuses on word forms, lexical translations, and explanations.',
+    phrasesDesc: 'Phrases mode: Focuses on idiomatic collocations and reusable spoken chunks.',
+    styleDesc: 'Style mode: Highlights literary registers, slang, and cultural tone nuances.'
+  };
 
   return (
     <motion.div 
@@ -140,7 +165,7 @@ export default function SettingsView({
             </select>
           </div>
 
-          {/* AI Lecture Breakdown Setting */}
+          {/* Default Analysis Mode Setting */}
           <div className="p-4 rounded-3xl bg-app-card border border-app-card-border shadow-app-card flex flex-col gap-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
@@ -148,25 +173,26 @@ export default function SettingsView({
                   <Sparkles size={18} />
                 </div>
                 <div className="flex flex-col">
-                  <span className="font-medium text-sm">{t('settings.lecturePromptVariant')}</span>
-                  <span className="text-[10px] text-app-fg opacity-40">{t('settings.lecturePromptVariantDesc')}</span>
+                  <span className="font-medium text-sm">{localizedModes.title}</span>
+                  <span className="text-[10px] text-app-fg opacity-40">{localizedModes.desc}</span>
                 </div>
               </div>
               <select 
-                value={lecturePromptVariant}
-                onChange={(e) => setLecturePromptVariant(e.target.value as 'compact' | 'rich')}
-                className="bg-transparent text-sm font-bold text-app-fg outline-none text-right cursor-pointer"
+                value={analysisMode}
+                onChange={(e) => setAnalysisMode(e.target.value as 'overview' | 'vocabulary' | 'phrases' | 'style')}
+                className="bg-transparent text-sm font-bold text-app-fg outline-none text-right cursor-pointer capitalize"
               >
-                <option value="compact" className="bg-app-bg text-app-fg">{t('settings.lecturePromptVariantCompact')}</option>
-                <option value="rich" className="bg-app-bg text-app-fg">{t('settings.lecturePromptVariantRich')}</option>
+                <option value="overview" className="bg-app-bg text-app-fg">{localizedModes.overview}</option>
+                <option value="vocabulary" className="bg-app-bg text-app-fg">{localizedModes.vocabulary}</option>
+                <option value="phrases" className="bg-app-bg text-app-fg">{localizedModes.phrases}</option>
+                <option value="style" className="bg-app-bg text-app-fg">{localizedModes.style}</option>
               </select>
             </div>
             <div className="text-[11px] text-app-fg/60 bg-app-bg/50 p-3 rounded-2xl border border-app-card-border/50 leading-relaxed select-none">
-              {lecturePromptVariant === 'compact' ? (
-                <span>{t('settings.lecturePromptVariantCompactDesc')}</span>
-              ) : (
-                <span>{t('settings.lecturePromptVariantRichDesc')}</span>
-              )}
+              {analysisMode === 'overview' && <span>{localizedModes.overviewDesc}</span>}
+              {analysisMode === 'vocabulary' && <span>{localizedModes.vocabularyDesc}</span>}
+              {analysisMode === 'phrases' && <span>{localizedModes.phrasesDesc}</span>}
+              {analysisMode === 'style' && <span>{localizedModes.styleDesc}</span>}
             </div>
           </div>
         </div>

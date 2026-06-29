@@ -3533,8 +3533,8 @@ export default function App() {
               setTargetLanguage={setTargetLanguage}
               theme={theme}
               setTheme={setTheme}
-              lecturePromptVariant={lecturePromptVariant}
-              setLecturePromptVariant={handleSetLecturePromptVariant}
+              analysisMode={analysisMode}
+              setAnalysisMode={handleSetAnalysisMode}
               onResetData={resetUserData}
               onClose={() => goBack({ type: "explore" })}
             />

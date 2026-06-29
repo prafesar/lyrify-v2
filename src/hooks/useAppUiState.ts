@@ -55,9 +55,6 @@ export function useAppUiState() {
   const [isStarFilterActive, setIsStarFilterActive] = useState<boolean>(
     () => userPreferencesRepository.getBoolPreference("cantolex_star_filter_active", false)
   );
-  const [lecturePromptVariant, setLecturePromptVariant] = useState<"compact" | "rich">(
-    () => (userPreferencesRepository.getPreference("lyrify_lecture_variant", "compact") as "compact" | "rich")
-  );
   const [analysisMode, setAnalysisModeInternal] = useState<AnalysisMode>(
     () => {
       const stored = userPreferencesRepository.getPreference("lyrify_analysis_mode", null);
@@ -67,6 +64,7 @@ export function useAppUiState() {
       return mapLegacyToCanonicalMode(legacyVariant);
     }
   );
+  const lecturePromptVariant = mapCanonicalToLegacyRequest(analysisMode);
   const [previewLyricsMode, setPreviewLyricsMode] = useState<"original" | "translation">("original");
 
   const [popoverData, setPopoverData] = useState<PopoverDataInfo | null>(null);
@@ -101,7 +99,6 @@ export function useAppUiState() {
   }, []);
 
   const handleSetLecturePromptVariant = useCallback((variant: "compact" | "rich") => {
-    setLecturePromptVariant(variant);
     userPreferencesRepository.setPreference("lyrify_lecture_variant", variant);
     const canonical = mapLegacyToCanonicalMode(variant);
     setAnalysisModeInternal(canonical);
@@ -112,7 +109,6 @@ export function useAppUiState() {
     setAnalysisModeInternal(mode);
     userPreferencesRepository.setPreference("lyrify_analysis_mode", mode);
     const legacyVariant = mapCanonicalToLegacyRequest(mode);
-    setLecturePromptVariant(legacyVariant);
     userPreferencesRepository.setPreference("lyrify_lecture_variant", legacyVariant);
   }, []);
 

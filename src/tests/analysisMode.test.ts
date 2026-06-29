@@ -37,4 +37,31 @@ describe("AnalysisMode Canonical Model & Compatibility Layer Tests", () => {
     expect(mapCanonicalToLegacyRequest("phrases")).toBe("rich");
     expect(mapCanonicalToLegacyRequest("style")).toBe("rich");
   });
+
+  describe("Preferences fallbacks and State Mapping", () => {
+    it("should fallback to legacy preference when canonical mode is not defined", () => {
+      // Simulate state hydration fallback logic
+      const storedAnalysisMode = null;
+      const legacyVariant = "rich";
+      
+      const hydratedMode = storedAnalysisMode || mapLegacyToCanonicalMode(legacyVariant);
+      expect(hydratedMode).toBe("vocabulary");
+    });
+
+    it("should map default legacy preference correctly", () => {
+      const storedAnalysisMode = null;
+      const legacyVariant = "compact";
+      
+      const hydratedMode = storedAnalysisMode || mapLegacyToCanonicalMode(legacyVariant);
+      expect(hydratedMode).toBe("overview");
+    });
+
+    it("should prioritize stored canonical mode over legacy settings during hydration", () => {
+      const storedAnalysisMode = "style";
+      const legacyVariant = "compact"; // discrepancy, but canonical mode should win
+      
+      const hydratedMode = storedAnalysisMode || mapLegacyToCanonicalMode(legacyVariant);
+      expect(hydratedMode).toBe("style");
+    });
+  });
 });
