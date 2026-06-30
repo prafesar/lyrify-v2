@@ -3413,6 +3413,7 @@ export default function App() {
                           availableAnalysisModes={availableAnalysisModes}
                           analysisError={analysisError}
                           resolvedAnalysisVariant={resolvedAnalysisVariant}
+                          onNavigateToTab={(tab) => setActiveTab(tab)}
                         />
                       </motion.div>
                     )}

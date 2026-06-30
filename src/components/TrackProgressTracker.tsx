@@ -38,9 +38,9 @@ export const TrackProgressTracker: React.FC<TrackProgressTrackerProps> = ({
 
   const getLocalizedStepLabel = (id: TrackStationId) => {
     switch (id) {
-      case 'lyrics': return 'Overview';
+      case 'lyrics': return 'Lyrics';
+      case 'analysis': return 'Overview';
       case 'words': return 'Words';
-      case 'analysis': return 'Modes';
       case 'saved': return 'Practice';
       default: return '';
     }

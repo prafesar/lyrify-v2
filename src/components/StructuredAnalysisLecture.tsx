@@ -51,6 +51,7 @@ interface StructuredAnalysisLectureProps {
   availableAnalysisModes?: AnalysisMode[];
   analysisError?: string | null;
   resolvedAnalysisVariant?: ResolvedAnalysisVariant;
+  onNavigateToTab?: (tab: 'lyrics' | 'words' | 'analysis' | 'cards') => void;
 }
 
 export const StructuredAnalysisLecture: React.FC<StructuredAnalysisLectureProps> = ({
@@ -67,7 +68,8 @@ export const StructuredAnalysisLecture: React.FC<StructuredAnalysisLectureProps>
   wordFormStats,
   availableAnalysisModes = [],
   analysisError,
-  resolvedAnalysisVariant
+  resolvedAnalysisVariant,
+  onNavigateToTab
 }) => {
   // Ordered target kinds of the blocks
   const targetKinds = ['overview', 'emotions', 'sections', 'lexical_groups', 'takeaways', 'notes'] as const;
@@ -389,6 +391,27 @@ export const StructuredAnalysisLecture: React.FC<StructuredAnalysisLectureProps>
   return (
     <div className="w-full font-sans text-app-fg select-text leading-relaxed pb-32" id="structured-lecture-analysis">
       
+      {/* Back button or Sub-navigation header if NOT in overview mode */}
+      {activeMode !== 'overview' && (
+        <div className="mb-6 p-4 bg-app-accent/5 border border-app-accent/15 rounded-2xl flex items-center justify-between gap-4 animate-in fade-in duration-300">
+          <div className="space-y-0.5">
+            <h3 className="text-xs font-black uppercase tracking-[0.15em] text-app-accent">
+              Deeper Study Path
+            </h3>
+            <p className="text-xs text-app-muted font-medium">
+              You are viewing the custom <span className="font-bold text-app-fg capitalize">{activeMode}</span> breakdown of this song.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => handleSetAnalysisMode?.('overview')}
+            className="px-3.5 py-2 bg-app-accent hover:bg-app-accent/95 text-white rounded-xl text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer shadow-sm shadow-app-accent/15"
+          >
+            ← Back to Overview
+          </button>
+        </div>
+      )}
+
       {/* Mode Switcher segmented control / pill buttons */}
       {((activeMode && handleSetAnalysisMode) || wordFormStats) && (
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
@@ -440,9 +463,9 @@ export const StructuredAnalysisLecture: React.FC<StructuredAnalysisLectureProps>
               <BookOpen size={32} />
             </div>
             <div className="space-y-3">
-              <h3 className="text-xl font-bold text-app-fg tracking-tight capitalize">No {activeMode || 'Breakdown'} Yet</h3>
+              <h3 className="text-xl font-bold text-app-fg tracking-tight capitalize">No Song Overview Yet</h3>
               <p className="text-sm text-app-fg opacity-50 font-medium leading-relaxed px-4">
-                Generate a custom, mode-specific breakdown for this track in <strong className="text-app-fg capitalize">{activeMode}</strong> mode. Each mode focuses on different aspects of the lyrics and vocabulary.
+                Generate a guided song overview and thematic breakdown to unlock vocabulary, phrase study, and artistic stylistic devices.
               </p>
             </div>
 
@@ -461,328 +484,464 @@ export const StructuredAnalysisLecture: React.FC<StructuredAnalysisLectureProps>
                   className="px-8 py-4 rounded-2xl bg-app-fg text-app-bg font-black uppercase tracking-[0.18em] text-[10px] shadow-xl hover:scale-[1.03] transition-all flex items-center gap-2.5 cursor-pointer hover:bg-app-fg-hover"
                 >
                   <Sparkles size={14} className="text-app-bg" />
-                  Generate AI {activeMode || 'Breakdown'}
+                  Generate AI Overview
                 </button>
               </div>
             )}
           </div>
         ) : (
-          blocks.map((block) => {
-            const isModelEditingText = editingBlockId === block.id && editingField === 'text';
-            const isModelEditingTitle = editingBlockId === block.id && editingField === 'title';
+          <>
+            {blocks.map((block) => {
+              const isModelEditingText = editingBlockId === block.id && editingField === 'text';
+              const isModelEditingTitle = editingBlockId === block.id && editingField === 'title';
 
-            return (
-              <section 
-                key={block.id} 
-                id={`block-${block.id}`} 
-                className="space-y-3 animate-in fade-in duration-300 scroll-mt-24 group/section"
-              >
-                
-                {/* Kind Marker Tag -- ultra minimalist inline label block */}
-                <div className="flex items-center justify-between pb-0.5">
-                  <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-app-accent opacity-50 shrink-0 select-none">
-                    {block.kind}
-                  </span>
+              return (
+                <section 
+                  key={block.id} 
+                  id={`block-${block.id}`} 
+                  className="space-y-3 animate-in fade-in duration-300 scroll-mt-24 group/section"
+                >
+                  
+                  {/* Kind Marker Tag -- ultra minimalist inline label block */}
+                  <div className="flex items-center justify-between pb-0.5">
+                    <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-app-accent opacity-50 shrink-0 select-none">
+                      {block.kind}
+                    </span>
 
-                  {/* Optional tiny manual section deleter */}
-                  {block.source === 'manual' && !editingBlockId && (
-                    <button
-                      type="button"
-                      onClick={() => deleteBlockBlock(block.id)}
-                      className="opacity-0 group-hover/section:opacity-60 hover:!opacity-100 p-1 text-app-muted hover:text-red-400 transition-opacity duration-200 cursor-pointer text-[10px] font-bold uppercase tracking-wider"
-                      title="Delete section"
+                    {/* Optional tiny manual section deleter */}
+                    {block.source === 'manual' && !editingBlockId && (
+                      <button
+                        type="button"
+                        onClick={() => deleteBlockBlock(block.id)}
+                        className="opacity-0 group-hover/section:opacity-60 hover:!opacity-100 p-1 text-app-muted hover:text-red-400 transition-opacity duration-200 cursor-pointer text-[10px] font-bold uppercase tracking-wider"
+                        title="Delete section"
+                      >
+                        Delete
+                      </button>
+                    )}
+                  </div>
+
+                {/* Editable Block Title */}
+                <div className="relative group/title">
+                  {isModelEditingTitle ? (
+                    <div className="flex items-center gap-2 max-w-full">
+                      <input
+                        ref={titleInputRef}
+                        type="text"
+                        value={tempEditValue}
+                        onChange={(e) => setTempEditValue(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') saveBlockEdit(block.id);
+                          if (e.key === 'Escape') cancelEdit();
+                        }}
+                        className="text-lg font-medium tracking-tight bg-transparent text-app-fg border-b border-app-accent w-full focus:outline-none py-0.5"
+                      />
+                      <div className="flex gap-2 shrink-0 select-none">
+                        <button 
+                          onClick={() => saveBlockEdit(block.id)} 
+                          className="p-1 text-app-accent hover:scale-105 transition-transform"
+                        >
+                          <Check size={14} />
+                        </button>
+                        <button 
+                          onClick={cancelEdit} 
+                          className="p-1 text-app-muted hover:scale-105 transition-transform"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <h2 
+                      onClick={() => startBlockEdit(block.id, 'title', block.title || '')}
+                      className="font-sans font-semibold text-lg md:text-xl text-app-fg tracking-tight leading-snug cursor-text hover:text-app-accent transition-colors"
                     >
-                      Delete
-                    </button>
+                      {block.title || getKindTitlePlaceholder(block.kind as BlockKind)}
+                      <span className="inline-block opacity-0 group-hover/title:opacity-45 text-app-muted ml-2 pb-0.5 transition-opacity">
+                        <Edit3 size={12} className="inline align-middle" />
+                      </span>
+                    </h2>
                   )}
                 </div>
 
-              {/* Editable Block Title */}
-              <div className="relative group/title">
-                {isModelEditingTitle ? (
-                  <div className="flex items-center gap-2 max-w-full">
-                    <input
-                      ref={titleInputRef}
-                      type="text"
-                      value={tempEditValue}
-                      onChange={(e) => setTempEditValue(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') saveBlockEdit(block.id);
-                        if (e.key === 'Escape') cancelEdit();
-                      }}
-                      className="text-lg font-medium tracking-tight bg-transparent text-app-fg border-b border-app-accent w-full focus:outline-none py-0.5"
-                    />
-                    <div className="flex gap-2 shrink-0 select-none">
-                      <button 
-                        onClick={() => saveBlockEdit(block.id)} 
-                        className="p-1 text-app-accent hover:scale-105 transition-transform"
-                      >
-                        <Check size={14} />
-                      </button>
-                      <button 
-                        onClick={cancelEdit} 
-                        className="p-1 text-app-muted hover:scale-105 transition-transform"
-                      >
-                        <X size={14} />
-                      </button>
+                {/* Editable Commentary Paragraph Details */}
+                <div className="relative group/text">
+                  {isModelEditingText ? (
+                    <div className="space-y-3 mt-1">
+                      <textarea
+                        ref={editorRef}
+                        value={tempEditValue}
+                        onChange={(e) => {
+                          setTempEditValue(e.target.value);
+                          // Auto-growing textbox
+                          e.target.style.height = 'auto';
+                          e.target.style.height = `${e.target.scrollHeight}px`;
+                        }}
+                        className="w-full bg-transparent border-0 border-l border-app-accent/40 font-serif text-[16px] md:text-[18px] leading-relaxed text-app-fg py-1 px-4 focus:ring-0 focus:outline-none resize-none"
+                        style={{ minHeight: '120px' }}
+                      />
+                      <div className="flex items-center justify-start gap-4 text-[10px] uppercase font-black tracking-widest pl-4 select-none">
+                        <button 
+                          onClick={() => saveBlockEdit(block.id)} 
+                          className="text-app-accent hover:opacity-80 flex items-center gap-1 cursor-pointer"
+                        >
+                          <Check size={11} className="inline" /> Save Content
+                        </button>
+                        <button 
+                          onClick={cancelEdit} 
+                          className="text-app-muted hover:text-app-fg cursor-pointer"
+                        >
+                          Cancel
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                ) : (
-                  <h2 
-                    onClick={() => startBlockEdit(block.id, 'title', block.title || '')}
-                    className="font-sans font-semibold text-lg md:text-xl text-app-fg tracking-tight leading-snug cursor-text hover:text-app-accent transition-colors"
-                  >
-                    {block.title || getKindTitlePlaceholder(block.kind as BlockKind)}
-                    <span className="inline-block opacity-0 group-hover/title:opacity-45 text-app-muted ml-2 pb-0.5 transition-opacity">
-                      <Edit3 size={12} className="inline align-middle" />
-                    </span>
-                  </h2>
-                )}
-              </div>
-
-              {/* Editable Commentary Paragraph Details */}
-              <div className="relative group/text">
-                {isModelEditingText ? (
-                  <div className="space-y-3 mt-1">
-                    <textarea
-                      ref={editorRef}
-                      value={tempEditValue}
-                      onChange={(e) => {
-                        setTempEditValue(e.target.value);
-                        // Auto-growing textbox
-                        e.target.style.height = 'auto';
-                        e.target.style.height = `${e.target.scrollHeight}px`;
-                      }}
-                      className="w-full bg-transparent border-0 border-l border-app-accent/40 font-serif text-[16px] md:text-[18px] leading-relaxed text-app-fg py-1 px-4 focus:ring-0 focus:outline-none resize-none"
-                      style={{ minHeight: '120px' }}
-                    />
-                    <div className="flex items-center justify-start gap-4 text-[10px] uppercase font-black tracking-widest pl-4 select-none">
-                      <button 
-                        onClick={() => saveBlockEdit(block.id)} 
-                        className="text-app-accent hover:opacity-80 flex items-center gap-1 cursor-pointer"
-                      >
-                        <Check size={11} className="inline" /> Save Content
-                      </button>
-                      <button 
-                        onClick={cancelEdit} 
-                        className="text-app-muted hover:text-app-fg cursor-pointer"
-                      >
-                        Cancel
-                      </button>
+                  ) : (
+                    <div 
+                      onClick={() => startBlockEdit(block.id, 'text', block.text)}
+                      className="font-serif text-[17px] md:text-[19px] leading-relaxed text-app-fg/80 cursor-text selection:bg-app-accent/10"
+                      title="Click text body to edit inline"
+                    >
+                      <div className="markdown-body">
+                        <ReactMarkdown>{block.text}</ReactMarkdown>
+                      </div>
                     </div>
-                  </div>
-                ) : (
-                  <div 
-                    onClick={() => startBlockEdit(block.id, 'text', block.text)}
-                    className="font-serif text-[17px] md:text-[19px] leading-relaxed text-app-fg/80 cursor-text selection:bg-app-accent/10"
-                    title="Click text body to edit inline"
-                  >
-                    <div className="markdown-body">
-                      <ReactMarkdown>{block.text}</ReactMarkdown>
-                    </div>
-                  </div>
-                )}
-              </div>
+                  )}
+                </div>
 
-              {/* Nestable Phrases associated with this Section */}
-              <div className="pt-2">
-                <div className="space-y-3">
-                  {(block.phrases || []).map((phrase) => {
-                    const isPhraseEditing = editingPhraseId === phrase.id;
-                    const isExpanded = expandedPhraseId === phrase.id;
+                {/* Nestable Phrases associated with this Section */}
+                <div className="pt-2">
+                  <div className="space-y-3">
+                    {(block.phrases || []).map((phrase) => {
+                      const isPhraseEditing = editingPhraseId === phrase.id;
+                      const isExpanded = expandedPhraseId === phrase.id;
 
-                    if (isPhraseEditing) {
+                      if (isPhraseEditing) {
+                        return (
+                          <div 
+                            key={phrase.id} 
+                            className="flex flex-col p-4 bg-app-card border border-app-accent/30 rounded-2xl animate-in fade-in zoom-in-95 duration-200 shadow-sm relative"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <div className="flex items-center gap-3 w-full">
+                              {/* Active editor indicator */}
+                              <div className="p-2.5 bg-app-accent/10 border border-app-accent/20 text-app-accent rounded-xl inline-flex shrink-0 max-h-12 justify-center items-center align-middle">
+                                <Edit3 size={15} className="animate-pulse" />
+                              </div>
+
+                              {/* Inline editable inputs */}
+                              <div className="flex-1 min-w-0 pr-1 space-y-2">
+                                <div>
+                                  <input
+                                    type="text"
+                                    value={tempPhraseText}
+                                    onChange={(e) => setTempPhraseText(e.target.value)}
+                                    className="w-full bg-app-bg text-app-fg border border-app-card-border/80 focus:border-app-accent focus:ring-1 focus:ring-app-accent rounded-xl py-1.5 px-3 font-sans text-sm sm:text-base font-extrabold tracking-tight leading-none outline-none"
+                                    placeholder="Original Phrase • Оригинальная фраза"
+                                    autoFocus
+                                  />
+                                </div>
+                                <div>
+                                  <input
+                                    type="text"
+                                    value={tempPhraseTranslation}
+                                    onChange={(e) => setTempPhraseTranslation(e.target.value)}
+                                    className="w-full bg-app-bg text-app-fg border border-app-card-border/80 focus:border-app-accent focus:ring-1 focus:ring-app-accent rounded-xl py-1 px-3 font-sans text-xs sm:text-sm font-semibold tracking-tight leading-none outline-none"
+                                    placeholder="Translation • Перевод"
+                                  />
+                                </div>
+                              </div>
+
+                              {/* Controls actions row */}
+                              <div className="flex items-center gap-1.5 shrink-0 align-middle">
+                                <button
+                                  type="button"
+                                  onClick={() => savePhraseEdit(block.id, phrase.id)}
+                                  className="p-2.5 border border-emerald-500/20 bg-emerald-500/10 text-emerald-400 rounded-xl hover:bg-emerald-500/20 active:scale-95 transition-all cursor-pointer"
+                                  title="Save"
+                                >
+                                  <Check size={14} />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => deletePhraseItem(block.id, phrase.id)}
+                                  className="p-2.5 border border-red-500/20 bg-red-500/10 text-red-200 rounded-xl hover:bg-red-500/20 active:scale-95 transition-all cursor-pointer"
+                                  title="Delete Phrase"
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={cancelEdit}
+                                  className="p-2.5 border border-app-card-border bg-app-bg text-app-muted hover:text-app-fg rounded-xl hover:bg-app-card-border/20 active:scale-95 transition-all cursor-pointer"
+                                  title="Cancel"
+                                >
+                                  <X size={14} />
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      }
+
+                      const isSaveActive = isPhraseSaved(phrase.text);
+
                       return (
                         <div 
                           key={phrase.id} 
-                          className="flex flex-col p-4 bg-app-card border border-app-accent/30 rounded-2xl animate-in fade-in zoom-in-95 duration-200 shadow-sm relative"
-                          onClick={(e) => e.stopPropagation()}
+                          className="group/phrase flex flex-col p-4 bg-app-card border border-app-card-border hover:border-app-accent/30 rounded-2xl transition-all duration-200 shadow-sm hover:shadow-md cursor-pointer relative"
+                          onClick={() => setExpandedPhraseId(expandedPhraseId === phrase.id ? null : phrase.id)}
                         >
+                          {/* Visible Row (Always visible) */}
                           <div className="flex items-center gap-3 w-full">
-                            {/* Active editor indicator */}
-                            <div className="p-2.5 bg-app-accent/10 border border-app-accent/20 text-app-accent rounded-xl inline-flex shrink-0 max-h-12 justify-center items-center align-middle">
-                              <Edit3 size={15} className="animate-pulse" />
+                            {/* Voice action */}
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleVoicing(phrase.text);
+                              }}
+                              className="p-2 bg-app-bg text-app-muted hover:text-app-fg rounded-xl transition-all active:scale-95 inline-flex shrink-0 border border-app-card-border/40 hover:border-app-card-border align-middle leading-none cursor-pointer"
+                              title="Pronounce"
+                            >
+                              <Volume2 size={15} />
+                            </button>
+
+                            {/* Phrase Text & Translation */}
+                            <div className="flex-1 min-w-0 pr-1">
+                              <div className="flex flex-wrap items-baseline gap-x-2">
+                                <span className="font-serif text-[17px] md:text-[19px] text-app-accent leading-snug">
+                                  {phrase.text}
+                                </span>
+                              </div>
+                              <p className="font-serif text-[17px] md:text-[19px] text-app-muted mt-0.5 leading-snug">
+                                {phrase.translation}
+                              </p>
                             </div>
 
-                            {/* Inline editable inputs */}
-                            <div className="flex-1 min-w-0 pr-1 space-y-2">
-                              <div>
-                                <input
-                                  type="text"
-                                  value={tempPhraseText}
-                                  onChange={(e) => setTempPhraseText(e.target.value)}
-                                  className="w-full bg-app-bg text-app-fg border border-app-card-border/80 focus:border-app-accent focus:ring-1 focus:ring-app-accent rounded-xl py-1.5 px-3 font-sans text-sm sm:text-base font-extrabold tracking-tight leading-none outline-none"
-                                  placeholder="Original Phrase • Оригинальная фраза"
-                                  autoFocus
-                                />
-                              </div>
-                              <div>
-                                <input
-                                  type="text"
-                                  value={tempPhraseTranslation}
-                                  onChange={(e) => setTempPhraseTranslation(e.target.value)}
-                                  className="w-full bg-app-bg text-app-fg border border-app-card-border/80 focus:border-app-accent focus:ring-1 focus:ring-app-accent rounded-xl py-1 px-3 font-sans text-xs sm:text-sm font-semibold tracking-tight leading-none outline-none"
-                                  placeholder="Translation • Перевод"
-                                />
-                              </div>
-                            </div>
-
-                            {/* Controls actions row */}
-                            <div className="flex items-center gap-1.5 shrink-0 align-middle">
-                              <button
-                                type="button"
-                                onClick={() => savePhraseEdit(block.id, phrase.id)}
-                                className="p-2.5 border border-emerald-500/20 bg-emerald-500/10 text-emerald-400 rounded-xl hover:bg-emerald-500/20 active:scale-95 transition-all cursor-pointer"
-                                title="Save"
-                              >
-                                <Check size={14} />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => deletePhraseItem(block.id, phrase.id)}
-                                className="p-2.5 border border-red-500/20 bg-red-500/10 text-red-200 rounded-xl hover:bg-red-500/20 active:scale-95 transition-all cursor-pointer"
-                                title="Delete Phrase"
-                              >
-                                <Trash2 size={14} />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={cancelEdit}
-                                className="p-2.5 border border-app-card-border bg-app-bg text-app-muted hover:text-app-fg rounded-xl hover:bg-app-card-border/20 active:scale-95 transition-all cursor-pointer"
-                                title="Cancel"
-                              >
-                                <X size={14} />
-                              </button>
-                            </div>
+                            {/* FSRS Toggle trigger */}
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleTogglePhraseSaved(phrase);
+                              }}
+                              className={`p-2.5 rounded-xl transition-all duration-200 cursor-pointer shrink-0 border active:scale-95 ${
+                                isSaveActive 
+                                  ? 'bg-emerald-500/10 text-emerald-400 font-bold border border-emerald-500/20' 
+                                  : 'bg-app-bg text-app-muted hover:text-app-fg border border-app-card-border/30 hover:border-app-accent/30'
+                              }`}
+                              title={isSaveActive ? 'Saved in Study Cards' : 'Add phrase to Cards'}
+                            >
+                              {isSaveActive ? <Check size={14} /> : <Plus size={14} />}
+                            </button>
                           </div>
+
+                          {/* Expandable info space */}
+                          <AnimatePresence initial={false}>
+                            {isExpanded && (
+                              <motion.div
+                                initial={{ height: 0, opacity: 0 }}
+                                animate={{ height: "auto", opacity: 1 }}
+                                exit={{ height: 0, opacity: 0 }}
+                                transition={{ duration: 0.15, ease: "easeInOut" }}
+                                className="overflow-hidden"
+                              >
+                                <div className="pt-3.5 mt-3 border-t border-app-card-border/40 space-y-3.5" onClick={(e) => e.stopPropagation()}>
+                                  {/* Example usage */}
+                                  {phrase.studyExample && (
+                                    <div className="pl-4 border-l-2 border-app-card-border/55 py-0.5">
+                                      <p className="font-serif text-[17px] md:text-[19px] text-app-muted/90 italic leading-relaxed">
+                                        "{phrase.studyExample}"
+                                      </p>
+                                    </div>
+                                  )}
+
+                                  {/* Tags layer (chips) */}
+                                  <div className="flex flex-wrap gap-2 items-center">
+                                    {/* Type badge */}
+                                    {phrase.type && phrase.type !== 'phrase' && (
+                                      <span className="text-[9px] uppercase font-black tracking-widest text-[#6366f1] bg-[#6366f1]/10 border border-[#6366f1]/10 px-2 py-0.5 rounded-lg shrink-0 leading-none">
+                                        {phrase.type}
+                                      </span>
+                                    )}
+
+                                    {/* Priority/Level indicator badge */}
+                                    {phrase.priority && (
+                                      <span className={`text-[9.5px] uppercase font-black tracking-[0.08em] px-2 py-0.5 rounded-lg leading-none shrink-0 border ${
+                                        phrase.priority === 'core' ? 'bg-emerald-500/5 text-emerald-600 dark:text-emerald-400 border-emerald-500/10' :
+                                        phrase.priority === 'colloquial' ? 'bg-sky-500/5 text-sky-600 dark:text-sky-400 border-sky-500/10' :
+                                        phrase.priority === 'cultural' ? 'bg-amber-500/5 text-amber-600 dark:text-amber-500 border-amber-500/10' :
+                                        'bg-purple-500/5 text-purple-600 dark:text-purple-400 border-purple-500/10'
+                                      }`}>
+                                        {phrase.priority}
+                                      </span>
+                                    )}
+                                  </div>
+
+                                  {/* Editor Action row only */}
+                                  <div className="flex items-center justify-between pt-2 border-t border-app-card-border/20">
+                                    <button
+                                      type="button"
+                                      onClick={() => startPhraseEdit(phrase)}
+                                      className="text-[10px] uppercase font-extrabold tracking-wider text-app-muted hover:text-app-fg flex items-center gap-1 cursor-pointer py-0.5"
+                                    >
+                                      <Edit3 size={11} /> Edit Phrase
+                                    </button>
+                                    <span className="text-[9px] font-mono opacity-25 select-none uppercase tracking-widest">
+                                      CantoLex Interactive Card
+                                    </span>
+                                  </div>
+                                </div>
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
                         </div>
                       );
-                    }
+                    })}
+                  </div>
+                </div>
 
-                    const isSaveActive = isPhraseSaved(phrase.text);
+                {/* Gentle Thin Divider line */}
+                {block.kind !== 'notes' && <div className="border-b border-app-card-border/35 pt-6" />}
 
-                    return (
-                      <div 
-                        key={phrase.id} 
-                        className="group/phrase flex flex-col p-4 bg-app-card border border-app-card-border hover:border-app-accent/30 rounded-2xl transition-all duration-200 shadow-sm hover:shadow-md cursor-pointer relative"
-                        onClick={() => setExpandedPhraseId(expandedPhraseId === phrase.id ? null : phrase.id)}
-                      >
-                        {/* Visible Row (Always visible) */}
-                        <div className="flex items-center gap-3 w-full">
-                          {/* Voice action */}
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleVoicing(phrase.text);
-                            }}
-                            className="p-2 bg-app-bg text-app-muted hover:text-app-fg rounded-xl transition-all active:scale-95 inline-flex shrink-0 border border-app-card-border/40 hover:border-app-card-border align-middle leading-none cursor-pointer"
-                            title="Pronounce"
-                          >
-                            <Volume2 size={15} />
-                          </button>
+              </section>
+            );
+          })}
 
-                          {/* Phrase Text & Translation */}
-                          <div className="flex-1 min-w-0 pr-1">
-                            <div className="flex flex-wrap items-baseline gap-x-2">
-                              <span className="font-serif text-[17px] md:text-[19px] text-app-accent leading-snug">
-                                {phrase.text}
-                              </span>
-                            </div>
-                            <p className="font-serif text-[17px] md:text-[19px] text-app-muted mt-0.5 leading-snug">
-                              {phrase.translation}
-                            </p>
-                          </div>
-
-                          {/* FSRS Toggle trigger */}
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleTogglePhraseSaved(phrase);
-                            }}
-                            className={`p-2.5 rounded-xl transition-all duration-200 cursor-pointer shrink-0 border active:scale-95 ${
-                              isSaveActive 
-                                ? 'bg-emerald-500/10 text-emerald-400 font-bold border border-emerald-500/20' 
-                                : 'bg-app-bg text-app-muted hover:text-app-fg border border-app-card-border/30 hover:border-app-accent/30'
-                            }`}
-                            title={isSaveActive ? 'Saved in Study Cards' : 'Add phrase to Cards'}
-                          >
-                            {isSaveActive ? <Check size={14} /> : <Plus size={14} />}
-                          </button>
-                        </div>
-
-                        {/* Expandable info space */}
-                        <AnimatePresence initial={false}>
-                          {isExpanded && (
-                            <motion.div
-                              initial={{ height: 0, opacity: 0 }}
-                              animate={{ height: "auto", opacity: 1 }}
-                              exit={{ height: 0, opacity: 0 }}
-                              transition={{ duration: 0.15, ease: "easeInOut" }}
-                              className="overflow-hidden"
-                            >
-                              <div className="pt-3.5 mt-3 border-t border-app-card-border/40 space-y-3.5" onClick={(e) => e.stopPropagation()}>
-                                {/* Example usage */}
-                                {phrase.studyExample && (
-                                  <div className="pl-4 border-l-2 border-app-card-border/55 py-0.5">
-                                    <p className="font-serif text-[17px] md:text-[19px] text-app-muted/90 italic leading-relaxed">
-                                      "{phrase.studyExample}"
-                                    </p>
-                                  </div>
-                                )}
-
-                                {/* Tags layer (chips) */}
-                                <div className="flex flex-wrap gap-2 items-center">
-                                  {/* Type badge */}
-                                  {phrase.type && phrase.type !== 'phrase' && (
-                                    <span className="text-[9px] uppercase font-black tracking-widest text-[#6366f1] bg-[#6366f1]/10 border border-[#6366f1]/10 px-2 py-0.5 rounded-lg shrink-0 leading-none">
-                                      {phrase.type}
-                                    </span>
-                                  )}
-
-                                  {/* Priority/Level indicator badge */}
-                                  {phrase.priority && (
-                                    <span className={`text-[9.5px] uppercase font-black tracking-[0.08em] px-2 py-0.5 rounded-lg leading-none shrink-0 border ${
-                                      phrase.priority === 'core' ? 'bg-emerald-500/5 text-emerald-600 dark:text-emerald-400 border-emerald-500/10' :
-                                      phrase.priority === 'colloquial' ? 'bg-sky-500/5 text-sky-600 dark:text-sky-400 border-sky-500/10' :
-                                      phrase.priority === 'cultural' ? 'bg-amber-500/5 text-amber-600 dark:text-amber-500 border-amber-500/10' :
-                                      'bg-purple-500/5 text-purple-600 dark:text-purple-400 border-purple-500/10'
-                                    }`}>
-                                      {phrase.priority}
-                                    </span>
-                                  )}
-                                </div>
-
-                                {/* Editor Action row only */}
-                                <div className="flex items-center justify-between pt-2 border-t border-app-card-border/20">
-                                  <button
-                                    type="button"
-                                    onClick={() => startPhraseEdit(phrase)}
-                                    className="text-[10px] uppercase font-extrabold tracking-wider text-app-muted hover:text-app-fg flex items-center gap-1 cursor-pointer py-0.5"
-                                  >
-                                    <Edit3 size={11} /> Edit Phrase
-                                  </button>
-                                  <span className="text-[9px] font-mono opacity-25 select-none uppercase tracking-widest">
-                                    CantoLex Interactive Card
-                                  </span>
-                                </div>
-                              </div>
-                            </motion.div>
-                          )}
-                        </AnimatePresence>
+          {/* Guided Overview Deeper Study Paths and Recommended Action Blocks */}
+          {activeMode === 'overview' && (
+            <div className="space-y-10 pt-8 animate-in fade-in duration-500">
+              
+              {/* Bento Cards for Deeper Study Angles */}
+              <div className="border-t border-app-card-border/20 pt-8 space-y-4">
+                <div className="space-y-1">
+                  <h3 className="text-xs font-black uppercase tracking-[0.2em] text-app-fg">
+                    Deeper Study Angles
+                  </h3>
+                  <p className="text-xs text-app-muted leading-normal">
+                    Explore this song through different analytical focus areas designed to highlight specific aspects.
+                  </p>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {/* Vocabulary Card */}
+                  <div 
+                    onClick={() => handleSetAnalysisMode?.('vocabulary')}
+                    className="group bg-app-card border border-app-card-border/40 hover:border-app-accent/40 rounded-2xl p-5 cursor-pointer transition-all hover:scale-[1.01] flex flex-col justify-between space-y-4 shadow-sm"
+                  >
+                    <div className="space-y-2 text-left">
+                      <div className="p-2 bg-amber-500/10 text-amber-500 rounded-xl w-fit">
+                        <BookOpen size={16} />
                       </div>
-                    );
-                  })}
+                      <h4 className="text-sm font-black uppercase tracking-wider text-app-fg group-hover:text-app-accent transition-colors">
+                        Vocabulary Mode
+                      </h4>
+                      <p className="text-xs text-app-muted leading-relaxed">
+                        Curated thematic vocabulary, idiomatic words, and key expressions sorted by lexical category.
+                      </p>
+                    </div>
+                    <span className="text-xs font-extrabold uppercase tracking-wider text-app-accent group-hover:translate-x-0.5 transition-transform inline-flex items-center gap-1">
+                      Explore Vocabulary <span>→</span>
+                    </span>
+                  </div>
+
+                  {/* Phrases Card */}
+                  <div 
+                    onClick={() => handleSetAnalysisMode?.('phrases')}
+                    className="group bg-app-card border border-app-card-border/40 hover:border-app-accent/40 rounded-2xl p-5 cursor-pointer transition-all hover:scale-[1.01] flex flex-col justify-between space-y-4 shadow-sm"
+                  >
+                    <div className="space-y-2 text-left">
+                      <div className="p-2 bg-blue-500/10 text-blue-500 rounded-xl w-fit">
+                        <Plus size={16} />
+                      </div>
+                      <h4 className="text-sm font-black uppercase tracking-wider text-app-fg group-hover:text-app-accent transition-colors">
+                        Phrases & Grammar
+                      </h4>
+                      <p className="text-xs text-app-muted leading-relaxed">
+                        Analyze syntactic structures, notable line-by-line grammar nuances, and colloquial patterns.
+                      </p>
+                    </div>
+                    <span className="text-xs font-extrabold uppercase tracking-wider text-app-accent group-hover:translate-x-0.5 transition-transform inline-flex items-center gap-1">
+                      Explore Phrases <span>→</span>
+                    </span>
+                  </div>
+
+                  {/* Style Card */}
+                  <div 
+                    onClick={() => handleSetAnalysisMode?.('style')}
+                    className="group bg-app-card border border-app-card-border/40 hover:border-app-accent/40 rounded-2xl p-5 cursor-pointer transition-all hover:scale-[1.01] flex flex-col justify-between space-y-4 shadow-sm"
+                  >
+                    <div className="space-y-2 text-left">
+                      <div className="p-2 bg-purple-500/10 text-purple-500 rounded-xl w-fit">
+                        <Sparkles size={16} />
+                      </div>
+                      <h4 className="text-sm font-black uppercase tracking-wider text-app-fg group-hover:text-app-accent transition-colors">
+                        Style & Emotions
+                      </h4>
+                      <p className="text-xs text-app-muted leading-relaxed">
+                        Deconstruct the emotional landscape, literary devices, and performance dynamics of the track.
+                      </p>
+                    </div>
+                    <span className="text-xs font-extrabold uppercase tracking-wider text-app-accent group-hover:translate-x-0.5 transition-transform inline-flex items-center gap-1">
+                      Explore Style <span>→</span>
+                    </span>
+                  </div>
                 </div>
               </div>
 
-              {/* Gentle Thin Divider line */}
-              {block.kind !== 'notes' && <div className="border-b border-app-card-border/35 pt-6" />}
+              {/* Recommended Next Steps */}
+              <div className="border-t border-app-card-border/20 pt-8 space-y-4">
+                <div className="space-y-1">
+                  <h3 className="text-xs font-black uppercase tracking-[0.2em] text-app-fg">
+                    Recommended Next Steps
+                  </h3>
+                  <p className="text-xs text-app-muted leading-normal">
+                    Go from understanding the song to mastering its language components.
+                  </p>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Words Tab Card */}
+                  <div 
+                    onClick={() => onNavigateToTab?.('words')}
+                    className="group bg-app-card/40 border border-app-card-border/20 hover:border-app-accent/30 rounded-2xl p-5 cursor-pointer transition-all flex items-center justify-between gap-4 shadow-sm"
+                  >
+                    <div className="space-y-1.5 text-left">
+                      <h4 className="text-xs font-black uppercase tracking-wider text-app-fg group-hover:text-app-accent transition-colors">
+                        1. Review Song Words
+                      </h4>
+                      <p className="text-xs text-app-muted leading-relaxed">
+                        Inspect the complete <strong>lexical inventory</strong>. Mark words as known, learning, or check occurrence lines.
+                      </p>
+                    </div>
+                    <span className="text-app-muted group-hover:text-app-accent group-hover:translate-x-0.5 transition-all text-xs font-bold shrink-0">
+                      Words Tab →
+                    </span>
+                  </div>
 
-            </section>
-          );
-        })
+                  {/* Practice Tab Card */}
+                  <div 
+                    onClick={() => onNavigateToTab?.('cards')}
+                    className="group bg-app-card/40 border border-app-card-border/20 hover:border-app-accent/30 rounded-2xl p-5 cursor-pointer transition-all flex items-center justify-between gap-4 shadow-sm"
+                  >
+                    <div className="space-y-1.5 text-left">
+                      <h4 className="text-xs font-black uppercase tracking-wider text-app-fg group-hover:text-app-accent transition-colors">
+                        2. Active Practice
+                      </h4>
+                      <p className="text-xs text-app-muted leading-relaxed">
+                        Test yourself with your interactive <strong>spaced repetition</strong> cards to lock the new vocabulary into long-term memory.
+                      </p>
+                    </div>
+                    <span className="text-app-muted group-hover:text-app-accent group-hover:translate-x-0.5 transition-all text-xs font-bold shrink-0">
+                      Practice Tab →
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          )}
+        </>
       )}
       </div>
 
