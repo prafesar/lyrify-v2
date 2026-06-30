@@ -10,7 +10,7 @@
 Важно:
 
 - агент в `lyrify-v2` не проверяет серверный код напрямую;
-- если клиентскую задачу нужно строить вокруг нового API, считай target contract продуктовым ориентиром, а не гарантией, что сервер уже задеплоен;
+- target contract ниже уже соответствует текущему внешнему API, задеплоенному на `https://api.cantolex.com`;
 - не придумывай backend implementation внутри этого репозитория.
 
 ## Базовые правила
@@ -146,8 +146,12 @@ Success response:
 - `POST /api/v1/track-preparation/fetch`
 - `POST /api/v1/translation/cached`
 - `POST /api/v1/translation/fetch`
-- `POST /api/v1/lecture/cached`
 - `POST /api/v1/lecture/fetch`
+
+Важно:
+
+- `lecture/cached` на текущем этапе не использовать;
+- lecture flow сейчас считается intentionally non-cached, потому что prompts и mode behavior еще меняются.
 
 ### Основная идея
 
@@ -254,10 +258,36 @@ type LectureFetchRequest = {
   preparedTrack: PreparedTrackPayload
   targetLanguage: string
   analysisMode: "overview" | "vocabulary" | "phrases" | "style"
+  existingItems?: Array<{
+    text: string
+    translation?: string
+    explanation?: string
+    kind?:
+      | "word"
+      | "expression"
+      | "idiom"
+      | "collocation"
+      | "grammar"
+      | "cultural_reference"
+      | "theme"
+      | "vocabulary"
+      | "slang"
+      | "phrasal_verb"
+    sourceMode?: "overview" | "vocabulary" | "phrases" | "style"
+  }>
 }
 ```
 
+Важно:
+
+- `existingItems` — это soft anti-duplication context, а не жесткий blacklist;
+- клиент может передавать туда уже найденные phrases/items из других mode payloads;
+- если item повторяется в новом mode, сервер ожидает, что LLM попробует дать новый учебный угол, а не просто продублирует старое объяснение.
+
 ## Практические правила для агента `lyrify-v2`
+
+- Для lecture flow не строй клиентскую логику вокруг `lecture/cached`; на текущем этапе lecture должен запрашиваться через `POST /api/v1/lecture/fetch`.
+- Если у клиента уже есть payload других lecture modes для этого же трека, перед новым `lecture/fetch` собирай из них `existingItems`.
 
 - Если задача касается уже работающего client flow, учитывай live legacy contract.
 - Если задача касается нового `Words`, нового `Practice`, lexical items или backend-first preparation flow, проектируй клиент вокруг target contract.

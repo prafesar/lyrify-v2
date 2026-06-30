@@ -174,3 +174,68 @@ export interface AiPort {
   computeLyricsHash(lyrics: string | PreparedLyricsInput): Promise<string>;
   normalizeString(str: string): string;
 }
+
+export type PreparedTrackPayload = {
+  trackKey: string;
+  lyricsKey: string;
+  sourceLanguage?: string;
+  metadata: {
+    title?: string;
+    artist?: string;
+    album?: string;
+    itunesId?: string | number;
+    durationMs?: number;
+    promptVersion: string;
+  };
+  lines: Array<{
+    index: number;
+    text: string;
+    language?: string;
+  }>;
+  lexicalItems: Array<{
+    id: string;
+    baseForm: string;
+    displayText: string;
+    kind: "word" | "phrase" | "phrasal_verb" | "separable_verb" | "expression";
+    normalizedKey: string;
+  }>;
+  occurrences: Array<{
+    lexicalItemId: string;
+    lineIndex: number;
+    occurrenceIndex: number;
+    surfaceText: string;
+    parts: Array<{
+      surface: string;
+      role?: string;
+      contextBefore?: string;
+      contextAfter?: string;
+    }>;
+    spans: Array<{
+      startOffset: number;
+      endOffset: number;
+      role?: string;
+    }>;
+    resolutionStatus: "resolved" | "ambiguous" | "unresolved";
+  }>;
+};
+
+export type TranslationPayload = Array<{
+  lineKey: string;
+  lineIndex: number;
+  original: string;
+  translation: string;
+  language: string;
+  blockType?: string;
+}>;
+
+export interface TranslationFetchRequest {
+  preparedTrack: PreparedTrackPayload;
+  targetLanguage: string;
+}
+
+export interface LectureFetchRequest {
+  preparedTrack: PreparedTrackPayload;
+  targetLanguage: string;
+  analysisMode: "overview" | "vocabulary" | "phrases" | "style";
+}
+

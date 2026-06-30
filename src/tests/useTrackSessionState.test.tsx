@@ -303,10 +303,7 @@ describe("useTrackSession Mode-Aware & Immediate State Generation Regression Tes
       processingStatus: { stage1_completed: true, stage2_completed: true, stage3_completed: false }
     };
 
-    const harness = new TestStateHarness("overview", "Spanish");
-    act(() => {
-      root.render(<TestHarness initialMode="overview" initialLang="Spanish" onStateUpdate={(s) => harness.state = s} />);
-    });
+    const harness = await renderHarness("overview", "Spanish");
 
     await act(async () => {
       harness.state.setCurrentTrack(track);

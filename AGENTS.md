@@ -48,6 +48,8 @@
 - Историческая ось `compact | rich` считается legacy-переходом, а не целевой моделью.
 - `Words` — отдельная вкладка для всех lexical items трека.
 - `Practice` должен быть полезен даже если пользователь еще ничего не сохранил в FSRS.
+- `lecture/fetch` на текущем этапе использовать без cache; lecture payloads могут быть более индивидуальными и чувствительными к изменению prompts.
+- Перед новым lecture request клиент должен уметь собирать `existingItems` из уже загруженных mode payloads того же трека и передавать их во внешний API.
 
 ## Что Нужно Построить На Текущем Этапе
 
@@ -145,6 +147,9 @@
 - `rich` не нужно считать эквивалентом одного из новых учебных режимов.
 - Подсветка должна опираться на backend-prepared lexical items и programmatic span resolution.
 - Translation и lecture должны отправляться поверх prepared track payload.
+- `lecture/cached` не считать активным runtime-path на текущем этапе.
+- `existingItems` для lecture — это контекст для уменьшения дублей между `overview | vocabulary | phrases | style`, а не жесткий запрет на повтор.
+- Если item повторяется между режимами, новый режим должен по возможности давать новый pedagogical angle.
 - Client-side extractor допустим только как fallback или validator, а не как основа продуктовой модели.
 
 ## Что Считать Успешным Результатом На Текущем Этапе
