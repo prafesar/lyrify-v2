@@ -1,20 +1,63 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
-</div>
+Верхнеуровневый план по полезности
 
-# Run and deploy your AI Studio app
+1. Manual-first line workspace
+Самый полезный шаг.
+Сделать, чтобы пользователь мог:
+•  открыть строку;
+•  вручную написать summary;
+•  добавить notes к строке;
+•  выделять фрагменты строки и превращать их в notes/cards;
+•  редактировать всё без AI.
 
-This contains everything you need to run your app locally.
+Это даст максимальный UX-эффект сразу.
 
-View your app in AI Studio: https://ai.studio/apps/3b50a3cb-7e72-449b-9765-e59365925aef
+2. Selection-based flow вместо AI-first
+Добавить:
+•  клик по слову;
+•  выделение фрагмента;
+•  быстрые действия:
+◦  lookup
+◦  add note
+◦  add to study
 
-## Run Locally
+Это самый сильный non-AI инструмент.
 
-**Prerequisites:**  Node.js
+3. AI как draft, а не как источник истины
+Переоформить AI UX:
+•  Generate draft
+•  Accept all / edit / delete
+•  пользовательский manual layer — главный.
+
+4. Нормализация SQLite модели
+Нужно сделать до того, как разрастутся:
+•  notes,
+•  community разборы,
+•  несколько источников объяснений,
+•  FSRS-связи.
+
+5. Словарные и переводческие интеграции
+После ручного workflow.
+Не как “магия”, а как helper tool.
+
+6. Локализация интерфейса
+После стабилизации основных экранов line study.
+
+7. Community line explanations
+После того как private/manual workflow уже хороший.
+Иначе опубликуете слабую модель данных и слабый UX.
+
+8. Вынос LLM worker
+Когда AI станет зрелым сервисным слоем, а не экспериментальной фичей.
 
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+
+Мой итог
+
+Да, направление хорошее.
+Я бы прямо формулировал продукт так:
+
+•  основа — пользователь сам строит понимание строки;
+•  словарь и выделение фрагментов — главный инструмент;
+•  AI — опциональный черновик;
+•  community — следующий уровень после ручного workflow;
+•  данные — нужно нормализовать рано, до роста фич.
