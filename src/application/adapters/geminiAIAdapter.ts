@@ -10,7 +10,8 @@ function isPreparedInput(input: any): input is PreparedLyricsInput {
 export class GeminiAIAdapter implements AiPort {
   async fetchStructuredLecture(
     lyrics: string | PreparedLyricsInput,
-    forceRegenerate?: boolean
+    forceRegenerate?: boolean,
+    existingItems?: any[]
   ): Promise<StructuredLectureBlock[]> {
     let rawLyrics = "";
     let trackTitle = "";
@@ -267,6 +268,20 @@ export class GeminiAIAdapter implements AiPort {
 
   async saveTrackToSharedCache(track: TrackLyricsData): Promise<void> {
     return originalGeminiService.saveTrackToSharedCache(track);
+  }
+
+  async getPreparedTrack(
+    lyrics: string | PreparedLyricsInput,
+    targetLanguage: string
+  ): Promise<PreparedTrackPayload> {
+    return {
+      trackKey: "local",
+      lyricsKey: "local",
+      metadata: { promptVersion: "1.0" },
+      lines: [],
+      lexicalItems: [],
+      occurrences: []
+    };
   }
 
   async computeTrackKey(title: string, artists: string[]): Promise<string> {

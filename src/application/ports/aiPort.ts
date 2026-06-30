@@ -51,7 +51,8 @@ export const TRANSLATION_PROMPT_VERSION = 4;
 export interface AiPort {
   fetchStructuredLecture(
     lyrics: string | PreparedLyricsInput,
-    forceRegenerate?: boolean
+    forceRegenerate?: boolean,
+    existingItems?: any[]
   ): Promise<StructuredLectureBlock[]>;
 
   getCachedStructuredLecture(
@@ -168,9 +169,100 @@ export interface AiPort {
     targetLanguage?: string
   ): Promise<any[]>;
 
+  getPreparedTrack(
+    lyrics: string | PreparedLyricsInput,
+    targetLanguage: string
+  ): Promise<PreparedTrackPayload>;
+
   saveTrackToSharedCache(track: TrackLyricsData): Promise<void>;
 
   computeTrackKey(title: string, artists: string[]): Promise<string>;
   computeLyricsHash(lyrics: string | PreparedLyricsInput): Promise<string>;
   normalizeString(str: string): string;
 }
+
+export type PreparedTrackPayload = {
+  trackKey: string;
+  lyricsKey: string;
+  sourceLanguage?: string;
+  metadata: {
+    title?: string;
+    artist?: string;
+    album?: string;
+    itunesId?: string | number;
+    durationMs?: number;
+    promptVersion: string;
+  };
+  lines: Array<{
+    index: number;
+    text: string;
+    language?: string;
+  }>;
+  lexicalItems: Array<{
+    id: string;
+    baseForm: string;
+    displayText: string;
+    kind: "word" | "phrase" | "phrasal_verb" | "separable_verb" | "expression";
+    normalizedKey: string;
+  }>;
+  occurrences: Array<{
+    lexicalItemId: string;
+    lineIndex: number;
+    occurrenceIndex: number;
+    surfaceText: string;
+    parts: Array<{
+      surface: string;
+      role?: string;
+      contextBefore?: string;
+      contextAfter?: string;
+    }>;
+    spans: Array<{
+      startOffset: number;
+      endOffset: number;
+      role?: string;
+    }>;
+    resolutionStatus: "resolved" | "ambiguous" | "unresolved";
+  }>;
+};
+
+export type TranslationPayload = {
+  lyricsKey: string;
+  targetLanguage: string;
+  lines: Array<{
+    lineKey: string;
+    lineIndex: number;
+    original: string;
+    translation: string;
+    language: string;
+    blockType?: string;
+  }>;
+};
+
+export interface TranslationFetchRequest {
+  preparedTrack: PreparedTrackPayload;
+  targetLanguage: string;
+}
+
+export interface LectureFetchRequest {
+  preparedTrack: PreparedTrackPayload;
+  targetLanguage: string;
+  analysisMode: "overview" | "vocabulary" | "phrases" | "style";
+  existingItems?: Array<{
+    text: string;
+    translation?: string;
+    explanation?: string;
+    kind?:
+      | "word"
+      | "expression"
+      | "idiom"
+      | "collocation"
+      | "grammar"
+      | "cultural_reference"
+      | "theme"
+      | "vocabulary"
+      | "slang"
+      | "phrasal_verb";
+    sourceMode?: "overview" | "vocabulary" | "phrases" | "style";
+  }>;
+}
+

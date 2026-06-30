@@ -1,9 +1,10 @@
-import { AiPort, TrackMetadata, TrackMeaningResult, TrackMeaningEntry } from "../ports/aiPort";
+import { AiPort, TrackMetadata, TrackMeaningResult, TrackMeaningEntry, PreparedTrackPayload, TranslationFetchRequest, LectureFetchRequest } from "../ports/aiPort";
 import { TrackLyricsData, StructuredLectureBlock, extractTrackMeaning } from "../../services/musicService";
 import { PreparedLyricsInput, prepareLyricsInput, normalizeTrackTitle, normalizeArtists, computeStableHash } from "../../services/lyricsPreprocessor";
 import { userPreferencesRepository } from "./browserUserDataRepository";
 import { AnalysisMode } from "../../constants";
 import { mapLegacyToCanonicalMode, mapCanonicalToLegacyRequest } from "../../services/analysisMode";
+import { computeLyricsKey } from "../../services/serverCacheLookupService";
 
 function isPreparedInput(input: any): input is PreparedLyricsInput {
   return input && typeof input === 'object' && 'lines' in input && Array.isArray(input.lines);
@@ -17,6 +18,62 @@ function isPreparedInput(input: any): input is PreparedLyricsInput {
  */
 export class WorkerAIAdapter implements AiPort {
   private workerBaseUrl = "https://api.cantolex.com";
+  private preparedTrackCache = new Map<string, PreparedTrackPayload>();
+
+  private async getOrPrepareTrack(
+    lyricsInput: string | PreparedLyricsInput,
+    targetLanguage: string
+  ): Promise<PreparedTrackPayload> {
+    const lyricsText = isPreparedInput(lyricsInput)
+      ? lyricsInput.lines.map((l: any) => l.text).join("\n")
+      : lyricsInput;
+
+    const title = isPreparedInput(lyricsInput) ? lyricsInput.track.title : "Unknown Title";
+    const artists = isPreparedInput(lyricsInput) ? lyricsInput.track.artists : ["Unknown Artist"];
+
+    const lyricsKey = await computeLyricsKey(title, artists);
+
+    // Check memory cache first
+    const cachedMem = this.preparedTrackCache.get(lyricsKey);
+    if (cachedMem) {
+      return cachedMem;
+    }
+
+    // Step 1: POST /api/v1/track-preparation/cached
+    try {
+      const cachedPayload = await this.postToWorker<PreparedTrackPayload>("/api/v1/track-preparation/cached", {
+        lyricsKey
+      });
+      if (cachedPayload) {
+        this.preparedTrackCache.set(lyricsKey, cachedPayload);
+        return cachedPayload;
+      }
+    } catch (e) {
+      console.warn(`[WorkerAIAdapter] track-preparation/cached miss or failed for ${title}:`, e);
+    }
+
+    // Step 2: POST /api/v1/track-preparation/fetch
+    const trackKey = await this.computeTrackKey(title, artists);
+    const fetchPayload = await this.postToWorker<PreparedTrackPayload>("/api/v1/track-preparation/fetch", {
+      trackKey,
+      lyricsKey,
+      lyricsText,
+      metadata: {
+        title,
+        artist: artists.join(", "),
+        album: isPreparedInput(lyricsInput) ? lyricsInput.track.album : undefined,
+        itunesId: isPreparedInput(lyricsInput) ? lyricsInput.track.itunesId : undefined,
+        promptVersion: "1.0"
+      }
+    });
+
+    if (!fetchPayload) {
+      throw new Error("Failed to prepare track payload from server.");
+    }
+
+    this.preparedTrackCache.set(lyricsKey, fetchPayload);
+    return fetchPayload;
+  }
 
   /**
    * Universal HTTP POST helper to delegate AI capability calls to the Cloudflare Worker backend.
@@ -62,31 +119,27 @@ export class WorkerAIAdapter implements AiPort {
 
   async fetchStructuredLecture(
     lyrics: string | PreparedLyricsInput,
-    forceRegenerate?: boolean
+    forceRegenerate?: boolean,
+    existingItems?: any[]
   ): Promise<StructuredLectureBlock[]> {
-    let preparedInput: PreparedLyricsInput;
-    if (isPreparedInput(lyrics)) {
-      preparedInput = lyrics;
-    } else {
-      preparedInput = prepareLyricsInput(
-        "unknown-track",
-        [],
-        lyrics,
-        "English"
-      );
-    }
     const modePref = userPreferencesRepository.getPreference("lyrify_analysis_mode", null);
     const canonicalMode = mapLegacyToCanonicalMode(
       modePref || userPreferencesRepository.getPreference("lyrify_lecture_variant", "compact")
     );
-    const variant = mapCanonicalToLegacyRequest(canonicalMode);
-    const requestBody = {
-      ...preparedInput,
-      analysisMode: canonicalMode
+    
+    const targetLang = isPreparedInput(lyrics) ? lyrics.targetLanguage : "English";
+
+    // Get prepared track payload
+    const preparedTrack = await this.getOrPrepareTrack(lyrics, targetLang);
+
+    const requestBody: LectureFetchRequest = {
+      preparedTrack,
+      targetLanguage: targetLang,
+      analysisMode: canonicalMode,
+      existingItems
     };
-    return this.postToWorker<StructuredLectureBlock[]>("/api/v1/lecture/fetch", requestBody, {
-      "x-lyrify-lecture-variant": variant
-    });
+
+    return this.postToWorker<StructuredLectureBlock[]>("/api/v1/lecture/fetch", requestBody);
   }
 
   async getCachedStructuredLecture(
@@ -237,18 +290,52 @@ export class WorkerAIAdapter implements AiPort {
     trackKey?: string,
     targetLanguage?: string
   ): Promise<any[]> {
-    let preparedInput: PreparedLyricsInput;
-    if (isPreparedInput(lyrics)) {
-      preparedInput = lyrics;
-    } else {
-      preparedInput = prepareLyricsInput(
-        trackKey || "unknown-track",
-        [],
-        lyrics,
-        targetLanguage || "English"
-      );
+    const targetLang = targetLanguage || "English";
+    
+    // Get prepared track payload
+    const preparedTrack = await this.getOrPrepareTrack(lyrics, targetLang);
+
+    // Step 1: translation/cached
+    try {
+      const cachedResponse = await this.postToWorker<TranslationPayload>("/api/v1/translation/cached", {
+        preparedTrack,
+        targetLanguage: targetLang
+      });
+      if (cachedResponse) {
+        if (Array.isArray(cachedResponse.lines)) {
+          const lines = cachedResponse.lines;
+          if (cachedResponse.lexicalItems) {
+            (lines as any).lexicalItems = cachedResponse.lexicalItems;
+          }
+          return lines;
+        }
+        if (Array.isArray(cachedResponse)) {
+          return cachedResponse;
+        }
+      }
+    } catch (e) {
+      console.warn(`[WorkerAIAdapter] translation/cached miss or failed:`, e);
     }
-    return this.postToWorker<any[]>("/api/v1/translation/fetch", preparedInput);
+
+    // Step 2: translation/fetch
+    const fetchRequestBody: TranslationFetchRequest = {
+      preparedTrack,
+      targetLanguage: targetLang
+    };
+    const fetchResponse = await this.postToWorker<TranslationPayload>("/api/v1/translation/fetch", fetchRequestBody);
+    if (fetchResponse) {
+      if (Array.isArray(fetchResponse.lines)) {
+        const lines = fetchResponse.lines;
+        if (fetchResponse.lexicalItems) {
+          (lines as any).lexicalItems = fetchResponse.lexicalItems;
+        }
+        return lines;
+      }
+      if (Array.isArray(fetchResponse)) {
+        return fetchResponse;
+      }
+    }
+    return [];
   }
 
   async getPhraseAnalysis(
@@ -256,34 +343,13 @@ export class WorkerAIAdapter implements AiPort {
     trackKey?: string,
     targetLanguage?: string
   ): Promise<any[]> {
-    let preparedInput: PreparedLyricsInput;
-    if (isPreparedInput(lyrics)) {
-      preparedInput = lyrics;
-    } else {
-      preparedInput = prepareLyricsInput(
-        trackKey || "unknown-track",
-        [],
-        lyrics,
-        targetLanguage || "English"
-      );
-    }
-
-    const modePref = userPreferencesRepository.getPreference("lyrify_analysis_mode", null);
-    const canonicalMode = mapLegacyToCanonicalMode(
-      modePref || userPreferencesRepository.getPreference("lyrify_lecture_variant", "compact")
-    );
-    const variant = mapCanonicalToLegacyRequest(canonicalMode);
-    const requestBody = {
-      ...preparedInput,
-      analysisMode: canonicalMode
-    };
-    const blocks = await this.postToWorker<any[]>("/api/v1/lecture/fetch", requestBody, {
-      "x-lyrify-lecture-variant": variant
-    });
+    const targetLang = targetLanguage || "English";
+    const blocks = await this.fetchStructuredLecture(lyrics);
     const results: any[] = [];
     
+    const lines = isPreparedInput(lyrics) ? lyrics.lines : [];
     const lineKeyToIndex = new Map<string, number>();
-    for (const line of preparedInput.lines) {
+    for (const line of lines) {
       lineKeyToIndex.set(line.lineKey, line.lineIndex);
     }
 
@@ -305,7 +371,7 @@ export class WorkerAIAdapter implements AiPort {
             text: p.text,
             translation: p.translation,
             explanation: p.explanation,
-            language: p.language || preparedInput.targetLanguage || "unknown",
+            language: p.language || targetLang,
             lineKeys: lineKeys,
             lineKey: lineKeys[0] || undefined,
             lineIndex: lineIndex >= 0 ? lineIndex : 0,
@@ -319,6 +385,13 @@ export class WorkerAIAdapter implements AiPort {
 
   async saveTrackToSharedCache(track: TrackLyricsData): Promise<void> {
     // Firestore cache upload is bypassed/unnecessary when utilizing external Worker backend API.
+  }
+
+  async getPreparedTrack(
+    lyrics: string | PreparedLyricsInput,
+    targetLanguage: string
+  ): Promise<PreparedTrackPayload> {
+    return this.getOrPrepareTrack(lyrics, targetLanguage);
   }
 
   async computeTrackKey(title: string, artists: string[]): Promise<string> {

@@ -51,7 +51,7 @@ describe('Guided next-step CTA-block tests for multiple key states', () => {
 
     const step = determineNextStep(trackMock, []);
     expect(step.type).toBe('GENERATE_ANALYSIS');
-    expect(step.label).toBe('Generate Breakdown');
+    expect(step.label).toBe('Generate Overview');
   });
 
   it('Transition 3: Correctly guides users to SAVE_PHRASES when deep analysis completed but no track flashcard exists', () => {

@@ -42,25 +42,13 @@ export function determineNextStep(
     };
   }
 
-  // State 1.5: Has lyrics, but no translation/meaning/stage2 completed yet
-  const isStage2Completed = !!(track.processingStatus && track.processingStatus.stage2_completed) ||
-    !!(track.meaning && track.lines && track.lines.some(l => l.translation && l.translation.trim().length > 0));
-
-  if (!isStage2Completed) {
-    return {
-      type: 'TRANSLATE_LYRICS',
-      label: 'Translate Lyric',
-      description: 'Translate original lyrics and analyze meaning using CantoLex AI.'
-    };
-  }
-
   // State 2: Has lyrics, but no breakdown/analysis yet
   const isAnalysisCompleted = !!(track.lectureBlocks && track.lectureBlocks.length > 0 && !track.lectureBlocks.some(b => b.id === 'fallback-overview'));
   if (!isAnalysisCompleted) {
     return {
       type: 'GENERATE_ANALYSIS',
-      label: 'Generate Breakdown',
-      description: 'Run CantoLex AI to translate lines and extract important vocabulary patterns.'
+      label: 'Generate Overview',
+      description: 'Generate an AI-powered overview of the song directly from the lyrics.'
     };
   }
 

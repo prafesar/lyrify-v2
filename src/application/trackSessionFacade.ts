@@ -236,6 +236,7 @@ export class TrackSessionFacade {
           translationPromptVersion: TRANSLATION_PROMPT_VERSION,
           sourceLanguage: getLanguageCode(detectDominantLanguage(updatedLines) || trackData.sourceLanguage),
           lines: updatedLines,
+          translationLexicalItems: (translationsResult as any).lexicalItems || trackData.translationLexicalItems,
           processingStatus: { ...trackData.processingStatus, stage2_completed: true }
         };
       } catch (llmError) {
@@ -263,6 +264,7 @@ export class TrackSessionFacade {
         ...trackData,
         translationPromptVersion: TRANSLATION_PROMPT_VERSION,
         lines: updatedLines,
+        translationLexicalItems: (translationsResult as any).lexicalItems || trackData.translationLexicalItems,
         sourceLanguage: getLanguageCode(detectDominantLanguage(updatedLines) || trackData.sourceLanguage)
       };
     }

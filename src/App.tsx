@@ -47,12 +47,13 @@ import {
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { Track, Artist, Album, AnalysisMode } from "./constants";
-import { SUPPORTED_LANGUAGES, isExperimentalLanguage, normalizeLanguageCode } from "./lib/languages";
+import { SUPPORTED_LANGUAGES, isExperimentalLanguage, normalizeLanguageCode, getLanguageCode } from "./lib/languages";
 import { useUserCards } from "./hooks/useUserCards";
 import { usePlayback } from "./hooks/usePlayback";
 import { useLibrarySearch } from "./hooks/useLibrarySearch";
 import { useTrackSession } from "./hooks/useTrackSession";
 import { useAppUiState } from "./hooks/useAppUiState";
+import { WordsTab } from "./components/WordsTab";
 import { 
   studyCardsRepository,
   dailyTrackerRepository,
@@ -692,8 +693,11 @@ export default function App() {
     handleSourceLanguageOverride,
     handleSwitchAnalysisMode,
     wordFormStats,
-    availableAnalysisModes
-  } = useTrackSession();
+    availableAnalysisModes,
+    resolvedAnalysisVariant,
+    getLexicalItemStatus,
+    setLexicalItemStatus
+  } = useTrackSession(analysisMode, targetLanguage);
 
   const {
     phraseMetadata,
@@ -2625,7 +2629,10 @@ export default function App() {
                           handleAnalyzeSong();
                         } else if (actionType === 'GENERATE_ANALYSIS') {
                           setActiveTab('analysis');
-                          handleGenerateAnalysis();
+                          handleSetAnalysisModeAndSwitch('overview');
+                          setTimeout(() => {
+                            handleGenerateAnalysis(true);
+                          }, 50);
                         } else if (actionType === 'SAVE_PHRASES') {
                           setActiveTab('analysis'); // Переход на вкладку детального разбора песни
                         } else if (actionType === 'GO_TO_STUDY') {
@@ -3317,6 +3324,16 @@ export default function App() {
                   </div>
                 )}
 
+                {activeTab === "words" && (
+                  <div className="px-3 sm:px-6">
+                    <WordsTab
+                      currentTrack={currentTrack}
+                      getLexicalItemStatus={getLexicalItemStatus}
+                      setLexicalItemStatus={setLexicalItemStatus}
+                    />
+                  </div>
+                )}
+
                 {activeTab === "analysis" && (
                   <div className="pb-32 space-y-6 px-3 sm:px-6">
                     {isGeneratingAnalysis ? (
@@ -3353,7 +3370,7 @@ export default function App() {
                           </div>
                         </div>
                       </div>
-                    ) : (currentTrack.lectureBlocks && currentTrack.lectureBlocks.length > 0) ? (
+                    ) : (
                       <motion.div
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
@@ -3368,6 +3385,24 @@ export default function App() {
                           onUpdateTrack={async (updatedTrack) => {
                             setCurrentTrack(updatedTrack);
                             await saveTrackData(updatedTrack.trackId, updatedTrack);
+                            try {
+                              const activeMode = analysisMode || 'overview';
+                              const langCode = getLanguageCode(targetLanguage);
+                              if (updatedTrack.lectureBlocks) {
+                                await sqliteService.saveAnalysisVariant({
+                                  id: `${updatedTrack.trackId}_${activeMode}_${langCode}`,
+                                  trackId: updatedTrack.trackId,
+                                  mode: activeMode,
+                                  targetLanguage: langCode,
+                                  sourceLanguage: updatedTrack.sourceLanguage || "en",
+                                  status: "completed",
+                                  createdAt: Date.now(),
+                                  updatedAt: Date.now()
+                                }, updatedTrack.lectureBlocks);
+                              }
+                            } catch (e) {
+                              console.warn("Failed to update SQLite variant on user edit:", e);
+                            }
                             loadCommunityTracks();
                           }}
                           isGeneratingAnalysis={isGeneratingAnalysis}
@@ -3376,37 +3411,10 @@ export default function App() {
                           handleSetAnalysisMode={handleSetAnalysisModeAndSwitch}
                           wordFormStats={wordFormStats}
                           availableAnalysisModes={availableAnalysisModes}
+                          analysisError={analysisError}
+                          resolvedAnalysisVariant={resolvedAnalysisVariant}
                         />
                       </motion.div>
-                    ) : (
-                      <div className="py-24 flex flex-col items-center justify-center text-center space-y-8 font-sans max-w-md mx-auto">
-                        <div className="w-16 h-16 rounded-[1.5rem] bg-app-card border border-app-card-border/40 flex items-center justify-center text-app-fg opacity-20">
-                          <Brain size={32} />
-                        </div>
-                        <div className="space-y-3">
-                          <h3 className="text-xl font-bold text-app-fg tracking-tight">No Breakdown Yet</h3>
-                          <p className="text-sm text-app-fg opacity-50 font-medium leading-relaxed px-4">
-                            Run AI-breakdown to generate a structured lecture about the song, its meaning, emotions, and key vocabulary. Once created, you will be able to edit the content and save study cards.
-                          </p>
-                        </div>
-
-                        {analysisError && (
-                          <div id="analysis-error-banner" className="w-full p-5 rounded-[1.5rem] bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs text-center space-y-2">
-                            <p className="font-bold uppercase tracking-wider text-[10px]">Breakdown Error</p>
-                            <p className="opacity-90">{analysisError}</p>
-                          </div>
-                        )}
-
-                        <div className="pt-2">
-                          <button
-                            onClick={() => handleGenerateAnalysis()}
-                            className="px-8 py-4 rounded-2xl bg-app-fg text-app-bg font-black uppercase tracking-[0.18em] text-[10px] shadow-xl hover:scale-[1.03] transition-all flex items-center gap-2.5 cursor-pointer hover:bg-app-fg-hover"
-                          >
-                            <Sparkles size={14} className="text-app-bg" />
-                            Generate AI Breakdown
-                          </button>
-                        </div>
-                      </div>
                     )}
                   </div>
                 )}

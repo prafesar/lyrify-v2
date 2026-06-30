@@ -782,6 +782,39 @@ self.onmessage = async (event) => {
         break;
       }
 
+      case "ENSURE_WORD_FORM": {
+        const { id, language, surface, normalizedSurface } = payload;
+        try {
+          let exists = false;
+          db.exec({
+            sql: "SELECT id FROM word_forms WHERE language = ? AND normalized_surface = ?",
+            bind: [String(language), String(normalizedSurface)],
+            callback: () => {
+              exists = true;
+            }
+          });
+
+          if (!exists) {
+            db.exec({
+              sql: `
+                INSERT INTO word_forms (id, language, surface, normalized_surface, created_at)
+                VALUES (?, ?, ?, ?, ?)
+              `,
+              bind: [String(id), String(language), String(surface), String(normalizedSurface), Date.now()]
+            });
+          }
+          self.postMessage({ type: "WRITE_OK", messageId });
+        } catch (err: any) {
+          error("Error in ENSURE_WORD_FORM:", err);
+          self.postMessage({
+            type: "ERROR",
+            payload: `ENSURE_WORD_FORM failed: ${err.message || String(err)}`,
+            messageId
+          });
+        }
+        break;
+      }
+
       case "GET_TRACK_WORD_FORM_STATS": {
         const { trackId } = payload;
         let totalCount = 0;

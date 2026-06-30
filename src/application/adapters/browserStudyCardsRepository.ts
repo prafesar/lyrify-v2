@@ -2,6 +2,7 @@ import { StudyCardsRepositoryPort } from "../ports/studyCardsRepositoryPort";
 import { Flashcard, PhraseStatus } from "../../services/localCardService";
 import { Rating } from "ts-fsrs";
 import * as originalCardService from "../../services/localCardService";
+import { WordFormBridgeService } from "../../services/wordFormBridgeService";
 
 export class BrowserStudyCardsRepository implements StudyCardsRepositoryPort {
   async getCards(): Promise<Flashcard[]> {
@@ -33,18 +34,34 @@ export class BrowserStudyCardsRepository implements StudyCardsRepositoryPort {
     },
     status?: PhraseStatus
   ): Promise<string> {
-    return originalCardService.addPhraseToStudy(phraseData, status);
+    const cardId = await originalCardService.addPhraseToStudy(phraseData, status);
+    const cards = await originalCardService.getCards();
+    const card = cards?.find(c => c.id === cardId);
+    if (card) {
+      await WordFormBridgeService.syncCardToWordForms(card);
+    }
+    return cardId;
   }
 
   async updatePhraseStatus(cardId: string, status: PhraseStatus): Promise<void> {
-    return originalCardService.updatePhraseStatus(cardId, status);
+    await originalCardService.updatePhraseStatus(cardId, status);
+    const cards = await originalCardService.getCards();
+    const card = cards.find(c => c.id === cardId);
+    if (card) {
+      await WordFormBridgeService.syncCardToWordForms(card);
+    }
   }
 
   async updateCardFields(
     cardId: string,
     fields: Partial<Pick<Flashcard, 'text' | 'translation' | 'explanation' | 'type' | 'entryType' | 'userNote'>>
   ): Promise<void> {
-    return originalCardService.updateCardFields(cardId, fields);
+    await originalCardService.updateCardFields(cardId, fields);
+    const cards = await originalCardService.getCards();
+    const card = cards.find(c => c.id === cardId);
+    if (card) {
+      await WordFormBridgeService.syncCardToWordForms(card);
+    }
   }
 
   async deleteFlashcard(cardId: string): Promise<void> {
@@ -52,6 +69,11 @@ export class BrowserStudyCardsRepository implements StudyCardsRepositoryPort {
   }
 
   async reviewCard(cardId: string, rating: Rating): Promise<void> {
-    return originalCardService.reviewCard(cardId, rating);
+    await originalCardService.reviewCard(cardId, rating);
+    const cards = await originalCardService.getCards();
+    const card = cards.find(c => c.id === cardId);
+    if (card) {
+      await WordFormBridgeService.syncCardToWordForms(card);
+    }
   }
 }

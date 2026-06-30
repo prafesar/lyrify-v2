@@ -1323,6 +1323,63 @@ export class SqliteService {
   }
 
   /**
+   * Ensures a word form exists in the database and cache, creating it if necessary.
+   * Returns its ID.
+   */
+  public async ensureWordForm(
+    language: string,
+    surface: string,
+    normalizedSurface: string
+  ): Promise<string> {
+    const lang = language.toLowerCase();
+    const norm = normalizedSurface.toLowerCase();
+
+    // Check in-memory cache first
+    const existingId = Object.keys(this.wordForms).find(
+      (id) => this.wordForms[id].language === lang && this.wordForms[id].normalizedSurface === norm
+    );
+
+    if (existingId) {
+      return existingId;
+    }
+
+    // Generate unique ID
+    const newId = "wf_" + Math.random().toString(36).substring(2, 11) + "_" + Date.now();
+    this.wordForms[newId] = {
+      id: newId,
+      language: lang,
+      surface,
+      normalizedSurface: norm,
+      createdAt: Date.now()
+    };
+    this.saveWordFormsBackup();
+    this.notify("word_forms");
+
+    if (this.storageMode !== "error") {
+      try {
+        await this.sendWorkerMsg("ENSURE_WORD_FORM", {
+          id: newId,
+          language: lang,
+          surface,
+          normalizedSurface: norm
+        });
+      } catch (err) {
+        console.warn("[SqliteService] Failed to ensure word form in worker:", err);
+      }
+    }
+
+    return newId;
+  }
+
+  /**
+   * Gets the current status of a word form from local cache.
+   */
+  public getUserWordFormStatus(wordFormId: string): WordFormStatus {
+    const record = this.userWordFormStatus[wordFormId];
+    return record ? record.status : "new";
+  }
+
+  /**
    * Reads a record of statuses for all word forms associated with a track.
    */
   public async getTrackWordFormStatuses(trackId: string): Promise<Record<string, WordFormStatus>> {
@@ -1348,44 +1405,8 @@ export class SqliteService {
     ignoredCount: number;
     unknownCount: number;
   }> {
-    if (this.storageMode !== "error") {
-      try {
-        const stats = await this.sendWorkerMsg<any>("GET_TRACK_WORD_FORM_STATS", { trackId });
-        if (stats) {
-          return stats;
-        }
-      } catch (err) {
-        console.warn("[SqliteService] Failed to get stats from worker, calculating locally:", err);
-      }
-    }
-
-    const list = await this.getTrackWordForms(trackId);
-    let totalCount = 0;
-    let knownCount = 0;
-    let learningCount = 0;
-    let seenCount = 0;
-    let newCount = 0;
-    let ignoredCount = 0;
-
-    list.forEach((item) => {
-      totalCount++;
-      if (item.status === "known") knownCount++;
-      else if (item.status === "learning") learningCount++;
-      else if (item.status === "seen") seenCount++;
-      else if (item.status === "ignored") ignoredCount++;
-      else newCount++;
-    });
-
-    const unknownCount = totalCount - knownCount - ignoredCount;
-    return {
-      totalCount,
-      knownCount,
-      learningCount,
-      seenCount,
-      newCount,
-      ignoredCount,
-      unknownCount
-    };
+    const { TrackVocabularyStatsService } = await import("./trackVocabularyStatsService");
+    return TrackVocabularyStatsService.calculateTrackStats(trackId);
   }
 }
 
