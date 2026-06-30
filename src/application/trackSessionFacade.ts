@@ -203,7 +203,11 @@ export class TrackSessionFacade {
       };
 
       try {
-        const translationsResult = await this.aiClient.getLineTranslations(trackData.preparedLyricsInput || lyrics || "");
+        const translationsResult = await this.aiClient.getLineTranslations(
+          trackData.preparedLyricsInput || lyrics || "",
+          trackKey,
+          targetLanguage
+        );
         
         const updatedLines = trackData.lines.map((line, idx) => {
           if (!line.original.trim()) {

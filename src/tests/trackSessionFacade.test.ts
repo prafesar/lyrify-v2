@@ -149,7 +149,11 @@ describe("TrackSessionFacade Unit Tests", () => {
       const updated = await trackSessionFacade.analyzeSongMeaningAndTranslations(initialTrack, "Spanish");
 
       expect(fetchLyrics).toHaveBeenCalledWith("Coldplay", "Yellow");
-      expect(aiClient.getLineTranslations).toHaveBeenCalled();
+      expect(aiClient.getLineTranslations).toHaveBeenCalledWith(
+        expect.any(String),
+        "track-coldplay-yellow",
+        "Spanish"
+      );
       expect(trackCacheRepository.saveTrackData).toHaveBeenCalled();
       expect(updated.rawLyrics).toBe(mockLyricsData.lyrics);
       expect(updated.meaning).toBe("");
