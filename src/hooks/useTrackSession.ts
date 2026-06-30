@@ -10,6 +10,7 @@ import {
 import { 
   type TrackLyricsData, 
   type LyricOption, 
+  type StructuredLectureBlock,
   fetchLyrics, 
   splitLyricsIntoLines, 
   saveTrackData, 
@@ -33,9 +34,19 @@ import { AnalysisMode } from "../constants";
 import { mapLegacyToCanonicalMode, mapCanonicalToLegacyRequest } from "../services/analysisMode";
 import { userPreferencesRepository } from "../application/adapters/browserUserDataRepository";
 
+export interface ResolvedAnalysisVariant {
+  selectedMode: AnalysisMode;
+  targetLanguage: string;
+  availableModes: AnalysisMode[];
+  blocks: StructuredLectureBlock[] | null;
+  isEmpty: boolean;
+  isGenerating: boolean;
+}
+
 export interface UseTrackSessionResult {
   currentTrack: TrackLyricsData | null;
   displayedLectureBlocks: StructuredLectureBlock[] | null;
+  resolvedAnalysisVariant: ResolvedAnalysisVariant;
   isLoadingLyrics: boolean;
   loadingStep: "searching" | "meaning" | "lecture" | "analyzing" | "translating" | "idle";
   lyricsFetchError: string | null;
@@ -202,7 +213,7 @@ export function useTrackSession(
             const blocks = localVariant.payload;
             setDisplayedLectureBlocks(blocks);
             
-            // Extract phrases and update currentTrack.lines in memory
+            // Extract phrases and prepare metadata
             const extractedPhrases: any[] = [];
             if (Array.isArray(blocks)) {
               for (const block of blocks) {
@@ -214,33 +225,33 @@ export function useTrackSession(
               }
             }
             
-            const updatedLines = currentTrack.lines.map((line) => {
-              const linePhrases = extractedPhrases
-                .filter((p: any) => p.lineKey && line.lineKey && p.lineKey === line.lineKey)
-                .map((p: any) => ({
-                  id: p.id || `${currentTrack.trackId}:p:${(p.text || p.phrase || "").replace(/\s+/g, '_')}`,
-                  text: p.text || p.phrase || "",
-                  translation: p.translation || "",
-                  explanation: p.explanation || "",
-                  language: p.language || p.targetLanguage || langCode,
-                  lemmas: p.lemmas || [],
-                  type: 'phrase' as const
-                }));
-                
-              return {
-                ...line,
-                phrases: linePhrases
-              };
-            });
-            
-            const extractedMeaning = extractTrackMeaning(blocks) || currentTrack.meaning;
-            const meanings = {
-              ...currentTrack.meanings,
-              [langCode]: extractedMeaning || ""
-            };
-            
             setCurrentTrack(prev => {
               if (prev && prev.trackId === currentTrack.trackId) {
+                const updatedLines = prev.lines.map((line) => {
+                  const linePhrases = extractedPhrases
+                    .filter((p: any) => p.lineKey && line.lineKey && p.lineKey === line.lineKey)
+                    .map((p: any) => ({
+                      id: p.id || `${prev.trackId}:p:${(p.text || p.phrase || "").replace(/\s+/g, '_')}`,
+                      text: p.text || p.phrase || "",
+                      translation: p.translation || "",
+                      explanation: p.explanation || "",
+                      language: p.language || p.targetLanguage || langCode,
+                      lemmas: p.lemmas || [],
+                      type: 'phrase' as const
+                    }));
+                    
+                  return {
+                    ...line,
+                    phrases: linePhrases
+                  };
+                });
+                
+                const extractedMeaning = extractTrackMeaning(blocks) || prev.meaning;
+                const meanings = {
+                  ...prev.meanings,
+                  [langCode]: extractedMeaning || ""
+                };
+
                 return {
                   ...prev,
                   meaning: extractedMeaning,
@@ -1185,6 +1196,23 @@ export function useTrackSession(
     await libraryRepository.updateTrackInLibrary(currentTrack.trackId, updatedTrack);
   }, [currentTrack]);
 
+  const resolvedAnalysisVariant = useMemo<ResolvedAnalysisVariant>(() => {
+    const activeMode = analysisMode || mapLegacyToCanonicalMode(
+      userPreferencesRepository.getPreference("lyrify_analysis_mode", null) || 
+      userPreferencesRepository.getPreference("lyrify_lecture_variant", "compact")
+    );
+    const activeLang = targetLanguage || "Spanish";
+
+    return {
+      selectedMode: activeMode,
+      targetLanguage: activeLang,
+      availableModes: availableAnalysisModes,
+      blocks: displayedLectureBlocks,
+      isEmpty: !displayedLectureBlocks || displayedLectureBlocks.length === 0,
+      isGenerating: isGeneratingAnalysis,
+    };
+  }, [analysisMode, targetLanguage, availableAnalysisModes, displayedLectureBlocks, isGeneratingAnalysis]);
+
   const linkedTrack = useMemo(() => {
     if (!currentTrack) return null;
     const linked = linkPhrasesToLines(currentTrack);
@@ -1197,6 +1225,7 @@ export function useTrackSession(
   return {
     currentTrack: linkedTrack,
     displayedLectureBlocks,
+    resolvedAnalysisVariant,
     isLoadingLyrics,
     loadingStep,
     lyricsFetchError,

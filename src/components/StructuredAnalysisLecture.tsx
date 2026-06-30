@@ -20,6 +20,7 @@ import { AnalysisMode } from '../constants';
 import ReactMarkdown from 'react-markdown';
 import { PhraseCard, PhraseCardStatus } from './PhraseCard';
 import { computeLineKey } from '../services/lyricsPreprocessor';
+import { ResolvedAnalysisVariant } from '../hooks/useTrackSession';
 
 interface StructuredAnalysisLectureProps {
   currentTrack: TrackLyricsData;
@@ -49,6 +50,7 @@ interface StructuredAnalysisLectureProps {
   } | null;
   availableAnalysisModes?: AnalysisMode[];
   analysisError?: string | null;
+  resolvedAnalysisVariant?: ResolvedAnalysisVariant;
 }
 
 export const StructuredAnalysisLecture: React.FC<StructuredAnalysisLectureProps> = ({
@@ -64,15 +66,21 @@ export const StructuredAnalysisLecture: React.FC<StructuredAnalysisLectureProps>
   handleSetAnalysisMode,
   wordFormStats,
   availableAnalysisModes = [],
-  analysisError
+  analysisError,
+  resolvedAnalysisVariant
 }) => {
   // Ordered target kinds of the blocks
   const targetKinds = ['overview', 'emotions', 'sections', 'lexical_groups', 'takeaways', 'notes'] as const;
   type BlockKind = typeof targetKinds[number];
 
+  // Derive mode, available modes and isGenerating from resolvedAnalysisVariant if available
+  const activeMode = resolvedAnalysisVariant ? resolvedAnalysisVariant.selectedMode : (analysisMode || 'overview');
+  const activeAvailableModes = resolvedAnalysisVariant ? resolvedAnalysisVariant.availableModes : availableAnalysisModes;
+  const activeIsGenerating = resolvedAnalysisVariant ? resolvedAnalysisVariant.isGenerating : isGeneratingAnalysis;
+
   // Migration mapping & initialization helper: converts older format blocks gracefully to the new 6-kind structure
   const blocks = useMemo(() => {
-    let rawBlocks = currentTrack.lectureBlocks || [];
+    let rawBlocks = (resolvedAnalysisVariant ? resolvedAnalysisVariant.blocks : currentTrack.lectureBlocks) || [];
     
     // Fallback migration to map legacy kinds to our modern 6-kind structure
     return rawBlocks.map(b => {
@@ -86,7 +94,7 @@ export const StructuredAnalysisLecture: React.FC<StructuredAnalysisLectureProps>
         kind: k as any
       };
     });
-  }, [currentTrack.lectureBlocks]);
+  }, [resolvedAnalysisVariant?.blocks, currentTrack.lectureBlocks]);
 
   // Active inline editing states
   const [editingBlockId, setEditingBlockId] = useState<string | null>(null);
@@ -382,13 +390,13 @@ export const StructuredAnalysisLecture: React.FC<StructuredAnalysisLectureProps>
     <div className="w-full font-sans text-app-fg select-text leading-relaxed pb-32" id="structured-lecture-analysis">
       
       {/* Mode Switcher segmented control / pill buttons */}
-      {((analysisMode && handleSetAnalysisMode) || wordFormStats) && (
+      {((activeMode && handleSetAnalysisMode) || wordFormStats) && (
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-          {analysisMode && handleSetAnalysisMode && (
+          {activeMode && handleSetAnalysisMode && (
             <div className="flex flex-wrap items-center gap-1 p-1 bg-app-card border border-app-card-border/40 rounded-2xl max-w-lg shadow-sm flex-1 sm:flex-initial" id="analysis-mode-selector">
               {(['overview', 'vocabulary', 'phrases', 'style'] as const).map((mode) => {
-                const isActive = analysisMode === mode;
-                const isSaved = availableAnalysisModes.includes(mode);
+                const isActive = activeMode === mode;
+                const isSaved = activeAvailableModes.includes(mode);
                 return (
                   <button
                     key={mode}
@@ -432,9 +440,9 @@ export const StructuredAnalysisLecture: React.FC<StructuredAnalysisLectureProps>
               <BookOpen size={32} />
             </div>
             <div className="space-y-3">
-              <h3 className="text-xl font-bold text-app-fg tracking-tight capitalize">No {analysisMode || 'Breakdown'} Yet</h3>
+              <h3 className="text-xl font-bold text-app-fg tracking-tight capitalize">No {activeMode || 'Breakdown'} Yet</h3>
               <p className="text-sm text-app-fg opacity-50 font-medium leading-relaxed px-4">
-                Generate a custom, mode-specific breakdown for this track in <strong className="text-app-fg capitalize">{analysisMode}</strong> mode. Each mode focuses on different aspects of the lyrics and vocabulary.
+                Generate a custom, mode-specific breakdown for this track in <strong className="text-app-fg capitalize">{activeMode}</strong> mode. Each mode focuses on different aspects of the lyrics and vocabulary.
               </p>
             </div>
 
@@ -453,7 +461,7 @@ export const StructuredAnalysisLecture: React.FC<StructuredAnalysisLectureProps>
                   className="px-8 py-4 rounded-2xl bg-app-fg text-app-bg font-black uppercase tracking-[0.18em] text-[10px] shadow-xl hover:scale-[1.03] transition-all flex items-center gap-2.5 cursor-pointer hover:bg-app-fg-hover"
                 >
                   <Sparkles size={14} className="text-app-bg" />
-                  Generate AI {analysisMode || 'Breakdown'}
+                  Generate AI {activeMode || 'Breakdown'}
                 </button>
               </div>
             )}
@@ -784,15 +792,15 @@ export const StructuredAnalysisLecture: React.FC<StructuredAnalysisLectureProps>
           <div className="space-y-2 text-center md:text-left w-full">
             <button
               type="button"
-              disabled={isGeneratingAnalysis}
+              disabled={activeIsGenerating}
               onClick={handleRegenerateAnalysis}
               className="group text-[12px] font-black uppercase tracking-[0.18em] text-app-fg hover:text-app-accent leading-none flex items-center justify-center md:justify-start gap-2 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none"
             >
               <RefreshCw 
                 size={12} 
-                className={`text-app-accent shrink-0 transition-transform duration-500 ${isGeneratingAnalysis ? 'animate-spin' : 'group-hover:rotate-180'}`} 
+                className={`text-app-accent shrink-0 transition-transform duration-500 ${activeIsGenerating ? 'animate-spin' : 'group-hover:rotate-180'}`} 
               />
-              <span>{isGeneratingAnalysis ? 'Rebuilding...' : 'Rebuild breakdown'}</span>
+              <span>{activeIsGenerating ? 'Rebuilding...' : 'Rebuild breakdown'}</span>
             </button>
             <p className="text-[11px] text-app-fg opacity-40 max-w-sm font-medium leading-normal select-none">
               Re-engage serverless AI music specialists to reconstruct the structured language breakdown essay from the source lyrics block.

@@ -47,7 +47,7 @@ import {
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { Track, Artist, Album, AnalysisMode } from "./constants";
-import { SUPPORTED_LANGUAGES, isExperimentalLanguage, normalizeLanguageCode } from "./lib/languages";
+import { SUPPORTED_LANGUAGES, isExperimentalLanguage, normalizeLanguageCode, getLanguageCode } from "./lib/languages";
 import { useUserCards } from "./hooks/useUserCards";
 import { usePlayback } from "./hooks/usePlayback";
 import { useLibrarySearch } from "./hooks/useLibrarySearch";
@@ -692,7 +692,8 @@ export default function App() {
     handleSourceLanguageOverride,
     handleSwitchAnalysisMode,
     wordFormStats,
-    availableAnalysisModes
+    availableAnalysisModes,
+    resolvedAnalysisVariant
   } = useTrackSession(analysisMode, targetLanguage);
 
   const {
@@ -3371,6 +3372,24 @@ export default function App() {
                           onUpdateTrack={async (updatedTrack) => {
                             setCurrentTrack(updatedTrack);
                             await saveTrackData(updatedTrack.trackId, updatedTrack);
+                            try {
+                              const activeMode = analysisMode || 'overview';
+                              const langCode = getLanguageCode(targetLanguage);
+                              if (updatedTrack.lectureBlocks) {
+                                await sqliteService.saveAnalysisVariant({
+                                  id: `${updatedTrack.trackId}_${activeMode}_${langCode}`,
+                                  trackId: updatedTrack.trackId,
+                                  mode: activeMode,
+                                  targetLanguage: langCode,
+                                  sourceLanguage: updatedTrack.sourceLanguage || "en",
+                                  status: "completed",
+                                  createdAt: Date.now(),
+                                  updatedAt: Date.now()
+                                }, updatedTrack.lectureBlocks);
+                              }
+                            } catch (e) {
+                              console.warn("Failed to update SQLite variant on user edit:", e);
+                            }
                             loadCommunityTracks();
                           }}
                           isGeneratingAnalysis={isGeneratingAnalysis}
@@ -3380,6 +3399,7 @@ export default function App() {
                           wordFormStats={wordFormStats}
                           availableAnalysisModes={availableAnalysisModes}
                           analysisError={analysisError}
+                          resolvedAnalysisVariant={resolvedAnalysisVariant}
                         />
                       </motion.div>
                     )}

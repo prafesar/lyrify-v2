@@ -60,6 +60,7 @@ function TestHarness({ initialMode, initialLang, onStateUpdate }: TestHarnessPro
     currentTrack: session.currentTrack,
     setCurrentTrack: session.setCurrentTrack,
     displayedLectureBlocks: session.displayedLectureBlocks,
+    resolvedAnalysisVariant: session.resolvedAnalysisVariant,
     handleGenerateAnalysis: session.handleGenerateAnalysis,
     setMode,
     setLang,
@@ -287,5 +288,64 @@ describe("useTrackSession Mode-Aware & Immediate State Generation Regression Tes
     // The generated vocabulary analysis should populate immediately without requiring any reload or tab switch
     expect(harness.state.displayedLectureBlocks).not.toBeNull();
     expect(harness.state.displayedLectureBlocks[0].text).toBe("Successfully generated fresh vocabulary blocks");
+  });
+
+  it("5. resolvedAnalysisVariant correctly exposes selectedMode, targetLanguage, blocks, isEmpty, isGenerating", async () => {
+    const track: TrackLyricsData = {
+      trackId: "track_v",
+      title: "Test Track V",
+      artist: "Test Artist V",
+      rawLyrics: "Line 1\nLine 2",
+      lines: [
+        { index: 0, original: "Line 1", translation: "" },
+        { index: 1, original: "Line 2", translation: "" }
+      ],
+      processingStatus: { stage1_completed: true, stage2_completed: true, stage3_completed: false }
+    };
+
+    const harness = new TestStateHarness("overview", "Spanish");
+    act(() => {
+      root.render(<TestHarness initialMode="overview" initialLang="Spanish" onStateUpdate={(s) => harness.state = s} />);
+    });
+
+    await act(async () => {
+      harness.state.setCurrentTrack(track);
+    });
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+
+    // Check default overview state
+    expect(harness.state.resolvedAnalysisVariant).toBeDefined();
+    expect(harness.state.resolvedAnalysisVariant.selectedMode).toBe("overview");
+    expect(harness.state.resolvedAnalysisVariant.targetLanguage).toBe("Spanish");
+    expect(harness.state.resolvedAnalysisVariant.blocks).toBeNull();
+    expect(harness.state.resolvedAnalysisVariant.isEmpty).toBe(true);
+    expect(harness.state.resolvedAnalysisVariant.isGenerating).toBe(false);
+
+    // Save variant beforehand
+    await sqliteService.saveAnalysisVariant({
+      id: "track_v_overview_es",
+      trackId: "track_v",
+      mode: "overview",
+      targetLanguage: "es",
+      sourceLanguage: "en",
+      status: "completed",
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    }, [
+      { id: "b1", kind: "overview", title: "Overview Title", text: "Overview Block Content" }
+    ]);
+
+    // Let any subscriptions run
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+
+    // Verify state correctly displays populated data
+    expect(harness.state.resolvedAnalysisVariant.blocks).not.toBeNull();
+    expect(harness.state.resolvedAnalysisVariant.blocks[0].text).toBe("Overview Block Content");
+    expect(harness.state.resolvedAnalysisVariant.isEmpty).toBe(false);
   });
 });
