@@ -2,7 +2,16 @@
 
 Этот документ нужен внешнему агенту, который работает только внутри `lyrify-v2`.
 
-Здесь зафиксирован текущий клиентский контракт внешнего API. Если код клиента нужно менять в части перевода, lecture flow или transport mapping, агент должен опираться на этот документ и не придумывать backend внутри этого репозитория.
+Здесь зафиксированы:
+
+- текущий live contract внешнего API, на который нельзя слепо закрывать глаза при правках клиента;
+- target contract, вокруг которого нужно проектировать ближайшие клиентские изменения.
+
+Важно:
+
+- агент в `lyrify-v2` не проверяет серверный код напрямую;
+- если клиентскую задачу нужно строить вокруг нового API, считай target contract продуктовым ориентиром, а не гарантией, что сервер уже задеплоен;
+- не придумывай backend implementation внутри этого репозитория.
 
 ## Базовые правила
 
@@ -11,7 +20,9 @@
 - В клиенте нет отдельного активного `track meaning` endpoint
 - Смысл трека должен извлекаться из lecture-блока `kind === "intro"` или fallback-блоков `overview` / `context`
 
-## Актуальные маршруты
+## Live Legacy Contract
+
+Этот раздел описывает маршруты, которые исторически уже использовались клиентом.
 
 ### `POST /api/v1/translation/fetch`
 
@@ -59,50 +70,25 @@ Success response:
 }
 ```
 
-Error response:
-
-```ts
-{
-  status: "error"
-  error: {
-    code: string
-    message: string
-  }
-}
-```
-
 ### `POST /api/v1/lecture/fetch`
 
 Назначение:
 
-- полный structured lecture / explanation разбор песни
+- structured lecture / explanation разбор песни
 
-Request body:
-
-- тот же `PreparedLyricsInput`, плюс опциональное поле режима:
+Legacy request body:
 
 ```ts
-type LectureRequestInput = PreparedLyricsInput & {
+type LegacyLectureRequestInput = PreparedLyricsInput & {
   analysisMode?: "overview" | "vocabulary" | "phrases" | "style" | "compact" | "rich"
 }
 ```
 
-Дополнительный заголовок совместимости:
+Legacy compatibility header:
 
 ```http
 x-lyrify-lecture-variant: compact | rich
 ```
-
-Правила:
-
-- основной способ выбора режима теперь `analysisMode` в body
-- `x-lyrify-lecture-variant` нужен только как legacy compatibility layer
-- клиент может продолжать отправлять и `analysisMode`, и legacy header одновременно на переходном этапе
-- canonical mode-модель для новых клиентских решений:
-  - `overview`
-  - `vocabulary`
-  - `phrases`
-  - `style`
 
 Success response:
 
@@ -150,52 +136,131 @@ Success response:
 }
 ```
 
-Примечания:
+## Target Contract For Upcoming Client Work
 
-- `cache: "bypass"` сейчас ожидаем для lecture flow
-- если сервер временно принял legacy `rich`, в `meta.analysisMode` клиент должен ориентироваться на canonical `phrases`
-- `legacyVariantUsed` нужен только как transition metadata и не должен становиться продуктовой осью UI
+Этот раздел описывает контракт, вокруг которого нужно проектировать новую клиентскую orchestration-модель.
 
-Error response:
+### Canonical route set
+
+- `POST /api/v1/track-preparation/cached`
+- `POST /api/v1/track-preparation/fetch`
+- `POST /api/v1/translation/cached`
+- `POST /api/v1/translation/fetch`
+- `POST /api/v1/lecture/cached`
+- `POST /api/v1/lecture/fetch`
+
+### Основная идея
+
+- клиент находит лирику;
+- клиент получает или вычисляет `lyricsKey`;
+- клиент сначала пытается получить prepared track payload через `track-preparation/cached`;
+- если payload не найден, клиент отправляет лирику и metadata на `track-preparation/fetch`;
+- translation и lecture строятся поверх prepared track payload.
+
+### Compact LLM draft, который стоит ожидать косвенно через preparation flow
+
+Клиент не обязан видеть этот draft напрямую, но его форма важна для проектирования локальной модели:
 
 ```ts
-{
-  status: "error"
-  error: {
-    code: string
-    message: string
-  }
+type LlmLexicalDraft = {
+  src?: string
+  lines: Array<{
+    i: number
+    t: string
+    lang?: string
+    occ: Array<{
+      s: string
+      b: string
+      k: "w" | "ph" | "pv" | "sv" | "ex"
+      p: string[]
+    }>
+  }>
 }
 ```
 
-### `GET /api/v1/tracks/cached`
+Важно:
 
-Назначение:
+- у каждой строки может быть свой `lang`, потому что лирика может быть многоязычной;
+- `occurrenceId`, offsets и normalized keys клиент не должен ожидать от LLM;
+- эти данные должны появляться уже после server-side post-processing.
 
-- получить уже закешированный payload трека по `lyricsKey`
-- либо получить список последних закешированных треков
+### `PreparedTrackPayload`
 
-Поддерживаемые сценарии:
+Новая клиентская orchestration-модель должна ориентироваться на payload такого типа:
 
-- `GET /api/v1/tracks/cached?lyricsKey=...`
-- `GET /api/v1/tracks/cached?limit=20`
+```ts
+type PreparedTrackPayload = {
+  trackKey: string
+  lyricsKey: string
+  sourceLanguage?: string
+  metadata: {
+    title?: string
+    artist?: string
+    album?: string
+    itunesId?: string | number
+    durationMs?: number
+    promptVersion: string
+  }
+  lines: Array<{
+    index: number
+    text: string
+    language?: string
+  }>
+  lexicalItems: Array<{
+    id: string
+    baseForm: string
+    displayText: string
+    kind: "word" | "phrase" | "phrasal_verb" | "separable_verb" | "expression"
+    normalizedKey: string
+  }>
+  occurrences: Array<{
+    lexicalItemId: string
+    lineIndex: number
+    occurrenceIndex: number
+    surfaceText: string
+    parts: Array<{
+      surface: string
+      role?: string
+      contextBefore?: string
+      contextAfter?: string
+    }>
+    spans: Array<{
+      startOffset: number
+      endOffset: number
+      role?: string
+    }>
+    resolutionStatus: "resolved" | "ambiguous" | "unresolved"
+  }>
+}
+```
 
-Важное уточнение:
+### Translation over prepared payload
 
-- на текущем этапе server-side cache считается устойчивым только для translation flow
-- lecture mode variants пока не считаются надежно server-cached contract surface
-- поэтому cached track lookup нельзя считать источником истины для mode-aware lecture variants
+Target request:
 
-## Важные ограничения клиента
+```ts
+type TranslationFetchRequest = {
+  preparedTrack: PreparedTrackPayload
+  targetLanguage: string
+}
+```
 
-- Сейчас нет отдельного cached lecture endpoint.
-- Поэтому `getCachedStructuredLecture()` в клиенте должен оставаться безопасным `null` / no-op path, который не ломает runtime.
-- `POST /api/v1/lecture/fetch` сейчас нужно считать uncached server path.
-- Если lecture payload нужен повторно, основной источник истины на текущем этапе — локальные `analysis_variants` в клиентском SQLite.
-- Если в UI или hooks добавляется новая AI-функция, transport mapping должен оставаться в adapter-layer, а не в компонентах.
+### Lecture over prepared payload
 
-## Что нельзя считать актуальным
+Target request:
 
-- Нельзя считать отдельный `track meaning` endpoint частью текущего клиента.
-- Нельзя добавлять в пользовательский UI Gemini-specific терминологию.
-- Нельзя придумывать новые backend routes внутри `lyrify-v2`, если их нет в этом документе.
+```ts
+type LectureFetchRequest = {
+  preparedTrack: PreparedTrackPayload
+  targetLanguage: string
+  analysisMode: "overview" | "vocabulary" | "phrases" | "style"
+}
+```
+
+## Практические правила для агента `lyrify-v2`
+
+- Если задача касается уже работающего client flow, учитывай live legacy contract.
+- Если задача касается нового `Words`, нового `Practice`, lexical items или backend-first preparation flow, проектируй клиент вокруг target contract.
+- Не делай вид, что target contract уже обязательно живет на проде, если пользователь этого явно не подтвердил.
+- Не придумывай новые backend routes сверх перечисленных в target contract без явного запроса пользователя.
+- Не добавляй Gemini-specific терминологию в пользовательский UI.

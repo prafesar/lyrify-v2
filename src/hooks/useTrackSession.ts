@@ -947,6 +947,7 @@ export function useTrackSession(
             lines: updatedLines,
             lectureBlocks: blocks
           };
+          setDisplayedLectureBlocks(blocks);
           setCurrentTrack(trackData);
           saveTrackData(trackData.trackId, trackData);
         }

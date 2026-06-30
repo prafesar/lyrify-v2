@@ -693,7 +693,7 @@ export default function App() {
     handleSwitchAnalysisMode,
     wordFormStats,
     availableAnalysisModes
-  } = useTrackSession();
+  } = useTrackSession(analysisMode, targetLanguage);
 
   const {
     phraseMetadata,
