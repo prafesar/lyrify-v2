@@ -379,6 +379,13 @@ export class WorkerAIAdapter implements AiPort {
     // Firestore cache upload is bypassed/unnecessary when utilizing external Worker backend API.
   }
 
+  async getPreparedTrack(
+    lyrics: string | PreparedLyricsInput,
+    targetLanguage: string
+  ): Promise<PreparedTrackPayload> {
+    return this.getOrPrepareTrack(lyrics, targetLanguage);
+  }
+
   async computeTrackKey(title: string, artists: string[]): Promise<string> {
     const cleanTitle = normalizeTrackTitle(title);
     const cleanArtists = normalizeArtists(artists);

@@ -30,7 +30,7 @@ import { checkServerCache } from "../services/serverCacheLookupService";
 import { getLanguageCode, detectDominantLanguage, cascadeTrackLanguageUpdate } from "../lib/languages";
 import { updateTrackCardsLanguage } from "../services/localCardService";
 import { sqliteService } from "../services/sqliteService";
-import { AnalysisMode } from "../constants";
+import { AnalysisMode, WordFormStatus } from "../constants";
 import { mapLegacyToCanonicalMode, mapCanonicalToLegacyRequest } from "../services/analysisMode";
 import { userPreferencesRepository } from "../application/adapters/browserUserDataRepository";
 
@@ -45,6 +45,20 @@ export interface ResolvedAnalysisVariant {
 
 export interface UseTrackSessionResult {
   currentTrack: TrackLyricsData | null;
+  preparedTrack: any | null;
+  translation: any[] | null;
+  lectureByMode: Record<AnalysisMode, StructuredLectureBlock[]>;
+  lexicalInventory: any[];
+  lexicalOccurrences: any[];
+  lexicalStats: {
+    total: number;
+    known: number;
+    learning: number;
+    new: number;
+    unknown: number;
+  };
+  getLexicalItemStatus: (item: { normalizedKey: string; language?: string }) => WordFormStatus;
+  setLexicalItemStatus: (normalizedKey: string, status: WordFormStatus) => Promise<void>;
   displayedLectureBlocks: StructuredLectureBlock[] | null;
   resolvedAnalysisVariant: ResolvedAnalysisVariant;
   isLoadingLyrics: boolean;
@@ -191,6 +205,169 @@ export function useTrackSession(
   const [isResourcesOpen, setIsResourcesOpen] = useState(false);
   const [wordFormStats, setWordFormStats] = useState<WordFormStats | null>(null);
   const [availableAnalysisModes, setAvailableAnalysisModes] = useState<AnalysisMode[]>([]);
+  const [lectureByMode, setLectureByMode] = useState<Record<AnalysisMode, StructuredLectureBlock[]>>({} as any);
+  const [userStatusUpdateTrigger, setUserStatusUpdateTrigger] = useState(0);
+
+  // Load all saved lecture variants of the track to construct lectureByMode
+  useEffect(() => {
+    if (!currentTrack || !currentTrack.trackId) {
+      setLectureByMode({} as any);
+      return;
+    }
+
+    let isCancelled = false;
+    const loadAllVariants = async () => {
+      try {
+        const variants = await sqliteService.getAnalysisVariantsForTrack(currentTrack.trackId);
+        const mapped: Record<AnalysisMode, StructuredLectureBlock[]> = {} as any;
+        const langCode = getLanguageCode(targetLanguage);
+        variants.forEach(v => {
+          if (v.variant.targetLanguage === langCode) {
+            mapped[v.variant.mode] = v.payload;
+          }
+        });
+        if (!isCancelled) {
+          setLectureByMode(mapped);
+        }
+      } catch (err) {
+        console.warn("[useTrackSession] Failed to load all variants for lectureByMode:", err);
+      }
+    };
+
+    loadAllVariants();
+
+    const unsubscribe = sqliteService.subscribe((event) => {
+      if (event === "analysis_variants") {
+        loadAllVariants();
+      }
+    });
+
+    return () => {
+      isCancelled = true;
+      unsubscribe();
+    };
+  }, [currentTrack?.trackId, targetLanguage]);
+
+  // Handle live updates for user statuses
+  useEffect(() => {
+    const unsubscribe = sqliteService.subscribe((event) => {
+      if (event === "word_forms" || event === "word_form_status_changed") {
+        setUserStatusUpdateTrigger(prev => prev + 1);
+      }
+    });
+    return unsubscribe;
+  }, []);
+
+  const getLexicalItemStatus = useCallback((item: { normalizedKey: string; language?: string }) => {
+    // Access trigger to register react dependency
+    const _ = userStatusUpdateTrigger;
+    const lang = (item.language || currentTrack?.sourceLanguage || "en").toLowerCase();
+    const key = item.normalizedKey.toLowerCase();
+    // Find matching wordFormId in sqliteService.wordForms
+    const wordFormId = Object.keys(sqliteService.wordForms).find(
+      (id) => sqliteService.wordForms[id].language === lang && sqliteService.wordForms[id].normalizedSurface === key
+    ) || key;
+    return sqliteService.getUserWordFormStatus(wordFormId);
+  }, [currentTrack?.sourceLanguage, userStatusUpdateTrigger]);
+
+  const setLexicalItemStatus = useCallback(async (normalizedKey: string, status: WordFormStatus) => {
+    const lang = (currentTrack?.sourceLanguage || "en").toLowerCase();
+    const key = normalizedKey.toLowerCase();
+    const wordFormId = await sqliteService.ensureWordForm(lang, normalizedKey, key);
+    await sqliteService.setUserWordFormStatus(wordFormId, status);
+    setUserStatusUpdateTrigger(prev => prev + 1);
+  }, [currentTrack?.sourceLanguage]);
+
+  const preparedTrack = useMemo(() => {
+    return currentTrack?.preparedTrack || null;
+  }, [currentTrack?.preparedTrack]);
+
+  const translation = useMemo(() => {
+    if (!currentTrack?.lines) return null;
+    return currentTrack.lines.map(line => ({
+      original: line.original,
+      translation: line.translation || "",
+      language: line.language || ""
+    }));
+  }, [currentTrack?.lines]);
+
+  const lexicalInventory = useMemo(() => {
+    if (!currentTrack?.preparedTrack?.lexicalItems) return [];
+    return currentTrack.preparedTrack.lexicalItems;
+  }, [currentTrack?.preparedTrack]);
+
+  const lexicalOccurrences = useMemo(() => {
+    if (!currentTrack?.preparedTrack?.occurrences) return [];
+    return currentTrack.preparedTrack.occurrences;
+  }, [currentTrack?.preparedTrack]);
+
+  const lexicalStats = useMemo(() => {
+    if (!currentTrack?.preparedTrack?.lexicalItems) {
+      return { total: 0, known: 0, learning: 0, new: 0, unknown: 0 };
+    }
+    const items = currentTrack.preparedTrack.lexicalItems;
+    let total = items.length;
+    let known = 0;
+    let learning = 0;
+    let newVal = 0;
+    
+    items.forEach(item => {
+      const status = getLexicalItemStatus(item);
+      if (status === "known") {
+        known++;
+      } else if (status === "learning") {
+        learning++;
+      } else {
+        newVal++;
+      }
+    });
+    
+    return {
+      total,
+      known,
+      learning,
+      new: newVal,
+      unknown: total - known
+    };
+  }, [currentTrack?.preparedTrack?.lexicalItems, getLexicalItemStatus]);
+
+  // Dynamically fetch and attach preparedTrack if it is missing
+  useEffect(() => {
+    if (!currentTrack || !currentTrack.trackId || !currentTrack.rawLyrics) {
+      return;
+    }
+    if (currentTrack.preparedTrack) {
+      return;
+    }
+    
+    let isCancelled = false;
+    const fetchPreparedTrack = async () => {
+      try {
+        const langCode = getLanguageCode(targetLanguage);
+        const pt = await aiClient.getPreparedTrack(
+          currentTrack.preparedLyricsInput || currentTrack.rawLyrics,
+          langCode
+        );
+        if (!isCancelled && pt) {
+          setCurrentTrack(prev => {
+            if (prev && prev.trackId === currentTrack.trackId && !prev.preparedTrack) {
+              const updated = { ...prev, preparedTrack: pt };
+              saveTrackData(currentTrack.trackId, updated);
+              return updated;
+            }
+            return prev;
+          });
+        }
+      } catch (err) {
+        console.warn("[useTrackSession] Failed to fetch preparedTrack:", err);
+      }
+    };
+    
+    fetchPreparedTrack();
+    return () => {
+      isCancelled = true;
+    };
+  }, [currentTrack?.trackId, currentTrack?.rawLyrics, targetLanguage]);
 
   useEffect(() => {
     if (!currentTrack || !currentTrack.trackId) {
@@ -871,7 +1048,7 @@ export function useTrackSession(
           setLoadingStep("lecture");
           try {
             // Collect existing items from other saved lecture variants of the same track (soft anti-duplication context)
-            let existingItems: any[] = [];
+            const existingItemsMap = new Map<string, any>();
             try {
               const allVariants = await sqliteService.getAnalysisVariantsForTrack(trackData.trackId);
               for (const item of allVariants) {
@@ -880,13 +1057,16 @@ export function useTrackSession(
                     if (block && Array.isArray(block.phrases)) {
                       for (const p of block.phrases) {
                         if (p && p.text) {
-                          existingItems.push({
-                            text: p.text,
-                            translation: p.translation,
-                            explanation: p.explanation,
-                            kind: p.type || p.kind || "expression",
-                            sourceMode: item.variant.mode
-                          });
+                          const normalizedKey = p.text.trim().toLowerCase();
+                          if (!existingItemsMap.has(normalizedKey)) {
+                            existingItemsMap.set(normalizedKey, {
+                              text: p.text.trim(),
+                              translation: p.translation,
+                              explanation: p.explanation,
+                              kind: p.type || p.kind || "expression",
+                              sourceMode: item.variant.mode
+                            });
+                          }
                         }
                       }
                     }
@@ -896,6 +1076,8 @@ export function useTrackSession(
             } catch (err) {
               console.warn("[useTrackSession] Failed to load existingItems for anti-duplication:", err);
             }
+
+            const existingItems = Array.from(existingItemsMap.values());
 
             blocks = await aiClient.fetchStructuredLecture(
               trackData.preparedLyricsInput || trackData.rawLyrics,
@@ -1252,6 +1434,14 @@ export function useTrackSession(
 
   return {
     currentTrack: linkedTrack,
+    preparedTrack,
+    translation,
+    lectureByMode,
+    lexicalInventory,
+    lexicalOccurrences,
+    lexicalStats,
+    getLexicalItemStatus,
+    setLexicalItemStatus,
     displayedLectureBlocks,
     resolvedAnalysisVariant,
     isLoadingLyrics,

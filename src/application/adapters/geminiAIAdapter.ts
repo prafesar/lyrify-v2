@@ -270,6 +270,20 @@ export class GeminiAIAdapter implements AiPort {
     return originalGeminiService.saveTrackToSharedCache(track);
   }
 
+  async getPreparedTrack(
+    lyrics: string | PreparedLyricsInput,
+    targetLanguage: string
+  ): Promise<PreparedTrackPayload> {
+    return {
+      trackKey: "local",
+      lyricsKey: "local",
+      metadata: { promptVersion: "1.0" },
+      lines: [],
+      lexicalItems: [],
+      occurrences: []
+    };
+  }
+
   async computeTrackKey(title: string, artists: string[]): Promise<string> {
     return originalGeminiService.computeTrackKey(title, artists);
   }

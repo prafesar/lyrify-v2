@@ -169,6 +169,11 @@ export interface AiPort {
     targetLanguage?: string
   ): Promise<any[]>;
 
+  getPreparedTrack(
+    lyrics: string | PreparedLyricsInput,
+    targetLanguage: string
+  ): Promise<PreparedTrackPayload>;
+
   saveTrackToSharedCache(track: TrackLyricsData): Promise<void>;
 
   computeTrackKey(title: string, artists: string[]): Promise<string>;

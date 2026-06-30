@@ -574,6 +574,7 @@ export interface TrackLyricsData {
   phrases?: Phrase[];
   fullTranslation?: string;
   preparedLyricsInput?: PreparedLyricsInput;
+  preparedTrack?: any;
   promptVersion?: number;
   translationPromptVersion?: number;
   processingStatus: {
