@@ -865,14 +865,42 @@ export function useTrackSession(
       }
 
       let blocks = localVariant ? localVariant.payload : null;
-
+      
       if (force || !blocks) {
         if (!blocks) {
           setLoadingStep("lecture");
           try {
+            // Collect existing items from other saved lecture variants of the same track (soft anti-duplication context)
+            let existingItems: any[] = [];
+            try {
+              const allVariants = await sqliteService.getAnalysisVariantsForTrack(trackData.trackId);
+              for (const item of allVariants) {
+                if (item.variant.mode !== canonicalMode && item.variant.targetLanguage === langCode && Array.isArray(item.payload)) {
+                  for (const block of item.payload) {
+                    if (block && Array.isArray(block.phrases)) {
+                      for (const p of block.phrases) {
+                        if (p && p.text) {
+                          existingItems.push({
+                            text: p.text,
+                            translation: p.translation,
+                            explanation: p.explanation,
+                            kind: p.type || p.kind || "expression",
+                            sourceMode: item.variant.mode
+                          });
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            } catch (err) {
+              console.warn("[useTrackSession] Failed to load existingItems for anti-duplication:", err);
+            }
+
             blocks = await aiClient.fetchStructuredLecture(
               trackData.preparedLyricsInput || trackData.rawLyrics,
-              force
+              force,
+              existingItems.length > 0 ? existingItems : undefined
             );
             
             // Save to SQLite

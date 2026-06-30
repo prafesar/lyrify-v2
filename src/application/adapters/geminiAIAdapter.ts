@@ -10,7 +10,8 @@ function isPreparedInput(input: any): input is PreparedLyricsInput {
 export class GeminiAIAdapter implements AiPort {
   async fetchStructuredLecture(
     lyrics: string | PreparedLyricsInput,
-    forceRegenerate?: boolean
+    forceRegenerate?: boolean,
+    existingItems?: any[]
   ): Promise<StructuredLectureBlock[]> {
     let rawLyrics = "";
     let trackTitle = "";

@@ -51,7 +51,8 @@ export const TRANSLATION_PROMPT_VERSION = 4;
 export interface AiPort {
   fetchStructuredLecture(
     lyrics: string | PreparedLyricsInput,
-    forceRegenerate?: boolean
+    forceRegenerate?: boolean,
+    existingItems?: any[]
   ): Promise<StructuredLectureBlock[]>;
 
   getCachedStructuredLecture(
@@ -219,14 +220,18 @@ export type PreparedTrackPayload = {
   }>;
 };
 
-export type TranslationPayload = Array<{
-  lineKey: string;
-  lineIndex: number;
-  original: string;
-  translation: string;
-  language: string;
-  blockType?: string;
-}>;
+export type TranslationPayload = {
+  lyricsKey: string;
+  targetLanguage: string;
+  lines: Array<{
+    lineKey: string;
+    lineIndex: number;
+    original: string;
+    translation: string;
+    language: string;
+    blockType?: string;
+  }>;
+};
 
 export interface TranslationFetchRequest {
   preparedTrack: PreparedTrackPayload;
@@ -237,5 +242,22 @@ export interface LectureFetchRequest {
   preparedTrack: PreparedTrackPayload;
   targetLanguage: string;
   analysisMode: "overview" | "vocabulary" | "phrases" | "style";
+  existingItems?: Array<{
+    text: string;
+    translation?: string;
+    explanation?: string;
+    kind?:
+      | "word"
+      | "expression"
+      | "idiom"
+      | "collocation"
+      | "grammar"
+      | "cultural_reference"
+      | "theme"
+      | "vocabulary"
+      | "slang"
+      | "phrasal_verb";
+    sourceMode?: "overview" | "vocabulary" | "phrases" | "style";
+  }>;
 }
 
