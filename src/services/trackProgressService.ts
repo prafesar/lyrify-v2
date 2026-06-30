@@ -1,7 +1,7 @@
 import { TrackLyricsData } from './musicService';
 import { Flashcard } from './localCardService';
 
-export type TrackStationId = 'lyrics' | 'analysis' | 'saved';
+export type TrackStationId = 'lyrics' | 'words' | 'analysis' | 'saved';
 export type StationStatus = 'completed' | 'current' | 'upcoming';
 
 export interface TrackStation {
@@ -50,17 +50,21 @@ export function buildTrackProgressViewModel(
     currentStepId = 'saved';
   }
 
-  // Build the list of 3 stations with their status
+  // Build the list of 4 stations with their status
   const stationIds: { id: TrackStationId; label: string }[] = [
-    { id: 'lyrics', label: 'Lyrics' },
-    { id: 'analysis', label: 'Breakdown' },
-    { id: 'saved', label: 'Cards' },
+    { id: 'lyrics', label: 'Overview' },
+    { id: 'words', label: 'Words' },
+    { id: 'analysis', label: 'Modes' },
+    { id: 'saved', label: 'Practice' },
   ];
 
   const steps = stationIds.map((station): TrackStation => {
     let status: StationStatus;
 
-    if (station.id === currentStepId) {
+    if (station.id === 'words') {
+      // Words are ready as long as we have lyrics/prepared track
+      status = hasLyrics ? 'completed' : 'upcoming';
+    } else if (station.id === currentStepId) {
       if (station.id === 'saved' && isSavedCompleted) {
         status = 'completed'; // If saved completed, even the last one is completed
       } else {

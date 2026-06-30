@@ -1,14 +1,14 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import { Music, FileText, Sparkles, Bookmark } from 'lucide-react';
+import { Music, FileText, Sparkles, Bookmark, BookOpen } from 'lucide-react';
 import { TrackProgressViewModel, TrackStationId } from '../services/trackProgressService';
 import { useTranslation } from '../lib/i18n';
 
 interface TrackProgressTrackerProps {
   viewModel: TrackProgressViewModel;
-  activeTab: 'lyrics' | 'cards' | 'analysis';
+  activeTab: 'lyrics' | 'words' | 'cards' | 'analysis';
   onAction: (actionType: TrackProgressViewModel['ctaActionType']) => void;
-  onTabChange: (tab: 'lyrics' | 'cards' | 'analysis') => void;
+  onTabChange: (tab: 'lyrics' | 'words' | 'cards' | 'analysis') => void;
 }
 
 export const TrackProgressTracker: React.FC<TrackProgressTrackerProps> = ({
@@ -25,6 +25,8 @@ export const TrackProgressTracker: React.FC<TrackProgressTrackerProps> = ({
     switch (id) {
       case 'lyrics':
         return <Music size={size} />;
+      case 'words':
+        return <BookOpen size={size} />;
       case 'analysis':
         return <Sparkles size={size} />;
       case 'saved':
@@ -36,9 +38,10 @@ export const TrackProgressTracker: React.FC<TrackProgressTrackerProps> = ({
 
   const getLocalizedStepLabel = (id: TrackStationId) => {
     switch (id) {
-      case 'lyrics': return t('trackProgress.stationLyrics');
-      case 'analysis': return t('trackProgress.stationAnalysis');
-      case 'saved': return t('trackProgress.stationCards');
+      case 'lyrics': return 'Overview';
+      case 'words': return 'Words';
+      case 'analysis': return 'Modes';
+      case 'saved': return 'Practice';
       default: return '';
     }
   };
@@ -48,6 +51,7 @@ export const TrackProgressTracker: React.FC<TrackProgressTrackerProps> = ({
   // Check matching active visual tab
   const getIsViewing = (id: TrackStationId) => {
     if (id === 'lyrics') return activeTab === 'lyrics';
+    if (id === 'words') return activeTab === 'words';
     if (id === 'analysis') return activeTab === 'analysis';
     if (id === 'saved') return activeTab === 'cards';
     return false;
@@ -104,6 +108,8 @@ export const TrackProgressTracker: React.FC<TrackProgressTrackerProps> = ({
             const handleStationClick = () => {
               if (step.id === 'lyrics') {
                 onTabChange('lyrics');
+              } else if (step.id === 'words') {
+                onTabChange('words');
               } else if (step.id === 'analysis') {
                 onTabChange('analysis');
               } else if (step.id === 'saved') {

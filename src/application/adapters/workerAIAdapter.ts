@@ -303,7 +303,11 @@ export class WorkerAIAdapter implements AiPort {
       });
       if (cachedResponse) {
         if (Array.isArray(cachedResponse.lines)) {
-          return cachedResponse.lines;
+          const lines = cachedResponse.lines;
+          if (cachedResponse.lexicalItems) {
+            (lines as any).lexicalItems = cachedResponse.lexicalItems;
+          }
+          return lines;
         }
         if (Array.isArray(cachedResponse)) {
           return cachedResponse;
@@ -321,7 +325,11 @@ export class WorkerAIAdapter implements AiPort {
     const fetchResponse = await this.postToWorker<TranslationPayload>("/api/v1/translation/fetch", fetchRequestBody);
     if (fetchResponse) {
       if (Array.isArray(fetchResponse.lines)) {
-        return fetchResponse.lines;
+        const lines = fetchResponse.lines;
+        if (fetchResponse.lexicalItems) {
+          (lines as any).lexicalItems = fetchResponse.lexicalItems;
+        }
+        return lines;
       }
       if (Array.isArray(fetchResponse)) {
         return fetchResponse;

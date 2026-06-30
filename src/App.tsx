@@ -53,6 +53,7 @@ import { usePlayback } from "./hooks/usePlayback";
 import { useLibrarySearch } from "./hooks/useLibrarySearch";
 import { useTrackSession } from "./hooks/useTrackSession";
 import { useAppUiState } from "./hooks/useAppUiState";
+import { WordsTab } from "./components/WordsTab";
 import { 
   studyCardsRepository,
   dailyTrackerRepository,
@@ -693,7 +694,9 @@ export default function App() {
     handleSwitchAnalysisMode,
     wordFormStats,
     availableAnalysisModes,
-    resolvedAnalysisVariant
+    resolvedAnalysisVariant,
+    getLexicalItemStatus,
+    setLexicalItemStatus
   } = useTrackSession(analysisMode, targetLanguage);
 
   const {
@@ -3318,6 +3321,16 @@ export default function App() {
                         </p>
                       </div>
                     )}
+                  </div>
+                )}
+
+                {activeTab === "words" && (
+                  <div className="px-3 sm:px-6">
+                    <WordsTab
+                      currentTrack={currentTrack}
+                      getLexicalItemStatus={getLexicalItemStatus}
+                      setLexicalItemStatus={setLexicalItemStatus}
+                    />
                   </div>
                 )}
 
