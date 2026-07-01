@@ -5,8 +5,8 @@ import { DailyTrackerRepositoryPort } from "./ports/dailyTrackerRepositoryPort";
 import { LyricsProviderPort } from "./ports/lyricsProviderPort";
 import { MusicMetadataPort } from "./ports/musicMetadataPort";
 import { TrackLyricsData, Track, extractTrackMeaning } from "../services/musicService";
-import { prepareLyricsInput, computeLineKey, findMatchedTranslation } from "../services/lyricsPreprocessor";
-import { getLanguageCode, detectDominantLanguage } from "../lib/languages";
+import { prepareLyricsInput } from "../services/lyricsPreprocessor";
+import { getLanguageCode } from "../lib/languages";
 
 export class TrackSessionFacade {
   constructor(
@@ -191,36 +191,28 @@ export class TrackSessionFacade {
     const isTranslationOutdated = !trackData.translationPromptVersion || trackData.translationPromptVersion < TRANSLATION_PROMPT_VERSION;
 
     if (!trackData.processingStatus.stage2_completed || isTranslationOutdated) {
-      const metadata = {
-        title: trackData.title,
-        artists: [trackData.artist],
-        artistId: trackData.artistId,
-        albumName: trackData.album,
-        albumId: trackData.albumId,
-        coverUrl: trackData.coverUrl,
-        audioUrl: trackData.audioUrl,
-        appleMusicUrl: trackData.appleMusicUrl
-      };
-
       try {
+        const preparedTrack = await this.aiClient.getPreparedTrack(
+          trackData.preparedLyricsInput || lyrics || "",
+          targetLanguage
+        );
         const translationsResult = await this.aiClient.getLineTranslations(
           trackData.preparedLyricsInput || lyrics || "",
           trackKey,
           targetLanguage
         );
         
-        const updatedLines = trackData.lines.map((line, idx) => {
-          if (!line.original.trim()) {
-            return line;
-          }
-          const matched = findMatchedTranslation(line.original, idx, translationsResult);
-
-          return {
-            ...line,
-            translation: matched ? matched.translation : (line.translation || ""),
-            language: matched ? matched.language : (line.language || "en")
-          };
-        });
+        const updatedLines = translationsResult.map((t: any) => ({
+          id: `${trackData.trackId}:line:${t.lineIndex}`,
+          lineId: t.lineKey || `line_${t.lineIndex}`,
+          lineTextHash: t.lineKey || `line_${t.lineIndex}`,
+          lineKey: t.lineKey,
+          index: t.lineIndex,
+          original: t.original || t.text || "",
+          translation: t.translation || "",
+          language: t.language || preparedTrack.sourceLanguage || "en",
+          phrases: []
+        }));
 
         // Meaning is canonicalized from structured lecture blocks
         const extractedMeaning = extractTrackMeaning(trackData.lectureBlocks);
@@ -238,7 +230,7 @@ export class TrackSessionFacade {
           difficulty: trackData.difficulty || "intermediate",
           promptVersion: ANALYSIS_PROMPT_VERSION,
           translationPromptVersion: TRANSLATION_PROMPT_VERSION,
-          sourceLanguage: getLanguageCode(detectDominantLanguage(updatedLines) || trackData.sourceLanguage),
+          sourceLanguage: getLanguageCode(preparedTrack.sourceLanguage || trackData.sourceLanguage || "en"),
           lines: updatedLines,
           translationLexicalItems: (translationsResult as any).lexicalItems || trackData.translationLexicalItems,
           processingStatus: { ...trackData.processingStatus, stage2_completed: true }
@@ -251,25 +243,28 @@ export class TrackSessionFacade {
       }
     } else {
       // Translation flow cached, but reload translations to confirm accuracy or ensure they're loaded
+      const preparedTrack = await this.aiClient.getPreparedTrack(
+        trackData.preparedLyricsInput || lyrics || "",
+        targetLanguage
+      );
       const translationsResult = await this.aiClient.getLineTranslations(trackData.preparedLyricsInput || lyrics || "", trackKey, targetLanguage);
-      const updatedLines = trackData.lines.map((line, idx) => {
-        if (!line.original.trim()) {
-          return line;
-        }
-        const matched = findMatchedTranslation(line.original, idx, translationsResult);
-
-        return {
-          ...line,
-          translation: matched ? matched.translation : (line.translation || ""),
-          language: matched ? matched.language : (line.language || "en")
-        };
-      });
+      const updatedLines = translationsResult.map((t: any) => ({
+        id: `${trackData.trackId}:line:${t.lineIndex}`,
+        lineId: t.lineKey || `line_${t.lineIndex}`,
+        lineTextHash: t.lineKey || `line_${t.lineIndex}`,
+        lineKey: t.lineKey,
+        index: t.lineIndex,
+        original: t.original || t.text || "",
+        translation: t.translation || "",
+        language: t.language || preparedTrack.sourceLanguage || "en",
+        phrases: []
+      }));
       trackData = {
         ...trackData,
         translationPromptVersion: TRANSLATION_PROMPT_VERSION,
         lines: updatedLines,
         translationLexicalItems: (translationsResult as any).lexicalItems || trackData.translationLexicalItems,
-        sourceLanguage: getLanguageCode(detectDominantLanguage(updatedLines) || trackData.sourceLanguage)
+        sourceLanguage: getLanguageCode(preparedTrack.sourceLanguage || trackData.sourceLanguage || "en")
       };
     }
 
@@ -420,30 +415,34 @@ export class TrackSessionFacade {
   ): Promise<TrackLyricsData> {
     const updatedTrackPre = this.enrichWithPreparedLyricsInput(track, targetLanguage);
     const trackKey = await this.aiClient.computeTrackKey(updatedTrackPre.title, [updatedTrackPre.artist]);
+    const preparedTrack = await this.aiClient.getPreparedTrack(
+      updatedTrackPre.preparedLyricsInput || updatedTrackPre.rawLyrics,
+      targetLanguage
+    );
     const translationsResult = await this.aiClient.getLineTranslations(
       updatedTrackPre.preparedLyricsInput || updatedTrackPre.rawLyrics,
       trackKey,
       targetLanguage
     );
 
-    const updatedLines = updatedTrackPre.lines.map((line, idx) => {
-      if (!line.original.trim()) {
-        return line;
-      }
-      const matched = findMatchedTranslation(line.original, idx, translationsResult);
-
-      return {
-        ...line,
-        translation: matched ? matched.translation : (line.translation || ""),
-        language: matched ? matched.language : (line.language || "en")
-      };
-    });
+    const updatedLines = translationsResult.map((t: any) => ({
+      id: `${track.trackId}:line:${t.lineIndex}`,
+      lineId: t.lineKey || `line_${t.lineIndex}`,
+      lineTextHash: t.lineKey || `line_${t.lineIndex}`,
+      lineKey: t.lineKey,
+      index: t.lineIndex,
+      original: t.original || t.text || "",
+      translation: t.translation || "",
+      language: t.language || preparedTrack.sourceLanguage || "en",
+      phrases: [],
+    }));
 
     const updatedTrack = this.enrichWithPreparedLyricsInput({
       ...updatedTrackPre,
       translationPromptVersion: TRANSLATION_PROMPT_VERSION,
       lines: updatedLines,
-      sourceLanguage: getLanguageCode(detectDominantLanguage(updatedLines) || updatedTrackPre.sourceLanguage)
+      sourceLanguage: getLanguageCode(preparedTrack.sourceLanguage || updatedTrackPre.sourceLanguage || "en"),
+      processingStatus: { ...updatedTrackPre.processingStatus, stage2_completed: true }
     }, targetLanguage);
 
     this.trackCacheRepository.saveTrackData(updatedTrack.trackId, updatedTrack);
