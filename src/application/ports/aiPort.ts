@@ -160,7 +160,8 @@ export interface AiPort {
   getLineTranslations(
     lyrics: string | PreparedLyricsInput,
     trackKey?: string,
-    targetLanguage?: string
+    targetLanguage?: string,
+    trackId?: string
   ): Promise<any[]>;
 
   getPhraseAnalysis(

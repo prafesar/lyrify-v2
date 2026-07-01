@@ -196,24 +196,13 @@ export class TrackSessionFacade {
           trackData.preparedLyricsInput || lyrics || "",
           targetLanguage
         );
-        const translationsResult = await this.aiClient.getLineTranslations(
+        const updatedLines = await this.aiClient.getLineTranslations(
           trackData.preparedLyricsInput || lyrics || "",
           trackKey,
-          targetLanguage
+          targetLanguage,
+          trackData.trackId
         );
         
-        const updatedLines = translationsResult.map((t: any) => ({
-          id: `${trackData.trackId}:line:${t.lineIndex}`,
-          lineId: t.lineKey || `line_${t.lineIndex}`,
-          lineTextHash: t.lineKey || `line_${t.lineIndex}`,
-          lineKey: t.lineKey,
-          index: t.lineIndex,
-          original: t.original || t.text || "",
-          translation: t.translation || "",
-          language: t.language || preparedTrack.sourceLanguage || "en",
-          phrases: []
-        }));
-
         // Meaning is canonicalized from structured lecture blocks
         const extractedMeaning = extractTrackMeaning(trackData.lectureBlocks);
         const meaning = trackData.meaning || extractedMeaning || "";
@@ -232,7 +221,7 @@ export class TrackSessionFacade {
           translationPromptVersion: TRANSLATION_PROMPT_VERSION,
           sourceLanguage: getLanguageCode(preparedTrack.sourceLanguage || trackData.sourceLanguage || "en"),
           lines: updatedLines,
-          translationLexicalItems: (translationsResult as any).lexicalItems || trackData.translationLexicalItems,
+          translationLexicalItems: (updatedLines as any).lexicalItems || trackData.translationLexicalItems,
           processingStatus: { ...trackData.processingStatus, stage2_completed: true }
         };
       } catch (llmError) {
@@ -247,23 +236,17 @@ export class TrackSessionFacade {
         trackData.preparedLyricsInput || lyrics || "",
         targetLanguage
       );
-      const translationsResult = await this.aiClient.getLineTranslations(trackData.preparedLyricsInput || lyrics || "", trackKey, targetLanguage);
-      const updatedLines = translationsResult.map((t: any) => ({
-        id: `${trackData.trackId}:line:${t.lineIndex}`,
-        lineId: t.lineKey || `line_${t.lineIndex}`,
-        lineTextHash: t.lineKey || `line_${t.lineIndex}`,
-        lineKey: t.lineKey,
-        index: t.lineIndex,
-        original: t.original || t.text || "",
-        translation: t.translation || "",
-        language: t.language || preparedTrack.sourceLanguage || "en",
-        phrases: []
-      }));
+      const updatedLines = await this.aiClient.getLineTranslations(
+        trackData.preparedLyricsInput || lyrics || "",
+        trackKey,
+        targetLanguage,
+        trackData.trackId
+      );
       trackData = {
         ...trackData,
         translationPromptVersion: TRANSLATION_PROMPT_VERSION,
         lines: updatedLines,
-        translationLexicalItems: (translationsResult as any).lexicalItems || trackData.translationLexicalItems,
+        translationLexicalItems: (updatedLines as any).lexicalItems || trackData.translationLexicalItems,
         sourceLanguage: getLanguageCode(preparedTrack.sourceLanguage || trackData.sourceLanguage || "en")
       };
     }
@@ -419,23 +402,12 @@ export class TrackSessionFacade {
       updatedTrackPre.preparedLyricsInput || updatedTrackPre.rawLyrics,
       targetLanguage
     );
-    const translationsResult = await this.aiClient.getLineTranslations(
+    const updatedLines = await this.aiClient.getLineTranslations(
       updatedTrackPre.preparedLyricsInput || updatedTrackPre.rawLyrics,
       trackKey,
-      targetLanguage
+      targetLanguage,
+      track.trackId
     );
-
-    const updatedLines = translationsResult.map((t: any) => ({
-      id: `${track.trackId}:line:${t.lineIndex}`,
-      lineId: t.lineKey || `line_${t.lineIndex}`,
-      lineTextHash: t.lineKey || `line_${t.lineIndex}`,
-      lineKey: t.lineKey,
-      index: t.lineIndex,
-      original: t.original || t.text || "",
-      translation: t.translation || "",
-      language: t.language || preparedTrack.sourceLanguage || "en",
-      phrases: [],
-    }));
 
     const updatedTrack = this.enrichWithPreparedLyricsInput({
       ...updatedTrackPre,

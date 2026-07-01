@@ -638,27 +638,23 @@ export function useTrackSession(
       }
 
       if (cacheResult && cacheResult.hasTranslation && cacheResult.translation) {
-        const preparedTrack = await trackSessionFacade.aiClient.getPreparedTrack(
-          trackData.preparedLyricsInput || trackData.rawLyrics || cacheResult.translation.map((line: any) => line.original).join("\n"),
-          targetLanguage
-        );
-
         let lyrics = trackData.rawLyrics;
         if (!lyrics) {
           lyrics = cacheResult.translation.map((line: any) => line.original).join("\n");
         }
 
-        const updatedLines = cacheResult.translation.map((t: any) => ({
-          id: `${trackData.trackId}:line:${t.lineIndex}`,
-          lineId: t.lineKey || `line_${t.lineIndex}`,
-          lineTextHash: t.lineKey || `line_${t.lineIndex}`,
-          lineKey: t.lineKey,
-          index: t.lineIndex,
-          original: t.original || t.text || "",
-          translation: t.translation || "",
-          language: t.language || preparedTrack.sourceLanguage || "en",
-          phrases: [],
-        }));
+        const trackKey = await trackSessionFacade.aiClient.computeTrackKey(trackData.title, [trackData.artist]);
+        const preparedTrack = await trackSessionFacade.aiClient.getPreparedTrack(
+          trackData.preparedLyricsInput || lyrics,
+          targetLanguage
+        );
+
+        const updatedLines = await trackSessionFacade.aiClient.getLineTranslations(
+          trackData.preparedLyricsInput || lyrics,
+          trackKey,
+          targetLanguage,
+          trackData.trackId
+        );
 
         const provider = typeof trackData.source === 'string' ? trackData.source : 'unknown';
         const authors = trackData.authors ? trackData.authors.split(',').map((a: string) => a.trim()) : null;
@@ -837,27 +833,23 @@ export function useTrackSession(
       }
 
       if (cacheResult && cacheResult.hasTranslation && cacheResult.translation) {
-        const preparedTrack = await trackSessionFacade.aiClient.getPreparedTrack(
-          trackData.preparedLyricsInput || trackData.rawLyrics || cacheResult.translation.map((line: any) => line.original).join("\n"),
-          targetLanguage
-        );
-
         let lyrics = trackData.rawLyrics;
         if (!lyrics) {
           lyrics = cacheResult.translation.map((line: any) => line.original).join("\n");
         }
 
-        const updatedLines = cacheResult.translation.map((t: any) => ({
-          id: `${trackData.trackId}:line:${t.lineIndex}`,
-          lineId: t.lineKey || `line_${t.lineIndex}`,
-          lineTextHash: t.lineKey || `line_${t.lineIndex}`,
-          lineKey: t.lineKey,
-          index: t.lineIndex,
-          original: t.original || t.text || "",
-          translation: t.translation || "",
-          language: t.language || preparedTrack.sourceLanguage || "en",
-          phrases: [],
-        }));
+        const trackKey = await trackSessionFacade.aiClient.computeTrackKey(trackData.title, [trackData.artist]);
+        const preparedTrack = await trackSessionFacade.aiClient.getPreparedTrack(
+          trackData.preparedLyricsInput || lyrics,
+          targetLanguage
+        );
+
+        const updatedLines = await trackSessionFacade.aiClient.getLineTranslations(
+          trackData.preparedLyricsInput || lyrics,
+          trackKey,
+          targetLanguage,
+          trackData.trackId
+        );
 
         const provider = typeof trackData.source === 'string' ? trackData.source : 'unknown';
         const authors = trackData.authors ? trackData.authors.split(',').map((a: string) => a.trim()) : null;

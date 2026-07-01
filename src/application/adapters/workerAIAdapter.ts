@@ -288,12 +288,16 @@ export class WorkerAIAdapter implements AiPort {
   async getLineTranslations(
     lyrics: string | PreparedLyricsInput,
     trackKey?: string,
-    targetLanguage?: string
+    targetLanguage?: string,
+    trackId?: string
   ): Promise<any[]> {
     const targetLang = targetLanguage || "English";
     
     // Get prepared track payload
     const preparedTrack = await this.getOrPrepareTrack(lyrics, targetLang);
+
+    let rawLines: any[] = [];
+    let lexicalItems: any[] | undefined;
 
     // Step 1: translation/cached
     try {
@@ -303,14 +307,10 @@ export class WorkerAIAdapter implements AiPort {
       });
       if (cachedResponse) {
         if (Array.isArray(cachedResponse.lines)) {
-          const lines = cachedResponse.lines;
-          if (cachedResponse.lexicalItems) {
-            (lines as any).lexicalItems = cachedResponse.lexicalItems;
-          }
-          return lines;
-        }
-        if (Array.isArray(cachedResponse)) {
-          return cachedResponse;
+          rawLines = cachedResponse.lines;
+          lexicalItems = cachedResponse.lexicalItems;
+        } else if (Array.isArray(cachedResponse)) {
+          rawLines = cachedResponse;
         }
       }
     } catch (e) {
@@ -318,24 +318,47 @@ export class WorkerAIAdapter implements AiPort {
     }
 
     // Step 2: translation/fetch
-    const fetchRequestBody: TranslationFetchRequest = {
-      preparedTrack,
-      targetLanguage: targetLang
-    };
-    const fetchResponse = await this.postToWorker<TranslationPayload>("/api/v1/translation/fetch", fetchRequestBody);
-    if (fetchResponse) {
-      if (Array.isArray(fetchResponse.lines)) {
-        const lines = fetchResponse.lines;
-        if (fetchResponse.lexicalItems) {
-          (lines as any).lexicalItems = fetchResponse.lexicalItems;
+    if (rawLines.length === 0) {
+      const fetchRequestBody: TranslationFetchRequest = {
+        preparedTrack,
+        targetLanguage: targetLang
+      };
+      try {
+        const fetchResponse = await this.postToWorker<TranslationPayload>("/api/v1/translation/fetch", fetchRequestBody);
+        if (fetchResponse) {
+          if (Array.isArray(fetchResponse.lines)) {
+            rawLines = fetchResponse.lines;
+            lexicalItems = fetchResponse.lexicalItems;
+          } else if (Array.isArray(fetchResponse)) {
+            rawLines = fetchResponse;
+          }
         }
-        return lines;
-      }
-      if (Array.isArray(fetchResponse)) {
-        return fetchResponse;
+      } catch (e) {
+        console.error(`[WorkerAIAdapter] translation/fetch failed:`, e);
       }
     }
-    return [];
+
+    // Adapt rawLines to canonical client LyricsLine[] shape
+    const mappedLines = rawLines.map((t: any) => {
+      const idx = typeof t.lineIndex === 'number' ? t.lineIndex : (typeof t.index === 'number' ? t.index : 0);
+      return {
+        id: `${trackId || "track"}:line:${idx}`,
+        lineId: t.lineKey || `line_${idx}`,
+        lineTextHash: t.lineKey || `line_${idx}`,
+        lineKey: t.lineKey || "",
+        index: idx,
+        original: t.original !== undefined ? t.original : (t.text !== undefined ? t.text : ""),
+        translation: t.translation || "",
+        language: t.language || preparedTrack.sourceLanguage || "en",
+        phrases: []
+      };
+    });
+
+    if (lexicalItems) {
+      (mappedLines as any).lexicalItems = lexicalItems;
+    }
+
+    return mappedLines;
   }
 
   async getPhraseAnalysis(

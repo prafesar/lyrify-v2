@@ -210,7 +210,8 @@ export class GeminiAIAdapter implements AiPort {
   async getLineTranslations(
     lyrics: string | PreparedLyricsInput,
     trackKey?: string,
-    targetLanguage?: string
+    targetLanguage?: string,
+    trackId?: string
   ): Promise<any[]> {
     let finalTrackKey = trackKey || "";
     let finalTargetLang = targetLanguage || "";
