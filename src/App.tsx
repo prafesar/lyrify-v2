@@ -295,7 +295,8 @@ const LyricLine = ({
 
   const metadata = phraseMetadata ? phraseMetadata.get(normalizePhraseKey(trimmedLine)) : null;
   const userTrans = metadata?.translatedPhrase;
-  const autoTrans = currentTrack?.lines?.[i]?.translation;
+  const lineObj = currentTrack?.lines?.find((l: any) => l.index === i);
+  const autoTrans = lineObj?.translation;
   const displayTranslation = userTrans || autoTrans;
 
   const isLyricsOnly = displayMode === "lyrics";
@@ -306,7 +307,7 @@ const LyricLine = ({
 
   const showUnderTranslation = isBoth || (isLyricsOnly && activeLineIndex === i) || (alwaysShowTranslation && !isTranslationOnly);
 
-  const isStarred = currentTrack?.lines?.[i]?.isStarred;
+  const isStarred = lineObj?.isStarred;
 
   return (
     <div 
@@ -998,7 +999,7 @@ export default function App() {
 
   const handleAddNoteToDictionary = async (lineIndex: number, note: any, noteIndex: number, status?: "known" | "learning") => {
     if (!currentTrack) return;
-    const line = currentTrack.lines[lineIndex];
+    const line = currentTrack.lines.find((l: any) => l.index === lineIndex);
     if (!line) return;
 
     // Support both active/raw LineItem structure (original & translation) and saved legacy format (sourceText & text)
@@ -3602,9 +3603,12 @@ export default function App() {
                   <motion.div 
                     initial={false}
                     animate={{ 
-                      width: `${activeLineIndex !== null && currentTrack.lines.length > 0 
-                            ? ((activeLineIndex + 1) / currentTrack.lines.length) * 100 
-                            : 0}%` 
+                      width: (() => {
+                        if (activeLineIndex === null || !currentTrack.lines || currentTrack.lines.length === 0) return "0%";
+                        const idx = currentTrack.lines.findIndex((l: any) => l.index === activeLineIndex);
+                        const displayIdx = idx !== -1 ? idx : 0;
+                        return `${((displayIdx + 1) / currentTrack.lines.length) * 100}%`;
+                      })()
                     }}
                     className="h-full bg-gradient-to-r from-[var(--accent)] to-purple-500"
                   />
