@@ -228,38 +228,26 @@ export const WordsTab: React.FC<WordsTabProps> = ({
                     </button>
 
                     <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="font-serif text-base font-bold text-app-fg truncate">
-                          {item.displayText || item.baseForm}
+                      <div className="flex items-center flex-wrap gap-2">
+                        <span className="font-serif text-base font-bold text-app-fg">
+                          {item.baseForm || item.displayText}
                         </span>
-                        {item.baseForm && item.baseForm !== item.displayText && (
-                          <span className="text-xs text-app-muted opacity-60">
-                            ({item.baseForm})
+                        {translationInfo?.translation ? (
+                          <span className="text-sm font-semibold text-app-fg opacity-80">
+                            — {translationInfo.translation}
+                          </span>
+                        ) : (
+                          <span className="text-xs font-semibold text-app-muted italic">
+                            — No stored translation
                           </span>
                         )}
                         <button
-                          onClick={(e) => speakWord(item.displayText || item.baseForm, e)}
+                          onClick={(e) => speakWord(item.baseForm || item.displayText, e)}
                           className="p-1 text-app-fg opacity-30 hover:opacity-100 hover:text-app-accent transition-all shrink-0"
                           title="Listen pronunciation"
                         >
                           <Volume2 size={13} />
                         </button>
-                      </div>
-
-                      {/* Kind Pill and Translation */}
-                      <div className="flex items-center gap-2 mt-1">
-                        <span className="text-[10px] font-black uppercase tracking-wider text-app-accent px-1.5 py-0.5 bg-app-accent/5 rounded-md border border-app-accent/10">
-                          {getKindLabel(item.kind)}
-                        </span>
-                        {translationInfo?.translation ? (
-                          <span className="text-sm font-semibold text-app-fg opacity-80 truncate">
-                            — {translationInfo.translation}
-                          </span>
-                        ) : (
-                          <span className="text-xs font-semibold text-app-muted italic">
-                            No stored translation
-                          </span>
-                        )}
                       </div>
                     </div>
                   </div>
