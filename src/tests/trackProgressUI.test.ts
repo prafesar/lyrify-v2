@@ -44,11 +44,12 @@ describe('Track Progress Metro Line UI Actions', () => {
     expect(vm!.currentStepId).toBe('saved');
     expect(vm!.ctaActionType).toBe('save_phrase');
 
-    // First two steps (Lyrics, Analysis) should be 'completed'
+    // First three steps (Lyrics, Analysis, Words) should be 'completed'
     expect(vm!.steps[0].status).toBe('completed');
     expect(vm!.steps[1].status).toBe('completed');
+    expect(vm!.steps[2].status).toBe('completed');
 
-    // The current step (Saved) should be 'current'
-    expect(vm!.steps[2].status).toBe('current');
+    // The current step (Saved / Practice) should be 'current'
+    expect(vm!.steps[3].status).toBe('current');
   });
 });

@@ -19,6 +19,7 @@ const { mockAiClient } = vi.hoisted(() => {
       computeLyricsHash: vi.fn(),
       fetchStructuredLecture: vi.fn(),
       getCachedStructuredLecture: vi.fn().mockResolvedValue(null),
+      getPreparedTrack: vi.fn(),
     },
   };
 });
@@ -42,6 +43,7 @@ vi.mock("../application/adapters/workerAIAdapter", () => {
       computeLyricsHash = mockAiClient.computeLyricsHash;
       fetchStructuredLecture = mockAiClient.fetchStructuredLecture;
       getCachedStructuredLecture = mockAiClient.getCachedStructuredLecture;
+      getPreparedTrack = mockAiClient.getPreparedTrack;
     },
   };
 });
@@ -143,6 +145,17 @@ describe("TrackSessionFacade Unit Tests", () => {
       ];
 
       vi.mocked(aiClient.computeTrackKey).mockResolvedValue("track-coldplay-yellow");
+      vi.mocked(aiClient.getPreparedTrack).mockResolvedValue({
+        trackId: "track-abc",
+        sourceLanguage: "en",
+        targetLanguage: "es",
+        lines: [
+          { index: 0, text: "Look at the stars", originalText: "Look at the stars", lineKey: "line-0" },
+          { index: 1, text: "Look how they shine", originalText: "Look how they shine", lineKey: "line-1" }
+        ],
+        lexicalItems: [],
+        occurrences: []
+      });
       vi.mocked(aiClient.getLineTranslations).mockResolvedValue(mockTranslations);
       vi.mocked(aiClient.saveTrackToSharedCache).mockResolvedValue(undefined);
 
@@ -150,9 +163,10 @@ describe("TrackSessionFacade Unit Tests", () => {
 
       expect(fetchLyrics).toHaveBeenCalledWith("Coldplay", "Yellow");
       expect(aiClient.getLineTranslations).toHaveBeenCalledWith(
-        expect.any(String),
+        expect.anything(),
         "track-coldplay-yellow",
-        "Spanish"
+        "Spanish",
+        "track-abc"
       );
       expect(trackCacheRepository.saveTrackData).toHaveBeenCalled();
       expect(updated.rawLyrics).toBe(mockLyricsData.lyrics);

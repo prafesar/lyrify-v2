@@ -1428,6 +1428,21 @@ export function useTrackSession(
     };
   }, [currentTrack, displayedLectureBlocks]);
 
+  const effectiveWordFormStats = useMemo(() => {
+    if (lexicalStats && lexicalStats.total > 0) {
+      return {
+        totalCount: lexicalStats.total,
+        knownCount: lexicalStats.known,
+        learningCount: lexicalStats.learning,
+        seenCount: lexicalStats.known + lexicalStats.learning,
+        newCount: lexicalStats.new,
+        ignoredCount: 0,
+        unknownCount: lexicalStats.unknown
+      };
+    }
+    return wordFormStats;
+  }, [lexicalStats, wordFormStats]);
+
   return {
     currentTrack: linkedTrack,
     preparedTrack,
@@ -1477,7 +1492,7 @@ export function useTrackSession(
     handleAnalyzeStarredLines,
     handleSourceLanguageOverride,
     handleSwitchAnalysisMode,
-    wordFormStats,
+    wordFormStats: effectiveWordFormStats,
     setWordFormStats,
     availableAnalysisModes
   };
