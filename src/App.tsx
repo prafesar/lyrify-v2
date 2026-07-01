@@ -290,8 +290,16 @@ const LyricLine = ({
 }: LyricLineProps) => {
   const trimmedLine = line.trim();
 
-  if (!trimmedLine && isCompact) return null;
-  if (!trimmedLine) return <div className="h-6" />;
+  if (!trimmedLine) {
+    if (isCompact) {
+      return <div className="h-4" key={`separator-compact-${i}`} />;
+    }
+    return (
+      <div className="h-10 flex items-center justify-center my-1" key={`separator-${i}`}>
+        <div className="w-1.5 h-1.5 rounded-full bg-app-fg/10" />
+      </div>
+    );
+  }
 
   const metadata = phraseMetadata ? phraseMetadata.get(normalizePhraseKey(trimmedLine)) : null;
   const userTrans = metadata?.translatedPhrase;
@@ -697,7 +705,8 @@ export default function App() {
     availableAnalysisModes,
     resolvedAnalysisVariant,
     getLexicalItemStatus,
-    setLexicalItemStatus
+    setLexicalItemStatus,
+    preparedTrack
   } = useTrackSession(analysisMode, targetLanguage);
 
   const {
@@ -3115,7 +3124,17 @@ export default function App() {
                   <div className="flex flex-col gap-1 pb-32">
 
                     {currentTrack.rawLyrics ? (() => {
-                      let linesToRender = currentTrack.lines || [];
+                      let linesToRender = (preparedTrack && preparedTrack.lines)
+                        ? preparedTrack.lines.map((l: any) => {
+                            const cl = currentTrack.lines?.find((line: any) => line.index === l.index);
+                            return {
+                              original: l.text,
+                              index: l.index,
+                              translation: cl?.translation || "",
+                              isStarred: cl?.isStarred || false
+                            };
+                          })
+                        : (currentTrack.lines || []);
                       if (isStarFilterActive) {
                         // Filter for starred lines
                         linesToRender = linesToRender.filter((line: any) => line.isStarred);

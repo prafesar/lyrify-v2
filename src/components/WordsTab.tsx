@@ -313,7 +313,7 @@ export const WordsTab: React.FC<WordsTabProps> = ({
                           ) : (
                             <div className="space-y-2">
                               {itemOccurrences.map((occ: any, oIdx: number) => {
-                                const lineObj = currentTrack.lines ? currentTrack.lines[occ.lineIndex] : null;
+                                const lineObj = currentTrack.lines ? currentTrack.lines.find((l: any) => l.index === occ.lineIndex) : null;
                                 if (!lineObj) return null;
 
                                 return (

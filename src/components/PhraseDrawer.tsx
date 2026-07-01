@@ -62,7 +62,7 @@ export default function PhraseDrawer({
 
   // Prefer lines from reactive currentTrack if available, otherwise fallback to phraseAnalysis
   const activeTrack = currentTrack || phraseAnalysis;
-  const lineData = activeTrack?.lines?.[lineIndex!];
+  const lineData = activeTrack?.lines?.find((l: any) => l.index === lineIndex);
   if (!lineData) return null;
 
   const lineText = lineData.original || '';
@@ -224,7 +224,7 @@ export default function PhraseDrawer({
                   <h2 className="text-2xl font-bold font-serif leading-tight text-app-fg">{lineText}</h2>
                   {(() => {
                     const lineMetadata = phraseMetadata.get(normalizePhraseKey(lineText));
-                    const lineTranslation = lineMetadata?.translatedPhrase || phraseAnalysis?.lines?.[lineIndex]?.translation;
+                    const lineTranslation = lineMetadata?.translatedPhrase || lineData?.translation;
                     return lineTranslation ? (
                       <p className="text-lg text-app-fg opacity-60 font-serif italic mt-2">
                         {lineTranslation}

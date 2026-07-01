@@ -121,7 +121,8 @@ export const LineWorkspace = ({
 }: LineWorkspaceProps) => {
   const { t } = useTranslation();
   // Line Data from Track
-  const cachedExpl = currentTrack?.lines?.[i]?.explanation || null;
+  const lineObj = currentTrack?.lines?.find((l: any) => l.index === i);
+  const cachedExpl = lineObj?.explanation || null;
   const initialMyExpl = cachedExpl?.myExplanation || "";
   const initialSummary = cachedExpl?.summary || "";
 
@@ -368,7 +369,7 @@ export const LineWorkspace = ({
       
       // Calculate original mapping note index
       const nIdx = sorted.findIndex((it) => it.id === itemId);
-      const noteOriginKey = currentTrack ? generateNoteOriginKey(currentTrack.trackId, currentTrack.lines[i]?.lineId, translationVal, originalText, nIdx) : "";
+      const noteOriginKey = currentTrack ? generateNoteOriginKey(currentTrack.trackId, lineObj?.lineId, translationVal, originalText, nIdx) : "";
       const existingCard = noteOriginKey && originKeyMetadata ? originKeyMetadata.get(noteOriginKey) : undefined;
       
       if (existingCard) {
@@ -616,7 +617,7 @@ export const LineWorkspace = ({
           // Render Phrase element (kind: "phrase")
           const phraseText = item.original || "";
           const translationText = item.translation || "";
-          const noteOriginKey = currentTrack ? generateNoteOriginKey(currentTrack.trackId, currentTrack.lines[i]?.lineId, translationText, phraseText, nIdx) : "";
+          const noteOriginKey = currentTrack ? generateNoteOriginKey(currentTrack.trackId, lineObj?.lineId, translationText, phraseText, nIdx) : "";
           const existingCard = noteOriginKey && originKeyMetadata ? originKeyMetadata.get(noteOriginKey) : undefined;
           const isAlreadyInDictionary = !!existingCard;
 
